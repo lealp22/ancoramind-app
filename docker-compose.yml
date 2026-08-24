@@ -1,0 +1,38 @@
+services:
+  app:
+    build: .
+    ports:
+      - "7777:7777"
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=development
+      # ngrok is external; set NGROK_URL in .env after starting ngrok
+    volumes:
+      - ./tmp:/app/tmp
+    restart: unless-stopped
+
+  # Optional PostgreSQL for production-like setup
+  # Uncomment and set AGNO_DATABASE_URL in .env to use it
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ancora
+      POSTGRES_PASSWORD: ancora
+      POSTGRES_DB: ancoramind
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ancora -d ancoramind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - postgres
+
+volumes:
+  pgdata:

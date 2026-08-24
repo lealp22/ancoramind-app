@@ -1,0 +1,66 @@
+"""Unit tests for instruction assembly."""
+
+import pytest
+
+from src.agent.instructions import assemble_instructions, load_prompt
+
+
+class TestLoadPrompt:
+    """Tests for loading individual prompt files."""
+
+    def test_loads_identity(self):
+        """Should load identity.md."""
+        content = load_prompt("identity.md")
+        assert "AncoraMind" in content
+        assert len(content) > 0
+
+    def test_loads_soul(self):
+        """Should load soul.md."""
+        content = load_prompt("soul.md")
+        # .lower() comparison — note: "ai" is lowercase after lower()
+        assert "personal ai assistant" in content.lower()
+        assert len(content) > 0
+
+    def test_loads_tool_contract(self):
+        """Should load tool_contract.md."""
+        content = load_prompt("tool_contract.md")
+        assert "Tool" in content
+        assert len(content) > 0
+
+    def test_loads_telegram_channel(self):
+        """Should load channels/telegram.md."""
+        content = load_prompt("channels/telegram.md")
+        assert "Telegram" in content
+        assert len(content) > 0
+
+    def test_missing_file_raises(self):
+        """Should raise FileNotFoundError for non-existent prompt."""
+        with pytest.raises(FileNotFoundError):
+            load_prompt("nonexistent.md")
+
+
+class TestAssembleInstructions:
+    """Tests for assembling the full instruction context."""
+
+    def test_returns_list_of_strings(self):
+        """Should return a list of strings."""
+        instructions = assemble_instructions()
+        assert isinstance(instructions, list)
+        assert len(instructions) == 4
+        assert all(isinstance(item, str) for item in instructions)
+
+    def test_identity_is_first(self):
+        """Identity block should be first."""
+        instructions = assemble_instructions()
+        assert "AncoraMind" in instructions[0]
+
+    def test_soul_is_second(self):
+        """Soul block should be second."""
+        instructions = assemble_instructions()
+        assert "personal ai assistant" in instructions[1].lower()
+
+    def test_no_empty_blocks(self):
+        """No instruction block should be empty."""
+        instructions = assemble_instructions()
+        for block in instructions:
+            assert len(block.strip()) > 0, f"Empty block found in instructions"

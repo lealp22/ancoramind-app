@@ -1,0 +1,1 @@
+"""Data repositories — PostgreSQL access layer (parameterized queries only)."""

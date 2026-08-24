@@ -1,0 +1,1 @@
+"""Action domain — proposals, confirmations, execution, and audit."""

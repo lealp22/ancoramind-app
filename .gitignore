@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+
+# Environment
+.env
+*.local
+
+# IDE
+.vscode/
+.idea/
+
+# Data (runtime)
+tmp/
+data/
+*.db
+*.sqlite3
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
