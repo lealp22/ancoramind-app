@@ -138,11 +138,19 @@ def create_app():
         logger.info("Using SQLite for Agno runtime (tmp/ancoramind.db)")
 
     # ── LLM Model ─────────────────────────────────────
+    api_key = None
+    if settings.llm_provider == "openrouter" and settings.openrouter_api_key:
+        api_key = settings.openrouter_api_key
+    elif settings.llm_provider == "openai" and settings.openai_api_key:
+        api_key = settings.openai_api_key
+
     model = create_model(
+        provider=settings.llm_provider,
         model_id=settings.llm_model,
         base_url=settings.llm_base_url,
+        api_key=api_key,
     )
-    logger.info("LLM model: %s", settings.llm_model)
+    logger.info("LLM provider: %s | model: %s", settings.llm_provider, settings.llm_model)
 
     # ── Agent Instructions ────────────────────────────
     instructions = assemble_instructions()

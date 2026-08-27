@@ -14,8 +14,12 @@ class Settings(BaseSettings):
     )
 
     # ── LLM (Agno auto-detects from standard env vars) ──
+    llm_provider: str = "openai"
+    """Provider: openai | openrouter | openai-like"""
+
     openai_api_key: str = ""
-    llm_model: str = "gpt-4o"
+    openrouter_api_key: str = ""
+    llm_model: str = "gpt-5.4-mini"
     llm_base_url: str | None = None
 
     # ── Telegram ──────────────────────────────────────

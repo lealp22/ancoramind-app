@@ -26,7 +26,7 @@ async def _get_document_service():
     return DocumentService(
         repository=DocumentsRepository(session),
         storage=_storage,
-        model=OpenAIChat(id="gpt-4o-mini"),
+        model=OpenAIChat(id="gpt-5.4-mini"),
     )
 
 

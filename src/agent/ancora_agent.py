@@ -1,25 +1,25 @@
-"""AncoraMind Agent — Agno agent creation and LLM model factory."""
+"""AncoraMind Agent — Agno agent creation and LLM model factory.
+
+Supports multiple LLM providers:
+- openai:     OpenAIChat (uses OPENAI_API_KEY)
+- openrouter: OpenRouter (uses OPENROUTER_API_KEY)
+- openai-like: Generic OpenAI-compatible (uses OPENAI_API_KEY + custom base_url)
+"""
 
 import os
 
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
-from agno.models.openai import OpenAIChat
 
 
 def create_db(db_url: str | None = None):
     """Create the Agno runtime database.
 
     Uses PostgreSQL if AGNO_DATABASE_URL is set, otherwise defaults to SQLite.
-
-    Args:
-        db_url: PostgreSQL connection string, or None for SQLite default.
     """
     if db_url:
         return PostgresDb(db_url=db_url)
-
-    # Default: SQLite for zero-config local development
     os.makedirs("tmp", exist_ok=True)
     return SqliteDb(
         session_table="ancoramind_sessions",
@@ -27,26 +27,72 @@ def create_db(db_url: str | None = None):
     )
 
 
-def create_model(model_id: str = "gpt-4o", base_url: str | None = None) -> OpenAIChat:
-    """Create the LLM model instance.
+def create_model(
+    provider: str = "openai",
+    model_id: str = "gpt-5.4-mini",
+    base_url: str | None = None,
+    api_key: str | None = None,
+):
+    """Create the LLM model instance for the configured provider.
 
-    Agno's OpenAIChat auto-detects OPENAI_API_KEY from the environment.
+    Providers:
+        openai:      OpenAIChat  — uses OPENAI_API_KEY env var
+        openrouter:  OpenRouter  — uses OPENROUTER_API_KEY env var
+        openai-like: OpenAILike  — uses OPENAI_API_KEY + custom base_url
+                                   (Groq, Together, DeepSeek, Ollama, etc.)
 
     Args:
-        model_id: OpenAI model ID (e.g. "gpt-4o", "gpt-4o-mini").
-        base_url: Optional custom base URL (e.g. for proxies / compatible APIs).
+        provider: One of "openai", "openrouter", "openai-like".
+        model_id: Model ID (e.g. "gpt-5.4-mini", "anthropic/claude-3.5-sonnet").
+        base_url: Custom base URL (required for openai-like).
+        api_key: Optional API key override (otherwise from env vars).
 
     Returns:
-        Configured OpenAIChat model instance.
+        Configured model instance.
     """
-    kwargs: dict = {"id": model_id}
-    if base_url:
-        kwargs["base_url"] = base_url
-    return OpenAIChat(**kwargs)
+    provider = provider.lower().strip()
+
+    if provider == "openai":
+        from agno.models.openai import OpenAIChat
+
+        kwargs: dict = {"id": model_id}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+        return OpenAIChat(**kwargs)
+
+    if provider == "openrouter":
+        from agno.models.openrouter import OpenRouter
+
+        kwargs = {"id": model_id}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+        return OpenRouter(**kwargs)
+
+    if provider == "openai-like":
+        from agno.models.openai import OpenAILike
+
+        if not base_url:
+            raise ValueError(
+                "LLM_BASE_URL is required when LLM_PROVIDER=openai-like. "
+                "Example: https://api.groq.com/openai/v1"
+            )
+        kwargs = {"id": model_id, "base_url": base_url}
+        if api_key:
+            kwargs["api_key"] = api_key
+        return OpenAILike(**kwargs)
+
+    raise ValueError(
+        f"Unsupported LLM_PROVIDER: {provider!r}. "
+        "Use one of: openai, openrouter, openai-like"
+    )
 
 
 def create_ancora_agent(
-    model: OpenAIChat,
+    model,
     tools: list,
     instructions: list[str],
     db=None,
@@ -54,10 +100,10 @@ def create_ancora_agent(
     """Create the AncoraMind agent.
 
     Args:
-        model: LLM model instance (OpenAIChat).
+        model: LLM model instance (OpenAIChat, OpenRouter, or OpenAILike).
         tools: List of plain Python functions — Agno auto-converts to tools.
         instructions: List of instruction strings (one per markdown prompt file).
-        db: Agno database for session persistence (PostgresDb or SqliteDb).
+        db: Agno database for session persistence.
 
     Returns:
         Configured Agno Agent instance.

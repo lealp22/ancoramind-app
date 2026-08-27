@@ -101,27 +101,119 @@ copy .env.example .env
 Editar `.env` con tus valores reales:
 
 ```env
-# ⚠️ CAMBIAR — tu API key de OpenAI
+# ── LLM Provider ───────────────────────────────
+# Opción 1: OpenAI
+LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-tu-api-key-real-aqui
+LLM_MODEL=gpt-5.4-mini
 
-# ⚠️ CAMBIAR — el token de @BotFather
+# Opción 2: OpenRouter (ver sección 4.5)
+# LLM_PROVIDER=openrouter
+# OPENROUTER_API_KEY=sk-or-v1-tu-key-aqui
+# LLM_MODEL=anthropic/claude-3.5-sonnet
+
+# Opción 3: Otro compatible OpenAI (ver sección 4.5)
+# LLM_PROVIDER=openai-like
+# LLM_MODEL=llama-3.3-70b-versatile
+# LLM_BASE_URL=https://api.groq.com/openai/v1
+# OPENAI_API_KEY=gsk_tu-key-aqui
+
+# ── Telegram ───────────────────────────────────
 TELEGRAM_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
-
-# Desarrollo
 APP_ENV=development
 
-# PostgreSQL — si usas Docker con los valores por defecto
+# ── PostgreSQL ────────────────────────────────
 ANCORA_DATABASE_URL=postgresql+asyncpg://ancora:ancora@localhost:5432/ancoramind
-
-# Opcional: PostgreSQL para Agno también
 # AGNO_DATABASE_URL=postgresql+psycopg://ancora:ancora@localhost:5432/ancoramind
 
-# Opcional: restringir usuarios (IDs de Telegram)
-# ALLOWED_TELEGRAM_USER_IDS=123456789,987654321
-
-# Documentos
+# ── Opcional ──────────────────────────────────
+# ALLOWED_TELEGRAM_USER_IDS=123456789
 DOCUMENT_STORAGE_PATH=./data/documents
 ```
+
+---
+
+## 4.5. Configurar proveedor LLM
+
+AncoraMind soporta **tres tipos de proveedor** mediante `LLM_PROVIDER`:
+
+### OpenAI (por defecto)
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+LLM_MODEL=gpt-5.4-mini
+```
+
+### OpenRouter
+
+[OpenRouter](https://openrouter.ai) da acceso a múltiples modelos (OpenAI, Anthropic, Google, Meta, etc.) con una sola API key.
+
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...
+LLM_MODEL=anthropic/claude-3.5-sonnet
+```
+
+El `base_url` (`https://openrouter.ai/api/v1`) es automático.
+
+**Modelos populares en OpenRouter:**
+
+| Modelo | `LLM_MODEL` |
+|---|---|
+| Claude 3.5 Sonnet | `anthropic/claude-3.5-sonnet` |
+| GPT-5.4 mini | `openai/gpt-5.4-mini` |
+| Gemini 2.0 Flash | `google/gemini-2.0-flash` |
+| Llama 3.3 70B | `meta-llama/llama-3.3-70b-instruct` |
+| DeepSeek R1 | `deepseek/deepseek-r1` |
+
+### Otro proveedor compatible con OpenAI (Groq, Together, DeepSeek, Ollama...)
+
+Usa `LLM_PROVIDER=openai-like` con `LLM_BASE_URL` apuntando al endpoint del proveedor:
+
+```env
+LLM_PROVIDER=openai-like
+OPENAI_API_KEY=gsk_tu-key-de-groq
+LLM_MODEL=llama-3.3-70b-versatile
+LLM_BASE_URL=https://api.groq.com/openai/v1
+```
+
+**Endpoints de proveedores comunes:**
+
+| Proveedor | `LLM_BASE_URL` |
+|---|---|
+| Groq | `https://api.groq.com/openai/v1` |
+| Together AI | `https://api.together.xyz/v1` |
+| DeepSeek | `https://api.deepseek.com/v1` |
+| Ollama (local) | `http://localhost:11434/v1` |
+
+---
+
+## 4.9. Script automatizado (opcional)
+
+En lugar de ejecutar los pasos 5–7 manualmente, puedes usar el script:
+
+```bash
+# Verificar prerrequisitos sin lanzar nada
+bash scripts/run-e2e.sh --check
+
+# Secuencia completa: PostgreSQL → migraciones → ngrok → webhook → lanzar
+bash scripts/run-e2e.sh
+
+# Si el webhook quedó en estado inconsistente, resetear antes de registrar
+bash scripts/run-e2e.sh --reset
+```
+
+> **Nota Windows:** El script `.sh` requiere Git Bash, WSL, o cualquier shell
+> compatible con bash. Si no tienes ninguno, sigue los pasos 5–7 manualmente.
+
+El script automatiza:
+1. Verificación de prerrequisitos (python, docker, ngrok, curl, .env)
+2. Inicio de PostgreSQL (Docker)
+3. Aplicación de migraciones (si no aplicadas)
+4. Detección/inicio de ngrok
+5. Registro del webhook en Telegram
+6. Lanzamiento de AncoraMind
 
 ---
 
@@ -191,7 +283,7 @@ Salida esperada:
 ```
 [INFO] src.main: Starting AncoraMind — env: development
 [INFO] src.main: Domain database initialized
-[INFO] src.main: LLM model: gpt-4o
+[INFO] src.main: LLM provider: openai | model: gpt-5.4-mini
 [INFO] src.main: Loaded 4 instruction blocks
 [INFO] src.main: Note tools registered: remember_note, search_notes
 [INFO] src.main: Document tools registered: search_documents, get_document, analyze_document

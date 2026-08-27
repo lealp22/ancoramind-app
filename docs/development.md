@@ -61,7 +61,7 @@ See `.env.example` for all required variables.
 
 Key variables:
 - `LLM_PROVIDER` — e.g. `openai`, `anthropic`
-- `LLM_MODEL` — e.g. `gpt-4o`
+- `LLM_MODEL` — e.g. `gpt-5.4-mini`
 - `LLM_API_KEY` — your API key
 - `TELEGRAM_BOT_TOKEN` — from @BotFather
 - `DATABASE_URL` — PostgreSQL connection string

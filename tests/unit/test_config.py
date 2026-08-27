@@ -16,24 +16,25 @@ class TestSettings:
         monkeypatch.delenv("AGNO_DATABASE_URL", raising=False)
 
         settings = Settings(_env_file=None)
-        assert settings.llm_model == "gpt-4o"
+        assert settings.llm_model == "gpt-5.4-mini"
         assert settings.app_env == "development"
         assert settings.telegram_token == ""
         assert settings.app_debug is False
 
     def test_env_override(self, monkeypatch):
         """Environment variables should override defaults."""
-        monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
+        monkeypatch.setenv("LLM_MODEL", "gpt-5.6-luna")
         monkeypatch.setenv("APP_ENV", "production")
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
 
         settings = Settings(_env_file=None)
-        assert settings.llm_model == "gpt-4o-mini"
+        assert settings.llm_model == "gpt-5.6-luna"
         assert settings.app_env == "production"
         assert settings.log_level == "DEBUG"
 
-    def test_db_url_property_when_empty(self):
+    def test_db_url_property_when_empty(self, monkeypatch):
         """db_url should return None when AGNO_DATABASE_URL is not set."""
+        monkeypatch.delenv("AGNO_DATABASE_URL", raising=False)
         settings = Settings(_env_file=None)
         assert settings.db_url is None
 
