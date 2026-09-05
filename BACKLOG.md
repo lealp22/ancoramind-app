@@ -43,11 +43,6 @@ fixture, aplicar `migrations/init.sql`, testear repos reales).
 **Criterio de cierre:** `pytest tests/integration/` verde con PostgreSQL
 dockerizado.
 
-### BL-3 · Higiene de repo (inmediato)
-- Commitear: `README.md` (modificado), `AGENTS.md` y `docs/quick-start.md` (sin
-  trackear) — incluyen la documentación multi-shell PowerShell/Git Bash.
-- `.env` modificado — verificar que no se commitea (está en `.gitignore`).
-
 ---
 
 ## P2 — Funcionalidad para "usable de verdad"
@@ -112,6 +107,7 @@ datos existentes (BL-4, BL-6 o BL-7).
 | Docs multi-shell (PowerShell/Git Bash) | — | 2026-09-05 |
 | BL-9 · Spec-003 retroactiva (+ fix aislamiento test_config) | specs/003 | 2026-09-05 |
 | BL-11 · docs/development.md actualizado (env vars, migraciones, multi-shell) | — | 2026-09-05 |
+| BL-3 · Higiene de repo (commits pendientes, push, .env no commiteado) | — | 2026-09-05 |
 
 ---
 
