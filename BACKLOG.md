@@ -93,6 +93,36 @@ una BD vacía; `alembic downgrade -1` deshace correctamente la última migració
 **Previsto para:** antes del primer feature que modifique el schema sobre
 datos existentes (BL-4, BL-6 o BL-7).
 
+### BL-13 · Diseño Soft Personal memory (mini-ADR)
+La "memoria soft personal" (preferencias, personalización) está definida en
+`docs/architecture.md` §7 como "Agno (futuro) — Memory de Agno" pero no tiene
+ni diseño, ni spec, ni implementación. Mini-ADR que decida: qué persiste
+(idioma, formatos, apodos frecuentes...), dónde (Memory de Agno en
+`agno_database_url` — respetando separación de DBs §2.7) y cómo la consumen
+las tools.
+**Previsto para:** post-MVP (primero cerrar BL-1). No bloquea nada actual.
+
+### BL-14 · Migrar infraestructura a Supabase (decisión explícita — abre "not yet")
+**Decisión del propietario (2026-09-05):** trabajar con Supabase desde ya en
+vez de PostgreSQL en contenedor. Alcance:
+1. **BD principal** — proyecto Supabase *main* (versión free, sin branches;
+   separación de entornos se decide más adelante o con upgrade a Pro).
+   Migrar `agno_database_url` (psycopg) y `ancora_database_url` (asyncpg)
+   al pooler de Supabase; aplicar `migrations/init.sql`.
+   ⚠️ Free tier: pausa el proyecto tras ~1 semana de inactividad.
+2. **Storage de ficheros** — nueva implementación de `DocumentStorage`
+   (Protocol en `src/storage/base.py`) sobre Supabase Storage, junto a la
+   de filesystem local.
+3. **BD vectorial (pgvector)** — ⚠️ figura en "fuera de alcance" de este
+   backlog y en AGENTS.md §8; esta mención ES la decisión explícita que la
+   abre. Secuenciación: solo tiene valor tras BL-6 (OCR/contenido real);
+   hasta entonces queda como diseño, no implementación.
+**Criterio de cierre:** app en marcha contra Supabase (BD + storage),
+migraciones aplicadas, E2E de notas/documentos OK, mini-ADR documentando
+la decisión (ADR-002).
+**Nota:** compatible con §2.7 (separación de DBs) — Supabase es solo el
+host PostgreSQL; el schema `ancora` sigue separado del runtime de Agno.
+
 ---
 
 ## Hecho (registro)
