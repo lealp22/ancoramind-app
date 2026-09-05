@@ -70,6 +70,7 @@ docker compose up -d
 | [Governance](docs/governance.md) | AI governance policies |
 | [ADR-001](docs/adr/ADR-001-agno-runtime.md) | Agno runtime decision |
 | [Development](docs/development.md) | Local development guide |
+| [Quick Start](docs/quick-start.md) | Guía de arranque rápido diario |
 | [E2E Deployment](docs/deployment-e2e.md) | Step-by-step Telegram + PostgreSQL deployment |
 
 ---
