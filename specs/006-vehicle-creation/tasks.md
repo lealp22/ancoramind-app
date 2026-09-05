@@ -33,10 +33,13 @@
       cargaba); test_instructions actualizado (4→5 bloques)
 
 ### T5: Tests
-- [ ] `test_register_vehicle` happy path — verifica normalización de matrícula
-- [ ] `test_register_vehicle_duplicate_registration` — `ValueError`, repo no llamado
-- [ ] Verificación de que `user_id` viene del `UserContext` (no del LLM)
-- [ ] `pytest tests/unit/` verde
+- [x] `test_register_vehicle` happy path — verifica normalización de matrícula
+- [x] `test_register_vehicle_duplicate_registration` — `ValueError`, repo no llamado
+- [x] `test_duplicate_comparison_is_normalized` — "AB-123CD" vs "ab 123 cd"
+- [x] `test_no_registration_skips_duplicate_check`
+- [x] `TestNormalizeRegistration` — parametrizado (7 casos)
+- [x] Verificación de que `user_id` viene del `UserContext` (no del LLM)
+- [x] `pytest tests/unit/` verde → **80 tests**
 
 ### T6: Verificación E2E
 - [ ] Telegram: crear vehículo con propose → "Sí" → execute
