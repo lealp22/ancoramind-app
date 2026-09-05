@@ -86,6 +86,18 @@ de éxito por categoría y ejecutar tras cada cambio de prompts/models/tools
 en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`
 (respeta `LLM_PROVIDER`/`LLM_MODEL` del `.env`). Cambio pequeño, un solo sitio.
 
+### BL-12 · Introducir Alembic como sistema de migraciones
+`migrations/init.sql` cubre el POC (idempotente, `IF NOT EXISTS`), pero no
+permite modificar tablas existentes con datos (añadir columna, cambiar tipo,
+backfills). Alembic ya está en `pyproject.toml` como dependencia (`>=1.13.0`).
+Baseline: registrar `init.sql` como la migración inicial (revision) y desde
+ahí solo migraciones incrementales.
+**Criterio de cierre:** `alembic upgrade head` ejecuta el schema completo en
+una BD vacía; `alembic downgrade -1` deshace correctamente la última migración;
+`migrations/init.sql` sigue para despliegues fresh sin Alembic (opcional).
+**Previsto para:** antes del primer feature que modifique el schema sobre
+datos existentes (BL-4, BL-6 o BL-7).
+
 ---
 
 ## Hecho (registro)
