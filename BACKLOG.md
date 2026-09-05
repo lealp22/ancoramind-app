@@ -47,7 +47,7 @@ dockerizado.
 
 ## P2 — Funcionalidad para "usable de verdad"
 
-### BL-4 · Tool para crear vehículos
+### BL-4 · Tool para crear vehículos 🔶 en curso — specs/006
 Ahora los vehículos se insertan por SQL manual en los E2E. Crear par
 `propose_vehicle` / `execute_vehicle` (WRITE → ActionProposal + confirmación),
 siguiendo el patrón de `maintenance.py`.
