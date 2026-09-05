@@ -18,7 +18,7 @@
 |---|---|
 | M1 Agent Runtime (Telegram+Agno+session) | ✅ |
 | M2 Canonical Memory (notes) | ✅ |
-| M3 Document Memory (storage+extraction) | ✅ (spec-003 no documentada — ver BL-9) |
+| M3 Document Memory (storage+extraction) | ✅ (specs/003 documentada retroactivamente) |
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
@@ -81,14 +81,10 @@ Las 5 carpetas de `evals/` están vacías: `confirmation`, `documents`,
 de éxito por categoría y ejecutar tras cada cambio de prompts/models/tools
 (requisito de gobernanza — ver `docs/governance.md`).
 
----
-
-## Higiene documental
-
-### BL-9 · Documentar spec-003 retroactivamente
-M3 (Document Memory) está implementado y testeado pero no existe
-`specs/003-document-memory/` — los specs saltan de 002 a 004. Recrear spec.md +
-tasks.md a partir del código existente para completar el registro SDD.
+### BL-10 · Unificar creación de modelo en tools de documentos
+`agent/tools/documents.py` instancia `OpenAIChat(id="gpt-5.4-mini")` hardcoded
+en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`
+(respeta `LLM_PROVIDER`/`LLM_MODEL` del `.env`). Cambio pequeño, un solo sitio.
 
 ---
 
@@ -102,6 +98,7 @@ tasks.md a partir del código existente para completar el registro SDD.
 | M4 Vehicle vertical slice | specs/004 | — |
 | M5 Calendar & Reminders | specs/005 | — |
 | Docs multi-shell (PowerShell/Git Bash) | — | 2026-09-05 |
+| BL-9 · Spec-003 retroactiva (+ fix aislamiento test_config) | specs/003 | 2026-09-05 |
 
 ---
 

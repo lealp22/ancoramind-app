@@ -85,7 +85,8 @@ prompts/                 ← Assets de IA versionados (identity, soul, tool_cont
 │                           channels/telegram.md, skills/)
 migrations/init.sql      ← Schema completo del dominio (9 tablas + indexes)
 scripts/run-e2e.sh       ← Despliegue automatizado (bash)
-specs/                   ← SDD: 001-runtime ... 005-calendar (spec.md + tasks.md)
+specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
+                            005-calendar (spec.md + tasks.md + verification.md)
 tests/unit/              ← 68 tests
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
@@ -209,7 +210,7 @@ mypy src/
 (fuente única de verdad). Los items priorizados son: E2E de M3–M5,
 integration tests con PostgreSQL real, tool de creación de vehículos,
 background worker de recordatorios, OCR real, proveedor de calendario real,
-evals agentic y documentar spec-003 retroactivamente.
+evals agentic y unificar la factory de modelo en tools de documentos.
 
 **Fuera de alcance (explícitamente "not yet"):** GraphRAG, vector search,
 multi-agent, WhatsApp, web frontend, microservices, event sourcing.

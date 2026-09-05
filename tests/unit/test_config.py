@@ -14,6 +14,10 @@ class TestSettings:
         monkeypatch.delenv("TELEGRAM_TOKEN", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("AGNO_DATABASE_URL", raising=False)
+        monkeypatch.delenv("LLM_MODEL", raising=False)
+        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.delenv("APP_DEBUG", raising=False)
 
         settings = Settings(_env_file=None)
         assert settings.llm_model == "gpt-5.4-mini"
