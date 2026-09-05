@@ -3,18 +3,21 @@
 ## Task Breakdown
 
 ### T1: Domain service
-- [ ] `VehicleService.register_vehicle(user_context, data: VehicleCreate) -> Vehicle`
-- [ ] Normalización: `registration` → uppercase sin espacios; `nickname` → strip
-- [ ] Duplicado por matrícula normalizada → `ValueError` con mensaje claro
-- [ ] Delegación en `VehiclesRepository.create()` (ya existe — no tocar)
+- [x] `VehicleService.register_vehicle(user_context, data: VehicleCreate) -> Vehicle`
+- [x] Normalización: `registration` → uppercase, solo `[A-Z0-9]`
+      (sin espacios ni símbolos); `nickname` → strip
+- [x] Duplicado por matrícula normalizada (ambos lados normalizados) → `ValueError`
+- [x] Delegación en `VehiclesRepository.create()` (ya existe — no tocar)
+- [x] `normalize_registration()` como función de dominio (testable)
 
 ### T2: Tools (thin adapters en `src/agent/tools/vehicles.py`)
-- [ ] `propose_vehicle` — valida, crea ActionProposal (`tool_name="register_vehicle"`),
+- [x] `propose_vehicle` — valida, crea ActionProposal (`tool_name="register_vehicle"`),
       devuelve resumen + confirmación (patrón `maintenance.py`)
-- [ ] `execute_vehicle` — confirm → service → mark_executed (patrón
+- [x] `execute_vehicle` — confirm → service → mark_executed (patrón
       `execute_vehicle_maintenance`)
-- [ ] Docstrings con frases de ejemplo del usuario (español)
-- [ ] Captura de `ValueError` del service → mensaje de error al usuario
+- [x] Docstrings con frases de ejemplo del usuario (español)
+- [x] Captura de `ValueError` del service → mensaje de error al usuario
+- [x] Añadido `_get_actions_repo()` en `vehicles.py` (solo existía en maintenance.py)
 
 ### T3: App wiring
 - [ ] Import + `tools.extend()` de las 2 tools en el bloque de vehículos de

@@ -3,6 +3,7 @@
 Framework-independent. Handles resolution, history, and governance.
 """
 
+import re
 from datetime import date
 from uuid import UUID
 
@@ -17,6 +18,17 @@ from src.domain.vehicles.models import (
 from src.repositories.maintenance import MaintenanceRepository
 from src.repositories.vehicles import VehiclesRepository
 from src.security.user_context import UserContext
+
+
+def normalize_registration(value: str | None) -> str | None:
+    """Normalize a license plate: uppercase, keep only A-Z and 0-9.
+
+    " 12-34 abc " → "1234ABC". Returns None if nothing alphanumeric remains.
+    """
+    if value is None:
+        return None
+    cleaned = re.sub(r"[^A-Z0-9]", "", value.upper())
+    return cleaned or None
 
 
 class VehicleService:
@@ -105,6 +117,34 @@ class VehicleService:
         return await self._maintenance.get_history(user_context.user_id, vehicle_id)
 
     # ── Write Operations ───────────────────────────────
+
+    async def register_vehicle(
+        self, user_context: UserContext, data: VehicleCreate
+    ) -> Vehicle:
+        """Register a new vehicle for the user.
+
+        WRITE operation. Caller must handle confirmation/authorization.
+        Raises ValueError if a vehicle with the same normalized registration
+        already exists for the user.
+        """
+        registration = normalize_registration(data.registration)
+        nickname = data.nickname.strip() if data.nickname else None
+
+        if registration:
+            candidates = await self._vehicles.find_by_reference(
+                user_context.user_id, registration
+            )
+            for candidate in candidates:
+                if normalize_registration(candidate.registration) == registration:
+                    raise ValueError(
+                        f"Ya existe un vehículo con la matrícula "
+                        f"{candidate.registration}: {candidate.display_name}"
+                    )
+
+        normalized = data.model_copy(
+            update={"registration": registration, "nickname": nickname}
+        )
+        return await self._vehicles.create(user_context.user_id, normalized)
 
     async def register_maintenance(
         self,

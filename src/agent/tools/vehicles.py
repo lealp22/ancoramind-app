@@ -7,7 +7,9 @@ from datetime import date
 from uuid import UUID
 
 from agno.run import RunContext
+from pydantic import ValidationError
 
+from src.domain.vehicles.models import VehicleCreate
 from src.domain.vehicles.service import VehicleService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -19,6 +21,11 @@ from src.security.user_context import UserContext
 async def _get_vehicle_service():
     session = await get_session()
     return VehicleService(VehiclesRepository(session), MaintenanceRepository(session))
+
+
+async def _get_actions_repo():
+    session = await get_session()
+    return ActionProposalsRepository(session)
 
 
 async def find_vehicle(run_context: RunContext, reference: str | None = None) -> str:
@@ -100,6 +107,123 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
         lines.append("\n   Sin historial de mantenimiento.")
 
     return "\n".join(lines)
+
+
+async def propose_vehicle(
+    run_context: RunContext,
+    make: str,
+    model: str,
+    year: int | None = None,
+    registration: str | None = None,
+    nickname: str | None = None,
+    vin: str | None = None,
+    source_document_id: str | None = None,
+) -> str:
+    """PROPOSE registering a new vehicle — requires user confirmation.
+
+    Creates an action proposal. Does NOT write yet.
+    Use when the user wants to register a new vehicle, e.g.:
+    - "Registra mi coche: Ford Mondeo 2019, matrícula 1234ABC"
+    - "Añade la furgoneta de la empresa"
+    - "Apunta este vehículo de la factura" (tras analizar un documento)
+    Requires at least make and model.
+
+    Args:
+        run_context: Injected by Agno.
+        make: Brand (Ford, Toyota, etc.).
+        model: Model (Mondeo, Corolla, etc.).
+        year: Optional year (1900-2100).
+        registration: Optional license plate.
+        nickname: Optional user nickname ("mi coche", "la furgoneta").
+        vin: Optional VIN/chassis number.
+        source_document_id: Optional source document UUID (e.g. vehicle registration document).
+    """
+    user_ctx = UserContext.from_run_context(run_context)
+    try:
+        data = VehicleCreate(
+            make=make, model=model, year=year, registration=registration,
+            nickname=nickname, vin=vin,
+        )
+    except ValidationError as e:
+        first = e.errors()[0]
+        loc = first.get("loc", "?")
+        msg = first.get("msg", str(e))[:150]
+        return f"Datos del vehículo no válidos ({loc}: {msg})"
+
+    src_doc = None
+    if source_document_id:
+        try:
+            src_doc = UUID(source_document_id)
+        except ValueError:
+            return f"ID de documento no válido: {source_document_id}"
+
+    actions_repo = await _get_actions_repo()
+    proposal = await actions_repo.create(
+        user_id=user_ctx.user_id,
+        tool_name="register_vehicle",
+        payload={
+            "make": data.make, "model": data.model, "year": data.year,
+            "registration": data.registration, "nickname": data.nickname,
+            "vin": data.vin,
+            "source_document_id": str(src_doc) if src_doc else None,
+        },
+        source_document_id=src_doc,
+    )
+
+    lines = [
+        f"🚗 **Propuesta de nuevo vehículo** (`{proposal['id']}`)",
+        f"   Marca: {data.make} | Modelo: {data.model}",
+    ]
+    if data.year:
+        lines.append(f"   Año: {data.year}")
+    if data.registration:
+        lines.append(f"   Matrícula: {data.registration}")
+    if data.nickname:
+        lines.append(f"   Apodo: {data.nickname}")
+    if data.vin:
+        lines.append(f"   VIN: {data.vin}")
+    lines.append("\n¿Confirmas el registro de este vehículo?")
+    return "\n".join(lines)
+
+
+async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
+    """Execute a confirmed vehicle registration proposal.
+
+    Only call after user explicitly confirmed (e.g. 'Sí' after a proposal).
+
+    Args:
+        run_context: Injected by Agno.
+        proposal_id: The proposal ID from propose_vehicle.
+    """
+    user_ctx = UserContext.from_run_context(run_context)
+    actions_repo = await _get_actions_repo()
+    proposal = await actions_repo.confirm(user_ctx.user_id, proposal_id)
+    if not proposal:
+        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
+
+    payload = proposal["payload"]
+    try:
+        data = VehicleCreate(
+            make=payload["make"], model=payload["model"], year=payload.get("year"),
+            registration=payload.get("registration"), nickname=payload.get("nickname"),
+            vin=payload.get("vin"),
+        )
+        service = await _get_vehicle_service()
+        vehicle = await service.register_vehicle(user_ctx, data)
+        await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
+
+        lines = ["✅ **Vehículo registrado**", f"   {vehicle.display_name}"]
+        if vehicle.registration:
+            lines.append(f"   Matrícula: {vehicle.registration}")
+        lines.append(f"   ID: `{vehicle.id}`")
+        if payload.get("source_document_id"):
+            lines.append(f"   Documento origen: `{payload['source_document_id']}`")
+        return "\n".join(lines)
+    except ValueError as e:
+        # p.ej. matrícula duplicada — la propuesta queda confirmada, no ejecutada
+        return f"❌ No se pudo registrar el vehículo: {str(e)[:200]}"
+    except Exception as e:
+        return f"❌ Error al registrar el vehículo: {str(e)[:200]}"
 
 
 async def get_vehicle_maintenance_history(run_context: RunContext, vehicle_id: str) -> str:
