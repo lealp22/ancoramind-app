@@ -16,7 +16,8 @@ siguiendo el patrón de `src/agent/tools/maintenance.py`.
 ### Must Have
 
 - `VehicleService.register_vehicle()` — método WRITE en el service (dominio puro)
-- Detección de duplicados por matrícula normalizada (uppercase, sin espacios)
+- Detección de duplicados por matrícula normalizada (uppercase, solo
+  caracteres alfanuméricos: sin espacios ni símbolos)
 - Par `propose_vehicle` / `execute_vehicle` en `src/agent/tools/vehicles.py`
   - `propose_vehicle` NO escribe: valida input, crea propuesta `pending_confirmation`
   - `execute_vehicle` valida confirmación, ejecuta y audita
@@ -52,10 +53,11 @@ siguiendo el patrón de `src/agent/tools/maintenance.py`.
 ### Piezas nuevas
 
 1. **Service** — `VehicleService.register_vehicle(user_context, data: VehicleCreate) -> Vehicle`
-   - Normaliza `registration` (`.upper().replace(" ", "")`) y `nickname` (strip)
+   - Normaliza `registration` (uppercase + `re.sub(r"[^A-Z0-9]", "", ...)` —
+     solo letras y números; si queda vacío → None) y `nickname` (strip)
    - Comprueba duplicado de matrícula: `find_by_reference` con matrícula
-     normalizada → si match exacto, lanza `ValueError` (el tool lo captura
-     y devuelve mensaje de error al usuario)
+     normalizada → si algún candidato coincide tras normalizar ambos lados,
+     lanza `ValueError` (el tool lo captura y devuelve mensaje de error)
    - Delega en `VehiclesRepository.create()`
 2. **Tools** — en `vehicles.py` (junto al resto de tools de vehículos):
    - `propose_vehicle(run_context, make, model, year?, registration?, nickname?, vin?, source_document_id?)`
