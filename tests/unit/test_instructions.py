@@ -46,8 +46,14 @@ class TestAssembleInstructions:
         """Should return a list of strings."""
         instructions = assemble_instructions()
         assert isinstance(instructions, list)
-        assert len(instructions) == 4
+        # identity + soul + tool_contract + telegram + vehicle skill
+        assert len(instructions) == 5
         assert all(isinstance(item, str) for item in instructions)
+
+    def test_vehicle_skill_loaded(self):
+        """The vehicles skill (registration + maintenance) should be included."""
+        instructions = assemble_instructions()
+        assert any("Vehicle Registration" in block for block in instructions)
 
     def test_identity_is_first(self):
         """Identity block should be first."""

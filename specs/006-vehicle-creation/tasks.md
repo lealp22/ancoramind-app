@@ -20,15 +20,17 @@
 - [x] Añadido `_get_actions_repo()` en `vehicles.py` (solo existía en maintenance.py)
 
 ### T3: App wiring
-- [ ] Import + `tools.extend()` de las 2 tools en el bloque de vehículos de
-      `_init_domain_tools()` (`src/main.py`)
-- [ ] Log actualizado: "Vehicle tools registered: ..." incluir propose/execute_vehicle
+- [x] Import + `tools.extend()` de las 2 tools en el bloque de vehículos de
+      `_init_domain_tools()` (`src/main.py`) → **13 tools**
+- [x] Log actualizado: "Vehicle tools registered: ..." incluir propose/execute_vehicle
 
 ### T4: Prompts (⚠️ cambio evaluable — anotar en commit)
-- [ ] `prompts/skills/vehicle_maintenance.md`: añadir `propose_vehicle` /
-      `execute_vehicle` a "Available Tools"
-- [ ] Nueva sección "Vehicle Registration" (flujo de confirmación,
+- [x] `prompts/skills/vehicle_maintenance.md`: añadir `propose_vehicle` /
+      `execute_vehicle` a "Available Tools" (renombrado a "Skill — Vehicles")
+- [x] Nueva sección "Vehicle Registration" (flujo de confirmación,
       qué datos pedir: make/model obligatorios, resto opcionales)
+- [x] **Skill activado** en `instructions.py` (estaba comentado — nunca se
+      cargaba); test_instructions actualizado (4→5 bloques)
 
 ### T5: Tests
 - [ ] `test_register_vehicle` happy path — verifica normalización de matrícula

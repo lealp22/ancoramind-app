@@ -65,23 +65,27 @@ def _init_domain_tools(settings: Settings) -> list:
             "search_documents, get_document, analyze_document"
         )
 
-        from src.agent.tools.vehicles import (
-            find_vehicle,
-            get_vehicle_maintenance_history,
-            get_vehicle_summary,
-        )
         from src.agent.tools.maintenance import (
             execute_vehicle_maintenance,
             propose_vehicle_maintenance,
         )
+        from src.agent.tools.vehicles import (
+            execute_vehicle,
+            find_vehicle,
+            get_vehicle_maintenance_history,
+            get_vehicle_summary,
+            propose_vehicle,
+        )
 
         tools.extend([
             find_vehicle, get_vehicle_summary, get_vehicle_maintenance_history,
+            propose_vehicle, execute_vehicle,
             propose_vehicle_maintenance, execute_vehicle_maintenance,
         ])
         logger.info(
             "Vehicle tools registered: find_vehicle, get_vehicle_summary, "
-            "get_vehicle_maintenance_history, propose/execute_vehicle_maintenance"
+            "get_vehicle_maintenance_history, propose/execute_vehicle, "
+            "propose/execute_vehicle_maintenance"
         )
 
         from src.agent.tools.reminders import (
