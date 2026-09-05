@@ -99,6 +99,7 @@ en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`
 | M5 Calendar & Reminders | specs/005 | — |
 | Docs multi-shell (PowerShell/Git Bash) | — | 2026-09-05 |
 | BL-9 · Spec-003 retroactiva (+ fix aislamiento test_config) | specs/003 | 2026-09-05 |
+| BL-11 · docs/development.md actualizado (env vars, migraciones, multi-shell) | — | 2026-09-05 |
 
 ---
 

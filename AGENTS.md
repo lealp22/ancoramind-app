@@ -90,7 +90,8 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
 tests/unit/              ← 68 tests
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
-                           deployment-e2e, adr/ADR-001-agno-runtime.md
+                           deployment-e2e, adding-tools (guía para nuevas tools),
+                           adr/ADR-001-agno-runtime.md
 ```
 
 ***\*Excepción aceptada:*** `domain/documents/service.py` usa `agno.agent.Agent`
@@ -233,6 +234,7 @@ multi-agent, WhatsApp, web frontend, microservices, event sourcing.
 1. **Añadir capability nueva** = models + repository + service + tool +
    registro en `_init_domain_tools()` (main.py) + tests + skill prompt si aplica.
    Seguir el patrón de `notes` (la más sencilla y completa).
+   **Guía detallada paso a paso: `docs/adding-tools.md`.**
 2. **Operación WRITE** → siempre par `propose_*` / `execute_*` con ActionProposal.
 3. **Tests:** los unit tests mockean repositorios (`AsyncMock(spec=Repo)`).
    Ejecutar `pytest tests/unit/` antes de dar nada por terminado.
