@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-05
+Última actualización: 2026-09-06
 
 ---
 
@@ -46,11 +46,6 @@ dockerizado.
 ---
 
 ## P2 — Funcionalidad para "usable de verdad"
-
-### BL-4 · Tool para crear vehículos 🔶 en curso — specs/006
-Ahora los vehículos se insertan por SQL manual en los E2E. Crear par
-`propose_vehicle` / `execute_vehicle` (WRITE → ActionProposal + confirmación),
-siguiendo el patrón de `maintenance.py`.
 
 ### BL-5 · Background worker para recordatorios
 Los recordatorios se crean con status `pending` pero nada los dispara.
@@ -170,6 +165,7 @@ host PostgreSQL; el schema `ancora` sigue separado del runtime de Agno.
 | BL-9 · Spec-003 retroactiva (+ fix aislamiento test_config) | specs/003 | 2026-09-05 |
 | BL-11 · docs/development.md actualizado (env vars, migraciones, multi-shell) | — | 2026-09-05 |
 | BL-3 · Higiene de repo (commits pendientes, push, .env no commiteado) | — | 2026-09-05 |
+| BL-4 · Tool para crear vehículos (propose/execute + normalización + E2E) | specs/006 | 2026-09-06 |
 
 ---
 

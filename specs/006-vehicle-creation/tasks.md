@@ -45,5 +45,6 @@
 ### T6: Verificación E2E
 - [x] Telegram: crear vehículo con propose → "Sí" → execute
 - [x] Telegram: `find_vehicle` con la matrícula nueva lo encuentra
-- [ ] Telegram: intentar matrícula duplicada normalizada → rechazo sin escritura
-- [ ] Documentar en `verification.md` (o anotar pendiente en BACKLOG — BL-1)
+- [x] Telegram: intentar matrícula duplicada normalizada → rechazo sin escritura
+- [x] Corregir matrícula → nueva propuesta, confirmación, alta y búsqueda OK
+- [x] Documentar en `verification.md` con verificación adicional en PostgreSQL

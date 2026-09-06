@@ -1,7 +1,7 @@
 # Spec: 006 — Vehicle Creation Tool
 
 > **Backlog:** BL-4
-> **Status:** in_progress
+> **Status:** implemented
 > **Target:** El usuario registra vehículos desde Telegram sin SQL manual
 
 ---
@@ -34,8 +34,8 @@ siguiendo el patrón de `src/agent/tools/maintenance.py`.
 ### Won't Have
 
 - Edición/borrado de vehículos (DESTRUCTIVE — otro spec si surge)
-- Deduplicación difusa (matrículas con guiones etc. se normalizan solo
-  uppercase + strip de espacios)
+- Deduplicación difusa más allá de la normalización definida (uppercase y
+  eliminación de todo carácter no alfanumérico)
 - Validación de formato de matrícula por país (España vs genérica)
 
 ---
@@ -93,6 +93,6 @@ Por tanto: par propose/execute, sin permisos adicionales.
    sin escribir
 4. `find_vehicle` con la matrícula nueva encuentra el vehículo creado
 5. Sin `ANCORA_DATABASE_URL` → app arranca sin las tools (degradación graceful)
-6. `pytest tests/unit/` verde (68 + nuevos)
+6. `pytest tests/unit/` verde (82 tests)
 7. E2E Telegram probado y documentado en `verification.md` (o anotado en
    BACKLOG como pendiente — alimenta BL-1)

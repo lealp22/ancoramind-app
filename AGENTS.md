@@ -209,9 +209,9 @@ mypy src/
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
 (fuente única de verdad). Los items priorizados son: E2E de M3–M5,
-integration tests con PostgreSQL real, tool de creación de vehículos,
-background worker de recordatorios, OCR real, proveedor de calendario real,
-evals agentic y unificar la factory de modelo en tools de documentos.
+integration tests con PostgreSQL real, migración a Supabase, background worker
+de recordatorios, OCR real, proveedor de calendario real, evals agentic y
+unificar la factory de modelo en tools de documentos.
 
 **Fuera de alcance (explícitamente "not yet"):** GraphRAG, vector search,
 multi-agent, WhatsApp, web frontend, microservices, event sourcing.
