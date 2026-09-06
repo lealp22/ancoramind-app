@@ -117,7 +117,7 @@ class DocumentsRepository:
             INSERT INTO ancora.ai_extractions
                 (document_id, provider, model, prompt_version,
                  schema_version, extraction, confidence, created_at)
-            VALUES (:doc_id,:prov,:model,:pv,:sv,:extraction::jsonb,:conf,:now)
+            VALUES (:doc_id,:prov,:model,:pv,:sv,CAST(:extraction AS jsonb),:conf,:now)
             RETURNING id, document_id, provider, model, prompt_version,
                       schema_version, extraction, confidence, created_at
         """)

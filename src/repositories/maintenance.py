@@ -21,7 +21,7 @@ class MaintenanceRepository:
         stmt = text("""
             INSERT INTO ancora.vehicle_maintenance
                 (vehicle_id,user_id,date,mileage_km,description,workshop,cost,work_performed,notes,source_document_id,created_at)
-            VALUES (:vid,:uid,:date,:mileage,:desc,:ws,:cost,:wp::jsonb,:notes,:src,:now)
+            VALUES (:vid,:uid,:date,:mileage,:desc,:ws,:cost,CAST(:wp AS jsonb),:notes,:src,:now)
             RETURNING *
         """)
         r = await self._session.execute(stmt, {

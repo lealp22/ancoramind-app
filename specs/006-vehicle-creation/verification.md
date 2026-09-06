@@ -43,6 +43,19 @@ skill pero no invocó la tool. La BD confirma que no se creó ninguna propuesta.
 4. `tool_contract.md`: nueva regla 11 — "Never simulate tool calls or their
    results" (⚠️ cambio evaluable)
 
+### Iteración 2 — 2026-09-06 (hallazgo: bug de sintaxis SQL)
+
+La tool ahora **sí se invoca** (fix del skill funcionó) pero falla el INSERT:
+`PostgresSyntaxError: syntax error at or near ":"` — SQLAlchemy + asyncpg no
+traduce `:param::jsonb` (confunde el cast con el bind param). Afectaba a 3
+repos: `actions.create`, `documents.create_extraction`,
+`maintenance.create` — es decir, **todos los propose_* y la extracción IA
+habrían fallado** (por eso M3–M5 no estaban validados en E2E).
+
+**Fix:** `CAST(:param AS jsonb)` en los 3 puntos. Verificado con repro
+contra la BD real: propuesta creada OK (`pending_confirmation`).
+80 unit tests passing.
+
 ### Botones Sí/No (pregunta del E2E)
 
 La interfaz Telegram de AgentOS **ignora los `callback_query`** de Telegram:
@@ -54,6 +67,7 @@ backlog; para el MVP se mantiene texto.
 
 ### Estado
 
-- Resultado: iteración 1 FAIL → fixes aplicados → **pendiente re-test**
+- Resultado: iteración 1 FAIL (agente simulaba) → iteración 2 falla en SQL
+  (fix aplicado y verificado) → **pendiente re-test iteración 3**
 - Resultado: pendiente
 

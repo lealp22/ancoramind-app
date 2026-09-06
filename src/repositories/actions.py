@@ -25,7 +25,7 @@ class ActionProposalsRepository:
         now = datetime.now(tz=timezone.utc)
         stmt = text("""
             INSERT INTO ancora.action_proposals (user_id, tool_name, status, payload, source_document_id, created_at)
-            VALUES (:uid,:tool,'pending_confirmation',:payload::jsonb,:src,:now)
+            VALUES (:uid,:tool,'pending_confirmation',CAST(:payload AS jsonb),:src,:now)
             RETURNING id,user_id,tool_name,status,payload,source_document_id,created_at
         """)
         result = await self._session.execute(stmt, {
