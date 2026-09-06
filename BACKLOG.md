@@ -76,6 +76,18 @@ Las 5 carpetas de `evals/` están vacías: `confirmation`, `documents`,
 de éxito por categoría y ejecutar tras cada cambio de prompts/models/tools
 (requisito de gobernanza — ver `docs/governance.md`).
 
+### BL-15 · Botones de confirmación en Telegram (HITL UX)
+La interfaz Telegram de AgentOS ignora los `callback_query`: no soporta
+inline keyboards nativamente (Discord sí — ver hallazgo en
+`specs/006-vehicle-creation/verification.md`). Opciones: (a) extender el
+webhook de AgentOS para procesar callback_query y enviar reply_markup vía
+pyTelegramBotAPI (toca internals de Agno — seguir proceso ADR-001:
+documentar → demostrar límite → proponer → decidir), (b) mantener
+confirmación textual (estado actual, suficiente para POC), (c) reconsiderar
+canal. Hallazgo proveniente del E2E de specs/006.
+**Previsto para:** post-MVP, junto a la decisión de BL-14 (Supabase) si hay
+migración de runtime.
+
 ### BL-10 · Unificar creación de modelo en tools de documentos
 `agent/tools/documents.py` instancia `OpenAIChat(id="gpt-5.4-mini")` hardcoded
 en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`

@@ -40,10 +40,12 @@ When the user wants to register a NEW vehicle (or a `not_found` result suggests 
 1. Required: make and model. Ask for them if missing.
 2. Optional: year, license plate (matrícula), nickname, VIN.
    Only ask for what the user already offered — don't interrogate.
-3. Call `propose_vehicle` — this creates a proposal and shows a summary.
-   It does NOT register anything yet.
+3. **You MUST call `propose_vehicle`.** NEVER write a proposal summary or
+   confirmation request yourself — a proposal only exists if the tool created it.
+   The tool shows the summary and the proposal ID to the user.
 4. Wait for the user's confirmation ("Sí", "confirma", "vale").
-5. Call `execute_vehicle` with the proposal ID.
+5. Call `execute_vehicle` with the proposal ID from step 3 — the exact ID,
+   never an invented one.
 6. Only claim success after `execute_vehicle` returns it.
 
 Duplicate plates are rejected at execution time (normalized comparison:
@@ -52,11 +54,13 @@ tell the user and do NOT retry with the same data.
 
 ## Maintenance Registration
 
-When registering maintenance:
+Same proposal/execute flow as Vehicle Registration: **you MUST call
+`propose_vehicle_maintenance`** — never simulate the proposal text yourself.
 1. Gather required fields (vehicle, date, mileage if applicable)
-2. Propose the maintenance record to the user
+2. Call `propose_vehicle_maintenance` — it creates the proposal and shows it
 3. Wait for confirmation
-4. Only claim success after the tool returns it
+4. Call `execute_vehicle_maintenance` with the proposal ID
+5. Only claim success after the tool returns it
 
 Link to source document when available.
 

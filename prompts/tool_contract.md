@@ -37,6 +37,11 @@
     Don't try SQL queries to work around missing tools.
     Don't use file operations when a domain tool exists.
 
+11. **Never simulate tool calls or their results.**
+    If an action requires a tool (proposals, writes, searches), you MUST
+    invoke it — describing the expected output in text is NOT the action.
+    A confirmation question is only valid if the propose_* tool produced it.
+
 ## Tool Result Patterns
 
 Tools return structured results:

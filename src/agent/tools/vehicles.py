@@ -183,6 +183,10 @@ async def propose_vehicle(
     if data.vin:
         lines.append(f"   VIN: {data.vin}")
     lines.append("\n¿Confirmas el registro de este vehículo?")
+    lines.append(
+        f"\n(ID de propuesta: `{proposal['id']}` — cuando el usuario confirme, "
+        "debes llamar a execute_vehicle con este ID exacto)"
+    )
     return "\n".join(lines)
 
 
@@ -199,7 +203,12 @@ async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.confirm(user_ctx.user_id, proposal_id)
     if not proposal:
-        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
+        return (
+            f"No existe ninguna propuesta pendiente con el ID `{proposal_id}` "
+            "(o ya fue ejecutada). NO la inventes: primero llama a propose_vehicle "
+            "con los datos del vehículo para crear una propuesta nueva, y espera "
+            "la confirmación del usuario antes de volver a ejecutar."
+        )
 
     payload = proposal["payload"]
     try:
