@@ -129,26 +129,15 @@ ni diseño, ni spec, ni implementación. Mini-ADR que decida: qué persiste
 las tools.
 **Previsto para:** post-MVP (primero cerrar BL-1). No bloquea nada actual.
 
-### BL-14 · Migrar infraestructura a Supabase (decisión explícita — abre "not yet")
+### BL-14 · Migrar infraestructura a Supabase 🔶 en curso — specs/007 + ADR-002
 **Decisión del propietario (2026-09-05):** trabajar con Supabase desde ya en
-vez de PostgreSQL en contenedor. Alcance:
-1. **BD principal** — proyecto Supabase *main* (versión free, sin branches;
-   separación de entornos se decide más adelante o con upgrade a Pro).
-   Migrar `agno_database_url` (psycopg) y `ancora_database_url` (asyncpg)
-   al pooler de Supabase; aplicar `migrations/init.sql`.
-   ⚠️ Free tier: pausa el proyecto tras ~1 semana de inactividad.
-2. **Storage de ficheros** — nueva implementación de `DocumentStorage`
-   (Protocol en `src/storage/base.py`) sobre Supabase Storage, junto a la
-   de filesystem local.
-3. **BD vectorial (pgvector)** — ⚠️ figura en "fuera de alcance" de este
-   backlog y en AGENTS.md §8; esta mención ES la decisión explícita que la
-   abre. Secuenciación: solo tiene valor tras BL-6 (OCR/contenido real);
-   hasta entonces queda como diseño, no implementación.
-**Criterio de cierre:** app en marcha contra Supabase (BD + storage),
-migraciones aplicadas, E2E de notas/documentos OK, mini-ADR documentando
-la decisión (ADR-002).
-**Nota:** compatible con §2.7 (separación de DBs) — Supabase es solo el
-host PostgreSQL; el schema `ancora` sigue separado del runtime de Agno.
+vez de PostgreSQL en contenedor. **Hecho (2026-09-06):** migración baseline
+`ancora_baseline` aplicada (8 tablas), bucket privado `ancora-documents`
+creado, `SupabaseDocumentStorage` + factory (`DOCUMENT_STORAGE_BACKEND`),
+ADR-002, 17 tests nuevos (99 total). **Pendiente:** credenciales reales en
+`.env` (session pooler + SUPABASE_URL/KEY) y E2E T7 (nota + documento +
+vehículo contra Supabase). pgvector: disponible (0.8.2), NO instalado —
+diseño solo hasta BL-6.
 
 ---
 

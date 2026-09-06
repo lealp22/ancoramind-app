@@ -3,9 +3,8 @@
 Organizes files as: {base_path}/{YY}/{MM}/{uuid}.{ext}
 """
 
-import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from src.storage.base import DocumentStorage, StoredDocument
@@ -28,7 +27,7 @@ class LocalFileSystemStorage(DocumentStorage):
 
     def _make_path(self, filename: str) -> Path:
         """Generate a storage path with date-based sharding."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         month_dir = self._base / str(now.year) / f"{now.month:02d}"
         month_dir.mkdir(parents=True, exist_ok=True)
 

@@ -12,11 +12,15 @@ from src.domain.documents.service import DocumentService
 from src.repositories.database import get_session
 from src.repositories.documents import DocumentsRepository
 from src.security.user_context import UserContext
-from src.storage.local import LocalFileSystemStorage
+from src.storage.base import DocumentStorage
 
-_storage = LocalFileSystemStorage(
-    base_path=os.environ.get("DOCUMENT_STORAGE_PATH", "./data/documents")
-)
+
+def _get_storage() -> DocumentStorage:
+    """Build the configured storage backend (ADR-002)."""
+    from src.config import Settings
+    from src.storage.factory import create_storage
+
+    return create_storage(Settings())  # type: ignore[call-arg]
 
 
 async def _get_document_service():
@@ -25,7 +29,7 @@ async def _get_document_service():
     session = await get_session()
     return DocumentService(
         repository=DocumentsRepository(session),
-        storage=_storage,
+        storage=_get_storage(),
         model=OpenAIChat(id="gpt-5.4-mini"),
     )
 
@@ -120,14 +124,17 @@ async def analyze_document(run_context: RunContext, files: list | None = None) -
 
     for file_obj in files:
         filepath = getattr(file_obj, "filepath", None) or getattr(file_obj, "path", None)
-        filename = getattr(file_obj, "original_filename", None) or os.path.basename(str(filepath or "unknown"))
+        filename = getattr(file_obj, "original_filename", None) or (
+            os.path.basename(str(filepath or "unknown"))
+        )
         mime_type = getattr(file_obj, "mime_type", None) or "application/octet-stream"
 
         if not filepath or not os.path.exists(str(filepath)):
             results.append(f"⚠️ No se pudo leer: {filename}")
             continue
 
-        content = open(str(filepath), "rb").read()
+        with open(str(filepath), "rb") as fh:
+            content = fh.read()
         result = await service.ingest(user_ctx, content, filename, mime_type)
         doc = result.document
         ext = result.extraction

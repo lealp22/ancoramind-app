@@ -75,7 +75,8 @@ src/
 ├── repositories/        ← Acceso PostgreSQL (sqlalchemy async, text() parametrizado)
 │   ├── database.py      ← init_database(), get_session() — llamar init al arrancar
 │   └── notes, documents, vehicles, maintenance, reminders, calendar, actions
-├── storage/             ← base.py (DocumentStorage Protocol), local.py (filesystem)
+├── storage/             ← base.py (DocumentStorage Protocol), local.py, supabase_storage.py,
+│                           factory.py (DOCUMENT_STORAGE_BACKEND: local|supabase — ADR-002)
 ├── security/            ← user_context.py (UserContext.from_run_context)
 └── governance/          ← (metadata, riesgo — en desarrollo)
 
@@ -83,15 +84,17 @@ AGENTS.md                 ← Esta guía (jerarquía: manda junto con docs/archi
 BACKLOG.md                ← Lista viva y priorizada de pendientes (fuente única de verdad)
 prompts/                 ← Assets de IA versionados (identity, soul, tool_contract,
 │                           channels/telegram.md, skills/)
-migrations/init.sql      ← Schema completo del dominio (9 tablas + indexes)
+migrations/init.sql      ← Schema completo del dominio (8 tablas + indexes;
+│                           aplicado también como baseline en Supabase — ADR-002)
 scripts/run-e2e.sh       ← Despliegue automatizado (bash)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
-                            005-calendar (spec.md + tasks.md + verification.md)
-tests/unit/              ← 82 tests
+                            005-calendar, 006-vehicle-creation, 007-supabase
+tests/unit/              ← 99 tests
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
-                           adr/ADR-001-agno-runtime.md
+                           adr/ADR-001-agno-runtime.md,
+                           adr/ADR-002-supabase-infrastructure.md
 ```
 
 ***\*Excepción aceptada:*** `domain/documents/service.py` usa `agno.agent.Agent`

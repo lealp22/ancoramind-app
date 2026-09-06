@@ -34,7 +34,14 @@ class Settings(BaseSettings):
     agno_database_url: str = ""
 # ── Document Storage ─────────────────────────────
     document_storage_path: str = "./data/documents"
+    document_storage_backend: str = "local"
+    """Backend: local | supabase"""
     ancora_database_url: str = ""
+
+    # ── Supabase (storage + managed PostgreSQL host) ──
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "ancora-documents"
 
     # ── Security ─────────────────────────────────────
     allowed_telegram_user_ids: str = ""

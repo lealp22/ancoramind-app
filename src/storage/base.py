@@ -4,7 +4,6 @@ Protocol-based design. Only LocalFileSystemStorage implemented for POC.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 
