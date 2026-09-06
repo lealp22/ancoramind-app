@@ -43,6 +43,7 @@
       workaround OpenRouter descubierto en E2E)
 
 ### T6: Verificación E2E
-- [ ] Telegram: crear vehículo con propose → "Sí" → execute
-- [ ] Telegram: `find_vehicle` con la matrícula nueva lo encuentra
+- [x] Telegram: crear vehículo con propose → "Sí" → execute
+- [x] Telegram: `find_vehicle` con la matrícula nueva lo encuentra
+- [ ] Telegram: intentar matrícula duplicada normalizada → rechazo sin escritura
 - [ ] Documentar en `verification.md` (o anotar pendiente en BACKLOG — BL-1)

@@ -84,6 +84,32 @@ Cubierto por tests con la forma exacta del fallo; 82 unit tests passing.
 iteración ya contiene el mensaje malformado. No se borra automáticamente la
 propuesta real pendiente (dato de auditoría).
 
+### Iteración 4 — 2026-09-06 (flujo principal PASS)
+
+Tras reiniciar, el primer intento reutilizó la sesión contaminada de la
+iteración anterior y falló. Después de enviar `/new`, el flujo completó:
+
+1. `propose_vehicle` mostró la propuesta del Ford Mondeo 2019, matrícula
+   `1234ABC`, y solicitó confirmación.
+2. "Sí" → `execute_vehicle` respondió éxito.
+3. `find_vehicle` encontró el Ford Mondeo por matrícula.
+
+Verificación adicional en PostgreSQL:
+
+- Propuesta `e3ca2015-a8ad-4993-94c4-f375191e5dfb`: `executed`, con
+  `confirmed_at` y `executed_at`.
+- Vehículo `8d7699a0-42e1-4dba-8cd0-475c0a64bf25`: Ford Mondeo 2019,
+  matrícula canónica `1234ABC`, `user_id=452022640`.
+
+El escenario 4 (matrícula duplicada con minúsculas/símbolos) queda pendiente
+de E2E antes de cerrar BL-4.
+
+**Observación UX:** `find_vehicle` tardó lo suficiente para que pareciera
+bloqueado. Agno 2.9 envía `send_chat_action("typing")` una sola vez antes de
+procesar; Telegram lo expira a los pocos segundos. La mejora recomendada es
+refrescar periódicamente `typing` durante el run, no enviar un mensaje temporal
+que ensucie el chat. Registrado como BL-17.
+
 ### Botones Sí/No (pregunta del E2E)
 
 La interfaz Telegram de AgentOS **ignora los `callback_query`** de Telegram:
@@ -97,7 +123,6 @@ backlog; para el MVP se mantiene texto.
 
 - Resultado: iteración 1 FAIL (agente simulaba) → iteración 2 falla en SQL
   (fix aplicado) → iteración 3 falla por historial con tool call malformado
-  (workaround aplicado y verificado unitariamente) → **pendiente re-test
-  iteración 4 en sesión nueva**
-- Resultado: pendiente
+  (workaround aplicado) → iteración 4 flujo principal PASS.
+- Resultado: **PASS parcial (3/4 escenarios); duplicado E2E pendiente**
 

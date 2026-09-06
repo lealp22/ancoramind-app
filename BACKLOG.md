@@ -98,6 +98,16 @@ antes de ejecutar/persistir. Es acoplamiento a método privado de Agno.
 reproducir el caso; si Agno ya filtra llamadas incompletas, eliminar subclase
 y sus tests. Mientras exista, test unitario obligatorio sobre la forma exacta.
 
+### BL-17 · Mantener indicador «escribiendo…» durante procesos largos
+Agno 2.9 Telegram envía `send_chat_action("typing")` una sola vez antes de
+procesar. Telegram lo expira a los pocos segundos; búsquedas/tools lentas
+parecen bloqueadas. Implementar un refresco periódico mientras dure el run,
+cancelándolo siempre en `finally`. Preferible a enviar/borrar un mensaje
+«Procesando…», que ensucia el chat y requiere más llamadas API.
+**Restricción:** Agno no expone configuración/hook para refrescarlo; aislar la
+extensión en la capa `agent/` y seguir ADR-001 (no tocar domain). Añadir tests
+de cancelación en éxito y error. Post-MVP salvo que la latencia empeore.
+
 ### BL-10 · Unificar creación de modelo en tools de documentos
 `agent/tools/documents.py` instancia `OpenAIChat(id="gpt-5.4-mini")` hardcoded
 en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`
