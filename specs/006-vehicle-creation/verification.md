@@ -56,6 +56,34 @@ habrían fallado** (por eso M3–M5 no estaban validados en E2E).
 contra la BD real: propuesta creada OK (`pending_confirmation`).
 80 unit tests passing.
 
+### Iteración 3 — 2026-09-06 (hallazgo: tool call malformado del proveedor)
+
+`propose_vehicle` completó correctamente y creó la propuesta real
+`ef768efc-3643-4546-b904-5c1dbacf0035`. Al responder "Sí", AgentOS devolvió
+su error genérico antes de ejecutar `execute_vehicle`; la propuesta quedó
+`pending_confirmation` y no se creó ningún vehículo.
+
+El historial persistido por Agno muestra que el primer run contenía dos tool
+calls en el mismo mensaje:
+
+1. `{ "id": "<uuid generado por Agno>" }` — incompleto, sin `type` ni
+   `function`; Agno añadió un resultado de error para una tool inexistente.
+2. El `propose_vehicle` válido, que sí se ejecutó.
+
+En el turno siguiente, OpenRouter rechazó el historial malformado antes de
+que el modelo pudiera elegir `execute_vehicle` (`status=ERROR`,
+`Provider returned error`). Entorno: Agno 2.9.0, modelo
+`minimax/minimax-m3:free`, proveedor OpenRouter (backend GMICloud).
+
+**Fix defensivo:** `SafeOpenRouter` filtra tool calls incompletos en
+`_populate_assistant_message`, después de consolidar streaming y antes de que
+Agno los ejecute/persista. Mantiene llamadas válidas y registra un warning.
+Cubierto por tests con la forma exacta del fallo; 82 unit tests passing.
+
+**Re-test:** reiniciar la app y enviar `/new`, porque la sesión de esta
+iteración ya contiene el mensaje malformado. No se borra automáticamente la
+propuesta real pendiente (dato de auditoría).
+
 ### Botones Sí/No (pregunta del E2E)
 
 La interfaz Telegram de AgentOS **ignora los `callback_query`** de Telegram:
@@ -68,6 +96,8 @@ backlog; para el MVP se mantiene texto.
 ### Estado
 
 - Resultado: iteración 1 FAIL (agente simulaba) → iteración 2 falla en SQL
-  (fix aplicado y verificado) → **pendiente re-test iteración 3**
+  (fix aplicado) → iteración 3 falla por historial con tool call malformado
+  (workaround aplicado y verificado unitariamente) → **pendiente re-test
+  iteración 4 en sesión nueva**
 - Resultado: pendiente
 

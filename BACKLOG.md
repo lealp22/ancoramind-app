@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 68 passing (`pytest tests/unit/`)
+Tests: 82 passing (`pytest tests/unit/`)
 
 ---
 
@@ -37,7 +37,7 @@ evento de calendario (propose/execute).
 `verification.md` del spec correspondiente.
 
 ### BL-2 · Integration tests con PostgreSQL real
-`tests/integration/` está vacío. Los 68 tests actuales mockean repositorios.
+`tests/integration/` está vacío. Los 82 tests actuales mockean repositorios.
 Crear integration tests contra el PostgreSQL de docker-compose (arrancar en
 fixture, aplicar `migrations/init.sql`, testear repos reales).
 **Criterio de cierre:** `pytest tests/integration/` verde con PostgreSQL
@@ -87,6 +87,16 @@ confirmación textual (estado actual, suficiente para POC), (c) reconsiderar
 canal. Hallazgo proveniente del E2E de specs/006.
 **Previsto para:** post-MVP, junto a la decisión de BL-14 (Supabase) si hay
 migración de runtime.
+
+### BL-16 · Retirar workaround SafeOpenRouter cuando Agno valide tool calls
+El E2E de specs/006 descubrió que `minimax/minimax-m3:free` vía OpenRouter
+(backend GMICloud) emitió un tool call vacío junto al válido. Agno 2.9.0 le
+añadió UUID, lo persistió y OpenRouter rechazó el siguiente turno. Workaround
+actual: `SafeOpenRouter._populate_assistant_message()` filtra calls incompletos
+antes de ejecutar/persistir. Es acoplamiento a método privado de Agno.
+**Criterio de cierre:** al actualizar Agno o cambiar de modelo/proveedor,
+reproducir el caso; si Agno ya filtra llamadas incompletas, eliminar subclase
+y sus tests. Mientras exista, test unitario obligatorio sobre la forma exacta.
 
 ### BL-10 · Unificar creación de modelo en tools de documentos
 `agent/tools/documents.py` instancia `OpenAIChat(id="gpt-5.4-mini")` hardcoded

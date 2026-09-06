@@ -6,11 +6,64 @@ Supports multiple LLM providers:
 - openai-like: Generic OpenAI-compatible (uses OPENAI_API_KEY + custom base_url)
 """
 
+import logging
 import os
+from typing import Any
 
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
+from agno.models.message import Message
+from agno.models.openrouter import OpenRouter
+from agno.models.response import ModelResponse
+
+logger = logging.getLogger(__name__)
+
+
+def _is_complete_function_call(tool_call: dict[str, Any]) -> bool:
+    """Return whether a provider tool call is safe to execute and replay.
+
+    Some OpenRouter model/provider combinations have emitted an empty tool
+    call alongside a valid one. Agno 2.9 adds a UUID to that empty entry and
+    persists it, but the provider rejects the malformed history next turn.
+    """
+    function = tool_call.get("function")
+    return (
+        tool_call.get("type") == "function"
+        and isinstance(function, dict)
+        and bool(function.get("name"))
+    )
+
+
+class SafeOpenRouter(OpenRouter):
+    """OpenRouter adapter that drops malformed tool calls before persistence."""
+
+    def _populate_assistant_message(
+        self,
+        assistant_message: Message,
+        provider_response: ModelResponse,
+    ) -> Message:
+        """Sanitize consolidated tool calls before Agno executes or stores them.
+
+        This is deliberately applied after streaming deltas are consolidated:
+        individual deltas may be incomplete, while the final calls may not.
+        """
+        complete_calls = [
+            call for call in provider_response.tool_calls
+            if _is_complete_function_call(call)
+        ]
+        dropped_calls = len(provider_response.tool_calls) - len(complete_calls)
+        if dropped_calls:
+            logger.warning(
+                "Dropped %d malformed OpenRouter tool call(s) from model %s",
+                dropped_calls,
+                self.id,
+            )
+        provider_response.tool_calls = complete_calls
+        return super()._populate_assistant_message(
+            assistant_message,
+            provider_response,
+        )
 
 
 def create_db(db_url: str | None = None):
@@ -63,14 +116,12 @@ def create_model(
         return OpenAIChat(**kwargs)
 
     if provider == "openrouter":
-        from agno.models.openrouter import OpenRouter
-
         kwargs = {"id": model_id}
         if api_key:
             kwargs["api_key"] = api_key
         if base_url:
             kwargs["base_url"] = base_url
-        return OpenRouter(**kwargs)
+        return SafeOpenRouter(**kwargs)
 
     if provider == "openai-like":
         from agno.models.openai import OpenAILike

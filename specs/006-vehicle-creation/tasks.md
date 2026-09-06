@@ -39,7 +39,8 @@
 - [x] `test_no_registration_skips_duplicate_check`
 - [x] `TestNormalizeRegistration` — parametrizado (7 casos)
 - [x] Verificación de que `user_id` viene del `UserContext` (no del LLM)
-- [x] `pytest tests/unit/` verde → **80 tests**
+- [x] `pytest tests/unit/` verde → **82 tests** (80 al cerrar T5 + 2 del
+      workaround OpenRouter descubierto en E2E)
 
 ### T6: Verificación E2E
 - [ ] Telegram: crear vehículo con propose → "Sí" → execute

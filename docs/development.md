@@ -68,7 +68,7 @@ app arranca igualmente pero sin domain tools (degradación graceful).
 ## Testing
 
 ```bash
-# Unit tests (68 passing — repos mockeados, sin PostgreSQL)
+# Unit tests (82 passing — repos mockeados, sin PostgreSQL)
 pytest tests/unit/
 
 # Integration tests (requiere PostgreSQL real — pendiente, ver BACKLOG.md BL-2)
