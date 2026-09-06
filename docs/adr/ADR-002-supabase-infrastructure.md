@@ -47,7 +47,7 @@ Usar **Supabase** como proveedor de infraestructura gestionada:
 
 | Conexión | Driver | URL |
 |---|---|---|
-| Agno runtime | psycopg (sync) | `postgresql://postgres.<ref>:PWD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres` |
+| Agno runtime | psycopg v3 (sync) | `postgresql+psycopg://postgres.<ref>:PWD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres` |
 | AncoraMind Core | asyncpg (async) | `postgresql+asyncpg://postgres.<ref>:PWD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres` |
 
 - **Session pooler (puerto 5432), no transaction pooler (6543):** asyncpg usa
@@ -56,6 +56,9 @@ Usar **Supabase** como proveedor de infraestructura gestionada:
   (`db.<ref>.supabase.co:5432`) es solo IPv6 en el free tier; el pooler
   funciona con IPv4.
 - Las credenciales viven en `.env`, nunca en Git (§69 del brief).
+- `create_db()` fija explícitamente `db_schema="agno_runtime"`. Sin este
+  parámetro Agno crearía sus tablas en `public`, violando la separación
+  obligatoria runtime/dominio.
 
 ### Limitaciones aceptadas
 
@@ -67,6 +70,10 @@ Usar **Supabase** como proveedor de infraestructura gestionada:
   datos futura podría copiar objetos entre buckets.
 - **Work in progress del Pro plan:** branches de Supabase (dev/prod) quedan
   fuera de alcance hasta que se pague el plan o surja necesidad.
+- Las tablas `ancora` no tienen grants para `anon`, `authenticated` ni
+  `service_role`; la app accede por conexión PostgreSQL como `postgres`. Si
+  en el futuro se expone `ancora` mediante PostgREST o se conceden grants,
+  habrá que habilitar RLS y definir políticas antes de hacerlo.
 
 ## Alternativas consideradas
 

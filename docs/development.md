@@ -8,7 +8,8 @@
 ## Prerequisites
 
 - Python 3.12+
-- Docker & Docker Compose (PostgreSQL 16)
+- Proyecto Supabase activo (opción principal) o Docker & Docker Compose
+  (alternativa local)
 - ngrok (para el webhook de Telegram en local)
 - Credenciales en `.env` (ver [`.env.example`](../.env.example))
 
@@ -33,7 +34,29 @@ cp .env.example .env
 # Editar .env con tus credenciales
 ```
 
-## Database (PostgreSQL via Docker)
+## Database
+
+### Opción principal: Supabase
+
+Usar el **Session pooler** (IPv4, puerto 5432) del Dashboard → Connect:
+
+```env
+AGNO_DATABASE_URL=postgresql+psycopg://postgres.<ref>:<password>@<pooler>:5432/postgres
+ANCORA_DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@<pooler>:5432/postgres
+DOCUMENT_STORAGE_BACKEND=supabase
+SUPABASE_URL=https://<ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_STORAGE_BUCKET=ancora-documents
+```
+
+No usar el Transaction pooler (6543) con la configuración actual de asyncpg.
+La Service Role Key es exclusivamente server-side y nunca se commitea.
+
+Las variables del proceso tienen prioridad sobre `.env`. Si cambias entre
+Docker local y Supabase, abre una terminal nueva o recarga `.env`; de lo
+contrario, una URL antigua exportada puede seguir apuntando a `localhost`.
+
+### Alternativa local: PostgreSQL via Docker
 
 ```bash
 # Arrancar solo PostgreSQL
@@ -44,8 +67,9 @@ docker compose down
 
 ### Aplicar migraciones
 
-Migraciones idempotentes en `migrations/init.sql` (schema `ancora`, 9 tablas).
+Migraciones idempotentes en `migrations/init.sql` (schema `ancora`, 8 tablas).
 No se usa Alembic de momento (se introducirá cuando haya necesidad real).
+En Supabase, el baseline ya está registrado como migración `ancora_baseline`.
 
 ```bash
 # PowerShell:
@@ -68,7 +92,7 @@ app arranca igualmente pero sin domain tools (degradación graceful).
 ## Testing
 
 ```bash
-# Unit tests (82 passing — repos mockeados, sin PostgreSQL)
+# Unit tests (101 passing — repos y Supabase client mockeados)
 pytest tests/unit/
 
 # Integration tests (requiere PostgreSQL real — pendiente, ver BACKLOG.md BL-2)
@@ -101,7 +125,11 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `NGROK_URL` | URL del túnel para el webhook | — |
 | `AGNO_DATABASE_URL` | Runtime de Agno (si no: SQLite en `tmp/`) | — |
 | `ANCORA_DATABASE_URL` | DB del dominio (schema `ancora`) — sin ella, sin domain tools | — |
+| `DOCUMENT_STORAGE_BACKEND` | `local` \| `supabase` | `local` |
 | `DOCUMENT_STORAGE_PATH` | Ruta del storage de documentos | `./data/documents` |
+| `SUPABASE_URL` | URL base del proyecto (backend `supabase`) | — |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clave server-side de Storage | — |
+| `SUPABASE_STORAGE_BUCKET` | Bucket privado de documentos | `ancora-documents` |
 | `ALLOWED_TELEGRAM_USER_IDS` | Allowlist de user IDs (coma-separados) | vacío = todos |
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |

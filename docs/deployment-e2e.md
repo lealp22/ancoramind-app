@@ -1,6 +1,6 @@
 # AncoraMind — Guía de Despliegue E2E
 
-> **Objetivo:** Lanzar AncoraMind completo con Telegram + PostgreSQL y validar
+> **Objetivo:** Lanzar AncoraMind completo con Telegram + Supabase y validar
 > todos los milestones (M1–M5) de extremo a extremo.
 
 ---
@@ -13,9 +13,9 @@
 | Git | `git --version` |
 | ngrok | [descargar](https://ngrok.com/download) + cuenta gratuita |
 | Cuenta de Telegram | [telegram.org](https://telegram.org) |
-| API key de OpenAI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| Docker Desktop | [docker.com](https://www.docker.com/products/docker-desktop/) (opcional, para PostgreSQL) |
-| PostgreSQL 16+ | Si no usas Docker: [postgresql.org](https://www.postgresql.org/download/) |
+| API key de LLM | OpenAI, OpenRouter u otro proveedor compatible |
+| Proyecto Supabase | Opción principal: PostgreSQL + Storage gestionados |
+| Docker Desktop | Opcional, solo para desarrollo con PostgreSQL local |
 
 ---
 
@@ -48,9 +48,42 @@ python -c "from src.main import create_app; print('OK')"
 
 ---
 
-## 3. Configurar PostgreSQL
+## 3. Configurar persistencia
 
-### Opción A: Docker (recomendado)
+### Opción A: Supabase (recomendada — ADR-002)
+
+El proyecto `ancoramind_project` ya contiene:
+
+- schema `ancora` con 8 tablas (migración `ancora_baseline`);
+- schema `agno_runtime` para las tablas internas de Agno;
+- bucket privado `ancora-documents` (límite 20 MB).
+
+En Supabase Dashboard → **Connect → Session pooler**, copia la URI y crea las
+dos variantes. La contraseña debe ir URL-encoded si contiene caracteres
+especiales:
+
+```env
+AGNO_DATABASE_URL=postgresql+psycopg://postgres.<ref>:<password>@<pooler>:5432/postgres
+ANCORA_DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@<pooler>:5432/postgres
+```
+
+Usa **Session pooler (puerto 5432)**, no Transaction pooler (6543). La URL de
+Agno debe incluir `+psycopg`; de lo contrario SQLAlchemy intentará cargar
+`psycopg2`.
+
+Para Storage:
+
+```env
+DOCUMENT_STORAGE_BACKEND=supabase
+SUPABASE_URL=https://<ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_STORAGE_BUCKET=ancora-documents
+```
+
+La Service Role Key es exclusivamente server-side: nunca se comparte, registra
+en logs ni commitea.
+
+### Opción B: Docker local
 
 ```bash
 # Iniciar PostgreSQL
@@ -82,7 +115,7 @@ Deberías ver:
  ancora | vehicles            | table | ancora
 ```
 
-### Opción B: PostgreSQL local
+### Opción C: PostgreSQL instalado localmente
 
 ```bash
 psql -U postgres -c "CREATE USER ancora WITH PASSWORD 'ancora';"
@@ -122,13 +155,18 @@ LLM_MODEL=gpt-5.4-mini
 TELEGRAM_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 APP_ENV=development
 
-# ── PostgreSQL ────────────────────────────────
-ANCORA_DATABASE_URL=postgresql+asyncpg://ancora:ancora@localhost:5432/ancoramind
-# AGNO_DATABASE_URL=postgresql+psycopg://ancora:ancora@localhost:5432/ancoramind
+# ── Supabase PostgreSQL (Session pooler, puerto 5432) ──
+AGNO_DATABASE_URL=postgresql+psycopg://postgres.<ref>:<password>@<pooler>:5432/postgres
+ANCORA_DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@<pooler>:5432/postgres
+
+# ── Supabase Storage ──────────────────────────
+DOCUMENT_STORAGE_BACKEND=supabase
+SUPABASE_URL=https://<ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_STORAGE_BUCKET=ancora-documents
 
 # ── Opcional ──────────────────────────────────
 # ALLOWED_TELEGRAM_USER_IDS=123456789
-DOCUMENT_STORAGE_PATH=./data/documents
 ```
 
 ---
@@ -197,7 +235,7 @@ En lugar de ejecutar los pasos 5–7 manualmente, puedes usar el script:
 # Verificar prerrequisitos sin lanzar nada
 bash scripts/run-e2e.sh --check
 
-# Secuencia completa: PostgreSQL → migraciones → ngrok → webhook → lanzar
+# Secuencia completa: detectar DB → ngrok → webhook → lanzar
 bash scripts/run-e2e.sh
 
 # Si el webhook quedó en estado inconsistente, resetear antes de registrar
@@ -208,9 +246,9 @@ bash scripts/run-e2e.sh --reset
 > compatible con bash. Si no tienes ninguno, sigue los pasos 5–7 manualmente.
 
 El script automatiza:
-1. Verificación de prerrequisitos (python, docker, ngrok, curl, .env)
-2. Inicio de PostgreSQL (Docker)
-3. Aplicación de migraciones (si no aplicadas)
+1. Verificación de prerrequisitos (python, ngrok, curl, `.env`)
+2. Detección de Supabase frente a PostgreSQL local
+3. Inicio de Docker + migraciones solo si la DB es local
 4. Detección/inicio de ngrok
 5. Registro del webhook en Telegram
 6. Lanzamiento de AncoraMind
@@ -284,12 +322,12 @@ Salida esperada:
 [INFO] src.main: Starting AncoraMind — env: development
 [INFO] src.main: Domain database initialized
 [INFO] src.main: LLM provider: openai | model: gpt-5.4-mini
-[INFO] src.main: Loaded 4 instruction blocks
+[INFO] src.main: Loaded 5 instruction blocks
 [INFO] src.main: Note tools registered: remember_note, search_notes
 [INFO] src.main: Document tools registered: search_documents, get_document, analyze_document
 [INFO] src.main: Vehicle tools registered: find_vehicle, get_vehicle_summary, ...
 [INFO] src.main: Reminder + Calendar tools registered: ...
-[INFO] src.main: Total tools: 17
+[INFO] src.main: Total tools: 19
 [INFO] src.main: AgentOS app created — webhook: /telegram/webhook
 ```
 
@@ -354,16 +392,14 @@ Esperado: `search_documents` → lista documentos con fecha, tamaño, tipo.
 
 ### 8.4 — Vehículos (M4)
 
-> ⚠️ Para testing E2E, inserta un vehículo directamente en PostgreSQL
-> (la tool dedicada de creación se añadirá en iteración futura):
+Primero crea el vehículo mediante el flujo gobernado:
 
-```sql
-INSERT INTO ancora.vehicles (user_id, make, model, year, registration, nickname)
-VALUES ('TU_TELEGRAM_USER_ID', 'Ford', 'Mondeo', 2020, '1234ABC', 'el coche');
+```text
+Tú: Registra mi Ford Mondeo 2020, matrícula 1234ABC
+Bot: propose_vehicle → muestra resumen y solicita confirmación
+Tú: Sí
+Bot: execute_vehicle → confirma el alta
 ```
-
-Donde `TU_TELEGRAM_USER_ID` es tu ID numérico de Telegram
-(visible en logs como session_id: `tg:ancoramind:123456789`).
 
 ```
 Tú: ¿Qué coches tengo?

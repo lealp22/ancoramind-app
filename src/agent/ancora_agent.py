@@ -70,9 +70,10 @@ def create_db(db_url: str | None = None):
     """Create the Agno runtime database.
 
     Uses PostgreSQL if AGNO_DATABASE_URL is set, otherwise defaults to SQLite.
+    Agno runtime tables always live in the dedicated ``agno_runtime`` schema.
     """
     if db_url:
-        return PostgresDb(db_url=db_url)
+        return PostgresDb(db_url=db_url, db_schema="agno_runtime")
     os.makedirs("tmp", exist_ok=True)
     return SqliteDb(
         session_table="ancoramind_sessions",

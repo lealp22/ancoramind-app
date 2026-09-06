@@ -19,6 +19,7 @@ documentos, manteniendo intactas las fronteras arquitectónicas (§2.5, §2.7,
   (`ancora_baseline`, sin los GRANT al rol `ancora` inexistente)
 - Bucket privado `ancora-documents` (20 MB limit) en Supabase Storage
 - Conexión vía **session pooler** (IPv4, puerto 5432) para ambos URLs
+- Runtime Agno fijado explícitamente en schema `agno_runtime`
 - `SupabaseDocumentStorage` — implementación del `DocumentStorage` Protocol
   (`store`/`get`/`delete`/`exists`) con `supabase-py`, I/O bloqueante envuelto
   en `asyncio.to_thread`
@@ -61,6 +62,8 @@ documentos, manteniendo intactas las fronteras arquitectónicas (§2.5, §2.7,
 5. `pyproject.toml` — +`supabase>=2.5.0`
 6. `.env.example` — sección Supabase con los 2 URLs de pooler y las 3 vars
    de storage
+7. `src/agent/ancora_agent.py` — `PostgresDb(..., db_schema="agno_runtime")`
+   para impedir que las tablas de Agno terminen en `public`
 
 ### Infra (fuera del código — hecho vía MCP/dashboard)
 

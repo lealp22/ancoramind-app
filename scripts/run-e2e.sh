@@ -4,8 +4,8 @@
 # =============================================================================
 # Automates the full deployment sequence:
 #   1. Check prerequisites
-#   2. Start PostgreSQL (Docker)
-#   3. Apply database migrations
+#   2. Detect managed Supabase vs local PostgreSQL
+#   3. Start PostgreSQL + migrations only in local mode
 #   4. Check .env configuration
 #   5. Start ngrok (if not running)
 #   6. Register Telegram webhook
@@ -52,7 +52,15 @@ done
 # ── 1. Prerequisites ─────────────────────────────
 echo ""; info "Checking prerequisites..."
 check_cmd() { command -v "$1" >/dev/null 2>&1 || error "$1 not found. Install it first."; }
-check_cmd python; check_cmd docker; check_cmd ngrok; check_cmd curl
+check_cmd python; check_cmd curl
+
+if command -v ngrok >/dev/null 2>&1; then
+  NGROK_CMD="$(command -v ngrok)"
+elif [ -x "$HOME/tools/ngrok.exe" ]; then
+  NGROK_CMD="$HOME/tools/ngrok.exe"
+else
+  error "ngrok not found in PATH or at ~/tools/ngrok.exe"
+fi
 
 [ -n "${TELEGRAM_TOKEN:-}" ] || error "TELEGRAM_TOKEN not set in .env"
 [ -n "${LLM_PROVIDER:-}" ] || error "LLM_PROVIDER not set in .env"
@@ -65,36 +73,67 @@ case "$LLM_PROVIDER" in
     [ -n "${OPENAI_API_KEY:-}" ] || warn "OPENAI_API_KEY not set" ;;
   *) error "Unknown LLM_PROVIDER: $LLM_PROVIDER (use: openai, openrouter, openai-like)" ;;
 esac
-ok "Prerequisites OK — provider: $LLM_PROVIDER"
+
+STORAGE_BACKEND="${DOCUMENT_STORAGE_BACKEND:-local}"
+case "$STORAGE_BACKEND" in
+  local) ;;
+  supabase)
+    [ -n "${SUPABASE_URL:-}" ] || error "SUPABASE_URL required when DOCUMENT_STORAGE_BACKEND=supabase"
+    [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] || error "SUPABASE_SERVICE_ROLE_KEY required when DOCUMENT_STORAGE_BACKEND=supabase"
+    ;;
+  *) error "Unknown DOCUMENT_STORAGE_BACKEND: $STORAGE_BACKEND (use: local, supabase)" ;;
+esac
+
+[ -n "${ANCORA_DATABASE_URL:-}" ] || error "ANCORA_DATABASE_URL not set"
+USE_LOCAL_DB=false
+case "$ANCORA_DATABASE_URL" in
+  *localhost*|*127.0.0.1*) USE_LOCAL_DB=true ;;
+esac
+
+if [ "$USE_LOCAL_DB" = true ]; then
+  check_cmd docker
+  DATABASE_MODE="local"
+else
+  DATABASE_MODE="managed"
+fi
+
+if [ "$STORAGE_BACKEND" = "supabase" ] && [[ "${SUPABASE_URL:-}" == *".storage.supabase.co"* ]]; then
+  error "SUPABASE_URL must be the project URL (https://<ref>.supabase.co), not the storage host"
+fi
+
+ok "Prerequisites OK — provider: $LLM_PROVIDER | database: $DATABASE_MODE | storage: $STORAGE_BACKEND"
 
 if [ "$CHECK_ONLY" = true ]; then info "Check-only mode. Exiting."; exit 0; fi
 
-# ── 2. PostgreSQL ────────────────────────────────
-echo ""; info "Starting PostgreSQL..."
-if docker compose ps postgres 2>/dev/null | grep -q "running"; then
-  ok "PostgreSQL already running"
-else
-  docker compose up postgres -d || error "Failed to start PostgreSQL"
-  info "Waiting for PostgreSQL..."
-  for i in $(seq 1 30); do
-    docker compose exec -T postgres pg_isready -U ancora -d ancoramind >/dev/null 2>&1 && break
-    sleep 1; [ "$i" -eq 30 ] && error "PostgreSQL not ready after 30s"
-  done
-  ok "PostgreSQL is ready"
-fi
+# ── 2-3. Database ─────────────────────────────────
+if [ "$USE_LOCAL_DB" = true ]; then
+  echo ""; info "Starting local PostgreSQL..."
+  if docker compose ps postgres 2>/dev/null | grep -q "running"; then
+    ok "PostgreSQL already running"
+  else
+    docker compose up postgres -d || error "Failed to start PostgreSQL"
+    info "Waiting for PostgreSQL..."
+    for i in $(seq 1 30); do
+      docker compose exec -T postgres pg_isready -U ancora -d ancoramind >/dev/null 2>&1 && break
+      sleep 1; [ "$i" -eq 30 ] && error "PostgreSQL not ready after 30s"
+    done
+    ok "PostgreSQL is ready"
+  fi
 
-# ── 3. Migrations ───────────────────────────────
-echo ""; info "Applying migrations..."
-if docker compose exec -T postgres psql -U ancora -d ancoramind -c "SELECT 1 FROM ancora.notes LIMIT 1" >/dev/null 2>&1; then
-  ok "Migrations already applied"
+  info "Checking local migrations..."
+  if docker compose exec -T postgres psql -U ancora -d ancoramind -c "SELECT 1 FROM ancora.notes LIMIT 1" >/dev/null 2>&1; then
+    ok "Migrations already applied"
+  else
+    docker compose exec -T postgres psql -U ancora -d ancoramind < migrations/init.sql || error "Failed to apply migrations"
+    ok "Migrations applied"
+  fi
+  TABLE_COUNT=$(docker compose exec -T postgres psql -U ancora -d ancoramind -t -c \
+    "SELECT count(*) FROM information_schema.tables WHERE table_schema='ancora'" | tr -d '[:space:]')
+  DATABASE_LABEL="local PostgreSQL ($TABLE_COUNT domain tables)"
 else
-  docker compose exec -T postgres psql -U ancora -d ancoramind < migrations/init.sql || error "Failed to apply migrations"
-  ok "Migrations applied"
+  info "Managed database detected — Docker and local migrations skipped"
+  DATABASE_LABEL="managed PostgreSQL (Supabase/pooler)"
 fi
-
-TABLE_COUNT=$(docker compose exec -T postgres psql -U ancora -d ancoramind -t -c \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema='ancora'" | tr -d '[:space:]')
-info "Domain tables in 'ancora' schema: $TABLE_COUNT"
 
 # ── 4. ngrok ────────────────────────────────────
 echo ""; info "Checking ngrok..."
@@ -109,7 +148,7 @@ fi
 
 if [ -z "$NGROK_URL" ]; then
   info "Starting ngrok in background..."
-  ngrok http 7777 > /dev/null 2>&1 &
+  "$NGROK_CMD" http 7777 > /dev/null 2>&1 &
   NGROK_PID=$!
   sleep 3
   NGROK_URL=$(curl -s "$NGROK_API" 2>/dev/null \
@@ -138,7 +177,8 @@ echo "=============================================="
 echo "  Provider:  $LLM_PROVIDER"
 echo "  Model:     ${LLM_MODEL:-gpt-5.4-mini}"
 echo "  Webhook:   $WEBHOOK_URL"
-echo "  Database:  PostgreSQL ($TABLE_COUNT domain tables)"
+echo "  Database:  $DATABASE_LABEL"
+echo "  Storage:   $STORAGE_BACKEND"
 echo "=============================================="
 echo ""
 info "Starting AncoraMind (Ctrl+C to stop)..."; echo ""

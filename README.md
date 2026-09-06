@@ -118,7 +118,7 @@ docs/               ← Architecture, governance, ADRs
 - [x] M5: Calendar & Reminders
 - [ ] MVP: Usable personal assistant (E2E Telegram validation)
 
-### Capabilities (17 tools)
+### Capabilities (19 tools)
 
 | Domain | Tools | Risk |
 |---|---|---|
@@ -126,6 +126,7 @@ docs/               ← Architecture, governance, ADRs
 | Notes | `remember_note`, `search_notes` | WRITE/READ |
 | Documents | `search_documents`, `get_document`, `analyze_document` | READ/EXTRACT |
 | Vehicles | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history` | READ |
+| Vehicles (creation) | `propose_vehicle`, `execute_vehicle` | WRITE |
 | Vehicles (write) | `propose_vehicle_maintenance`, `execute_vehicle_maintenance` | WRITE |
 | Reminders | `list_reminders`, `propose_reminder`, `execute_reminder` | READ/WRITE |
 | Calendar | `check_calendar`, `propose_calendar_event`, `execute_calendar_event` | READ/EXTERNAL_ACTION |

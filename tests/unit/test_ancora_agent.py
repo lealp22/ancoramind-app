@@ -1,9 +1,27 @@
 """Unit tests for AncoraMind model factory and provider safeguards."""
 
+from agno.db.postgres import PostgresDb
+from agno.db.sqlite import SqliteDb
 from agno.models.message import Message
 from agno.models.response import ModelResponse
 
-from src.agent.ancora_agent import SafeOpenRouter, create_model
+from src.agent.ancora_agent import SafeOpenRouter, create_db, create_model
+
+
+def test_create_db_uses_dedicated_agno_runtime_schema():
+    db = create_db("postgresql+psycopg://user:pass@localhost/database")
+
+    assert isinstance(db, PostgresDb)
+    assert db.db_schema == "agno_runtime"
+
+
+def test_create_db_defaults_to_sqlite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    db = create_db()
+
+    assert isinstance(db, SqliteDb)
+    assert db.session_table_name == "ancoramind_sessions"
 
 
 def test_create_model_uses_safe_openrouter_adapter():

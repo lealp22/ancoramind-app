@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 82 passing (`pytest tests/unit/`)
+Tests: 101 passing (`pytest tests/unit/`)
 
 ---
 
@@ -37,7 +37,8 @@ evento de calendario (propose/execute).
 `verification.md` del spec correspondiente.
 
 ### BL-2 · Integration tests con PostgreSQL real
-`tests/integration/` está vacío. Los 82 tests actuales mockean repositorios.
+`tests/integration/` está vacío. Los 101 tests actuales mockean repositorios
+y el cliente de Supabase.
 Crear integration tests contra el PostgreSQL de docker-compose (arrancar en
 fixture, aplicar `migrations/init.sql`, testear repos reales).
 **Criterio de cierre:** `pytest tests/integration/` verde con PostgreSQL
@@ -134,9 +135,11 @@ las tools.
 vez de PostgreSQL en contenedor. **Hecho (2026-09-06):** migración baseline
 `ancora_baseline` aplicada (8 tablas), bucket privado `ancora-documents`
 creado, `SupabaseDocumentStorage` + factory (`DOCUMENT_STORAGE_BACKEND`),
-ADR-002, 17 tests nuevos (99 total). **Pendiente:** credenciales reales en
-`.env` (session pooler + SUPABASE_URL/KEY) y E2E T7 (nota + documento +
-vehículo contra Supabase). pgvector: disponible (0.8.2), NO instalado —
+ADR-002, Storage real verificado y 19 tests nuevos (101 total). Seguridad:
+`rls_auto_enable()` ya no es ejecutable por roles API y Security Advisor está
+limpio. Session pooler sync/async e integración directa de repositorios ya
+verificados. **Pendiente:** E2E Telegram T7 (nota + documento + vehículo
+contra Supabase). pgvector: disponible (0.8.2), NO instalado —
 diseño solo hasta BL-6.
 
 ---
