@@ -46,8 +46,8 @@
       con aislamiento cross-user y limpieza de datos temporales
 - [x] Nota: remember/search contra Supabase
 - [ ] Documento: primera imagen FAIL; fixes `images`/`files`, streaming y
-      skill implementados; pendiente re-test Telegram
+      skill implementados; re-test Telegram pausado por BL-18
 - [ ] Vehículo: propose → Sí → execute PASS; búsqueda `6789-XYZ` corregida,
-      pendiente re-test Telegram
+      re-test Telegram pausado por BL-18
 - [x] Storage smoke test directo: upload → exists → download idéntico → delete
 - [x] Pipeline directo de imagen: Agno `Image` → tool → Storage + DB → cleanup

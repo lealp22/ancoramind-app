@@ -33,8 +33,20 @@ Tests: 108 passing (`pytest tests/unit/`)
 Probar en Telegram con credenciales reales: subir documento → extracción,
 registrar vehículo + mantenimiento (propose/execute), crear recordatorio y
 evento de calendario (propose/execute).
+**Pausa operativa (2026-09-07):** alerta de seguridad de red al usar ngrok;
+no retomar el canal hasta disponer de una alternativa autorizada (BL-18).
+Mientras tanto, validar los flujos mediante integration tests sin Telegram.
 **Criterio de cierre:** los 5 flujos probados y documentados en el
 `verification.md` del spec correspondiente.
+
+### BL-18 · Sustituir ngrok por una exposición HTTPS autorizada
+La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
+red sin autorización. Evaluar y decidir una alternativa para el webhook de
+Telegram: Cloudflare Tunnel, Tailscale Funnel, VPS propio o despliegue gestionado
+(Railway/Render/Fly). Requisitos: HTTPS público estable, secret token de webhook,
+coste/control razonables y aprobación de la política de red.
+**Criterio de cierre:** alternativa seleccionada y documentada; E2E Telegram
+ejecutado sin alertas ni túneles no autorizados.
 
 ### BL-2 · Integration tests con PostgreSQL real
 `tests/integration/` está vacío. Los 108 tests actuales mockean repositorios
@@ -140,9 +152,10 @@ ADR-002, Storage real verificado y 26 tests nuevos (108 total). Seguridad:
 `rls_auto_enable()` ya no es ejecutable por roles API y Security Advisor está
 limpio. Session pooler sync/async e integración directa de repositorios ya
 verificados. E2E nota y alta de vehículo PASS; fixes de foto, búsqueda de
-matrícula formateada y OpenRouter streaming listos. **Pendiente:** re-test
-Telegram de documento y búsqueda para cerrar T7. pgvector: disponible (0.8.2), NO instalado —
-diseño solo hasta BL-6.
+matrícula formateada y OpenRouter streaming listos. **Pendiente/pausado:**
+re-test Telegram de documento y búsqueda para cerrar T7, bloqueado hasta
+resolver BL-18 (alternativa autorizada a ngrok). pgvector: disponible (0.8.2),
+NO instalado — diseño solo hasta BL-6.
 
 ---
 

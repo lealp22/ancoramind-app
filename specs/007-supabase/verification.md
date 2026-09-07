@@ -92,8 +92,9 @@ Después de los fixes se verificó directamente:
 - [x] Configurar `ANCORA_DATABASE_URL` con Session pooler Supabase
 - [x] Telegram: guardar y recuperar una nota; confirmar fila en `ancora.notes`
 - [ ] Telegram: subir documento; confirmar objeto en Storage y fila en
-      `ancora.documents`
-- [ ] Telegram: repetir búsqueda del vehículo con matrícula formateada
+      `ancora.documents` — **pausado por BL-18** (alternativa a ngrok)
+- [ ] Telegram: repetir búsqueda del vehículo con matrícula formateada —
+      **pausado por BL-18**
 
 El valor de `SUPABASE_SERVICE_ROLE_KEY` nunca debe copiarse en este documento
 ni en logs/commits.
