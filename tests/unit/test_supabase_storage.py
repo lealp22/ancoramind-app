@@ -135,7 +135,11 @@ def _settings(**overrides):
     from src.config import Settings
 
     settings = Settings(
-        telegram_token="x", llm_provider="openai", _env_file=None
+        telegram_token="x",
+        llm_provider="openai",
+        supabase_url="",
+        supabase_service_role_key="",
+        _env_file=None,
     )
     for field, value in overrides.items():
         setattr(settings, field, value)

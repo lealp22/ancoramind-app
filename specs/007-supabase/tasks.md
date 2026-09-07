@@ -31,7 +31,7 @@
 ### T5: Tests
 - [x] `tests/unit/test_supabase_storage.py` (cliente mockeado): 17 tests —
       happy paths, FileNotFoundError, key traversal, layout de keys, factory
-- [x] `pytest tests/unit/` verde completo → **101 tests**
+- [x] `pytest tests/unit/` verde completo → **108 tests**
 - [x] ruff limpio en ficheros tocados (+ fix preexistente SIM115 en documents.py)
 - [x] Tests de `create_db`: PostgreSQL usa `agno_runtime`; fallback SQLite intacto
 
@@ -44,7 +44,10 @@
 - [x] URLs del Session pooler configuradas y conexiones sync/async verificadas
 - [x] Integración directa: notes + vehicles + ActionProposal contra Supabase,
       con aislamiento cross-user y limpieza de datos temporales
-- [ ] Nota: remember/search contra Supabase
-- [ ] Documento: subir attachment → bucket `ancora-documents`
-- [ ] Vehículo: propose → Sí → execute (regresión de specs/006)
+- [x] Nota: remember/search contra Supabase
+- [ ] Documento: primera imagen FAIL; fixes `images`/`files`, streaming y
+      skill implementados; pendiente re-test Telegram
+- [ ] Vehículo: propose → Sí → execute PASS; búsqueda `6789-XYZ` corregida,
+      pendiente re-test Telegram
 - [x] Storage smoke test directo: upload → exists → download idéntico → delete
+- [x] Pipeline directo de imagen: Agno `Image` → tool → Storage + DB → cleanup

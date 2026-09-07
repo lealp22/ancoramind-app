@@ -55,6 +55,15 @@ class VehicleService:
             candidates = await self._vehicles.find_by_reference(
                 user_context.user_id, reference
             )
+            normalized_reference = normalize_registration(reference)
+            if (
+                not candidates
+                and normalized_reference
+                and normalized_reference != reference.upper()
+            ):
+                candidates = await self._vehicles.find_by_reference(
+                    user_context.user_id, normalized_reference
+                )
         else:
             candidates = await self._vehicles.list_by_user(user_context.user_id)
 
@@ -62,7 +71,7 @@ class VehicleService:
             return VehicleResolution(
                 status="not_found",
                 message=(
-                    f"No encontré ningún vehículo"
+                    "No encontré ningún vehículo"
                     + (f' que coincida con "{reference}".' if reference else ".")
                     + " Puedes registrar uno con los datos del vehículo."
                 ),

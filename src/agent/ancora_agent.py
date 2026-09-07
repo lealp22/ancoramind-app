@@ -13,6 +13,7 @@ from typing import Any
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
+from agno.models.base import MessageData
 from agno.models.message import Message
 from agno.models.openrouter import OpenRouter
 from agno.models.response import ModelResponse
@@ -64,6 +65,27 @@ class SafeOpenRouter(OpenRouter):
             assistant_message,
             provider_response,
         )
+
+    def _populate_assistant_message_from_stream_data(
+        self,
+        assistant_message: Message,
+        stream_data: MessageData,
+    ) -> None:
+        """Sanitize consolidated streaming tool calls before execution/storage."""
+        super()._populate_assistant_message_from_stream_data(
+            assistant_message,
+            stream_data,
+        )
+        tool_calls = assistant_message.tool_calls or []
+        complete_calls = [call for call in tool_calls if _is_complete_function_call(call)]
+        dropped_calls = len(tool_calls) - len(complete_calls)
+        if dropped_calls:
+            logger.warning(
+                "Dropped %d malformed streaming OpenRouter tool call(s) from model %s",
+                dropped_calls,
+                self.id,
+            )
+        assistant_message.tool_calls = complete_calls
 
 
 def create_db(db_url: str | None = None):

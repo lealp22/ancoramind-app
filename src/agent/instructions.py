@@ -37,7 +37,7 @@ def assemble_instructions() -> list[str]:
     instructions.append(load_prompt("channels/telegram.md"))
 
     # Skills — add as domains are implemented
-    # instructions.append(load_prompt("skills/documents.md"))
+    instructions.append(load_prompt("skills/documents.md"))
     instructions.append(load_prompt("skills/vehicle_maintenance.md"))
 
     return instructions

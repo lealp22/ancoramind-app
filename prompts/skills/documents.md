@@ -17,13 +17,15 @@
 ## Document Pipeline (automatic)
 
 When the user sends an attachment:
-1. Original is stored automatically
-2. Document record is created automatically
-3. AI extraction runs automatically
-4. You receive the extraction results
+1. You MUST call `analyze_document` exactly once
+2. Agno injects Telegram photos as `images` and documents as `files`
+3. The tool stores the original automatically
+4. The tool creates the document record automatically
+5. The tool runs AI extraction and returns the result
 
-You don't need to call `store_document` or `analyze_document` for newly
-received attachments — the pipeline handles this.
+Never invent or manually supply `images`/`files`: they are trusted built-in
+parameters injected by Agno from the current Telegram message. Do not claim
+the attachment was archived until `analyze_document` confirms it.
 
 ## Important
 

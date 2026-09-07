@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-06
+> Última actualización: 2026-09-07
 
 ---
 
@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8). 101 tests passing.
+- **Estado actual:** Milestones M1–M5 completos (ver §8). 108 tests passing.
 
 ---
 
@@ -89,7 +89,7 @@ migrations/init.sql      ← Schema completo del dominio (8 tablas + indexes;
 scripts/run-e2e.sh       ← Despliegue automatizado (bash)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase
-tests/unit/              ← 101 tests
+tests/unit/              ← 108 tests
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -145,7 +145,7 @@ si hay error 404, cambiar `LLM_MODEL` en `.env`.
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests (101 passing)
+# Tests (108 passing)
 python -m pytest tests/unit/ -v
 
 # Lanzar la app (requiere .env + PostgreSQL/Supabase + ngrok + webhook)

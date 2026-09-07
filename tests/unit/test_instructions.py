@@ -46,14 +46,22 @@ class TestAssembleInstructions:
         """Should return a list of strings."""
         instructions = assemble_instructions()
         assert isinstance(instructions, list)
-        # identity + soul + tool_contract + telegram + vehicle skill
-        assert len(instructions) == 5
+        # identity + soul + tool_contract + telegram + documents + vehicles
+        assert len(instructions) == 6
         assert all(isinstance(item, str) for item in instructions)
 
     def test_vehicle_skill_loaded(self):
         """The vehicles skill (registration + maintenance) should be included."""
         instructions = assemble_instructions()
         assert any("Vehicle Registration" in block for block in instructions)
+
+    def test_document_skill_loaded(self):
+        """The document ingestion contract should be included."""
+        instructions = assemble_instructions()
+        assert any(
+            "MUST call `analyze_document` exactly once" in block
+            for block in instructions
+        )
 
     def test_identity_is_first(self):
         """Identity block should be first."""
@@ -69,4 +77,4 @@ class TestAssembleInstructions:
         """No instruction block should be empty."""
         instructions = assemble_instructions()
         for block in instructions:
-            assert len(block.strip()) > 0, f"Empty block found in instructions"
+            assert len(block.strip()) > 0, "Empty block found in instructions"

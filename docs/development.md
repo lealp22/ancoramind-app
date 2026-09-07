@@ -92,7 +92,7 @@ app arranca igualmente pero sin domain tools (degradación graceful).
 ## Testing
 
 ```bash
-# Unit tests (101 passing — repos y Supabase client mockeados)
+# Unit tests (108 passing — repos y Supabase client mockeados)
 pytest tests/unit/
 
 # Integration tests (requiere PostgreSQL real — pendiente, ver BACKLOG.md BL-2)

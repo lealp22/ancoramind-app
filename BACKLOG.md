@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-06
+Última actualización: 2026-09-07
 
 ---
 
@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 101 passing (`pytest tests/unit/`)
+Tests: 108 passing (`pytest tests/unit/`)
 
 ---
 
@@ -37,7 +37,7 @@ evento de calendario (propose/execute).
 `verification.md` del spec correspondiente.
 
 ### BL-2 · Integration tests con PostgreSQL real
-`tests/integration/` está vacío. Los 101 tests actuales mockean repositorios
+`tests/integration/` está vacío. Los 108 tests actuales mockean repositorios
 y el cliente de Supabase.
 Crear integration tests contra el PostgreSQL de docker-compose (arrancar en
 fixture, aplicar `migrations/init.sql`, testear repos reales).
@@ -88,8 +88,9 @@ migración de runtime.
 El E2E de specs/006 descubrió que `minimax/minimax-m3:free` vía OpenRouter
 (backend GMICloud) emitió un tool call vacío junto al válido. Agno 2.9.0 le
 añadió UUID, lo persistió y OpenRouter rechazó el siguiente turno. Workaround
-actual: `SafeOpenRouter._populate_assistant_message()` filtra calls incompletos
-antes de ejecutar/persistir. Es acoplamiento a método privado de Agno.
+actual: `SafeOpenRouter` filtra calls incompletos en las rutas streaming y
+no-streaming antes de ejecutar/persistir. Es acoplamiento a métodos privados
+de Agno.
 **Criterio de cierre:** al actualizar Agno o cambiar de modelo/proveedor,
 reproducir el caso; si Agno ya filtra llamadas incompletas, eliminar subclase
 y sus tests. Mientras exista, test unitario obligatorio sobre la forma exacta.
@@ -135,11 +136,12 @@ las tools.
 vez de PostgreSQL en contenedor. **Hecho (2026-09-06):** migración baseline
 `ancora_baseline` aplicada (8 tablas), bucket privado `ancora-documents`
 creado, `SupabaseDocumentStorage` + factory (`DOCUMENT_STORAGE_BACKEND`),
-ADR-002, Storage real verificado y 19 tests nuevos (101 total). Seguridad:
+ADR-002, Storage real verificado y 26 tests nuevos (108 total). Seguridad:
 `rls_auto_enable()` ya no es ejecutable por roles API y Security Advisor está
 limpio. Session pooler sync/async e integración directa de repositorios ya
-verificados. **Pendiente:** E2E Telegram T7 (nota + documento + vehículo
-contra Supabase). pgvector: disponible (0.8.2), NO instalado —
+verificados. E2E nota y alta de vehículo PASS; fixes de foto, búsqueda de
+matrícula formateada y OpenRouter streaming listos. **Pendiente:** re-test
+Telegram de documento y búsqueda para cerrar T7. pgvector: disponible (0.8.2), NO instalado —
 diseño solo hasta BL-6.
 
 ---

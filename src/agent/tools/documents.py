@@ -3,9 +3,12 @@
 Plain Python functions with run_context injection by Agno.
 """
 
-import os
+import mimetypes
+from collections.abc import Sequence
+from pathlib import Path
 from uuid import UUID
 
+from agno.media import File, Image
 from agno.run import RunContext
 
 from src.domain.documents.service import DocumentService
@@ -104,37 +107,82 @@ async def get_document(run_context: RunContext, document_id: str) -> str:
         if e.get("suggested_actions"):
             lines.append(f"   💡 Acciones sugeridas: {', '.join(e['suggested_actions'])}")
     return "\n".join(lines)
-async def analyze_document(run_context: RunContext, files: list | None = None) -> str:
+
+
+def _image_mime_type(content: bytes, declared: str | None) -> str:
+    """Return a safe image MIME type from declaration or common signatures."""
+    if declared and declared.startswith("image/"):
+        return declared
+    if content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if content.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return "image/webp"
+    return "application/octet-stream"
+
+
+def _media_filename(media: File | Image, mime_type: str, index: int) -> str:
+    """Derive a stable, non-user-controlled fallback filename for Agno media."""
+    filename = getattr(media, "filename", None) or getattr(media, "name", None)
+    if filename:
+        return Path(str(filename)).name
+
+    filepath = getattr(media, "filepath", None)
+    if filepath:
+        return Path(str(filepath)).name
+
+    extension = mimetypes.guess_extension(mime_type) or ".bin"
+    media_id = getattr(media, "id", None) or str(index)
+    return f"telegram-media-{media_id}{extension}"
+
+
+async def analyze_document(
+    run_context: RunContext,
+    images: Sequence[Image] | None = None,
+    files: Sequence[File] | None = None,
+) -> str:
     """Process a newly received attachment through the document pipeline.
 
-    Called when user sends a document via Telegram. Agno provides the
-    downloaded file via the `files` built-in parameter.
+    Called when user sends media via Telegram. Agno injects photos through
+    `images` and document attachments through `files`.
     Pipeline: store original → register → AI extract → return summary.
 
     Args:
         run_context: Injected by Agno.
-        files: Downloaded file objects from Agno (built-in parameter).
+        images: Telegram photos converted to Agno Image objects (injected).
+        files: Telegram documents converted to Agno File objects (injected).
     """
-    if not files:
+    media_items: list[File | Image] = [*(images or []), *(files or [])]
+    if not media_items:
         return "No se recibió ningún archivo para analizar."
 
     user_ctx = UserContext.from_run_context(run_context)
     service = await _get_document_service()
     results = []
 
-    for file_obj in files:
-        filepath = getattr(file_obj, "filepath", None) or getattr(file_obj, "path", None)
-        filename = getattr(file_obj, "original_filename", None) or (
-            os.path.basename(str(filepath or "unknown"))
-        )
-        mime_type = getattr(file_obj, "mime_type", None) or "application/octet-stream"
-
-        if not filepath or not os.path.exists(str(filepath)):
-            results.append(f"⚠️ No se pudo leer: {filename}")
+    for index, media in enumerate(media_items, start=1):
+        content = await media.aget_content_bytes()
+        if not content:
+            results.append(f"⚠️ No se pudo leer el adjunto {index}.")
             continue
 
-        with open(str(filepath), "rb") as fh:
-            content = fh.read()
+        declared_mime = getattr(media, "mime_type", None)
+        preliminary_filename = _media_filename(
+            media,
+            declared_mime or "application/octet-stream",
+            index,
+        )
+        mime_type = (
+            _image_mime_type(content, declared_mime)
+            if isinstance(media, Image)
+            else declared_mime
+            or mimetypes.guess_type(preliminary_filename)[0]
+            or "application/octet-stream"
+        )
+        filename = _media_filename(media, mime_type, index)
         result = await service.ingest(user_ctx, content, filename, mime_type)
         doc = result.document
         ext = result.extraction

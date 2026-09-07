@@ -65,6 +65,33 @@ class TestFindVehicle:
         assert result.status == "found"
         assert result.vehicle == v
 
+    async def test_registration_reference_retries_normalized(
+        self, service, mock_vehicles_repo, user_ctx
+    ):
+        vehicle = make_vehicle()
+        vehicle.registration = "6789XYZ"
+        mock_vehicles_repo.find_by_reference.side_effect = [[], [vehicle]]
+
+        result = await service.find_vehicle(user_ctx, "6789-xyz")
+
+        assert result.status == "found"
+        assert result.vehicle == vehicle
+        assert mock_vehicles_repo.find_by_reference.await_args_list == [
+            (("test-user", "6789-xyz"),),
+            (("test-user", "6789XYZ"),),
+        ]
+
+    async def test_regular_reference_does_not_retry_when_already_canonical(
+        self, service, mock_vehicles_repo, user_ctx
+    ):
+        mock_vehicles_repo.find_by_reference.return_value = []
+
+        await service.find_vehicle(user_ctx, "Toyota")
+
+        mock_vehicles_repo.find_by_reference.assert_awaited_once_with(
+            "test-user", "Toyota"
+        )
+
 
 class TestRegisterVehicle:
     async def test_happy_path_normalizes(self, service, mock_vehicles_repo, user_ctx):

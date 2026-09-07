@@ -322,7 +322,7 @@ Salida esperada:
 [INFO] src.main: Starting AncoraMind — env: development
 [INFO] src.main: Domain database initialized
 [INFO] src.main: LLM provider: openai | model: gpt-5.4-mini
-[INFO] src.main: Loaded 5 instruction blocks
+[INFO] src.main: Loaded 6 instruction blocks
 [INFO] src.main: Note tools registered: remember_note, search_notes
 [INFO] src.main: Document tools registered: search_documents, get_document, analyze_document
 [INFO] src.main: Vehicle tools registered: find_vehicle, get_vehicle_summary, ...
