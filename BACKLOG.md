@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-08
+Última actualización: 2026-09-09
 
 ---
 
@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 123 passing (`pytest tests/unit/`)
+Tests: 126 passing (`pytest tests/unit/`) — Ruff limpio en `src/ tests/ scripts/`
 
 ---
 
@@ -119,19 +119,6 @@ cancelándolo siempre en `finally`. Preferible a enviar/borrar un mensaje
 extensión en la capa `agent/` y seguir ADR-001 (no tocar domain). Añadir tests
 de cancelación en éxito y error. Post-MVP salvo que la latencia empeore.
 
-### BL-19 · Establecer baseline Ruff limpio en todo `src/` y `tests/`
-El repositorio tiene avisos de Ruff preexistentes fuera de los módulos tocados
-por BL-18 (formato, imports, `datetime.UTC` y finales de fichero). El CI de
-Railway lintéa los módulos productivos de despliegue y ejecuta toda la suite de
-tests, pero no puede usar aún `ruff check src/ tests/` como gate global.
-**Criterio de cierre:** `ruff check src/ tests/ scripts/` verde y workflow CI
-simplificado a ese comando global.
-
-### BL-10 · Unificar creación de modelo en tools de documentos
-`agent/tools/documents.py` instancia `OpenAIChat(id="gpt-5.4-mini")` hardcoded
-en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`
-(respeta `LLM_PROVIDER`/`LLM_MODEL` del `.env`). Cambio pequeño, un solo sitio.
-
 ### BL-12 · Introducir Alembic como sistema de migraciones
 `migrations/init.sql` cubre el POC (idempotente, `IF NOT EXISTS`), pero no
 permite modificar tablas existentes con datos (añadir columna, cambiar tipo,
@@ -183,6 +170,8 @@ NO instalado — diseño solo hasta BL-6.
 | BL-11 · docs/development.md actualizado (env vars, migraciones, multi-shell) | — | 2026-09-05 |
 | BL-3 · Higiene de repo (commits pendientes, push, .env no commiteado) | — | 2026-09-05 |
 | BL-4 · Tool para crear vehículos (propose/execute + normalización + E2E) | specs/006 | 2026-09-06 |
+| BL-10 · Unificar factory de modelo en tools de documentos (`create_model_from_settings`, respetando `LLM_PROVIDER`/`LLM_MODEL`) | — | 2026-09-09 |
+| BL-19 · Baseline Ruff limpio en `src/ tests/ scripts/` (155 avisos → 0; gate global en CI) | — | 2026-09-09 |
 
 ---
 

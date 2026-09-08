@@ -1,6 +1,6 @@
 """Unit tests for Reminder and Calendar services (mocked repos)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -22,14 +22,14 @@ class TestReminderService:
     async def test_create_reminder(self, user_ctx):
         repo = AsyncMock()
         expected = Reminder(id=uuid4(), user_id="test-user", title="t",
-                            description=None, trigger_at=datetime(2026, 8, 28, tzinfo=timezone.utc),
+                            description=None, trigger_at=datetime(2026, 8, 28, tzinfo=UTC),
                             status="pending", source_document_id=None, source_action_id=None,
-                            created_at=datetime(2026, 8, 24, tzinfo=timezone.utc))
+                            created_at=datetime(2026, 8, 24, tzinfo=UTC))
         repo.create.return_value = expected
         service = ReminderService(repo)
 
         result = await service.create_reminder(
-            user_ctx, "t", datetime(2026, 8, 28, tzinfo=timezone.utc),
+            user_ctx, "t", datetime(2026, 8, 28, tzinfo=UTC),
         )
         assert result == expected
         args = repo.create.call_args[0]
@@ -53,7 +53,7 @@ class TestCalendarService:
         repo.create.return_value = None
         service = CalendarService(repo, provider)
 
-        await service.create_event(user_ctx, "Dentista", datetime(2026, 8, 28, 17, 30, tzinfo=timezone.utc))
+        await service.create_event(user_ctx, "Dentista", datetime(2026, 8, 28, 17, 30, tzinfo=UTC))
         provider.create_event.assert_awaited_once()
         repo.create.assert_awaited_once()
 
@@ -62,8 +62,8 @@ class TestCalendarService:
         repo.list_range.return_value = []
         provider = NoopCalendarProvider()
         service = CalendarService(repo, provider)
-        start = datetime(2026, 8, 24, tzinfo=timezone.utc)
-        end = datetime(2026, 8, 30, tzinfo=timezone.utc)
+        start = datetime(2026, 8, 24, tzinfo=UTC)
+        end = datetime(2026, 8, 30, tzinfo=UTC)
         result = await service.check_calendar(user_ctx, start, end)
         assert result == []
         repo.list_range.assert_awaited_once_with("test-user", start, end)

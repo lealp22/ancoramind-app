@@ -1,6 +1,6 @@
 """Unit tests for Notes domain models."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -26,7 +26,7 @@ class TestNoteCreate:
 class TestNote:
     def test_valid_note_from_attributes(self):
         note_id = uuid4()
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         note = Note(
             id=note_id,
             user_id="user-1",

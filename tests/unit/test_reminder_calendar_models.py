@@ -1,6 +1,6 @@
 """Unit tests for Reminder and Calendar domain models."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from src.domain.calendar.models import CalendarEvent, CalendarEventCreate
@@ -23,9 +23,9 @@ class TestReminderCreate:
 class TestReminder:
     def test_from_attributes(self):
         r = Reminder(id=uuid4(), user_id="u1", title="t", description=None,
-                     trigger_at=datetime(2026, 8, 28, tzinfo=timezone.utc),
+                     trigger_at=datetime(2026, 8, 28, tzinfo=UTC),
                      status="pending", source_document_id=None, source_action_id=None,
-                     created_at=datetime(2026, 8, 24, tzinfo=timezone.utc))
+                     created_at=datetime(2026, 8, 24, tzinfo=UTC))
         assert r.status == "pending"
         assert r.user_id == "u1"
 
@@ -41,8 +41,8 @@ class TestCalendarEvent:
     def test_from_attributes(self):
         e = CalendarEvent(id=uuid4(), user_id="u1", title="Dentista",
                           description=None, location=None,
-                          start_at=datetime(2026, 8, 28, 17, 30, tzinfo=timezone.utc),
+                          start_at=datetime(2026, 8, 28, 17, 30, tzinfo=UTC),
                           end_at=None, provider_event_id="noop:test",
                           source_document_id=None,
-                          created_at=datetime(2026, 8, 24, tzinfo=timezone.utc))
+                          created_at=datetime(2026, 8, 24, tzinfo=UTC))
         assert e.provider_event_id == "noop:test"

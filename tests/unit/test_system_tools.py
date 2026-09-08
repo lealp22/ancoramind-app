@@ -1,6 +1,6 @@
 """Unit tests for system utility tools."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.agent.tools.system import get_current_datetime
 
@@ -23,9 +23,9 @@ class TestGetCurrentDatetime:
 
     def test_returns_current_time(self):
         """Should return a time within a few seconds of now."""
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
         result = get_current_datetime()
-        after = datetime.now(tz=timezone.utc)
+        after = datetime.now(tz=UTC)
 
         parsed = datetime.fromisoformat(result)
         assert before <= parsed <= after

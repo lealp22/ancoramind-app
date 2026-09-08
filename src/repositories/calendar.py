@@ -1,7 +1,6 @@
 """Calendar repository — parameterized SQL."""
 
-from datetime import datetime, timezone
-from uuid import UUID
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +17,7 @@ class CalendarRepository:
     async def create(
         self, user_id: str, data: CalendarEventCreate, provider_event_id: str | None
     ) -> CalendarEvent:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         stmt = text("""
             INSERT INTO ancora.calendar_events
                 (user_id,title,description,location,start_at,end_at,provider_event_id,source_document_id,created_at)

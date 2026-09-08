@@ -1,7 +1,8 @@
 """Unit tests for user context resolution."""
 
-import pytest
+from dataclasses import FrozenInstanceError
 
+import pytest
 from agno.run import RunContext
 
 from src.security.user_context import UserContext
@@ -42,5 +43,5 @@ class TestUserContext:
 
     def test_frozen_dataclass(self):
         ctx = UserContext(user_id="test")
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             ctx.user_id = "modified"  # type: ignore[misc]

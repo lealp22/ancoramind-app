@@ -1,12 +1,12 @@
 """Unit tests for Notes domain service (with mocked repository)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
-from src.domain.notes.models import Note, NoteCreate
+from src.domain.notes.models import Note
 from src.domain.notes.service import NotesService
 from src.repositories.notes import NotesRepository
 from src.security.user_context import UserContext
@@ -32,7 +32,7 @@ class TestNotesService:
     async def test_remember_creates_note(self, service, mock_repo, user_ctx):
         """remember() should create a note via the repository."""
         note_id = uuid4()
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         expected = Note(
             id=note_id,
             user_id="test-user-1",
@@ -53,7 +53,7 @@ class TestNotesService:
     async def test_search_returns_notes(self, service, mock_repo, user_ctx):
         """search() should return notes from the repository."""
         note_id = uuid4()
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         expected = [
             Note(
                 id=note_id,
@@ -92,8 +92,8 @@ class TestNotesService:
             id=uuid4(),
             user_id="trusted-user-from-channel",
             content="ok",
-            created_at=datetime.now(tz=timezone.utc),
-            updated_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
+            updated_at=datetime.now(tz=UTC),
         )
 
         await service.remember(ctx, "content")

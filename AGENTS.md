@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-08
+> Última actualización: 2026-09-09
 
 ---
 
@@ -15,7 +15,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8). 123 tests passing.
+- **Estado actual:** Milestones M1–M5 completos (ver §8). 126 tests passing.
+  Ruff limpio en `src/ tests/ scripts/` (gate global en CI).
 
 ---
 
@@ -90,7 +91,7 @@ scripts/run-e2e.sh       ← Despliegue automatizado (bash)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment
-tests/unit/              ← 123 tests
+tests/unit/              ← 126 tests
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -146,7 +147,7 @@ si hay error 404, cambiar `LLM_MODEL` en `.env`.
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests (123 passing)
+# Tests (126 passing)
 python -m pytest tests/unit/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
@@ -166,8 +167,8 @@ docker compose exec -T postgres psql -U ancora -d ancoramind < migrations/init.s
 # Instalar dependencias
 pip install -e ".[dev]"
 
-# Lint / type check
-ruff check src/
+# Lint (gate global — también en CI)
+ruff check src/ tests/ scripts/
 mypy src/
 ```
 
@@ -215,8 +216,7 @@ mypy src/
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
 (fuente única de verdad). Los items priorizados son: E2E de M3–M5,
 integration tests con PostgreSQL real, despliegue Railway (specs/008), background
-worker de recordatorios, OCR real, proveedor de calendario real, evals agentic y
-unificar la factory de modelo en tools de documentos.
+worker de recordatorios, OCR real, proveedor de calendario real y evals agentic.
 
 **Fuera de alcance (explícitamente "not yet"):** GraphRAG, vector search,
 multi-agent, WhatsApp, web frontend, microservices, event sourcing.

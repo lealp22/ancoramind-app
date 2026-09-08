@@ -1,7 +1,5 @@
 """Unit tests for local filesystem storage."""
 
-import os
-import tempfile
 
 import pytest
 

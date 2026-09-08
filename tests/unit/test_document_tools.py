@@ -90,3 +90,26 @@ async def test_analyze_document_without_media_does_not_create_service(monkeypatc
 
     assert response == "No se recibió ningún archivo para analizar."
     get_service.assert_not_awaited()
+
+
+async def test_get_document_service_uses_settings_model_factory(monkeypatch):
+    """BL-10: the extraction model must come from create_model_from_settings,
+    not a hardcoded OpenAIChat — so LLM_PROVIDER/LLM_MODEL are respected."""
+
+    class _FakeModel:
+        id = "fake-model-id"
+
+    monkeypatch.setattr(
+        "src.agent.ancora_agent.create_model_from_settings",
+        lambda settings: _FakeModel(),
+    )
+
+    async def fake_get_session():
+        return object()
+
+    monkeypatch.setattr(document_tools, "get_session", fake_get_session)
+    monkeypatch.setattr(document_tools, "_get_storage", lambda: object())
+
+    service = await document_tools._get_document_service()
+
+    assert service.model_id == "fake-model-id"

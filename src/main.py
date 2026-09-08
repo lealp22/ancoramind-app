@@ -13,7 +13,11 @@ from agno.os.app import AgentOS
 from agno.os.interfaces.telegram import Telegram
 from fastapi import FastAPI
 
-from src.agent.ancora_agent import create_ancora_agent, create_db, create_model
+from src.agent.ancora_agent import (
+    create_ancora_agent,
+    create_db,
+    create_model_from_settings,
+)
 from src.agent.instructions import assemble_instructions
 from src.agent.server import resolve_server_config
 from src.agent.tools.system import get_current_datetime
@@ -145,18 +149,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         logger.info("Using SQLite for Agno runtime (tmp/ancoramind.db)")
 
     # ── LLM Model ─────────────────────────────────────
-    api_key = None
-    if settings.llm_provider == "openrouter" and settings.openrouter_api_key:
-        api_key = settings.openrouter_api_key
-    elif settings.llm_provider == "openai" and settings.openai_api_key:
-        api_key = settings.openai_api_key
-
-    model = create_model(
-        provider=settings.llm_provider,
-        model_id=settings.llm_model,
-        base_url=settings.llm_base_url,
-        api_key=api_key,
-    )
+    model = create_model_from_settings(settings)
     logger.info("LLM provider: %s | model: %s", settings.llm_provider, settings.llm_model)
 
     # ── Agent Instructions ────────────────────────────

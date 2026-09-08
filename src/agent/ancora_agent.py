@@ -8,7 +8,7 @@ Supports multiple LLM providers:
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
@@ -17,6 +17,9 @@ from agno.models.base import MessageData
 from agno.models.message import Message
 from agno.models.openrouter import OpenRouter
 from agno.models.response import ModelResponse
+
+if TYPE_CHECKING:
+    from src.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +165,34 @@ def create_model(
     raise ValueError(
         f"Unsupported LLM_PROVIDER: {provider!r}. "
         "Use one of: openai, openrouter, openai-like"
+    )
+
+
+def create_model_from_settings(settings: "Settings"):
+    """Create the LLM model from application settings.
+
+    Single source of truth for provider/model/base_url/api_key resolution,
+    shared by the main agent (src.main) and the document extraction tool
+    (agent/tools/documents.py — BL-10).
+
+    Args:
+        settings: Application settings (LLM_PROVIDER/LLM_MODEL/LLM_BASE_URL,
+            OPENAI_API_KEY/OPENROUTER_API_KEY).
+
+    Returns:
+        Configured model instance.
+    """
+    api_key = None
+    if settings.llm_provider == "openrouter" and settings.openrouter_api_key:
+        api_key = settings.openrouter_api_key
+    elif settings.llm_provider == "openai" and settings.openai_api_key:
+        api_key = settings.openai_api_key
+
+    return create_model(
+        provider=settings.llm_provider,
+        model_id=settings.llm_model,
+        base_url=settings.llm_base_url,
+        api_key=api_key,
     )
 
 

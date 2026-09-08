@@ -3,10 +3,9 @@
 Framework-independent. Pipeline orchestration for the document lifecycle.
 """
 
-import json
 from uuid import UUID
 
-from agno.models.openai import OpenAIChat
+from agno.models.base import Model
 
 from src.domain.documents.models import (
     AIExtraction,
@@ -18,7 +17,7 @@ from src.domain.documents.models import (
 from src.domain.documents.schemas import GenericDocumentExtraction
 from src.repositories.documents import DocumentsRepository
 from src.security.user_context import UserContext
-from src.storage.base import DocumentStorage, StoredDocument
+from src.storage.base import DocumentStorage
 
 
 class DocumentService:
@@ -31,7 +30,7 @@ class DocumentService:
         self,
         repository: DocumentsRepository,
         storage: DocumentStorage,
-        model: OpenAIChat,
+        model: Model,
         provider: str = "openai",
     ):
         self._repo = repository

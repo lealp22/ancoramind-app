@@ -3,7 +3,7 @@
 Plain Python functions — Agno auto-converts them to tools from type hints and docstrings.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def get_current_datetime() -> str:
@@ -15,4 +15,4 @@ def get_current_datetime() -> str:
     Returns:
         ISO 8601 formatted datetime string with timezone (UTC).
     """
-    return datetime.now(tz=timezone.utc).isoformat()
+    return datetime.now(tz=UTC).isoformat()

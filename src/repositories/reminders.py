@@ -1,7 +1,6 @@
 """Reminders repository — parameterized SQL."""
 
-from datetime import datetime, timezone
-from uuid import UUID
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,7 @@ class RemindersRepository:
         self._session = session
 
     async def create(self, user_id: str, data: ReminderCreate) -> Reminder:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         stmt = text("""
             INSERT INTO ancora.reminders
                 (user_id,title,description,trigger_at,status,source_document_id,source_action_id,created_at)
@@ -34,7 +33,11 @@ class RemindersRepository:
 
     async def list_by_user(self, user_id: str, status: str | None = None) -> list[Reminder]:
         if status:
-            stmt = text("SELECT * FROM ancora.reminders WHERE user_id=:uid AND status=:status ORDER BY trigger_at")
+            stmt = text("""
+                SELECT * FROM ancora.reminders
+                WHERE user_id=:uid AND status=:status
+                ORDER BY trigger_at
+            """)
             r = await self._session.execute(stmt, {"uid": user_id, "status": status})
         else:
             stmt = text("SELECT * FROM ancora.reminders WHERE user_id=:uid ORDER BY trigger_at")

@@ -3,7 +3,7 @@
 All queries are parameterized. No string interpolation. User-scoped data access.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ class NotesRepository:
         Returns:
             The created Note with generated id and timestamps.
         """
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         stmt = text("""
             INSERT INTO ancora.notes (user_id, content, created_at, updated_at)
             VALUES (:user_id, :content, :now, :now)

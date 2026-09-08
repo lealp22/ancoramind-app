@@ -1,6 +1,6 @@
 """Vehicles repository — parameterized PostgreSQL access for vehicles."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import text
@@ -16,9 +16,10 @@ class VehiclesRepository:
         self._session = session
 
     async def create(self, user_id: str, data: VehicleCreate) -> Vehicle:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         stmt = text("""
-            INSERT INTO ancora.vehicles (user_id,make,model,year,registration,nickname,vin,created_at)
+            INSERT INTO ancora.vehicles
+                (user_id,make,model,year,registration,nickname,vin,created_at)
             VALUES (:uid,:make,:model,:year,:reg,:nick,:vin,:now)
             RETURNING id,user_id,make,model,year,registration,nickname,vin,created_at
         """)

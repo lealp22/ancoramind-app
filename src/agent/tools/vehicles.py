@@ -3,7 +3,6 @@
 All WRITE operations use action proposals for governance.
 """
 
-from datetime import date
 from uuid import UUID
 
 from agno.run import RunContext
@@ -45,7 +44,11 @@ async def find_vehicle(run_context: RunContext, reference: str | None = None) ->
 
     if result.status == "found" and result.vehicle:
         v = result.vehicle
-        lines = [f"🚗 **{v.display_name}**", f"   ID: `{v.id}`", f"   Marca: {v.make} | Modelo: {v.model}"]
+        lines = [
+            f"🚗 **{v.display_name}**",
+            f"   ID: `{v.id}`",
+            f"   Marca: {v.make} | Modelo: {v.model}",
+        ]
         if v.year:
             lines.append(f"   Año: {v.year}")
         if v.registration:
@@ -92,7 +95,7 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
 
     if summary.last_maintenance:
         m = summary.last_maintenance
-        lines.append(f"\n🔧 **Último mantenimiento:**")
+        lines.append("\n🔧 **Último mantenimiento:**")
         lines.append(f"   Fecha: {m.date}")
         if m.mileage_km:
             lines.append(f"   Kilometraje: {m.mileage_km:,} km")

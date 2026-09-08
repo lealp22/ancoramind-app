@@ -11,11 +11,17 @@ from pydantic import BaseModel, Field
 class VehicleCreate(BaseModel):
     """Input for creating a vehicle."""
 
-    make: str = Field(..., min_length=1, max_length=100, description="Brand (Ford, Toyota, etc.)")
-    model: str = Field(..., min_length=1, max_length=100, description="Model (Mondeo, Corolla, etc.)")
+    make: str = Field(
+        ..., min_length=1, max_length=100, description="Brand (Ford, Toyota, etc.)"
+    )
+    model: str = Field(
+        ..., min_length=1, max_length=100, description="Model (Mondeo, Corolla, etc.)"
+    )
     year: int | None = Field(default=None, ge=1900, le=2100)
     registration: str | None = Field(default=None, description="License plate")
-    nickname: str | None = Field(default=None, description="User's nickname (mi coche, la furgoneta)")
+    nickname: str | None = Field(
+        default=None, description="User's nickname (mi coche, la furgoneta)"
+    )
     vin: str | None = Field(default=None)
 
 
@@ -56,7 +62,9 @@ class VehicleMaintenanceCreate(BaseModel):
     cost: str | None = None
     work_performed: list[str] = Field(default_factory=list)
     notes: str | None = None
-    source_document_id: UUID | None = Field(default=None, description="Source document if from invoice")
+    source_document_id: UUID | None = Field(
+        default=None, description="Source document if from invoice"
+    )
 
 
 class VehicleMaintenance(BaseModel):

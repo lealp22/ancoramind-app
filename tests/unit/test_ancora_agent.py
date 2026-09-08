@@ -4,13 +4,20 @@ from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
 from agno.models.base import MessageData
 from agno.models.message import Message
+from agno.models.openai import OpenAIChat
 from agno.models.response import ModelResponse
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
     ChoiceDeltaToolCallFunction,
 )
 
-from src.agent.ancora_agent import SafeOpenRouter, create_db, create_model
+from src.agent.ancora_agent import (
+    SafeOpenRouter,
+    create_db,
+    create_model,
+    create_model_from_settings,
+)
+from src.config import Settings
 
 
 def test_create_db_uses_dedicated_agno_runtime_schema():
@@ -37,6 +44,32 @@ def test_create_model_uses_safe_openrouter_adapter():
     )
 
     assert isinstance(model, SafeOpenRouter)
+
+
+def test_create_model_from_settings_resolves_openrouter_api_key():
+    settings = Settings(
+        llm_provider="openrouter",
+        llm_model="minimax/minimax-m3:free",
+        openrouter_api_key="test-key",
+    )
+
+    model = create_model_from_settings(settings)
+
+    assert isinstance(model, SafeOpenRouter)
+    assert model.id == "minimax/minimax-m3:free"
+
+
+def test_create_model_from_settings_resolves_openai_api_key():
+    settings = Settings(
+        llm_provider="openai",
+        llm_model="gpt-5.4-mini",
+        openai_api_key="test-key",
+    )
+
+    model = create_model_from_settings(settings)
+
+    assert isinstance(model, OpenAIChat)
+    assert model.id == "gpt-5.4-mini"
 
 
 def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):

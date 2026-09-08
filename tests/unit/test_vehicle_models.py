@@ -1,15 +1,13 @@
 """Unit tests for Vehicle domain models."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from src.domain.vehicles.models import (
     Vehicle,
     VehicleCreate,
-    VehicleMaintenance,
     VehicleMaintenanceCreate,
     VehicleResolution,
-    VehicleSummary,
 )
 
 
@@ -31,13 +29,13 @@ class TestVehicle:
     def test_display_name_with_nickname(self):
         v = Vehicle(id=uuid4(), user_id="u1", make="Ford", model="Mondeo",
                     year=2020, registration="1234ABC", nickname="el coche",
-                    vin=None, created_at=datetime.now(tz=timezone.utc))
+                    vin=None, created_at=datetime.now(tz=UTC))
         assert v.display_name == "el coche Ford Mondeo"
 
     def test_display_name_without_nickname(self):
         v = Vehicle(id=uuid4(), user_id="u1", make="Ford", model="Mondeo",
                     year=None, registration=None, nickname=None,
-                    vin=None, created_at=datetime.now(tz=timezone.utc))
+                    vin=None, created_at=datetime.now(tz=UTC))
         assert v.display_name == "Ford Mondeo"
 
 
@@ -55,7 +53,7 @@ class TestVehicleResolution:
     def test_found(self):
         v = Vehicle(id=uuid4(), user_id="u1", make="Ford", model="Mondeo",
                     year=None, registration=None, nickname=None,
-                    vin=None, created_at=datetime.now(tz=timezone.utc))
+                    vin=None, created_at=datetime.now(tz=UTC))
         r = VehicleResolution(status="found", vehicle=v)
         assert r.status == "found"
         assert r.vehicle is not None
@@ -68,9 +66,9 @@ class TestVehicleResolution:
     def test_ambiguous(self):
         v1 = Vehicle(id=uuid4(), user_id="u1", make="Ford", model="Mondeo",
                      year=None, registration=None, nickname=None,
-                     vin=None, created_at=datetime.now(tz=timezone.utc))
+                     vin=None, created_at=datetime.now(tz=UTC))
         v2 = Vehicle(id=uuid4(), user_id="u1", make="Ford", model="Focus",
                      year=None, registration=None, nickname=None,
-                     vin=None, created_at=datetime.now(tz=timezone.utc))
+                     vin=None, created_at=datetime.now(tz=UTC))
         r = VehicleResolution(status="ambiguous", candidates=[v1, v2])
         assert len(r.candidates) == 2

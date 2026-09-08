@@ -1,7 +1,7 @@
 """Vehicle maintenance repository — parameterized SQL."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import text
@@ -17,7 +17,7 @@ class MaintenanceRepository:
         self._session = session
 
     async def create(self, user_id: str, data: VehicleMaintenanceCreate) -> VehicleMaintenance:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         stmt = text("""
             INSERT INTO ancora.vehicle_maintenance
                 (vehicle_id,user_id,date,mileage_km,description,workshop,cost,work_performed,notes,source_document_id,created_at)

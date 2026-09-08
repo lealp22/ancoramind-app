@@ -62,7 +62,7 @@ async def propose_vehicle_maintenance(
         return f"ID de vehículo no válido: {vehicle_id}"
 
     try:
-        parsed_date = date.fromisoformat(date_str)
+        date.fromisoformat(date_str)
     except ValueError:
         return f"Fecha no válida: {date_str}. Usa YYYY-MM-DD."
 

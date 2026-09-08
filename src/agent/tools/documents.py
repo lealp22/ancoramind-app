@@ -27,13 +27,20 @@ def _get_storage() -> DocumentStorage:
 
 
 async def _get_document_service():
-    """Create a DocumentService with fresh DB session."""
-    from agno.models.openai import OpenAIChat
+    """Create a DocumentService with fresh DB session.
+
+    The extraction model is built via create_model_from_settings() so it
+    honors LLM_PROVIDER/LLM_MODEL/LLM_BASE_URL from settings — same factory
+    as the main agent (BL-10).
+    """
+    from src.agent.ancora_agent import create_model_from_settings
+    from src.config import Settings
+
     session = await get_session()
     return DocumentService(
         repository=DocumentsRepository(session),
         storage=_get_storage(),
-        model=OpenAIChat(id="gpt-5.4-mini"),
+        model=create_model_from_settings(Settings()),  # type: ignore[call-arg]
     )
 
 

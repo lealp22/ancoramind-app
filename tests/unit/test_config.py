@@ -1,6 +1,5 @@
 """Unit tests for application configuration."""
 
-import os
 
 from src.config import Settings
 

@@ -1,6 +1,6 @@
 """Documents repository — parameterized PostgreSQL access for documents."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import text
@@ -25,7 +25,7 @@ class DocumentsRepository:
 
     async def create(self, user_id: str, data: DocumentCreate) -> Document:
         """Create a document record."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         stmt = text("""
             INSERT INTO ancora.documents
                 (user_id, storage_key, original_filename, mime_type, size_bytes, created_at)
@@ -70,7 +70,9 @@ class DocumentsRepository:
             size_bytes=row.size_bytes, created_at=row.created_at,
         )
 
-    async def search(self, user_id: str, query: str | None = None, limit: int = 20) -> list[Document]:
+    async def search(
+        self, user_id: str, query: str | None = None, limit: int = 20
+    ) -> list[Document]:
         """Search documents by filename (ILIKE) or list recent."""
         if query:
             stmt = text("""
@@ -111,7 +113,7 @@ class DocumentsRepository:
 
     async def create_extraction(self, data: AIExtractionCreate) -> AIExtraction:
         """Store an AI extraction result."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         confidence = data.extraction.get("confidence")
         stmt = text("""
             INSERT INTO ancora.ai_extractions
