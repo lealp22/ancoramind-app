@@ -72,6 +72,7 @@ docker compose up -d
 | [Development](docs/development.md) | Local development guide |
 | [Quick Start](docs/quick-start.md) | Guía de arranque rápido diario |
 | [E2E Deployment](docs/deployment-e2e.md) | Step-by-step Telegram + PostgreSQL deployment |
+| [Railway Deployment](docs/deployment-railway.md) | Railway + GitHub CI/CD + stable Telegram webhook |
 
 ---
 
@@ -84,7 +85,7 @@ docker compose up -d
 | Database | PostgreSQL |
 | Channel | Telegram (private chats) |
 | Validation | Pydantic |
-| Deployment | Docker + Docker Compose |
+| Deployment | Docker local; Railway prepared for managed deployment |
 
 ---
 

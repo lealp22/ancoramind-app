@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-07
+> Última actualización: 2026-09-08
 
 ---
 
@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8). 108 tests passing.
+- **Estado actual:** Milestones M1–M5 completos (ver §8). 123 tests passing.
 
 ---
 
@@ -88,8 +88,9 @@ migrations/init.sql      ← Schema completo del dominio (8 tablas + indexes;
 │                           aplicado también como baseline en Supabase — ADR-002)
 scripts/run-e2e.sh       ← Despliegue automatizado (bash)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
-                            005-calendar, 006-vehicle-creation, 007-supabase
-tests/unit/              ← 108 tests
+                            005-calendar, 006-vehicle-creation, 007-supabase,
+                            008-railway-deployment
+tests/unit/              ← 123 tests
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -145,10 +146,11 @@ si hay error 404, cambiar `LLM_MODEL` en `.env`.
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests (108 passing)
+# Tests (123 passing)
 python -m pytest tests/unit/ -v
 
-# Lanzar la app (requiere .env + PostgreSQL/Supabase + ngrok + webhook)
+# Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
+# si se valida Telegram mediante una exposición HTTPS autorizada)
 python -m src.main
 
 # PostgreSQL (Docker)
@@ -212,8 +214,8 @@ mypy src/
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
 (fuente única de verdad). Los items priorizados son: E2E de M3–M5,
-integration tests con PostgreSQL real, migración a Supabase, background worker
-de recordatorios, OCR real, proveedor de calendario real, evals agentic y
+integration tests con PostgreSQL real, despliegue Railway (specs/008), background
+worker de recordatorios, OCR real, proveedor de calendario real, evals agentic y
 unificar la factory de modelo en tools de documentos.
 
 **Fuera de alcance (explícitamente "not yet"):** GraphRAG, vector search,

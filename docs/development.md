@@ -3,14 +3,16 @@
 > Comandos multi-shell: los que usan `<` (redirección bash) no funcionan en
 > PowerShell — se indica la alternativa cuando aplica.
 > Arranque día a día: ver [quick-start.md](quick-start.md). Primera vez:
-> ver [deployment-e2e.md](deployment-e2e.md).
+> ver [deployment-e2e.md](deployment-e2e.md). Despliegue gestionado: ver
+> [deployment-railway.md](deployment-railway.md).
 
 ## Prerequisites
 
 - Python 3.12+
 - Proyecto Supabase activo (opción principal) o Docker & Docker Compose
   (alternativa local)
-- ngrok (para el webhook de Telegram en local)
+- ngrok solo si se trabaja localmente con webhook (pausado en esta red; ver
+  BL-18). Railway no lo necesita.
 - Credenciales en `.env` (ver [`.env.example`](../.env.example))
 
 ## Setup
@@ -85,14 +87,16 @@ docker compose exec -T postgres psql -U ancora -d ancoramind < migrations/init.s
 python -m src.main
 ```
 
-Requiere: `.env` con `TELEGRAM_TOKEN`, ngrok corriendo y webhook registrado
-(pasos 2–3 de [quick-start.md](quick-start.md)). Sin `ANCORA_DATABASE_URL` la
-app arranca igualmente pero sin domain tools (degradación graceful).
+Localmente requiere `.env` con `TELEGRAM_TOKEN` y, si se valida Telegram, un
+webhook público autorizado. En Railway, el dominio estable sustituye a ngrok
+(ver [deployment-railway.md](deployment-railway.md)). Sin
+`ANCORA_DATABASE_URL` la app arranca igualmente pero sin domain tools
+(degradación graceful).
 
 ## Testing
 
 ```bash
-# Unit tests (108 passing — repos y Supabase client mockeados)
+# Unit tests (123 passing — repos y Supabase client mockeados)
 pytest tests/unit/
 
 # Integration tests (requiere PostgreSQL real — pendiente, ver BACKLOG.md BL-2)
@@ -122,7 +126,11 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LLM_MODEL` | Modelo | `gpt-5.4-mini` |
 | `LLM_BASE_URL` | Endpoint custom (obligatorio en `openai-like`) | — |
 | `TELEGRAM_TOKEN` | Token del bot (de @BotFather) | — |
+| `TELEGRAM_WEBHOOK_SECRET_TOKEN` | Secret que Telegram envía al webhook en producción | — |
 | `NGROK_URL` | URL del túnel para el webhook | — |
+| `PORT` | Puerto HTTP inyectado por Railway | `7777` local |
+| `AGENT_OS_HOST` | Host HTTP opcional | `localhost` dev / `0.0.0.0` prod |
+| `AGENT_OS_PORT` | Puerto HTTP local alternativo | `7777` |
 | `AGNO_DATABASE_URL` | Runtime de Agno (si no: SQLite en `tmp/`) | — |
 | `ANCORA_DATABASE_URL` | DB del dominio (schema `ancora`) — sin ella, sin domain tools | — |
 | `DOCUMENT_STORAGE_BACKEND` | `local` \| `supabase` | `local` |

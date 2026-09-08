@@ -26,7 +26,7 @@
 | Repositorios reales | ✅ notes, vehicles, ActionProposal lifecycle |
 | Aislamiento cross-user | ✅ Notes y vehicles no devuelven datos de otro user_id |
 | Limpieza del smoke test | ✅ Sin datos temporales residuales |
-| Unit tests | ✅ 108 passing |
+| Unit tests | ✅ 123 passing |
 
 ## Seguridad
 
@@ -84,7 +84,7 @@ Después de los fixes se verificó directamente:
 - `find_vehicle("6789-XYZ")` encuentra el Toyota canónico.
 - Agno `Image` → `analyze_document` → Supabase Storage + `ancora.documents`.
 - MIME `image/jpeg`, descarga con bytes idénticos y cleanup sin residuos.
-- 108 tests passing.
+- 123 tests passing.
 
 ## E2E pendiente (T7)
 

@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-07
+Última actualización: 2026-09-08
 
 ---
 
@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 108 passing (`pytest tests/unit/`)
+Tests: 123 passing (`pytest tests/unit/`)
 
 ---
 
@@ -39,17 +39,19 @@ Mientras tanto, validar los flujos mediante integration tests sin Telegram.
 **Criterio de cierre:** los 5 flujos probados y documentados en el
 `verification.md` del spec correspondiente.
 
-### BL-18 · Sustituir ngrok por una exposición HTTPS autorizada
+### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
-red sin autorización. Evaluar y decidir una alternativa para el webhook de
-Telegram: Cloudflare Tunnel, Tailscale Funnel, VPS propio o despliegue gestionado
-(Railway/Render/Fly). Requisitos: HTTPS público estable, secret token de webhook,
-coste/control razonables y aprobación de la política de red.
-**Criterio de cierre:** alternativa seleccionada y documentada; E2E Telegram
-ejecutado sin alertas ni túneles no autorizados.
+red sin autorización. **Decisión (2026-09-08): Railway** como despliegue
+gestionado conectado a GitHub; Supabase permanece como PostgreSQL y Storage.
+Hecho: runtime compatible con `PORT`, Dockerfile, healthcheck, `railway.json`,
+CI GitHub Actions, helper de webhook seguro y documentación. Pendiente: crear
+servicio Railway, cargar variables, activar Auto Deploy + Wait for CI, generar
+dominio, registrar webhook y repetir E2E Telegram.
+**Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
+Telegram ejecutado sin alertas ni túneles desde el equipo local.
 
 ### BL-2 · Integration tests con PostgreSQL real
-`tests/integration/` está vacío. Los 108 tests actuales mockean repositorios
+`tests/integration/` está vacío. Los 123 tests actuales mockean repositorios
 y el cliente de Supabase.
 Crear integration tests contra el PostgreSQL de docker-compose (arrancar en
 fixture, aplicar `migrations/init.sql`, testear repos reales).
@@ -117,6 +119,14 @@ cancelándolo siempre en `finally`. Preferible a enviar/borrar un mensaje
 extensión en la capa `agent/` y seguir ADR-001 (no tocar domain). Añadir tests
 de cancelación en éxito y error. Post-MVP salvo que la latencia empeore.
 
+### BL-19 · Establecer baseline Ruff limpio en todo `src/` y `tests/`
+El repositorio tiene avisos de Ruff preexistentes fuera de los módulos tocados
+por BL-18 (formato, imports, `datetime.UTC` y finales de fichero). El CI de
+Railway lintéa los módulos productivos de despliegue y ejecuta toda la suite de
+tests, pero no puede usar aún `ruff check src/ tests/` como gate global.
+**Criterio de cierre:** `ruff check src/ tests/ scripts/` verde y workflow CI
+simplificado a ese comando global.
+
 ### BL-10 · Unificar creación de modelo en tools de documentos
 `agent/tools/documents.py` instancia `OpenAIChat(id="gpt-5.4-mini")` hardcoded
 en lugar de reutilizar la factory `create_model()` de `ancora_agent.py`
@@ -148,7 +158,7 @@ las tools.
 vez de PostgreSQL en contenedor. **Hecho (2026-09-06):** migración baseline
 `ancora_baseline` aplicada (8 tablas), bucket privado `ancora-documents`
 creado, `SupabaseDocumentStorage` + factory (`DOCUMENT_STORAGE_BACKEND`),
-ADR-002, Storage real verificado y 26 tests nuevos (108 total). Seguridad:
+ADR-002, Storage real verificado y 26 tests nuevos (123 total). Seguridad:
 `rls_auto_enable()` ya no es ejecutable por roles API y Security Advisor está
 limpio. Session pooler sync/async e integración directa de repositorios ya
 verificados. E2E nota y alta de vehículo PASS; fixes de foto, búsqueda de

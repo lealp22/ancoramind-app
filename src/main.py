@@ -7,28 +7,31 @@ Run: python -m src.main
 import logging
 import os
 import sys
+from typing import Any
 
 from agno.os.app import AgentOS
 from agno.os.interfaces.telegram import Telegram
+from fastapi import FastAPI
 
 from src.agent.ancora_agent import create_ancora_agent, create_db, create_model
 from src.agent.instructions import assemble_instructions
+from src.agent.server import resolve_server_config
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
 
 logger = logging.getLogger(__name__)
 
 # ── Optional domain tools (require ANCORA_DATABASE_URL) ──
-_NOTE_TOOLS: list = []
+_NOTE_TOOLS: list[Any] = []
 
 
-def _init_domain_tools(settings: Settings) -> list:
+def _init_domain_tools(settings: Settings) -> list[Any]:
     """Initialize domain tools if the domain database is configured.
 
     Domain tools (notes, vehicles, etc.) require ANCORA_DATABASE_URL.
     If not set, they are silently skipped.
     """
-    tools: list = []
+    tools: list[Any] = []
 
     if not settings.ancora_database_url:
         logger.info(
@@ -88,15 +91,15 @@ def _init_domain_tools(settings: Settings) -> list:
             "propose/execute_vehicle_maintenance"
         )
 
-        from src.agent.tools.reminders import (
-            execute_reminder,
-            list_reminders,
-            propose_reminder,
-        )
         from src.agent.tools.calendar import (
             check_calendar,
             execute_calendar_event,
             propose_calendar_event,
+        )
+        from src.agent.tools.reminders import (
+            execute_reminder,
+            list_reminders,
+            propose_reminder,
         )
 
         tools.extend([
@@ -118,9 +121,9 @@ def _init_domain_tools(settings: Settings) -> list:
     return tools
 
 
-def create_app():
+def create_app() -> tuple[FastAPI, AgentOS]:
     """Build the AgentOS application with AncoraMind agent and Telegram interface."""
-    settings = Settings()  # type: ignore[call-arg]
+    settings = Settings()
 
     logging.basicConfig(
         level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -182,7 +185,7 @@ def create_app():
         interfaces=[
             Telegram(
                 agent=ancora_agent,
-                reply_to_mentions_only=True if allowlist else False,
+                reply_to_mentions_only=bool(allowlist),
             )
         ],
     )
@@ -224,7 +227,23 @@ def main() -> None:
             ngrok_url,
         )
 
-    agent_os.serve(app="src.main:app", reload=True)
+    settings = Settings()
+    server = resolve_server_config(settings.app_env, os.environ)
+    logger.info(
+        "Starting HTTP server — host: %s | port: %d | reload: %s",
+        server.host,
+        server.port,
+        server.reload,
+    )
+    # Uvicorn requires an import string when reload is enabled. In production,
+    # pass the already-created app to avoid constructing it a second time.
+    serve_app = "src.main:app" if server.reload else app
+    agent_os.serve(
+        app=serve_app,
+        host=server.host,
+        port=server.port,
+        reload=server.reload,
+    )
 
 
 if __name__ == "__main__":

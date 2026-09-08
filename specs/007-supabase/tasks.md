@@ -31,7 +31,7 @@
 ### T5: Tests
 - [x] `tests/unit/test_supabase_storage.py` (cliente mockeado): 17 tests —
       happy paths, FileNotFoundError, key traversal, layout de keys, factory
-- [x] `pytest tests/unit/` verde completo → **108 tests**
+- [x] `pytest tests/unit/` verde completo → **123 tests**
 - [x] ruff limpio en ficheros tocados (+ fix preexistente SIM115 en documents.py)
 - [x] Tests de `create_db`: PostgreSQL usa `agno_runtime`; fallback SQLite intacto
 

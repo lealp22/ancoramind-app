@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 license = {text = "Proprietary"}
 
 dependencies = [
-    "agno[os,telegram]>=2.7.0",
+    "agno[os,telegram]>=2.9.0,<3.0.0",
     "psycopg[binary]>=3.2.0",
     "asyncpg>=0.29.0",
     "sqlalchemy[asyncio]>=2.0.0",
