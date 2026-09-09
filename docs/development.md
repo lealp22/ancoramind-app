@@ -96,11 +96,16 @@ webhook público autorizado. En Railway, el dominio estable sustituye a ngrok
 ## Testing
 
 ```bash
-# Unit tests (123 passing — repos y Supabase client mockeados)
+# Unit tests (126 passing — repos y Supabase client mockeados)
 pytest tests/unit/
 
-# Integration tests (requiere PostgreSQL real — pendiente, ver BACKLOG.md BL-2)
+# Integration tests (PostgreSQL real via docker compose — specs/009)
+# La fixture arranca el contenedor sola; sin Docker se saltan (no fallan).
+# La BD dedicada es ancoramind_test: la BD de dev (ancoramind) nunca se toca.
 pytest tests/integration/
+
+# Todo (unit + integration)
+pytest
 
 # E2E tests (requiere stack completo)
 pytest tests/e2e/
@@ -139,6 +144,10 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave server-side de Storage | — |
 | `SUPABASE_STORAGE_BUCKET` | Bucket privado de documentos | `ancora-documents` |
 | `ALLOWED_TELEGRAM_USER_IDS` | Allowlist de user IDs (coma-separados) | vacío = todos |
+| `ANCORA_TEST_DATABASE_URL` | BD custom para integration tests (si no: docker compose) | — |
+| `ANCORA_TEST_DATABASE` | Nombre de la BD dedicada de integration tests | `ancoramind_test` |
+| `ANCORA_TEST_ADMIN_DSN` | DSN admin para crear la BD de integration tests | docker compose |
+| `ANCORA_TEST_REQUIRE_DB` | `1` = fallar (en vez de saltar) sin PostgreSQL — usado en CI | — |
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 

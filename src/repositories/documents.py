@@ -1,5 +1,6 @@
 """Documents repository — parameterized PostgreSQL access for documents."""
 
+import json
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -126,7 +127,7 @@ class DocumentsRepository:
         result = await self._session.execute(stmt, {
             "doc_id": data.document_id, "prov": data.provider,
             "model": data.model, "pv": data.prompt_version,
-            "sv": data.schema_version, "extraction": data.extraction,
+            "sv": data.schema_version, "extraction": json.dumps(data.extraction),
             "conf": confidence, "now": now,
         })
         row = result.fetchone()

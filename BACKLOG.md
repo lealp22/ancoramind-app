@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 126 passing (`pytest tests/unit/`) — Ruff limpio en `src/ tests/ scripts/`
+Tests: 126 unit + 16 integration passing — Ruff limpio en `src/ tests/ scripts/`
 
 ---
 
@@ -35,7 +35,9 @@ registrar vehículo + mantenimiento (propose/execute), crear recordatorio y
 evento de calendario (propose/execute).
 **Pausa operativa (2026-09-07):** alerta de seguridad de red al usar ngrok;
 no retomar el canal hasta disponer de una alternativa autorizada (BL-18).
-Mientras tanto, validar los flujos mediante integration tests sin Telegram.
+Mientras tanto, validar los flujos mediante integration tests sin Telegram:
+la capa de repositorios ya está cubierta (specs/009, 16 tests + fix jsonb);
+los flujos service/tool con LLM real siguen requiriendo este E2E.
 **Criterio de cierre:** los 5 flujos probados y documentados en el
 `verification.md` del spec correspondiente.
 
@@ -49,14 +51,6 @@ servicio Railway, cargar variables, activar Auto Deploy + Wait for CI, generar
 dominio, registrar webhook y repetir E2E Telegram.
 **Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
 Telegram ejecutado sin alertas ni túneles desde el equipo local.
-
-### BL-2 · Integration tests con PostgreSQL real
-`tests/integration/` está vacío. Los 123 tests actuales mockean repositorios
-y el cliente de Supabase.
-Crear integration tests contra el PostgreSQL de docker-compose (arrancar en
-fixture, aplicar `migrations/init.sql`, testear repos reales).
-**Criterio de cierre:** `pytest tests/integration/` verde con PostgreSQL
-dockerizado.
 
 ---
 
@@ -172,6 +166,7 @@ NO instalado — diseño solo hasta BL-6.
 | BL-4 · Tool para crear vehículos (propose/execute + normalización + E2E) | specs/006 | 2026-09-06 |
 | BL-10 · Unificar factory de modelo en tools de documentos (`create_model_from_settings`, respetando `LLM_PROVIDER`/`LLM_MODEL`) | — | 2026-09-09 |
 | BL-19 · Baseline Ruff limpio en `src/ tests/ scripts/` (155 avisos → 0; gate global en CI) | — | 2026-09-09 |
+| BL-2 · Integration tests con PostgreSQL real (16 tests, BD dedicada `ancoramind_test`, fix jsonb asyncpg en documents.py, job CI integration) | specs/009 | 2026-09-09 |
 
 ---
 

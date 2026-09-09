@@ -32,3 +32,27 @@ jobs:
 
       - name: Unit tests
         run: pytest tests/unit/ -q
+
+  integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      # The conftest fixture starts docker-compose postgres by itself
+      # (same code path as local). REQUIRE_DB makes infra issues fail loud.
+      - name: Integration tests (docker compose postgres)
+        run: pytest tests/integration/ -q
+        env:
+          ANCORA_TEST_REQUIRE_DB: "1"

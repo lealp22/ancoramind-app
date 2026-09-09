@@ -92,6 +92,7 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment
 tests/unit/              ← 126 tests
+tests/integration/        ← 16 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -149,6 +150,9 @@ source .venv/Scripts/activate
 
 # Tests (126 passing)
 python -m pytest tests/unit/ -v
+
+# Integration tests (16 — PostgreSQL dockerizado; se saltan sin Docker)
+python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
 # si se valida Telegram mediante una exposición HTTPS autorizada)
