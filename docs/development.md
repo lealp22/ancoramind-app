@@ -93,6 +93,13 @@ webhook público autorizado. En Railway, el dominio estable sustituye a ngrok
 `ANCORA_DATABASE_URL` la app arranca igualmente pero sin domain tools
 (degradación graceful).
 
+Con `ANCORA_DATABASE_URL` + `TELEGRAM_TOKEN` la app arranca además el **worker
+de recordatorios** (BL-5): dispara los `pending` vencidos y los notifica por
+Telegram vía `sendMessage` (outbound, sin webhook — ver
+[adr/ADR-003-reminder-worker.md](adr/ADR-003-reminder-worker.md)). Se desactiva
+con `REMINDER_WORKER_ENABLED=false` y su cadencia se ajusta con
+`REMINDER_POLL_INTERVAL_SECONDS`.
+
 ## Testing
 
 ```bash
@@ -148,6 +155,8 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `ANCORA_TEST_DATABASE` | Nombre de la BD dedicada de integration tests | `ancoramind_test` |
 | `ANCORA_TEST_ADMIN_DSN` | DSN admin para crear la BD de integration tests | docker compose |
 | `ANCORA_TEST_REQUIRE_DB` | `1` = fallar (en vez de saltar) sin PostgreSQL — usado en CI | — |
+| `REMINDER_WORKER_ENABLED` | Arranca el worker de recordatorios (auto-gated con DB + token) | `true` |
+| `REMINDER_POLL_INTERVAL_SECONDS` | Segundos entre ciclos de escaneo del worker | `60` |
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 

@@ -1,0 +1,109 @@
+"""Unit tests for the Telegram notifier (BL-5, specs/010)."""
+
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
+import httpx
+
+from src.domain.reminders.models import Reminder
+from src.notifications.telegram import (
+    LATE_THRESHOLD_SECONDS,
+    TelegramNotifier,
+    format_reminder_message,
+)
+
+
+def _reminder(
+    title: str = "ITV",
+    description: str | None = "Pedir cita",
+    minutes_ago: float = 1,
+    user_id: str = "452022640",
+) -> Reminder:
+    return Reminder(
+        id=uuid4(),
+        user_id=user_id,
+        title=title,
+        description=description,
+        trigger_at=datetime.now(tz=UTC) - timedelta(minutes=minutes_ago),
+        status="pending",
+        source_document_id=None,
+        source_action_id=None,
+        created_at=datetime.now(tz=UTC),
+    )
+
+
+class TestFormatReminderMessage:
+    def test_includes_title_description_and_scheduled_date(self):
+        reminder = _reminder(title="Renovar seguro", description="Llamar a la correduría")
+        text = format_reminder_message(reminder)
+        assert "Renovar seguro" in text
+        assert "Llamar a la correduría" in text
+        assert "Programado para:" in text
+        assert "retraso" not in text
+
+    def test_omits_description_when_missing(self):
+        text = format_reminder_message(_reminder(description=None))
+        assert "Programado para:" in text
+        assert text.count("\n") == 1  # only title + scheduled line
+
+    def test_adds_late_note_when_fired_long_after_trigger(self):
+        reminder = _reminder(minutes_ago=30)
+        late_by = timedelta(seconds=LATE_THRESHOLD_SECONDS + 60)
+        now = reminder.trigger_at + late_by
+        text = format_reminder_message(reminder, now=now)
+        assert "retraso" in text
+
+    def test_no_late_note_within_threshold(self):
+        reminder = _reminder(minutes_ago=1)
+        now = reminder.trigger_at + timedelta(seconds=LATE_THRESHOLD_SECONDS - 1)
+        text = format_reminder_message(reminder, now=now)
+        assert "retraso" not in text
+
+
+class TestTelegramNotifier:
+    def _client(self, handler) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    async def test_send_reminder_success(self):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+        delivered = await notifier.send_reminder(_reminder())
+
+        assert delivered is True
+        assert len(requests) == 1
+        assert "/bot123456:ABC/sendMessage" in str(requests[0].url)
+        body = requests[0].read()
+        assert b'"chat_id":452022640' in body
+        assert b"parse_mode" not in body  # plain text (untrusted DATA, §2.8)
+
+    async def test_send_reminder_api_rejection(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"ok": False, "description": "Bad Request"})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+        assert await notifier.send_reminder(_reminder()) is False
+
+    async def test_send_reminder_network_error(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("network down")
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+        assert await notifier.send_reminder(_reminder()) is False
+
+    async def test_send_reminder_rejects_non_numeric_user_id(self):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"ok": True})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+        delivered = await notifier.send_reminder(_reminder(user_id="some-uuid-user"))
+
+        assert delivered is False
+        assert requests == []  # no HTTP call for non-Telegram user ids

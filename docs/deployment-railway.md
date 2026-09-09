@@ -69,6 +69,12 @@ DOCUMENT_STORAGE_BACKEND=supabase
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<server-side-only>
 SUPABASE_STORAGE_BUCKET=ancora-documents
+
+# Reminder worker (BL-5 / ADR-003) — optional; defaults shown work as-is.
+# Auto-gated: needs ANCORA_DATABASE_URL + TELEGRAM_TOKEN (already above).
+# Outbound only: fires pending reminders without depending on the webhook.
+REMINDER_WORKER_ENABLED=true
+REMINDER_POLL_INTERVAL_SECONDS=60
 ```
 
 No configures `NGROK_URL`. Railway proporciona `PORT` automáticamente; la app
@@ -138,6 +144,32 @@ webhook por `TELEGRAM_TOKEN`. Un entorno staging requerirá:
 Hasta entonces se recomienda un único entorno production protegido por
 `ALLOWED_TELEGRAM_USER_IDS`, más Pull Requests y CI antes de mergear.
 
+## 8. Recordatorios: worker interno (BL-5 / ADR-003)
+
+El worker de recordatorios corre **dentro del mismo servicio** que la app
+(arranca con FastAPI en el startup). No requiere ningún servicio o cron de
+Railway aparte, ni configuración adicional si aceptas los defaults
+(`REMINDER_WORKER_ENABLED=true`, `REMINDER_POLL_INTERVAL_SECONDS=60`).
+
+Comportamiento esperado en Railway:
+
+- **El disparo es outbound** (`sendMessage` de la Bot API): funciona aunque el
+  webhook inbound aún no esté registrado. El worker se activa con el primer
+  deployment saludable — antes incluso de completar el paso 5 (webhook).
+- **Deploys y restarts**: durante un deploy el worker está parado. Los
+  recordatorios vencidos en ese hueco quedan `pending` (son duraderos en la
+  BD de Supabase) y se disparan al arrancar la nueva versión, con nota de
+  retraso si superan 5 min.
+- **Réplica única**: Railway corre una réplica por defecto — no escalar
+  horizontalmente sin resolver el doble disparo (TOCTOU, ver ADR-003).
+- **Supabase free tier pausado**: los ciclos fallarán con error en los logs y
+  se reintentan cada intervalo; al restaurar el proyecto se disparan los
+  vencidos acumulados.
+
+Validación post-deployment (sin webhook): crea un recordatorio con `trigger_at`
+en el futuro cercano (o deja uno vencido en la BD); en los logs debe aparecer
+`Reminder worker started` y el mensaje debe llegar al chat privado del bot.
+
 ## Troubleshooting
 
 | Síntoma | Acción |
@@ -146,4 +178,5 @@ Hasta entonces se recomienda un único entorno production protegido por
 | Healthcheck falla | Confirmar que Railway inyecta `PORT` y que `/health` devuelve `status: ok`. |
 | Telegram no entrega mensajes | Ejecutar `python scripts/telegram_webhook.py status`; confirmar dominio, secret y `TELEGRAM_TOKEN`. |
 | CI verde pero no hay deploy | Confirmar en Railway que el servicio observa `main`, Auto Deploy y Wait for CI están activos. |
+| Recordatorios no llegan | Revisar logs: debe aparecer `Reminder worker started (interval=…s)`. Confirmar `TELEGRAM_TOKEN`, `ANCORA_DATABASE_URL`, `REMINDER_WORKER_ENABLED` y que el recordatorio sigue `pending` con `trigger_at` vencido. Nota: el disparo es outbound — no depende del webhook. |
 | Necesitas volver atrás | Railway → deployment anterior → Rollback; no cambies el webhook si el dominio no cambió. |

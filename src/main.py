@@ -1,9 +1,11 @@
 """AncoraMind — Application entry point.
 
-Orchestrates Agno + AgentOS + Telegram.
+Orchestrates Agno + AgentOS + Telegram + reminder worker.
 Run: python -m src.main
 """
 
+import asyncio
+import contextlib
 import logging
 import os
 import sys
@@ -27,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 # ── Optional domain tools (require ANCORA_DATABASE_URL) ──
 _NOTE_TOOLS: list[Any] = []
+
+# ── Reminder worker task handle (BL-5) ──
+_WORKER_TASK: asyncio.Task | None = None
 
 
 def _init_domain_tools(settings: Settings) -> list[Any]:
@@ -125,6 +130,56 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
     return tools
 
 
+def _register_reminder_worker(app: FastAPI, settings: Settings) -> None:
+    """Wire the reminder background worker into the FastAPI lifecycle (BL-5).
+
+    In-process asyncio worker (ADR-003): scans pending reminders whose
+    trigger_at is due and delivers them via Telegram sendMessage (outbound —
+    no webhook needed). Auto-gated like domain tools: skipped with a log line
+    when its prerequisites are missing.
+    """
+    if not settings.reminder_worker_enabled:
+        logger.info("Reminder worker disabled (REMINDER_WORKER_ENABLED=false)")
+        return
+    if not settings.ancora_database_url:
+        logger.info("Reminder worker skipped — ANCORA_DATABASE_URL not set")
+        return
+    if not settings.telegram_token:
+        logger.info("Reminder worker skipped — TELEGRAM_TOKEN not set (no notifier)")
+        return
+
+    async def start_worker() -> None:
+        global _WORKER_TASK
+        from src.domain.reminders.worker import RemindersWorker
+        from src.notifications.telegram import TelegramNotifier
+        from src.repositories.database import get_session
+
+        worker = RemindersWorker(
+            session_factory=get_session,
+            notifier=TelegramNotifier(settings.telegram_token),
+        )
+        _WORKER_TASK = asyncio.create_task(
+            worker.run_forever(settings.reminder_poll_interval_seconds),
+            name="reminder-worker",
+        )
+        logger.info(
+            "Reminder worker started (interval=%ss)",
+            settings.reminder_poll_interval_seconds,
+        )
+
+    async def stop_worker() -> None:
+        global _WORKER_TASK
+        if _WORKER_TASK is not None:
+            _WORKER_TASK.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await _WORKER_TASK
+            _WORKER_TASK = None
+            logger.info("Reminder worker stopped")
+
+    app.add_event_handler("startup", start_worker)
+    app.add_event_handler("shutdown", stop_worker)
+
+
 def create_app() -> tuple[FastAPI, AgentOS]:
     """Build the AgentOS application with AncoraMind agent and Telegram interface."""
     settings = Settings()
@@ -185,6 +240,9 @@ def create_app() -> tuple[FastAPI, AgentOS]:
 
     app = agent_os.get_app()
     logger.info("AgentOS app created — webhook: /telegram/webhook")
+
+    # ── Reminder worker (BL-5) ─────────────────────────
+    _register_reminder_worker(app, settings)
 
     return app, agent_os
 

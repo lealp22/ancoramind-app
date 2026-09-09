@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 126 unit + 16 integration passing — Ruff limpio en `src/ tests/ scripts/`
+Tests: 139 unit + 17 integration passing — Ruff limpio en `src/ tests/ scripts/`
 
 ---
 
@@ -49,17 +49,17 @@ Hecho: runtime compatible con `PORT`, Dockerfile, healthcheck, `railway.json`,
 CI GitHub Actions, helper de webhook seguro y documentación. Pendiente: crear
 servicio Railway, cargar variables, activar Auto Deploy + Wait for CI, generar
 dominio, registrar webhook y repetir E2E Telegram.
+**Nota (2026-09-09):** al desplegar se activará también el worker de
+recordatorios (BL-5 / ADR-003 / specs/010): variables `REMINDER_WORKER_*`
+opcionales (defaults válidos); su entrega es **outbound** y funciona desde el
+primer deployment saludable, sin esperar al registro del webhook. Ver
+`docs/deployment-railway.md` §8.
 **Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
 Telegram ejecutado sin alertas ni túneles desde el equipo local.
 
 ---
 
 ## P2 — Funcionalidad para "usable de verdad"
-
-### BL-5 · Background worker para recordatorios
-Los recordatorios se crean con status `pending` pero nada los dispara.
-Opciones: worker asyncio en `src/main.py` (simple, POC) o APScheduler/cron.
-Investigar y decidir (puede merecer un mini-ADR).
 
 ### BL-6 · OCR/vision real para extracción de documentos
 La extracción IA usa filename + metadata, no el contenido real de PDFs/imágenes.
@@ -167,6 +167,7 @@ NO instalado — diseño solo hasta BL-6.
 | BL-10 · Unificar factory de modelo en tools de documentos (`create_model_from_settings`, respetando `LLM_PROVIDER`/`LLM_MODEL`) | — | 2026-09-09 |
 | BL-19 · Baseline Ruff limpio en `src/ tests/ scripts/` (155 avisos → 0; gate global en CI) | — | 2026-09-09 |
 | BL-2 · Integration tests con PostgreSQL real (16 tests, BD dedicada `ancoramind_test`, fix jsonb asyncpg en documents.py, job CI integration) | specs/009 | 2026-09-09 |
+| BL-5 · Background worker de recordatorios (asyncio in-process + TelegramNotifier outbound; worker arranca con la app — ADR-003, documentado para BL-18/Railway) | specs/010 | 2026-09-09 |
 
 ---
 

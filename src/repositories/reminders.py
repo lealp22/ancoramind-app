@@ -1,6 +1,7 @@
 """Reminders repository — parameterized SQL."""
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,34 @@ class RemindersRepository:
             stmt = text("SELECT * FROM ancora.reminders WHERE user_id=:uid ORDER BY trigger_at")
             r = await self._session.execute(stmt, {"uid": user_id})
         return [_row_to_reminder(row) for row in r.fetchall()]
+
+    async def list_due(self, now: datetime, limit: int = 50) -> list[Reminder]:
+        """List pending reminders whose trigger_at is due (worker — BL-5)."""
+        stmt = text("""
+            SELECT * FROM ancora.reminders
+            WHERE status='pending' AND trigger_at <= :now
+            ORDER BY trigger_at
+            LIMIT :limit
+        """)
+        r = await self._session.execute(stmt, {"now": now, "limit": limit})
+        return [_row_to_reminder(row) for row in r.fetchall()]
+
+    async def mark_fired(self, reminder_id: UUID, user_id: str) -> bool:
+        """Mark a pending reminder as fired (idempotent on status).
+
+        Only updates rows still in 'pending' so retries or a racing second
+        worker cannot fire a reminder twice (returns False in that case).
+        """
+        stmt = text("""
+            UPDATE ancora.reminders
+            SET status='fired'
+            WHERE id=:id AND user_id=:uid AND status='pending'
+        """)
+        r = await self._session.execute(
+            stmt, {"id": reminder_id, "uid": user_id}
+        )
+        await self._session.commit()
+        return r.rowcount > 0
 
 
 def _row_to_reminder(row) -> Reminder:

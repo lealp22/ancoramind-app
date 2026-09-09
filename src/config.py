@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     # ── Security ─────────────────────────────────────
     allowed_telegram_user_ids: str = ""
 
+    # ── Reminder worker (BL-5 / ADR-003) ─────────────
+    reminder_worker_enabled: bool = True
+    """Start the reminder background worker. Auto-gated: also requires
+    ANCORA_DATABASE_URL and TELEGRAM_TOKEN."""
+    reminder_poll_interval_seconds: int = 60
+    """Seconds between reminder worker scan cycles."""
+
     @property
     def allowed_user_ids(self) -> list[int]:
         """Parse comma-separated allowed user IDs."""

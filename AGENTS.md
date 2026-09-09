@@ -15,8 +15,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8). 126 tests passing.
-  Ruff limpio en `src/ tests/ scripts/` (gate global en CI).
+- **Estado actual:** Milestones M1–M5 completos (ver §8). 139 unit + 17 integration
+  tests passing. Ruff limpio en `src/ tests/ scripts/` (gate global en CI).
 
 ---
 
@@ -79,6 +79,7 @@ src/
 ├── storage/             ← base.py (DocumentStorage Protocol), local.py, supabase_storage.py,
 │                           factory.py (DOCUMENT_STORAGE_BACKEND: local|supabase — ADR-002)
 ├── security/            ← user_context.py (UserContext.from_run_context)
+├── notifications/       ← telegram.py (TelegramNotifier — entrega outbound BL-5/ADR-003)
 └── governance/          ← (metadata, riesgo — en desarrollo)
 
 AGENTS.md                 ← Esta guía (jerarquía: manda junto con docs/architecture.md)
@@ -91,13 +92,14 @@ scripts/run-e2e.sh       ← Despliegue automatizado (bash)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment
-tests/unit/              ← 126 tests
-tests/integration/        ← 16 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+tests/unit/              ← 139 tests
+tests/integration/        ← 17 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
                            adr/ADR-001-agno-runtime.md,
-                           adr/ADR-002-supabase-infrastructure.md
+                           adr/ADR-002-supabase-infrastructure.md,
+                           adr/ADR-003-reminder-worker.md
 ```
 
 ***\*Excepción aceptada:*** `domain/documents/service.py` usa `agno.agent.Agent`
@@ -148,10 +150,10 @@ si hay error 404, cambiar `LLM_MODEL` en `.env`.
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests (126 passing)
+# Tests (139 passing)
 python -m pytest tests/unit/ -v
 
-# Integration tests (16 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (17 — PostgreSQL dockerizado; se saltan sin Docker)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
@@ -219,8 +221,8 @@ mypy src/
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
 (fuente única de verdad). Los items priorizados son: E2E de M3–M5,
-integration tests con PostgreSQL real, despliegue Railway (specs/008), background
-worker de recordatorios, OCR real, proveedor de calendario real y evals agentic.
+despliegue Railway (specs/008), OCR real, proveedor de calendario real y
+evals agentic.
 
 **Fuera de alcance (explícitamente "not yet"):** GraphRAG, vector search,
 multi-agent, WhatsApp, web frontend, microservices, event sourcing.
