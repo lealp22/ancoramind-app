@@ -4,8 +4,6 @@ Orchestrates Agno + AgentOS + Telegram + reminder worker.
 Run: python -m src.main
 """
 
-import asyncio
-import contextlib
 import logging
 import os
 import sys
@@ -21,6 +19,7 @@ from src.agent.ancora_agent import (
     create_model_from_settings,
 )
 from src.agent.instructions import assemble_instructions
+from src.agent.lifecycle import install_reminder_worker_lifespan
 from src.agent.server import resolve_server_config
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
@@ -29,10 +28,6 @@ logger = logging.getLogger(__name__)
 
 # ── Optional domain tools (require ANCORA_DATABASE_URL) ──
 _NOTE_TOOLS: list[Any] = []
-
-# ── Reminder worker task handle (BL-5) ──
-_WORKER_TASK: asyncio.Task | None = None
-
 
 def _init_domain_tools(settings: Settings) -> list[Any]:
     """Initialize domain tools if the domain database is configured.
@@ -120,6 +115,33 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             "check_calendar, propose/execute_calendar_event"
         )
 
+        from src.agent.tools.todos import (
+            add_todo_item,
+            complete_todo_item,
+            delete_todo_item,
+            execute_todo_list,
+            list_todo_items,
+            list_todo_lists,
+            move_todo_item,
+            propose_todo_list,
+            propose_todo_list_delete,
+            propose_todo_list_rename,
+            reopen_todo_item,
+            update_todo_item,
+        )
+
+        tools.extend([
+            list_todo_lists, propose_todo_list, execute_todo_list,
+            propose_todo_list_rename, propose_todo_list_delete,
+            list_todo_items, add_todo_item, update_todo_item,
+            complete_todo_item, reopen_todo_item,
+            move_todo_item, delete_todo_item,
+        ])
+        logger.info(
+            "Todo tools registered: list/propose/execute_todo_list (+rename/delete), "
+            "list/add/update/complete/reopen/move/delete_todo_item"
+        )
+
     except Exception:
         logger.warning(
             "Failed to initialize domain database — "
@@ -131,53 +153,8 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
 
 
 def _register_reminder_worker(app: FastAPI, settings: Settings) -> None:
-    """Wire the reminder background worker into the FastAPI lifecycle (BL-5).
-
-    In-process asyncio worker (ADR-003): scans pending reminders whose
-    trigger_at is due and delivers them via Telegram sendMessage (outbound —
-    no webhook needed). Auto-gated like domain tools: skipped with a log line
-    when its prerequisites are missing.
-    """
-    if not settings.reminder_worker_enabled:
-        logger.info("Reminder worker disabled (REMINDER_WORKER_ENABLED=false)")
-        return
-    if not settings.ancora_database_url:
-        logger.info("Reminder worker skipped — ANCORA_DATABASE_URL not set")
-        return
-    if not settings.telegram_token:
-        logger.info("Reminder worker skipped — TELEGRAM_TOKEN not set (no notifier)")
-        return
-
-    async def start_worker() -> None:
-        global _WORKER_TASK
-        from src.domain.reminders.worker import RemindersWorker
-        from src.notifications.telegram import TelegramNotifier
-        from src.repositories.database import get_session
-
-        worker = RemindersWorker(
-            session_factory=get_session,
-            notifier=TelegramNotifier(settings.telegram_token),
-        )
-        _WORKER_TASK = asyncio.create_task(
-            worker.run_forever(settings.reminder_poll_interval_seconds),
-            name="reminder-worker",
-        )
-        logger.info(
-            "Reminder worker started (interval=%ss)",
-            settings.reminder_poll_interval_seconds,
-        )
-
-    async def stop_worker() -> None:
-        global _WORKER_TASK
-        if _WORKER_TASK is not None:
-            _WORKER_TASK.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await _WORKER_TASK
-            _WORKER_TASK = None
-            logger.info("Reminder worker stopped")
-
-    app.add_event_handler("startup", start_worker)
-    app.add_event_handler("shutdown", stop_worker)
+    """Install the auto-gated reminder-worker FastAPI lifespan (BL-22)."""
+    install_reminder_worker_lifespan(app, settings)
 
 
 def create_app() -> tuple[FastAPI, AgentOS]:

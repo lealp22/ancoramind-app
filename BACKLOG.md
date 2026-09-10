@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-09
+Última actualización: 2026-09-10
 
 ---
 
@@ -23,7 +23,8 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 139 unit + 17 integration passing — Ruff limpio en `src/ tests/ scripts/`
+Tests: 171 unit passing; integration requiere PostgreSQL/Docker — Ruff limpio
+en `src/ tests/ scripts/`
 
 ---
 
@@ -57,6 +58,27 @@ primer deployment saludable, sin esperar al registro del webhook. Ver
 **Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
 Telegram ejecutado sin alertas ni túneles desde el equipo local.
 
+### BL-22 · Migrar reminder worker a FastAPI lifespan ✅ implementado — specs/012
+`src/main.py::_register_reminder_worker` usa `app.add_event_handler(...)`,
+que la versión instalada de FastAPI ya no expone (`AttributeError` al
+importar `src.main` con worker habilitado — detectado 2026-09-10 durante
+BL-21). Migrar a `lifespan` (`@asynccontextmanager`, pasado a
+`FastAPI(lifespan=...)` o al `AgentOS.get_app()` si lo soporta): arrancar
+`asyncio.create_task(worker.run_forever(...))` al entrar y cancelarlo
+limpiamente al salir. Mantener los auto-gates actuales
+(`REMINDER_WORKER_ENABLED` + `ANCORA_DATABASE_URL` + `TELEGRAM_TOKEN` con
+sus logs de motivo). **Criterio de cierre:** `python -c "from src.main
+import app"` sin `AttributeError` (con worker habilitado y deshabilitado);
+suites unit + integration verdes; Ruff limpio. Toca `main.py` + tests del
+wiring (nuevo o existentes de specs/010). **Prioridad P1** — sin esto la app
+no arranca con el worker activo (regresión vs specs/010).
+**Hecho (2026-09-10):** `src/agent/lifecycle.py` envuelve el lifecycle previo
+de AgentOS/Starlette, preserva los tres auto-gates, crea la task por instancia
+en `app.state` y la cancela limpiamente; `main.py` ya no usa
+`add_event_handler` ni estado global. 3 tests de lifecycle; 171 unit passing,
+Ruff y mypy del alcance limpios; integración ejecutada sin fallos pero omitida
+sin PostgreSQL/Docker. Ver `specs/012-fastapi-lifespan/`.
+
 ---
 
 ## P2 — Funcionalidad para "usable de verdad"
@@ -69,6 +91,28 @@ pymupdf). Riesgo: contenido no confiable → DATA, no INSTRUCTIONS (§2 AGENTS.m
 ### BL-7 · Proveedor de calendario real
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
+
+### BL-21 · Listas TODO (múltiples listas por usuario) ✅ implementado — 2026-09-10
+Permitir al usuario crear y gestionar **listas de tareas (TODO)** con nombre
+personalizado (ej. "Trabajo", "Personal", "Compras", "Proyecto X").
+Cada lista contiene items con: título, descripción opcional, estado
+(pending/done), prioridad opcional, fecha límite opcional y orden manual.
+Operaciones: crear/renombrar/eliminar lista; añadir/editar/mover/eliminar
+item; marcar done/pending; reordenar (drag-and-drop lógica); listar items
+con filtros (estado, prioridad, fecha). Diferencia clave con `reminders`:
+no hay trigger temporal automático ni worker — es gestión activa iniciada
+por el usuario. Requiere: modelos (`todo_lists`, `todo_items`), repositorio,
+servicio, tools (`propose_`/`execute_` para WRITE), prompts/skill, tests
+unit + integration, migración idempotente en `migrations/init.sql`.
+**Prioridad:** P2 — hace el asistente "usable de verdad" para gestión diaria.
+**Implementación (2026-09-10):** dominio `src/domain/todos/` (models+service),
+`src/repositories/todos.py` (SQL parametrizado, user-scoped), 12 tools en
+`src/agent/tools/todos.py` (listas con propose/execute + items directos),
+registro en `_init_domain_tools()`, skill `prompts/skills/todos.md`,
+`tablas ancora.todo_lists/todo_items` en `migrations/init.sql`,
+29 unit tests + 7 integration tests nuevos (168 unit passing, Ruff limpio,
+mypy limpio en archivos nuevos). El wiring FastAPI del worker se corrigió
+posteriormente en BL-22/specs/012. E2E Telegram pendiente (bloqueado por BL-18).
 
 ---
 
@@ -168,6 +212,8 @@ NO instalado — diseño solo hasta BL-6.
 | BL-19 · Baseline Ruff limpio en `src/ tests/ scripts/` (155 avisos → 0; gate global en CI) | — | 2026-09-09 |
 | BL-2 · Integration tests con PostgreSQL real (16 tests, BD dedicada `ancoramind_test`, fix jsonb asyncpg en documents.py, job CI integration) | specs/009 | 2026-09-09 |
 | BL-5 · Background worker de recordatorios (asyncio in-process + TelegramNotifier outbound; worker arranca con la app — ADR-003, documentado para BL-18/Railway) | specs/010 | 2026-09-09 |
+| BL-21 · Listas TODO (múltiples listas por usuario: dominio + repo + 12 tools + skill + tablas; spec redactada retroactivamente — ver specs/011/verification.md) | specs/011 | 2026-09-10 |
+| BL-22 · Migrar reminder worker a FastAPI lifespan (preserva lifecycle AgentOS; auto-gates + cancelación limpia) | specs/012 | 2026-09-10 |
 
 ---
 

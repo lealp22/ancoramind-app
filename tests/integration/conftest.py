@@ -71,7 +71,8 @@ else:
 TRUNCATE_SQL = """
     TRUNCATE TABLE ancora.notes, ancora.documents, ancora.ai_extractions,
         ancora.vehicles, ancora.vehicle_maintenance, ancora.action_proposals,
-        ancora.reminders, ancora.calendar_events
+        ancora.reminders, ancora.calendar_events,
+        ancora.todo_items, ancora.todo_lists
     RESTART IDENTITY CASCADE
 """
 

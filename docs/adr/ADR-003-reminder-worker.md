@@ -1,6 +1,7 @@
 # ADR-003 — Worker de recordatorios en el proceso de la app
 
-> **Status:** Accepted (implementado 2026-09-09 — specs/010, BL-5)
+> **Status:** Accepted (implementado 2026-09-09 — specs/010, BL-5;
+> lifecycle migrado a FastAPI lifespan 2026-09-10 — specs/012, BL-22)
 > **Contexto:** BL-5. Mini-ADR solicitado por el backlog para fijar la decisión.
 
 ---
@@ -29,9 +30,11 @@ Restricciones relevantes:
 procesos/servicios extra):
 
 1. **Bucle** — `RemindersWorker.run_forever(interval)` como `asyncio.Task`
-   arrancado en el startup de FastAPI (`app.add_event_handler`) y cancelado en
-   el shutdown. Intervalo configurable (`REMINDER_POLL_INTERVAL_SECONDS`,
-   default 60 s).
+   arrancado/cancelado mediante un wrapper `FastAPI/Starlette lifespan`
+   (`src/agent/lifecycle.py`). El wrapper preserva el lifecycle previo de
+   AgentOS, guarda la task por instancia en `app.state` y la cancela antes de
+   salir del lifecycle original. Intervalo configurable
+   (`REMINDER_POLL_INTERVAL_SECONDS`, default 60 s).
 2. **Dominio puro** — `src/domain/reminders/worker.py` conoce el repositorio y
    un Protocol `ReminderNotifier`; no importa nada de Agno ni de Telegram.
 3. **Notificación outbound** — `TelegramNotifier` (`src/notifications/`)

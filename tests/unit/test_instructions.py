@@ -46,8 +46,8 @@ class TestAssembleInstructions:
         """Should return a list of strings."""
         instructions = assemble_instructions()
         assert isinstance(instructions, list)
-        # identity + soul + tool_contract + telegram + documents + vehicles
-        assert len(instructions) == 6
+        # identity + soul + tool_contract + telegram + documents + vehicles + todos
+        assert len(instructions) == 7
         assert all(isinstance(item, str) for item in instructions)
 
     def test_vehicle_skill_loaded(self):
@@ -78,3 +78,8 @@ class TestAssembleInstructions:
         instructions = assemble_instructions()
         for block in instructions:
             assert len(block.strip()) > 0, "Empty block found in instructions"
+
+    def test_todos_skill_loaded(self):
+        """The todos skill (lists + items) should be included."""
+        instructions = assemble_instructions()
+        assert any("Todo Lists" in block for block in instructions)

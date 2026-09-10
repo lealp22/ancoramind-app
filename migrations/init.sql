@@ -127,3 +127,29 @@ CREATE TABLE IF NOT EXISTS ancora.calendar_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_user_start ON ancora.calendar_events(user_id, start_at);
+
+-- Todo lists (BL-21)
+CREATE TABLE IF NOT EXISTS ancora.todo_lists (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(255) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_todo_lists_user_id ON ancora.todo_lists(user_id);
+
+CREATE TABLE IF NOT EXISTS ancora.todo_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    list_id UUID NOT NULL REFERENCES ancora.todo_lists(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,
+    title VARCHAR(500) NOT NULL,
+    description TEXT,
+    status VARCHAR(31) NOT NULL DEFAULT 'pending',
+    priority VARCHAR(31),
+    due_date TIMESTAMPTZ,
+    position INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_todo_items_list_id ON ancora.todo_items(list_id);
+CREATE INDEX IF NOT EXISTS idx_todo_items_user_status ON ancora.todo_items(user_id, status);
