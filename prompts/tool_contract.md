@@ -13,7 +13,8 @@
 
 4. **Distinguish read from write.**
    - READ tools return information.
-   - WRITE tools change data and may require confirmation.
+    - Every WRITE, EXTERNAL_ACTION, and DESTRUCTIVE operation requires a persisted
+      `propose_*` → explicit user confirmation → `execute_*` flow. Never bypass it.
 
 5. **Don't blindly retry failed tools.**
    If a tool fails, report the error. Don't retry more than once

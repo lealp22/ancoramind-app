@@ -1,20 +1,20 @@
-"""Todo tools — thin Agno tool adapters for TodosService.
+"""Todo tools — thin Agno adapters with strict ActionProposal governance.
 
-List management is a WRITE operation: propose_*/execute_* governance applies
-to list creation/rename/delete. Item operations (add/edit/move/delete,
-mark done/pending) are scoped to a user-owned list and execute directly
-after resolving identity from RunContext — same level of reversibility as
-notes (canonical memory, no external side effects).
+Every TODO mutation is a WRITE operation. A propose_* tool records the intent
+as a pending ActionProposal; execute_* confirms it, revalidates ownership via
+the domain service, performs the mutation, and records execution.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from agno.run import RunContext
+from pydantic import ValidationError
 
-from src.domain.todos.models import TodoItem
+from src.domain.todos.models import TodoItem, TodoItemCreate, TodoItemUpdate
 from src.domain.todos.service import TodosService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -41,17 +41,39 @@ def _parse_uuid(value: str, label: str) -> UUID | str:
         return f"ID no válido ({label}): {value}"
 
 
+def _parse_due_date(value: str | None) -> datetime | str | None:
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return f"Fecha no válida: {value}. Usa formato ISO 8601 (YYYY-MM-DD)."
+
+
 def _format_list_line(list_id: UUID, name: str) -> str:
     return f"📋 **{name}** — `{list_id}`"
 
 
 def _format_item_line(item: TodoItem) -> str:
     icon = "✅" if item.status == "done" else "⏳"
-    prio = _PRIORITY_ICONS.get(item.priority or "", "")
+    priority = _PRIORITY_ICONS.get(item.priority or "", "")
     due = f" — 📅 {item.due_date.strftime('%Y-%m-%d')}" if item.due_date else ""
-    desc = f"\n   {item.description}" if item.description else ""
-    prio_txt = f"{prio} " if prio else ""
-    return f"{icon} {prio_txt}**{item.title}** `{item.id}` [{item.status}]{due}{desc}"
+    description = f"\n   {item.description}" if item.description else ""
+    priority_text = f"{priority} " if priority else ""
+    return f"{icon} {priority_text}**{item.title}** `{item.id}` [{item.status}]{due}{description}"
+
+
+async def _create_proposal(
+    user_context: UserContext,
+    tool_name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    actions_repo = await _get_actions_repo()
+    return await actions_repo.create(
+        user_id=user_context.user_id,
+        tool_name=tool_name,
+        payload=payload,
+    )
 
 
 async def list_todo_lists(run_context: RunContext) -> str:
@@ -64,21 +86,24 @@ async def list_todo_lists(run_context: RunContext) -> str:
     Args:
         run_context: Injected by Agno.
     """
-    user_ctx = UserContext.from_run_context(run_context)
+    user_context = UserContext.from_run_context(run_context)
     service = await _get_todos_service()
-    lists = await service.list_lists(user_ctx)
+    lists = await service.list_lists(user_context)
     if not lists:
         return (
             "No tienes listas TODO todavía. "
             "Pídeme crear una con propose_todo_list "
             '(ej. "Crea una lista Trabajo").'
         )
+
     lines = [f"📋 **Tus listas TODO** ({len(lists)}):\n"]
-    for lst in lists:
-        items = await service.list_items(user_ctx, lst.id)
-        pending = sum(1 for i in (items or []) if i.status == "pending")
+    for todo_list in lists:
+        items = await service.list_items(user_context, todo_list.id)
+        pending = sum(1 for item in (items or []) if item.status == "pending")
         total = len(items or [])
-        lines.append(f"{_format_list_line(lst.id, lst.name)} — {pending}/{total} pendientes")
+        lines.append(
+            f"{_format_list_line(todo_list.id, todo_list.name)} — {pending}/{total} pendientes"
+        )
     return "\n".join(lines)
 
 
@@ -94,14 +119,13 @@ async def propose_todo_list(run_context: RunContext, name: str) -> str:
         run_context: Injected by Agno.
         name: List name (ej. "Trabajo", "Personal", "Compra").
     """
-    user_ctx = UserContext.from_run_context(run_context)
+    user_context = UserContext.from_run_context(run_context)
     if not name or not name.strip():
         return "Dime el nombre de la lista (ej. Trabajo, Personal, Compra)."
-    actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.create(
-        user_id=user_ctx.user_id,
-        tool_name="create_todo_list",
-        payload={"name": name.strip()},
+    proposal = await _create_proposal(
+        user_context,
+        "create_todo_list",
+        {"name": name.strip()},
     )
     return (
         f"📋 **Propuesta de lista TODO** (`{proposal['id']}`)\n"
@@ -117,42 +141,44 @@ async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
 
     Args:
         run_context: Injected by Agno.
-        proposal_id: Proposal ID from propose_todo_list / propose_todo_list_rename
-            / propose_todo_list_delete.
+        proposal_id: Proposal ID from a propose_todo_list* tool.
     """
-    user_ctx = UserContext.from_run_context(run_context)
+    user_context = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.confirm(user_ctx.user_id, proposal_id)
+    proposal = await actions_repo.confirm(user_context.user_id, proposal_id)
     if not proposal:
         return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
+
     payload = proposal["payload"]
     tool_name = proposal["tool_name"]
     service = await _get_todos_service()
     try:
         if tool_name == "create_todo_list":
-            created = await service.create_list(user_ctx, payload["name"])
+            created = await service.create_list(user_context, payload["name"])
             result = f"✅ **Lista creada**: {created.name}\n   ID: `{created.id}`"
         elif tool_name == "rename_todo_list":
             renamed = await service.rename_list(
-                user_ctx, UUID(payload["list_id"]), payload["name"]
+                user_context, UUID(payload["list_id"]), payload["name"]
             )
             if not renamed:
                 return f"No se encontró la lista `{payload['list_id']}`."
             result = f"✅ **Lista renombrada**: {renamed.name}\n   ID: `{renamed.id}`"
         elif tool_name == "delete_todo_list":
-            ok = await service.delete_list(user_ctx, UUID(payload["list_id"]))
-            if not ok:
+            deleted = await service.delete_list(user_context, UUID(payload["list_id"]))
+            if not deleted:
                 return f"No se encontró la lista `{payload['list_id']}`."
             result = (
                 f"✅ **Lista eliminada** (`{payload['list_id']}`) "
                 "junto con sus tareas."
             )
         else:
-            return f"Propuesta de tipo desconocido: {tool_name}"
-        await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
+            return f"Propuesta de lista desconocida: {tool_name}"
+        await actions_repo.mark_executed(user_context.user_id, proposal_id)
         return result
-    except Exception as e:
-        return f"❌ Error: {str(e)[:200]}"
+    except (KeyError, TypeError, ValueError) as error:
+        return f"❌ Datos de propuesta no válidos: {str(error)[:200]}"
+    except Exception as error:
+        return f"❌ Error: {str(error)[:200]}"
 
 
 async def propose_todo_list_rename(
@@ -166,34 +192,35 @@ async def propose_todo_list_rename(
     Args:
         run_context: Injected by Agno.
         list_id: UUID of the list (from list_todo_lists).
-        name: New name for the list.
+        name: New list name.
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(list_id, "lista")
-    if isinstance(parsed, str):
-        return parsed
+    user_context = UserContext.from_run_context(run_context)
+    parsed_list_id = _parse_uuid(list_id, "lista")
+    if isinstance(parsed_list_id, str):
+        return parsed_list_id
     if not name or not name.strip():
         return "Dime el nuevo nombre de la lista."
+
     service = await _get_todos_service()
-    target = await service.list_lists(user_ctx)
-    current = next((lst for lst in target if lst.id == parsed), None)
-    if current is None:
+    current = await service.list_lists(user_context)
+    target = next((todo_list for todo_list in current if todo_list.id == parsed_list_id), None)
+    if target is None:
         return f"No se encontró la lista `{list_id}`."
-    actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.create(
-        user_id=user_ctx.user_id,
-        tool_name="rename_todo_list",
-        payload={"list_id": str(parsed), "name": name.strip()},
+
+    proposal = await _create_proposal(
+        user_context,
+        "rename_todo_list",
+        {"list_id": str(parsed_list_id), "name": name.strip()},
     )
     return (
         f"📋 **Propuesta de renombrado** (`{proposal['id']}`)\n"
-        f"   {current.name} → {name.strip()}\n"
+        f"   {target.name} → {name.strip()}\n"
         "\n¿Confirmas el cambio de nombre?"
     )
 
 
 async def propose_todo_list_delete(run_context: RunContext, list_id: str) -> str:
-    """PROPOSE deleting a TODO list (and its items) — requires confirmation.
+    """PROPOSE deleting a TODO list and its tasks — requires confirmation.
 
     Use when the user wants to remove a list:
     - "Elimina la lista Compra"
@@ -203,26 +230,26 @@ async def propose_todo_list_delete(run_context: RunContext, list_id: str) -> str
         run_context: Injected by Agno.
         list_id: UUID of the list (from list_todo_lists).
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(list_id, "lista")
-    if isinstance(parsed, str):
-        return parsed
+    user_context = UserContext.from_run_context(run_context)
+    parsed_list_id = _parse_uuid(list_id, "lista")
+    if isinstance(parsed_list_id, str):
+        return parsed_list_id
+
     service = await _get_todos_service()
-    target = await service.list_lists(user_ctx)
-    current = next((lst for lst in target if lst.id == parsed), None)
-    if current is None:
+    current = await service.list_lists(user_context)
+    target = next((todo_list for todo_list in current if todo_list.id == parsed_list_id), None)
+    if target is None:
         return f"No se encontró la lista `{list_id}`."
-    items = await service.list_items(user_ctx, parsed)
-    n_items = len(items or [])
-    actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.create(
-        user_id=user_ctx.user_id,
-        tool_name="delete_todo_list",
-        payload={"list_id": str(parsed)},
+    items = await service.list_items(user_context, parsed_list_id)
+
+    proposal = await _create_proposal(
+        user_context,
+        "delete_todo_list",
+        {"list_id": str(parsed_list_id)},
     )
     return (
         f"📋 **Propuesta de borrado** (`{proposal['id']}`)\n"
-        f"   Lista: {current.name} ({n_items} tarea(s) se eliminarán)\n"
+        f"   Lista: {target.name} ({len(items or [])} tarea(s) se eliminarán)\n"
         "\n¿Confirmas la eliminación?"
     )
 
@@ -245,28 +272,27 @@ async def list_todo_items(
         status: Optional filter: pending | done.
         priority: Optional filter: low | normal | high.
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(list_id, "lista")
-    if isinstance(parsed, str):
-        return parsed
+    user_context = UserContext.from_run_context(run_context)
+    parsed_list_id = _parse_uuid(list_id, "lista")
+    if isinstance(parsed_list_id, str):
+        return parsed_list_id
     service = await _get_todos_service()
     try:
         items = await service.list_items(
-            user_ctx, parsed, status=status, priority=priority
+            user_context, parsed_list_id, status=status, priority=priority
         )
-    except ValueError as e:
-        return f"Filtro no válido: {e}"
+    except ValueError as error:
+        return f"Filtro no válido: {error}"
     if items is None:
         return f"No se encontró la lista `{list_id}`."
     if not items:
         return "La lista no tiene tareas con esos filtros. 📭"
     lines = [f"📋 **Tareas** ({len(items)}):\n"]
-    for item in items:
-        lines.append(_format_item_line(item))
+    lines.extend(_format_item_line(item) for item in items)
     return "\n".join(lines)
 
 
-async def add_todo_item(
+async def propose_todo_item(
     run_context: RunContext,
     list_id: str,
     title: str,
@@ -274,7 +300,7 @@ async def add_todo_item(
     priority: str | None = None,
     due_date: str | None = None,
 ) -> str:
-    """Add a task to a TODO list.
+    """PROPOSE adding a task to a TODO list — requires user confirmation.
 
     Use when the user wants to add something to a list:
     - "Añade a Trabajo: preparar la presentación"
@@ -288,32 +314,50 @@ async def add_todo_item(
         priority: Optional: low | normal | high.
         due_date: Optional ISO 8601 datetime (ej. '2026-09-15').
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(list_id, "lista")
-    if isinstance(parsed, str):
-        return parsed
+    user_context = UserContext.from_run_context(run_context)
+    parsed_list_id = _parse_uuid(list_id, "lista")
+    if isinstance(parsed_list_id, str):
+        return parsed_list_id
     if not title or not title.strip():
         return "Dime el título de la tarea."
-    due = None
-    if due_date:
-        try:
-            due = datetime.fromisoformat(due_date)
-        except ValueError:
-            return f"Fecha no válida: {due_date}. Usa formato ISO 8601 (YYYY-MM-DD)."
-    service = await _get_todos_service()
+    parsed_due_date = _parse_due_date(due_date)
+    if isinstance(parsed_due_date, str):
+        return parsed_due_date
     try:
-        item = await service.add_item(
-            user_ctx, parsed, title,
-            description=description, priority=priority, due_date=due,
+        data = TodoItemCreate(
+            title=title.strip(),
+            description=description.strip() if description else None,
+            priority=priority,
+            due_date=parsed_due_date,
         )
-    except ValueError as e:
-        return f"Datos no válidos: {e}"
-    if item is None:
-        return f"No se encontró la lista `{list_id}`."
-    return f"✅ **Tarea añadida**: {item.title}\n   ID: `{item.id}`"
+    except ValidationError as error:
+        return f"Datos no válidos: {error.errors()[0]['msg']}"
+
+    proposal = await _create_proposal(
+        user_context,
+        "create_todo_item",
+        {
+            "list_id": str(parsed_list_id),
+            "title": data.title,
+            "description": data.description,
+            "priority": data.priority,
+            "due_date": data.due_date.isoformat() if data.due_date else None,
+        },
+    )
+    details = [
+        f"📋 **Propuesta de nueva tarea** (`{proposal['id']}`)",
+        f"   Título: {data.title}",
+        f"   Lista: `{parsed_list_id}`",
+    ]
+    if data.priority:
+        details.append(f"   Prioridad: {data.priority}")
+    if data.due_date:
+        details.append(f"   Fecha límite: {data.due_date:%Y-%m-%d}")
+    details.append("\n¿Confirmas añadir esta tarea?")
+    return "\n".join(details)
 
 
-async def update_todo_item(
+async def propose_todo_item_update(
     run_context: RunContext,
     item_id: str,
     title: str | None = None,
@@ -321,7 +365,7 @@ async def update_todo_item(
     priority: str | None = None,
     due_date: str | None = None,
 ) -> str:
-    """Edit a TODO task (title, description, priority, due date).
+    """PROPOSE editing a TODO task — requires user confirmation.
 
     Use when the user wants to change a task:
     - "Cambia el título de esa tarea a ..."
@@ -335,31 +379,45 @@ async def update_todo_item(
         priority: New priority low | normal | high (optional).
         due_date: New due date ISO 8601 (optional).
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(item_id, "tarea")
-    if isinstance(parsed, str):
-        return parsed
-    due = None
-    if due_date:
-        try:
-            due = datetime.fromisoformat(due_date)
-        except ValueError:
-            return f"Fecha no válida: {due_date}. Usa formato ISO 8601 (YYYY-MM-DD)."
-    service = await _get_todos_service()
+    user_context = UserContext.from_run_context(run_context)
+    parsed_item_id = _parse_uuid(item_id, "tarea")
+    if isinstance(parsed_item_id, str):
+        return parsed_item_id
+    if all(value is None for value in (title, description, priority, due_date)):
+        return "Indica al menos un dato de la tarea que quieras cambiar."
+    parsed_due_date = _parse_due_date(due_date)
+    if isinstance(parsed_due_date, str):
+        return parsed_due_date
     try:
-        item = await service.update_item(
-            user_ctx, parsed, title=title,
-            description=description, priority=priority, due_date=due,
+        data = TodoItemUpdate(
+            title=title.strip() if title else None,
+            description=description.strip() if description else description,
+            priority=priority,
+            due_date=parsed_due_date,
         )
-    except ValueError as e:
-        return f"Datos no válidos: {e}"
-    if item is None:
-        return f"No se encontró la tarea `{item_id}`."
-    return f"✅ **Tarea actualizada**: {item.title}\n   ID: `{item.id}`"
+    except ValidationError as error:
+        return f"Datos no válidos: {error.errors()[0]['msg']}"
+
+    proposal = await _create_proposal(
+        user_context,
+        "update_todo_item",
+        {
+            "item_id": str(parsed_item_id),
+            "title": data.title,
+            "description": data.description,
+            "priority": data.priority,
+            "due_date": data.due_date.isoformat() if data.due_date else None,
+        },
+    )
+    return (
+        f"📋 **Propuesta de actualización** (`{proposal['id']}`)\n"
+        f"   Tarea: `{parsed_item_id}`\n"
+        "\n¿Confirmas los cambios de esta tarea?"
+    )
 
 
-async def complete_todo_item(run_context: RunContext, item_id: str) -> str:
-    """Mark a TODO task as done.
+async def propose_todo_item_complete(run_context: RunContext, item_id: str) -> str:
+    """PROPOSE marking a TODO task as done — requires user confirmation.
 
     Use when the user finished something:
     - "Hecho lo de preparar la presentación"
@@ -369,19 +427,11 @@ async def complete_todo_item(run_context: RunContext, item_id: str) -> str:
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(item_id, "tarea")
-    if isinstance(parsed, str):
-        return parsed
-    service = await _get_todos_service()
-    item = await service.set_item_status(user_ctx, parsed, "done")
-    if item is None:
-        return f"No se encontró la tarea `{item_id}`."
-    return f"✅ **Completada**: {item.title}"
+    return await _propose_todo_item_status(run_context, item_id, "done", "completar")
 
 
-async def reopen_todo_item(run_context: RunContext, item_id: str) -> str:
-    """Mark a TODO task back as pending.
+async def propose_todo_item_reopen(run_context: RunContext, item_id: str) -> str:
+    """PROPOSE reopening a TODO task — requires user confirmation.
 
     Use when the user wants to reopen a done task:
     - "Reabre la tarea de preparar la presentación"
@@ -390,21 +440,35 @@ async def reopen_todo_item(run_context: RunContext, item_id: str) -> str:
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(item_id, "tarea")
-    if isinstance(parsed, str):
-        return parsed
-    service = await _get_todos_service()
-    item = await service.set_item_status(user_ctx, parsed, "pending")
-    if item is None:
-        return f"No se encontró la tarea `{item_id}`."
-    return f"⏳ **Reabierta**: {item.title}"
+    return await _propose_todo_item_status(run_context, item_id, "pending", "reabrir")
 
 
-async def move_todo_item(
+async def _propose_todo_item_status(
+    run_context: RunContext,
+    item_id: str,
+    status: str,
+    action_label: str,
+) -> str:
+    user_context = UserContext.from_run_context(run_context)
+    parsed_item_id = _parse_uuid(item_id, "tarea")
+    if isinstance(parsed_item_id, str):
+        return parsed_item_id
+    proposal = await _create_proposal(
+        user_context,
+        "set_todo_item_status",
+        {"item_id": str(parsed_item_id), "status": status},
+    )
+    return (
+        f"📋 **Propuesta para {action_label} tarea** (`{proposal['id']}`)\n"
+        f"   Tarea: `{parsed_item_id}`\n"
+        "\n¿Confirmas esta acción?"
+    )
+
+
+async def propose_todo_item_move(
     run_context: RunContext, item_id: str, target_list_id: str
 ) -> str:
-    """Move a TODO task to another list.
+    """PROPOSE moving a TODO task to another list — requires confirmation.
 
     Use when the user wants to reorganize:
     - "Mueve esa tarea a la lista Personal"
@@ -414,22 +478,28 @@ async def move_todo_item(
         item_id: UUID of the item (from list_todo_items).
         target_list_id: UUID of the destination list (from list_todo_lists).
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed_item = _parse_uuid(item_id, "tarea")
-    if isinstance(parsed_item, str):
-        return parsed_item
-    parsed_list = _parse_uuid(target_list_id, "lista destino")
-    if isinstance(parsed_list, str):
-        return parsed_list
-    service = await _get_todos_service()
-    item = await service.move_item(user_ctx, parsed_item, parsed_list)
-    if item is None:
-        return "No se encontró la tarea o la lista destino."
-    return f"✅ **Tarea movida**: {item.title}\n   Lista destino: `{item.list_id}`"
+    user_context = UserContext.from_run_context(run_context)
+    parsed_item_id = _parse_uuid(item_id, "tarea")
+    if isinstance(parsed_item_id, str):
+        return parsed_item_id
+    parsed_target_list_id = _parse_uuid(target_list_id, "lista destino")
+    if isinstance(parsed_target_list_id, str):
+        return parsed_target_list_id
+    proposal = await _create_proposal(
+        user_context,
+        "move_todo_item",
+        {"item_id": str(parsed_item_id), "target_list_id": str(parsed_target_list_id)},
+    )
+    return (
+        f"📋 **Propuesta de mover tarea** (`{proposal['id']}`)\n"
+        f"   Tarea: `{parsed_item_id}`\n"
+        f"   Lista destino: `{parsed_target_list_id}`\n"
+        "\n¿Confirmas el movimiento?"
+    )
 
 
-async def delete_todo_item(run_context: RunContext, item_id: str) -> str:
-    """Delete a TODO task.
+async def propose_todo_item_delete(run_context: RunContext, item_id: str) -> str:
+    """PROPOSE deleting a TODO task — requires user confirmation.
 
     Use when the user wants to remove a task:
     - "Elimina esa tarea"
@@ -439,12 +509,102 @@ async def delete_todo_item(run_context: RunContext, item_id: str) -> str:
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
     """
-    user_ctx = UserContext.from_run_context(run_context)
-    parsed = _parse_uuid(item_id, "tarea")
-    if isinstance(parsed, str):
-        return parsed
+    user_context = UserContext.from_run_context(run_context)
+    parsed_item_id = _parse_uuid(item_id, "tarea")
+    if isinstance(parsed_item_id, str):
+        return parsed_item_id
+    proposal = await _create_proposal(
+        user_context,
+        "delete_todo_item",
+        {"item_id": str(parsed_item_id)},
+    )
+    return (
+        f"📋 **Propuesta de borrado de tarea** (`{proposal['id']}`)\n"
+        f"   Tarea: `{parsed_item_id}`\n"
+        "\n¿Confirmas la eliminación?"
+    )
+
+
+async def execute_todo_item(run_context: RunContext, proposal_id: str) -> str:
+    """Execute a confirmed TODO-item proposal.
+
+    Only call after the user explicitly confirmed ('Sí'). The Core revalidates
+    list/item ownership before every mutation.
+
+    Args:
+        run_context: Injected by Agno.
+        proposal_id: Proposal ID from a propose_todo_item* tool.
+    """
+    user_context = UserContext.from_run_context(run_context)
+    actions_repo = await _get_actions_repo()
+    proposal = await actions_repo.confirm(user_context.user_id, proposal_id)
+    if not proposal:
+        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
+
+    payload = proposal["payload"]
+    tool_name = proposal["tool_name"]
     service = await _get_todos_service()
-    ok = await service.delete_item(user_ctx, parsed)
-    if not ok:
-        return f"No se encontró la tarea `{item_id}`."
-    return f"✅ **Tarea eliminada** (`{item_id}`)."
+    try:
+        if tool_name == "create_todo_item":
+            item = await service.add_item(
+                user_context,
+                UUID(payload["list_id"]),
+                payload["title"],
+                description=payload.get("description"),
+                priority=payload.get("priority"),
+                due_date=datetime.fromisoformat(payload["due_date"])
+                if payload.get("due_date")
+                else None,
+            )
+            if item is None:
+                return f"No se encontró la lista `{payload['list_id']}`."
+            result = f"✅ **Tarea añadida**: {item.title}\n   ID: `{item.id}`"
+        elif tool_name == "update_todo_item":
+            item = await service.update_item(
+                user_context,
+                UUID(payload["item_id"]),
+                title=payload.get("title"),
+                description=payload.get("description"),
+                priority=payload.get("priority"),
+                due_date=datetime.fromisoformat(payload["due_date"])
+                if payload.get("due_date")
+                else None,
+            )
+            if item is None:
+                return f"No se encontró la tarea `{payload['item_id']}`."
+            result = f"✅ **Tarea actualizada**: {item.title}\n   ID: `{item.id}`"
+        elif tool_name == "set_todo_item_status":
+            item = await service.set_item_status(
+                user_context,
+                UUID(payload["item_id"]),
+                payload["status"],
+            )
+            if item is None:
+                return f"No se encontró la tarea `{payload['item_id']}`."
+            result = (
+                f"✅ **Completada**: {item.title}"
+                if item.status == "done"
+                else f"⏳ **Reabierta**: {item.title}"
+            )
+        elif tool_name == "move_todo_item":
+            item = await service.move_item(
+                user_context,
+                UUID(payload["item_id"]),
+                UUID(payload["target_list_id"]),
+            )
+            if item is None:
+                return "No se encontró la tarea o la lista destino."
+            result = f"✅ **Tarea movida**: {item.title}\n   Lista destino: `{item.list_id}`"
+        elif tool_name == "delete_todo_item":
+            deleted = await service.delete_item(user_context, UUID(payload["item_id"]))
+            if not deleted:
+                return f"No se encontró la tarea `{payload['item_id']}`."
+            result = f"✅ **Tarea eliminada** (`{payload['item_id']}`)."
+        else:
+            return f"Propuesta de tarea desconocida: {tool_name}"
+        await actions_repo.mark_executed(user_context.user_id, proposal_id)
+        return result
+    except (KeyError, TypeError, ValueError, ValidationError) as error:
+        return f"❌ Datos de propuesta no válidos: {str(error)[:200]}"
+    except Exception as error:
+        return f"❌ Error: {str(error)[:200]}"

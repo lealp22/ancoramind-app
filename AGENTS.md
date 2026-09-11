@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-09
+> Última actualización: 2026-09-11
 
 ---
 
@@ -15,8 +15,9 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8). 139 unit + 17 integration
-  tests passing. Ruff limpio en `src/ tests/ scripts/` (gate global en CI).
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 179 unit
+  tests passing; 24 integration tests requieren PostgreSQL/Docker (se omiten sin
+  esa infraestructura). Ruff limpio en `src/ tests/ scripts/` (gate global en CI).
 
 ---
 
@@ -35,7 +36,7 @@ Estas reglas vienen del brief de ingeniería. **No violarlas aunque parezca más
    solicitar*; el Core decide *qué permisos tiene*. La identidad del usuario
    (UserContext) NUNCA procede del LLM — se resuelve del `RunContext` de Agno.
 
-4. **WRITE/EXTERNAL_ACTION requiere gobernanza.** Patrón ActionProposal:
+4. **Toda operación WRITE/EXTERNAL_ACTION/DESTRUCTIVE requiere gobernanza.** Patrón ActionProposal:
    `propose_*` crea propuesta `pending_confirmation` → usuario confirma ("Sí")
    → `execute_*` valida, ejecuta y audita. Ejemplos:
    `propose_vehicle_maintenance` / `execute_vehicle_maintenance`.
@@ -65,17 +66,21 @@ src/
 ├── agent/               ← Capa Agno (infraestructura)
 │   ├── ancora_agent.py  ← create_model() (3 providers), create_db(), create_ancora_agent()
 │   ├── instructions.py  ← assemble_instructions(): carga prompts/*.md → list[str]
-│   ├── context.py       ← UserContext dataclass
+│   ├── lifecycle.py     ← lifespan FastAPI: worker recordatorios auto-gated (BL-22)
+│   ├── server.py        ← host/PORT/reload para local y Railway
+│   ├── telegram_webhook.py ← helper seguro de registro/estado de webhook
+│   ├── context.py       ← legado; UserContext canónico está en security/
 │   └── tools/           ← Thin adapters (UNA función por capability)
 │       ├── system.py      notes.py      documents.py
 │       ├── vehicles.py    maintenance.py (propose/execute)
-│       ├── reminders.py   calendar.py
+│       ├── reminders.py   calendar.py    todos.py (propose/execute estricto)
 ├── domain/              ← Lógica de negocio (el producto — sin imports de Agno*)
-│   ├── notes/ documents/ vehicles/ reminders/ calendar/ actions/
-│   └── (cada uno: models.py + service.py; calendar tiene provider.py Protocol)
+│   ├── notes/ documents/ vehicles/ reminders/ calendar/ todos/ actions/
+│   └── (cada uno: models.py + service.py; calendar tiene provider.py Protocol;
+│       reminders tiene worker.py sin dependencia de FastAPI)
 ├── repositories/        ← Acceso PostgreSQL (sqlalchemy async, text() parametrizado)
 │   ├── database.py      ← init_database(), get_session() — llamar init al arrancar
-│   └── notes, documents, vehicles, maintenance, reminders, calendar, actions
+│   └── notes, documents, vehicles, maintenance, reminders, calendar, todos, actions
 ├── storage/             ← base.py (DocumentStorage Protocol), local.py, supabase_storage.py,
 │                           factory.py (DOCUMENT_STORAGE_BACKEND: local|supabase — ADR-002)
 ├── security/            ← user_context.py (UserContext.from_run_context)
@@ -86,14 +91,15 @@ AGENTS.md                 ← Esta guía (jerarquía: manda junto con docs/archi
 BACKLOG.md                ← Lista viva y priorizada de pendientes (fuente única de verdad)
 prompts/                 ← Assets de IA versionados (identity, soul, tool_contract,
 │                           channels/telegram.md, skills/)
-migrations/init.sql      ← Schema completo del dominio (8 tablas + indexes;
+migrations/init.sql      ← Schema completo del dominio (10 tablas + indexes;
 │                           aplicado también como baseline en Supabase — ADR-002)
-scripts/run-e2e.sh       ← Despliegue automatizado (bash)
+scripts/                 ← run-e2e.sh + telegram_webhook.py (registro/estado seguro)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
-                            008-railway-deployment
-tests/unit/              ← 139 tests
-tests/integration/        ← 17 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+                            008-railway-deployment, 009-integration-tests,
+                            010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan
+tests/unit/              ← 179 tests
+tests/integration/        ← 24 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -150,10 +156,10 @@ si hay error 404, cambiar `LLM_MODEL` en `.env`.
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests (139 passing)
+# Tests unitarios (179 passing)
 python -m pytest tests/unit/ -v
 
-# Integration tests (17 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (24 — PostgreSQL dockerizado; se saltan sin Docker)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
@@ -175,6 +181,8 @@ pip install -e ".[dev]"
 
 # Lint (gate global — también en CI)
 ruff check src/ tests/ scripts/
+
+# Type checking (informativo; no es gate CI y actualmente tiene deuda previa)
 mypy src/
 ```
 
@@ -192,6 +200,8 @@ mypy src/
 | `reminders` | Recordatorios | trigger_at, status, provenance |
 | `calendar_events` | Eventos canónicos | provider_event_id (NoopCalendarProvider) |
 | `action_proposals` | Gobernanza WRITE | pending_confirmation → confirmed → executed |
+| `todo_lists` | Listas TODO canónicas | user_id, name, timestamps |
+| `todo_items` | Tareas de una lista TODO | FK list ON DELETE CASCADE, status, prioridad, due_date, position |
 
 **Tres tipos de memoria:** runtime/conversacional (Agno DB) ≠ soft personal
 (auxiliar) ≠ **canónica (schema `ancora` — fuente de verdad, siempre gana)**.
@@ -201,7 +211,9 @@ mypy src/
 ## 7. Gobernanza (resumen)
 
 - Clasificación de riesgo: `READ` < `WRITE` < `EXTERNAL_ACTION` < `DESTRUCTIVE`
-- READ → directa. WRITE/EXTERNAL_ACTION → ActionProposal + confirmación humana
+- READ → directa. WRITE/EXTERNAL_ACTION/DESTRUCTIVE → ActionProposal + confirmación humana.
+  No hay excepciones por reversibilidad: las mutaciones TODO de listas **e ítems**
+  usan `propose_*` → confirmación → `execute_*`.
 - Auditoría: action_proposals registra confirm/execute timestamps + provenance
   (`source_document_id`)
 - Detalle completo: `docs/governance.md`
@@ -216,7 +228,8 @@ mypy src/
 | M2 Canonical Memory (notes) | ✅ |
 | M3 Document Memory (storage+extraction) | ✅ |
 | M4 Vehicle vertical slice | ✅ |
-| M5 Calendar & Reminders | ✅ |
+| M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
+| BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
@@ -246,7 +259,9 @@ multi-agent, WhatsApp, web frontend, microservices, event sourcing.
    registro en `_init_domain_tools()` (main.py) + tests + skill prompt si aplica.
    Seguir el patrón de `notes` (la más sencilla y completa).
    **Guía detallada paso a paso: `docs/adding-tools.md`.**
-2. **Operación WRITE** → siempre par `propose_*` / `execute_*` con ActionProposal.
+2. **Operación WRITE/EXTERNAL_ACTION/DESTRUCTIVE** → siempre par `propose_*` /
+   `execute_*` con ActionProposal. La propuesta no escribe datos canónicos; el
+   executor confirma, revalida autorización/propiedad, ejecuta y audita.
 3. **Tests:** los unit tests mockean repositorios (`AsyncMock(spec=Repo)`).
    Ejecutar `pytest tests/unit/` antes de dar nada por terminado.
 4. **Cambiar prompts/models/tool descriptions** = cambio evaluable (gobernanza).

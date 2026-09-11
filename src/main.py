@@ -116,30 +116,31 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         )
 
         from src.agent.tools.todos import (
-            add_todo_item,
-            complete_todo_item,
-            delete_todo_item,
+            execute_todo_item,
             execute_todo_list,
             list_todo_items,
             list_todo_lists,
-            move_todo_item,
+            propose_todo_item,
+            propose_todo_item_complete,
+            propose_todo_item_delete,
+            propose_todo_item_move,
+            propose_todo_item_reopen,
+            propose_todo_item_update,
             propose_todo_list,
             propose_todo_list_delete,
             propose_todo_list_rename,
-            reopen_todo_item,
-            update_todo_item,
         )
 
         tools.extend([
             list_todo_lists, propose_todo_list, execute_todo_list,
             propose_todo_list_rename, propose_todo_list_delete,
-            list_todo_items, add_todo_item, update_todo_item,
-            complete_todo_item, reopen_todo_item,
-            move_todo_item, delete_todo_item,
+            list_todo_items, propose_todo_item, propose_todo_item_update,
+            propose_todo_item_complete, propose_todo_item_reopen,
+            propose_todo_item_move, propose_todo_item_delete, execute_todo_item,
         ])
         logger.info(
             "Todo tools registered: list/propose/execute_todo_list (+rename/delete), "
-            "list/add/update/complete/reopen/move/delete_todo_item"
+            "list/propose/execute_todo_item (+update/complete/reopen/move/delete)"
         )
 
     except Exception:
