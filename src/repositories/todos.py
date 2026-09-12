@@ -110,17 +110,19 @@ class TodosRepository:
             INSERT INTO ancora.todo_items
                 (list_id, user_id, title, description, status, priority,
                  due_date, position, created_at, updated_at)
-            SELECT :lid, :uid, :title, :desc, 'pending', :priority,
+            SELECT :insert_lid, :insert_uid, :title, :desc, 'pending', :priority,
                    :due, COALESCE(MAX(position), -1) + 1, :now, :now
             FROM ancora.todo_items
-            WHERE list_id = :lid AND user_id = :uid
+            WHERE list_id = :filter_lid AND user_id = :filter_uid
             RETURNING id, list_id, user_id, title, description, status,
                       priority, due_date, position, created_at, updated_at
         """)
         result = await self._session.execute(
             stmt,
             {
-                "lid": list_id, "uid": user_id, "title": data.title,
+                "insert_lid": list_id, "insert_uid": user_id,
+                "filter_lid": list_id, "filter_uid": user_id,
+                "title": data.title,
                 "desc": data.description, "priority": data.priority,
                 "due": data.due_date, "now": now,
             },
