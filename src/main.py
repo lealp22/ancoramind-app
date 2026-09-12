@@ -200,6 +200,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         db=db,
         tools=tools,
         instructions=instructions,
+        tool_call_limit=settings.agent_tool_call_limit,
     )
     logger.info("AncoraMind agent created")
 

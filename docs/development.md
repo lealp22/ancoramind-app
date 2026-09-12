@@ -137,6 +137,7 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `OPENROUTER_API_KEY` | API key (openrouter) | — |
 | `LLM_MODEL` | Modelo | `gpt-5.4-mini` |
 | `LLM_BASE_URL` | Endpoint custom (obligatorio en `openai-like`) | — |
+| `AGENT_TOOL_CALL_LIMIT` | Límite duro de tools por ejecución; evita bucles de tool-calling | `8` |
 | `TELEGRAM_TOKEN` | Token del bot (de @BotFather) | — |
 | `TELEGRAM_WEBHOOK_SECRET_TOKEN` | Secret que Telegram envía al webhook en producción | — |
 | `NGROK_URL` | URL del túnel para el webhook | — |

@@ -13,6 +13,7 @@ from openai.types.chat.chat_completion_chunk import (
 
 from src.agent.ancora_agent import (
     SafeOpenRouter,
+    create_ancora_agent,
     create_db,
     create_model,
     create_model_from_settings,
@@ -70,6 +71,17 @@ def test_create_model_from_settings_resolves_openai_api_key():
 
     assert isinstance(model, OpenAIChat)
     assert model.id == "gpt-5.4-mini"
+
+
+def test_create_ancora_agent_applies_tool_call_limit():
+    agent = create_ancora_agent(
+        model="openai:gpt-4o-mini",
+        tools=[],
+        instructions=[],
+        tool_call_limit=5,
+    )
+
+    assert agent.tool_call_limit == 5
 
 
 def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):

@@ -201,6 +201,7 @@ def create_ancora_agent(
     tools: list,
     instructions: list[str],
     db=None,
+    tool_call_limit: int = 8,
 ) -> Agent:
     """Create the AncoraMind agent.
 
@@ -209,6 +210,7 @@ def create_ancora_agent(
         tools: List of plain Python functions — Agno auto-converts to tools.
         instructions: List of instruction strings (one per markdown prompt file).
         db: Agno database for session persistence.
+        tool_call_limit: Maximum tool calls allowed in one agent run.
 
     Returns:
         Configured Agno Agent instance.
@@ -218,6 +220,7 @@ def create_ancora_agent(
         model=model,
         db=db,
         tools=tools,
+        tool_call_limit=tool_call_limit,
         instructions=instructions,
         add_history_to_context=True,
         num_history_runs=10,
