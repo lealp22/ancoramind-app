@@ -213,6 +213,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
             Telegram(
                 agent=ancora_agent,
                 reply_to_mentions_only=bool(allowlist),
+                reply_to_bot_messages=False,
             )
         ],
     )
