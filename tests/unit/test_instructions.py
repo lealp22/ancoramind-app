@@ -83,3 +83,10 @@ class TestAssembleInstructions:
         """The todos skill (lists + items) should be included."""
         instructions = assemble_instructions()
         assert any("Todo Lists" in block for block in instructions)
+
+    def test_tool_catalogs_are_not_duplicated_in_prompt_text(self):
+        """Tool schemas, not Markdown inventories, are the capability source of truth."""
+        prompt_text = "\n".join(assemble_instructions())
+
+        assert "## Available Tools" not in prompt_text
+        assert "delete_document" not in prompt_text

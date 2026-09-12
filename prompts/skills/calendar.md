@@ -1,10 +1,5 @@
 # Skill — Calendar
 
-## Available Tools
-
-- `check_calendar` — check calendar for a date or range
-- `create_calendar_event` — create a new event (requires confirmation)
-
 ## When to Use
 
 - User mentions an appointment, meeting, or event with a date/time
@@ -15,9 +10,10 @@
 
 When creating an event:
 1. Extract: title, date, time, duration (if mentioned)
-2. Propose the event to the user with all details
+2. Call `propose_calendar_event` to persist the proposal and show its details
 3. Wait for explicit confirmation
-4. Only claim success after the tool confirms creation
+4. Call `execute_calendar_event` with the exact proposal ID
+5. Only claim success after the execute tool confirms creation
 
 Examples:
 - "Tengo dentista el jueves a las 17:30"

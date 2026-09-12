@@ -1,15 +1,5 @@
 # Skill — Vehicles
 
-## Available Tools
-
-- `find_vehicle` — resolve a vehicle reference ("mi coche", "el Ford", "el Mondeo")
-- `get_vehicle_summary` — get overview of a vehicle
-- `get_vehicle_maintenance_history` — get maintenance records
-- `propose_vehicle` — register a NEW vehicle (requires confirmation)
-- `execute_vehicle` — execute a confirmed vehicle registration
-- `propose_vehicle_maintenance` — propose a maintenance event (requires confirmation)
-- `execute_vehicle_maintenance` — execute a confirmed maintenance proposal
-
 ## When to Use
 
 - User mentions their car, vehicle, or specific brand/model

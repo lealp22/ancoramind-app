@@ -63,7 +63,10 @@ class SafeOpenRouter(OpenRouter):
                 dropped_calls,
                 self.id,
             )
-        provider_response.tool_calls = complete_calls
+        # Agno 2.9.0 streaming checks ``tool_calls is not None`` rather than
+        # truthiness. Leaving [] here makes its model loop continue forever
+        # without executing a tool or incrementing the tool-call counter.
+        provider_response.tool_calls = complete_calls or None
         return super()._populate_assistant_message(
             assistant_message,
             provider_response,
@@ -88,7 +91,9 @@ class SafeOpenRouter(OpenRouter):
                 dropped_calls,
                 self.id,
             )
-        assistant_message.tool_calls = complete_calls
+        # None means "no tool calls" to Agno's streaming response loop. An
+        # empty list is incorrectly treated as another tool iteration in 2.9.0.
+        assistant_message.tool_calls = complete_calls or None
 
 
 def create_db(db_url: str | None = None):

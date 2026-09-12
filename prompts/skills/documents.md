@@ -1,12 +1,5 @@
 # Skill — Documents
 
-## Available Tools
-
-- `search_documents` — find documents by query
-- `get_document` — retrieve a specific document
-- `analyze_document` — trigger AI extraction on a document
-- `delete_document` — delete a document (requires confirmation)
-
 ## When to Use
 
 - User asks about a document they sent

@@ -118,6 +118,26 @@ def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):
     assert "Dropped 3 malformed OpenRouter tool call(s)" in caplog.text
 
 
+def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog):
+    response = ModelResponse(
+        content="¡Hola! ¿En qué puedo ayudarte?",
+        tool_calls=[
+            {},
+            {"id": "id-only"},
+            {"id": "missing-name", "type": "function", "function": {}},
+        ],
+    )
+    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    assistant_message = Message(role="assistant")
+
+    populated = model._populate_assistant_message(assistant_message, response)
+
+    assert populated.content == "¡Hola! ¿En qué puedo ayudarte?"
+    assert response.tool_calls is None
+    assert populated.tool_calls is None
+    assert "Dropped 3 malformed OpenRouter tool call(s)" in caplog.text
+
+
 def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
     stream_data = MessageData(
         response_tool_calls=[
@@ -152,3 +172,46 @@ def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
         }
     ]
     assert "Dropped 1 malformed streaming OpenRouter tool call(s)" in caplog.text
+
+
+def test_safe_openrouter_normalizes_only_malformed_streaming_tool_calls_to_none(caplog):
+    stream_data = MessageData(
+        response_content="¡Hola! ¿En qué puedo ayudarte?",
+        response_tool_calls=[ChoiceDeltaToolCall(index=0, id="id-only")],
+    )
+    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    assistant_message = Message(role="assistant")
+
+    model._populate_assistant_message_from_stream_data(
+        assistant_message,
+        stream_data,
+    )
+
+    assert assistant_message.content == "¡Hola! ¿En qué puedo ayudarte?"
+    assert assistant_message.tool_calls is None
+    assert "Dropped 1 malformed streaming OpenRouter tool call(s)" in caplog.text
+
+
+def test_safe_openrouter_stops_stream_loop_after_only_malformed_tool_calls(monkeypatch):
+    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    request_count = 0
+
+    def fake_invoke_stream(**_kwargs):
+        nonlocal request_count
+        request_count += 1
+        if request_count > 1:
+            raise AssertionError("Agno started another model request without a valid tool call")
+        yield ModelResponse(
+            content="¡Hola! ¿En qué puedo ayudarte?",
+            tool_calls=[ChoiceDeltaToolCall(index=0, id="id-only")],
+        )
+
+    monkeypatch.setattr(model, "invoke_stream", fake_invoke_stream)
+    messages = [Message(role="user", content="Hola")]
+
+    list(model.response_stream(messages=messages, tools=[]))
+
+    assert request_count == 1
+    assert [message.role for message in messages] == ["user", "assistant"]
+    assert messages[-1].content == "¡Hola! ¿En qué puedo ayudarte?"
+    assert messages[-1].tool_calls is None

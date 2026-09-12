@@ -1,23 +1,5 @@
 # Skill — Todo Lists
 
-## Available Tools
-
-- `list_todo_lists` — show all TODO lists with pending/total counts
-- `propose_todo_list` — propose a NEW list (requires confirmation)
-- `execute_todo_list` — execute a confirmed list proposal
-  (create, rename or delete depending on the proposal type)
-- `propose_todo_list_rename` — propose renaming a list (requires confirmation)
-- `propose_todo_list_delete` — propose deleting a list + its tasks
-  (requires confirmation)
-- `list_todo_items` — show tasks in a list (filters: status, priority)
-- `propose_todo_item` — propose adding a task to a list (requires confirmation)
-- `propose_todo_item_update` — propose editing a task (requires confirmation)
-- `propose_todo_item_complete` — propose marking a task as done
-- `propose_todo_item_reopen` — propose reopening a task
-- `propose_todo_item_move` — propose moving a task to another list
-- `propose_todo_item_delete` — propose deleting a task
-- `execute_todo_item` — execute a confirmed task proposal
-
 ## When to Use
 
 - User mentions a task list ("mi lista Trabajo", "la lista de la compra")
