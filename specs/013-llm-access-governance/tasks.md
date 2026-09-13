@@ -98,19 +98,22 @@ adaptador temporal Agno por `LLMAccess` y Agent per-run.
 
 ## T7: Governed LLM Access and per-run Agent factory
 
-- [ ] Introducir `LLMAccess` como única frontera de inferencia.
-- [ ] Implementar `ExecutionContext` y propagación mediante `ContextVar`.
-- [ ] Crear Agent por run con ID lógico estable, `run_id` explícito y config
+- [x] Introducir `LLMAccess` como única frontera de inferencia de runs gobernados.
+- [x] Implementar `ExecutionContext` y propagación mediante `ContextVar`.
+- [x] Crear Agent por run con ID lógico estable, `run_id` explícito y config
       snapshot fija.
-- [ ] Implementar `GovernedModel`/adaptador que exija contexto y falle cerrado.
-- [ ] Propagar `traceparent`, `correlation_id`, `llm_call_id` y revisión.
-- [ ] Registrar usage, request IDs, latencia y error class.
-- [ ] Mantener temporalmente OpenRouter directo solo detrás de `LLMAccess`.
-- [ ] Cambiar el default de `AGENT_TOOL_CALL_LIMIT` y el fallback del factory a
+- [x] Implementar `GovernedModel`/adaptador que exija contexto y falle cerrado.
+- [x] Propagar `traceparent`, `correlation_id`, `llm_call_id` y revisión.
+- [x] Registrar usage, request IDs, latencia y error class.
+- [x] Mantener temporalmente OpenRouter directo solo detrás de `LLMAccess`.
+- [x] Cambiar el default de `AGENT_TOOL_CALL_LIMIT` y el fallback del factory a
       12; actualizar tests y documentación operativa en ese incremento.
-- [ ] Configurar retries de Agent y Model explícitamente a 0.
+- [x] Configurar retries de Agent y Model explícitamente a 0.
 
-**Acceptance:** Q parcial, X e Y.
+**Acceptance:** Q parcial, X e Y parcialmente implementados en el processor
+T5+T7. El webhook legado AgentOS y la extracción documental directa quedan como
+excepciones transitorias hasta T4/T5 rollout y T9 respectivamente; LiteLLM
+fail-closed pertenece a T11.
 
 ## T8: Execution budget
 

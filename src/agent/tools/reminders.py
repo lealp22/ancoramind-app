@@ -84,7 +84,9 @@ async def propose_reminder(
         user_id=user_ctx.user_id,
         tool_name="create_reminder",
         payload={
-            "title": title, "trigger_at": trigger_at, "description": description,
+            "title": title,
+            "trigger_at": trigger_at,
+            "description": description,
             "source_document_id": str(src_doc) if src_doc else None,
         },
         source_document_id=src_doc,
@@ -125,7 +127,8 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
             trigger_at=datetime.fromisoformat(payload["trigger_at"]),
             description=payload.get("description"),
             source_document_id=UUID(payload["source_document_id"])
-            if payload.get("source_document_id") else None,
+            if payload.get("source_document_id")
+            else None,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
         return (

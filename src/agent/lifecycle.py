@@ -14,10 +14,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from agno.agent import Agent
 from fastapi import FastAPI
 
-from src.agent.interaction_runner import AgnoInteractionRunner
+from src.agent.governed_agent_factory import GovernedAgentFactory
+from src.agent.governed_interaction_runner import GovernedInteractionRunner
+from src.agent.llm_access import AgnoLLMAccess, LlmUsageRecorder
 from src.agent.telegram_admission import validate_telegram_admission_settings
 from src.config import Settings
 from src.domain.interactions.payloads import TelegramPayloadCipher
@@ -85,13 +86,18 @@ def install_reminder_worker_lifespan(app: FastAPI, settings: Settings) -> bool:
 def install_interaction_processor_lifespan(
     app: FastAPI,
     settings: Settings,
-    agent: Agent,
+    *,
+    db: Any,
+    tools: list[Any],
+    instructions: list[str],
+    runtime_config_manager: RuntimeConfigManager,
 ) -> bool:
-    """Install the T5 processor lifecycle only for an explicitly enabled rollout.
+    """Install the T5+T7 processor lifecycle only for an explicitly enabled rollout.
 
     The processor is intentionally gated behind durable admission. It does not
     share in-memory state with the webhook and is always stopped before the
-    wrapped lifecycle exits.
+    wrapped lifecycle exits. Every Agent execution is governed: per-run
+    factory, immutable snapshot, budget and usage audit (specs/013 T7).
     """
     if not settings.telegram_processor_enabled:
         logger.info("Telegram interaction processor disabled (TELEGRAM_PROCESSOR_ENABLED=false)")
@@ -106,6 +112,20 @@ def install_interaction_processor_lifespan(
         settings.telegram_payload_encryption_key,
         settings.telegram_payload_key_version,
     )
+    llm_access = AgnoLLMAccess(
+        settings=settings,
+        usage_recorder=LlmUsageRecorder(get_session).record,
+    )
+    agent_factory = GovernedAgentFactory(
+        llm_access=llm_access,
+        db=db,
+        tools=tools,
+        instructions=instructions,
+    )
+    agent_runner = GovernedInteractionRunner(
+        config_manager=runtime_config_manager,
+        factory=agent_factory,
+    )
 
     @asynccontextmanager
     async def interaction_processor_lifespan(application: FastAPI) -> AsyncIterator[Any]:
@@ -114,7 +134,7 @@ def install_interaction_processor_lifespan(
             processor = InteractionProcessor(
                 session_factory=get_session,
                 payload_cipher=payload_cipher,
-                agent_runner=AgnoInteractionRunner(agent),
+                agent_runner=agent_runner,
                 sender=notifier,
                 global_concurrency=settings.telegram_processor_global_concurrency,
             )

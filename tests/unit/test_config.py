@@ -32,7 +32,7 @@ class TestSettings:
 
         settings = Settings(_env_file=None)
         assert settings.llm_model == "gpt-5.4-mini"
-        assert settings.agent_tool_call_limit == 8
+        assert settings.agent_tool_call_limit == 12
         assert settings.app_env == "development"
         assert settings.telegram_token == ""
         assert settings.telegram_admission_enabled is False

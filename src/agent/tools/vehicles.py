@@ -88,10 +88,14 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
         return f"Vehículo no encontrado: {vehicle_id}"
 
     v = summary.vehicle
-    lines = [f"🚗 **{v.display_name}**", f"   ID: `{v.id}`", f"   {v.make} {v.model}"
-             + (f" ({v.year})" if v.year else "")
-             + (f" — {v.registration}" if v.registration else ""),
-             f"   Total intervenciones: {summary.total_maintenance_count}"]
+    lines = [
+        f"🚗 **{v.display_name}**",
+        f"   ID: `{v.id}`",
+        f"   {v.make} {v.model}"
+        + (f" ({v.year})" if v.year else "")
+        + (f" — {v.registration}" if v.registration else ""),
+        f"   Total intervenciones: {summary.total_maintenance_count}",
+    ]
 
     if summary.last_maintenance:
         m = summary.last_maintenance
@@ -144,8 +148,12 @@ async def propose_vehicle(
     user_ctx = UserContext.from_run_context(run_context)
     try:
         data = VehicleCreate(
-            make=make, model=model, year=year, registration=registration,
-            nickname=nickname, vin=vin,
+            make=make,
+            model=model,
+            year=year,
+            registration=registration,
+            nickname=nickname,
+            vin=vin,
         )
     except ValidationError as e:
         first = e.errors()[0]
@@ -165,8 +173,11 @@ async def propose_vehicle(
         user_id=user_ctx.user_id,
         tool_name="register_vehicle",
         payload={
-            "make": data.make, "model": data.model, "year": data.year,
-            "registration": data.registration, "nickname": data.nickname,
+            "make": data.make,
+            "model": data.model,
+            "year": data.year,
+            "registration": data.registration,
+            "nickname": data.nickname,
             "vin": data.vin,
             "source_document_id": str(src_doc) if src_doc else None,
         },
@@ -216,8 +227,11 @@ async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
     payload = proposal["payload"]
     try:
         data = VehicleCreate(
-            make=payload["make"], model=payload["model"], year=payload.get("year"),
-            registration=payload.get("registration"), nickname=payload.get("nickname"),
+            make=payload["make"],
+            model=payload["model"],
+            year=payload.get("year"),
+            registration=payload.get("registration"),
+            nickname=payload.get("nickname"),
             vin=payload.get("vin"),
         )
         service = await _get_vehicle_service()

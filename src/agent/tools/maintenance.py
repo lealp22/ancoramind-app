@@ -81,9 +81,14 @@ async def propose_vehicle_maintenance(
         user_id=user_ctx.user_id,
         tool_name="register_vehicle_maintenance",
         payload={
-            "vehicle_id": str(vid), "date": date_str, "description": description,
-            "mileage_km": mileage_km, "workshop": workshop, "cost": cost,
-            "work_performed": work_items, "notes": notes,
+            "vehicle_id": str(vid),
+            "date": date_str,
+            "description": description,
+            "mileage_km": mileage_km,
+            "workshop": workshop,
+            "cost": cost,
+            "work_performed": work_items,
+            "notes": notes,
             "source_document_id": str(src_doc) if src_doc else None,
         },
         source_document_id=src_doc,
@@ -136,7 +141,8 @@ async def execute_vehicle_maintenance(run_context: RunContext, proposal_id: str)
             work_performed=payload.get("work_performed", []),
             notes=payload.get("notes"),
             source_document_id=UUID(payload["source_document_id"])
-            if payload.get("source_document_id") else None,
+            if payload.get("source_document_id")
+            else None,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
 

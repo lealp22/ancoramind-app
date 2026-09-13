@@ -43,10 +43,7 @@ async def remember_note(
     user_ctx = UserContext.from_run_context(run_context)
     service = await _get_notes_service()
     note = await service.remember(user_ctx, content)
-    return (
-        f"Nota guardada (id: {note.id}). "
-        f"Puedes buscarla después con search_notes."
-    )
+    return f"Nota guardada (id: {note.id}). Puedes buscarla después con search_notes."
 
 
 async def search_notes(
@@ -73,19 +70,12 @@ async def search_notes(
     notes = await service.search(user_ctx, query)
 
     if not notes:
-        return (
-            "No encontré notas"
-            + (f' que coincidan con "{query}".' if query else ".")
-        )
+        return "No encontré notas" + (f' que coincidan con "{query}".' if query else ".")
 
     lines = []
     for note in notes:
         created = note.created_at.strftime("%Y-%m-%d %H:%M")
         lines.append(f"- [{created}] {note.content}")
 
-    header = (
-        f"Encontré {len(notes)} nota(s)"
-        + (f' sobre "{query}"' if query else "")
-        + ":\n\n"
-    )
+    header = f"Encontré {len(notes)} nota(s)" + (f' sobre "{query}"' if query else "") + ":\n\n"
     return header + "\n".join(lines)

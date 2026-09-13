@@ -45,6 +45,7 @@ def test_create_model_uses_safe_openrouter_adapter():
     )
 
     assert isinstance(model, SafeOpenRouter)
+    assert model.retries == 0
 
 
 def test_create_model_from_settings_resolves_openrouter_api_key():
@@ -58,6 +59,7 @@ def test_create_model_from_settings_resolves_openrouter_api_key():
 
     assert isinstance(model, SafeOpenRouter)
     assert model.id == "minimax/minimax-m3:free"
+    assert model.retries == 0
 
 
 def test_create_model_from_settings_resolves_openai_api_key():
@@ -71,6 +73,7 @@ def test_create_model_from_settings_resolves_openai_api_key():
 
     assert isinstance(model, OpenAIChat)
     assert model.id == "gpt-5.4-mini"
+    assert model.retries == 0
 
 
 def test_create_ancora_agent_applies_tool_call_limit():
@@ -82,6 +85,14 @@ def test_create_ancora_agent_applies_tool_call_limit():
     )
 
     assert agent.tool_call_limit == 5
+    assert agent.retries == 0
+
+
+def test_create_ancora_agent_defaults_to_approved_tool_ceiling_and_zero_retries():
+    agent = create_ancora_agent(model="openai:gpt-4o-mini", tools=[], instructions=[])
+
+    assert agent.tool_call_limit == 12
+    assert agent.retries == 0
 
 
 def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):

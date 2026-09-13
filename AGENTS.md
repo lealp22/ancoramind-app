@@ -15,8 +15,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 240 unit
-  tests passing; 49 integration tests requieren PostgreSQL/Docker (se omiten sin
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 270 unit
+  tests passing; 51 integration tests requieren PostgreSQL/Docker (se omiten sin
   esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
 ---
@@ -78,7 +78,9 @@ src/
 ├── main.py              ← Entry point: AgentOS + Telegram + registro de tools
 ├── config.py            ← Pydantic Settings (.env). extra="ignore"
 ├── agent/               ← Capa Agno (infraestructura)
-│   ├── ancora_agent.py  ← estado actual: factory física; target specs/013: Agent por run + LLMAccess
+│   ├── ancora_agent.py  ← factory física legado + SafeOpenRouter; T7 la compone con GovernedModel
+│   ├── llm_access.py / governed_model.py / governed_agent_factory.py /
+│   │   governed_interaction_runner.py ← T7: LLMAccess + Agent por run
 │   ├── instructions.py  ← assemble_instructions(): carga prompts/*.md → list[str]
 │   ├── lifecycle.py     ← lifespan FastAPI: worker recordatorios auto-gated (BL-22)
 │   ├── server.py        ← host/PORT/reload para local y Railway
@@ -89,14 +91,14 @@ src/
 │       ├── vehicles.py    maintenance.py (propose/execute)
 │       ├── reminders.py   calendar.py    todos.py (propose/execute estricto)
 ├── domain/              ← Lógica de negocio (el producto — sin imports de Agno*)
-│   ├── notes/ documents/ vehicles/ reminders/ calendar/ todos/ actions/ interactions/
+│   ├── notes/ documents/ vehicles/ reminders/ calendar/ todos/ actions/ interactions/ llm_access/
 │   └── (cada uno: models.py + service.py; calendar tiene provider.py Protocol;
 │       reminders tiene worker.py sin dependencia de FastAPI; documents aún
 │       contiene la excepción Agno que specs/013 abstraerá)
 ├── repositories/        ← Acceso PostgreSQL (sqlalchemy async, text() parametrizado)
 │   ├── database.py      ← init_database(), get_session() — llamar init al arrancar
 │   └── notes, documents, vehicles, maintenance, reminders, calendar, todos, actions,
-│       interactions (ledger Telegram durable — T3 specs/013)
+│       interactions, llm_usage (ledger/usage durable — specs/013)
 ├── storage/             ← base.py (DocumentStorage Protocol), local.py, supabase_storage.py,
 │                           factory.py (DOCUMENT_STORAGE_BACKEND: local|supabase — ADR-002)
 ├── security/            ← user_context.py (UserContext.from_run_context)
@@ -114,9 +116,9 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (T2–T6 implementados)
-tests/unit/              ← 240 tests
-tests/integration/        ← 49 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+                            013-llm-access-governance (T2–T7 implementados)
+tests/unit/              ← 270 tests
+tests/integration/        ← 51 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -253,7 +255,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T6 implementados; LLMAccess/runtime E2E/OTel pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T7 implementados; T8/T9/T10/T11 y E2E pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

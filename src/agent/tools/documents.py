@@ -67,8 +67,7 @@ async def search_documents(run_context: RunContext, query: str | None = None) ->
         created = doc.created_at.strftime("%Y-%m-%d %H:%M")
         size_kb = doc.size_bytes / 1024
         lines.append(
-            f"- `{doc.id}` | {doc.original_filename} "
-            f"({size_kb:.0f} KB, {doc.mime_type}, {created})"
+            f"- `{doc.id}` | {doc.original_filename} ({size_kb:.0f} KB, {doc.mime_type}, {created})"
         )
     header = f"Encontré {len(docs)} documento(s)" + (f' sobre "{query}"' if query else "") + ":\n\n"
     return header + "\n".join(lines)

@@ -81,6 +81,8 @@ async def test_agent_failure_after_claim_is_marked_ambiguous(
 
     assert await processor._run_agent(accepted) is True
     runner.run.assert_awaited_once()
+    assert runner.run.await_args.kwargs["telegram_update_id"] == 2
+    assert runner.run.await_args.kwargs["telegram_message_id"] == 3
     sender.send_text.assert_not_awaited()
     repo.update_status.assert_awaited_once_with(
         accepted.id,
@@ -174,12 +176,16 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
             session_id: str,
             run_id: str,
             correlation_id: UUID,
+            telegram_update_id: int,
+            telegram_message_id: int | None = None,
         ) -> str:
             assert input_text == "hola"
             assert user_id == "5"
             assert session_id == "tg:ancoramind:4"
             assert run_id
             assert correlation_id == accepted.id
+            assert telegram_update_id == 2
+            assert telegram_message_id == 3
             await release_runner.wait()
             return "respuesta final"
 

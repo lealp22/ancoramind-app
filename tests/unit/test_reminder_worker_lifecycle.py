@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from typing import cast
 
 import pytest
-from agno.agent import Agent
 from fastapi import FastAPI
 
 import src.agent.lifecycle as lifecycle_module
@@ -15,6 +14,7 @@ from src.agent.lifecycle import (
     install_reminder_worker_lifespan,
 )
 from src.config import Settings
+from src.domain.runtime_config.service import RuntimeConfigManager
 
 
 def _settings(
@@ -139,18 +139,25 @@ async def test_interaction_processor_auto_gates_and_cancels_cleanly(
 ) -> None:
     app = FastAPI()
     original = app.router.lifespan_context
+    manager = cast(RuntimeConfigManager, object())
 
     assert not install_interaction_processor_lifespan(
         app,
         _settings(telegram_processor_enabled=False),
-        cast(Agent, object()),
+        db=None,
+        tools=[],
+        instructions=[],
+        runtime_config_manager=manager,
     )
     assert app.router.lifespan_context is original
 
     assert not install_interaction_processor_lifespan(
         app,
         _settings(telegram_processor_enabled=True, telegram_admission_enabled=False),
-        cast(Agent, object()),
+        db=None,
+        tools=[],
+        instructions=[],
+        runtime_config_manager=manager,
     )
     assert app.router.lifespan_context is original
 
@@ -179,7 +186,10 @@ async def test_interaction_processor_auto_gates_and_cancels_cleanly(
     assert install_interaction_processor_lifespan(
         app,
         _settings(telegram_processor_enabled=True, telegram_admission_enabled=True),
-        cast(Agent, object()),
+        db=None,
+        tools=[],
+        instructions=[],
+        runtime_config_manager=manager,
     )
 
     async with app.router.lifespan_context(app):

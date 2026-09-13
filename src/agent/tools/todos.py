@@ -167,10 +167,7 @@ async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
             deleted = await service.delete_list(user_context, UUID(payload["list_id"]))
             if not deleted:
                 return f"No se encontró la lista `{payload['list_id']}`."
-            result = (
-                f"✅ **Lista eliminada** (`{payload['list_id']}`) "
-                "junto con sus tareas."
-            )
+            result = f"✅ **Lista eliminada** (`{payload['list_id']}`) junto con sus tareas."
         else:
             return f"Propuesta de lista desconocida: {tool_name}"
         await actions_repo.mark_executed(user_context.user_id, proposal_id)
@@ -181,9 +178,7 @@ async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
         return f"❌ Error: {str(error)[:200]}"
 
 
-async def propose_todo_list_rename(
-    run_context: RunContext, list_id: str, name: str
-) -> str:
+async def propose_todo_list_rename(run_context: RunContext, list_id: str, name: str) -> str:
     """PROPOSE renaming a TODO list — requires user confirmation.
 
     Use when the user wants to rename a list:
@@ -465,9 +460,7 @@ async def _propose_todo_item_status(
     )
 
 
-async def propose_todo_item_move(
-    run_context: RunContext, item_id: str, target_list_id: str
-) -> str:
+async def propose_todo_item_move(run_context: RunContext, item_id: str, target_list_id: str) -> str:
     """PROPOSE moving a TODO task to another list — requires confirmation.
 
     Use when the user wants to reorganize:

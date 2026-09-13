@@ -23,9 +23,7 @@ def resolve_server_config(
     for local AgentOS configuration, while ``PORT`` takes precedence.
     """
     is_development = app_env.lower() == "development"
-    host = environ.get("AGENT_OS_HOST") or (
-        "localhost" if is_development else "0.0.0.0"
-    )
+    host = environ.get("AGENT_OS_HOST") or ("localhost" if is_development else "0.0.0.0")
     raw_port = environ.get("PORT") or environ.get("AGENT_OS_PORT") or "7777"
 
     try:

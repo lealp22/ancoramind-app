@@ -55,15 +55,15 @@
 | N | Grupo/canal Telegram → no alcanza el Agent | ✅ T4 | `non_private_chat`, `200`, sin payload ni llamada Agno |
 | O | Usuario no allowlisted → no alcanza el Agent | ✅ T4 | `user_not_allowlisted`, `200`, sin payload ni llamada Agno |
 | P | Extracción documental comparte config, budget y trace | ⏳ | |
-| Q | Gateway caído → fail closed sin OpenRouter directo | ⏳ | |
+| Q | Gateway caído → fail closed sin OpenRouter directo | 🔶 T7 parcial | Runs T5 usan LLMAccess; LiteLLM fail-closed llega en T11 |
 | R | Collector caído → aplicación continúa | ⏳ | |
 | S | Logs/traces no contienen contenido personal | ⏳ | |
 | T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
 | U | Run activo durante cambio → conserva revisión anterior | ✅ T6 | Snapshots futuros por run y publish no muta snapshot hasta CAS correcto |
 | V | Duplicate delivery → no consume rate limit | ✅ T4 | Duplicate se detecta antes del contador durable y conserva correlation ID |
 | W | Rate limit superado → `2xx` y cero inferencias | ✅ T4 | burst/min/hora/cola ⇒ `rejected`, `200`, sin Agent |
-| X | Tool call 12 → permitida si queda budget | ⏳ | |
-| Y | Tool call 13 → rechazada por hard ceiling | ⏳ | |
+| X | Tool call 12 → permitida si queda budget | ✅ T7 base | Factory per-run recibe hard ceiling 12 desde snapshot |
+| Y | Tool call 13 → rechazada por hard ceiling | ✅ T7 base | Agent `tool_call_limit=12`; tool hooks/budget detallado llega en T8 |
 
 ## Production validation
 
@@ -146,9 +146,8 @@
   `failed_ambiguous`; `accepted` y `response_ready` continúan de forma segura.
 - El streaming visible está desactivado. Durante un run se refresca
   `sendChatAction(typing)` sin contenido.
-- `TELEGRAM_PROCESSOR_ENABLED=false` por defecto. El adaptador
-  `AgnoInteractionRunner` es temporal y T7 lo sustituirá por `LLMAccess` y un
-  Agent per-run.
+- `TELEGRAM_PROCESSOR_ENABLED=false` por defecto. T7 sustituyó el adaptador
+  temporal por `GovernedInteractionRunner`, `LLMAccess` y un Agent por run.
 
 ## T6 — RuntimeConfigManager and admin API verification (2026-09-14)
 
@@ -163,6 +162,28 @@
 - Admin API con Bearer obligatorio, actor obligatorio, sin CORS y sin tools LLM.
 - Invalidación multi-proceso queda explícitamente pendiente: swap directo con
   una réplica y `LISTEN/NOTIFY` en incremento posterior.
+
+## T7 — Governed LLM Access and per-run Agent verification (2026-09-14)
+
+- `ExecutionContext` se propaga mediante `ContextVar`; un `GovernedModel`
+  llamado sin contexto falla cerrado antes de alcanzar el provider.
+- `GovernedInteractionRunner` captura un `RuntimeConfigSnapshot` una vez por
+  run, crea `ExecutionBudget`, propaga `correlation_id`, `traceparent`, revisión
+  y `run_id` explícito mediante `RunContext.metadata`.
+- `GovernedAgentFactory` crea un Agent por run con ID lógico estable
+  `ancoramind-governed`, `tool_call_limit` del snapshot y retries explícitos a
+  cero. Cambios de runtime posteriores afectan únicamente a nuevos runs.
+- `AgnoLLMAccess` resuelve la ruta lógica del snapshot y compone el mixin
+  gobernado sobre la clase física existente, preservando `SafeOpenRouter`.
+  Mientras T11 no despliegue LiteLLM, el provider directo se permite solo dentro
+  de esta frontera transitoria.
+- Cada model turn gobernado genera `llm_call_id`, registra revisión, rutas,
+  provider/model, tokens, latencia, TTFT y `error_class` en
+  `ancora.llm_usage_events`. Una caída de auditoría es fail-open y no expone
+  contenido personal.
+- El webhook legado AgentOS y la creación directa de Agent en documentos siguen
+  siendo excepciones transitorias: el primero hasta activar T4/T5 y el segundo
+  hasta T9. No se consideran evidencia de cobertura universal de LLMAccess.
 
 ## Limitations and remaining evidence
 

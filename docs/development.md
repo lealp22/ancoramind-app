@@ -153,8 +153,14 @@ Recupera de forma segura `accepted` y `response_ready`.
 Para cada run, usa lock por chat y usuario, un semáforo global de dos y una cola
 ordenada por chat/fecha/update. Persiste una `logical_response` cifrada y las
 filas de delivery por chunk antes de `sendMessage`; el streaming visible queda
-desactivado y solo refresca `typing`. El adaptador `AgnoInteractionRunner` es
-temporal: T7 lo reemplazará por `LLMAccess` y un Agent por run.
+desactivado y solo refresca `typing`. T7 ya usa `GovernedInteractionRunner`:
+captura el snapshot runtime, crea `ExecutionContext` y `ExecutionBudget`, enlaza
+un Agent nuevo por run y exige `LLMAccess` para cada model turn. El provider
+directo sigue siendo transitorio dentro de `LLMAccess` hasta LiteLLM (T11).
+
+El hard safety ceiling actual es `AGENT_TOOL_CALL_LIMIT=12`; Agent y Model usan
+retries explícitos a cero. La extracción documental directa sigue pendiente de
+T9 y el webhook AgentOS legado permanece solo mientras T4/T5 no estén activados.
 
 El texto y los datos mínimos recuperables del update se serializan de forma
 determinista, se cifran con Fernet y se guardan como `BYTEA`; el ledger conserva
@@ -297,24 +303,20 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
-### Target de configuración dinámica (BL-23/specs/013)
+### Runtime dinámico y LLMAccess (BL-23/specs/013)
 
-La tabla anterior describe el runtime **actual**. El diseño aprobado para
-provider/model, budgets, rutas lógicas y políticas operativas es PostgreSQL con
-`RuntimeConfigManager` cacheado en memoria. Las API keys, tokens y credenciales
-OTLP seguirán en environment.
+T6 implementa `RuntimeConfigManager` cacheado en memoria; T7 captura ese
+snapshot por run y crea un Agent nuevo gobernado. El hard safety ceiling actual
+es `AGENT_TOOL_CALL_LIMIT=12`; Agent y Model usan retries explícitos a cero.
 
-Hasta implementar specs/013:
+Todavía quedan límites deliberados:
 
-- cambiar `LLM_PROVIDER`/`LLM_MODEL` requiere restart/deployment;
-- `AGENT_TOOL_CALL_LIMIT` sigue teniendo default efectivo 8;
-- no existe LiteLLM Proxy ni configuración runtime activa;
-- la telemetría de producto de Agno sigue habilitada por default.
-
-El target aprobado será default 12 como hard safety ceiling, junto con budget de
-120 s, 6 model calls y 8 Gateway requests. No adelantar estos cambios de forma
-aislada: deben implementarse con sus tests y la frontera `LLMAccess` de
-specs/013.
+- cambiar el provider/model físico de environment sigue requiriendo restart;
+- OpenRouter/provider directo solo está permitido dentro de `LLMAccess` hasta
+  desplegar LiteLLM privado y fail-closed (T11);
+- no hay todavía tool hooks/budget completo de tools y costes (T8);
+- la extracción documental directa se migra en T9;
+- telemetría OpenTelemetry y desactivación de telemetría Agno pertenecen a T10.
 
 ## Project Conventions
 

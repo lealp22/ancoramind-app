@@ -9,7 +9,6 @@ import os
 import sys
 from typing import Any
 
-from agno.agent import Agent
 from agno.os.app import AgentOS
 from agno.os.interfaces.telegram import Telegram
 from fastapi import FastAPI
@@ -37,6 +36,7 @@ from src.agent.telegram_admission import (
 )
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
+from src.domain.runtime_config.service import RuntimeConfigManager
 from src.repositories.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -192,10 +192,21 @@ def _register_reminder_worker(app: FastAPI, settings: Settings) -> None:
 def _register_interaction_processor(
     app: FastAPI,
     settings: Settings,
-    agent: Agent,
+    *,
+    db: Any,
+    tools: list[Any],
+    instructions: list[str],
+    runtime_config_manager: RuntimeConfigManager,
 ) -> None:
-    """Install the auto-gated T5 processor after the existing app lifespan."""
-    install_interaction_processor_lifespan(app, settings, agent)
+    """Install the auto-gated T5+T7 governed processor after the app lifespan."""
+    install_interaction_processor_lifespan(
+        app,
+        settings,
+        db=db,
+        tools=tools,
+        instructions=instructions,
+        runtime_config_manager=runtime_config_manager,
+    )
 
 
 def create_app() -> tuple[FastAPI, AgentOS]:
@@ -237,13 +248,14 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     tools.extend(_init_domain_tools(settings))
     logger.info("Total tools: %d — %s", len(tools), [t.__name__ for t in tools])
 
-    # ── AncoraMind Agent ──────────────────────────────
+    # ── AncoraMind Agent (legacy singleton — transitional until T4/T5 rollout) ──
     ancora_agent = create_ancora_agent(
         model=model,
         db=db,
         tools=tools,
         instructions=instructions,
         tool_call_limit=settings.agent_tool_call_limit,
+        retries=0,
     )
     logger.info("AncoraMind agent created")
 
@@ -287,7 +299,14 @@ def create_app() -> tuple[FastAPI, AgentOS]:
 
     # ── Reminder worker (BL-5) ─────────────────────────
     _register_reminder_worker(app, settings)
-    _register_interaction_processor(app, settings, ancora_agent)
+    _register_interaction_processor(
+        app,
+        settings,
+        db=db,
+        tools=tools,
+        instructions=instructions,
+        runtime_config_manager=runtime_config_manager,
+    )
 
     return app, agent_os
 

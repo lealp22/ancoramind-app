@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 240 unit + 49 integration passing — Ruff limpio en
+Tests: 270 unit + 51 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T6 implementados — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T7 implementados — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -58,13 +58,17 @@ conectar el processor/Agent al claim; mientras tanto el rollout flag no se activ
 en producción. **Actualización T5:** processor in-process auto-gated que reclama
 `accepted`, aplica locks chat/usuario + semáforo global 2, persiste outbox cifrada
 antes de delivery, refresca `typing` sin streaming y marca estados post-efecto
-como `failed_ambiguous` tras restart. Usa un adaptador temporal del Agent actual;
-T7 debe sustituirlo por `LLMAccess` y factory per-run. **Actualización T6:**
+como `failed_ambiguous` tras restart. **Actualización T6:**
 control plane runtime con schemas cerrados `extra="forbid"`, checksum SHA-256,
 revisiones inmutables, CAS con conflicto `409`, bootstrap sin secrets,
 snapshot in-memory last-known-good y API administrativa Bearer con actor
 obligatorio. `LISTEN/NOTIFY` queda para un incremento posterior con una réplica.
-Provider/model continúan en environment y OpenRouter sigue directo. Ver
+**Actualización T7:** el processor gobernado captura snapshot y contexto por run,
+compone un Agent por run con `run_id` explícito, retries 0 y ceiling 12; cada
+model turn pasa por `LLMAccess`/`GovernedModel` y persiste metadata de uso sin
+contenido personal. El provider directo sigue limitado a esta frontera hasta
+LiteLLM/T11; la extracción documental se migra en T9 y AgentOS legado persiste
+solo mientras T4/T5 sigan apagados. Ver
 `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update

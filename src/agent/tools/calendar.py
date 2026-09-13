@@ -115,8 +115,11 @@ async def propose_calendar_event(
         user_id=user_ctx.user_id,
         tool_name="create_calendar_event",
         payload={
-            "title": title, "start_at": start_at, "end_at": end_at,
-            "description": description, "location": location,
+            "title": title,
+            "start_at": start_at,
+            "end_at": end_at,
+            "description": description,
+            "location": location,
             "source_document_id": str(src_doc) if src_doc else None,
         },
         source_document_id=src_doc,
@@ -157,12 +160,12 @@ async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> s
             user_context=user_ctx,
             title=payload["title"],
             start_at=datetime.fromisoformat(payload["start_at"]),
-            end_at=datetime.fromisoformat(payload["end_at"])
-            if payload.get("end_at") else None,
+            end_at=datetime.fromisoformat(payload["end_at"]) if payload.get("end_at") else None,
             description=payload.get("description"),
             location=payload.get("location"),
             source_document_id=UUID(payload["source_document_id"])
-            if payload.get("source_document_id") else None,
+            if payload.get("source_document_id")
+            else None,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
         return (

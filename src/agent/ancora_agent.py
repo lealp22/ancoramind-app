@@ -8,12 +8,12 @@ Supports multiple LLM providers:
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
-from agno.models.base import MessageData
+from agno.models.base import MessageData, Model
 from agno.models.message import Message
 from agno.models.openrouter import OpenRouter
 from agno.models.response import ModelResponse
@@ -53,8 +53,7 @@ class SafeOpenRouter(OpenRouter):
         individual deltas may be incomplete, while the final calls may not.
         """
         complete_calls = [
-            call for call in provider_response.tool_calls
-            if _is_complete_function_call(call)
+            call for call in provider_response.tool_calls if _is_complete_function_call(call)
         ]
         dropped_calls = len(provider_response.tool_calls) - len(complete_calls)
         if dropped_calls:
@@ -66,7 +65,7 @@ class SafeOpenRouter(OpenRouter):
         # Agno 2.9.0 streaming checks ``tool_calls is not None`` rather than
         # truthiness. Leaving [] here makes its model loop continue forever
         # without executing a tool or incrementing the tool-call counter.
-        provider_response.tool_calls = complete_calls or None
+        cast(Any, provider_response).tool_calls = complete_calls or None
         return super()._populate_assistant_message(
             assistant_message,
             provider_response,
@@ -96,7 +95,7 @@ class SafeOpenRouter(OpenRouter):
         assistant_message.tool_calls = complete_calls or None
 
 
-def create_db(db_url: str | None = None):
+def create_db(db_url: str | None = None) -> PostgresDb | SqliteDb:
     """Create the Agno runtime database.
 
     Uses PostgreSQL if AGNO_DATABASE_URL is set, otherwise defaults to SQLite.
@@ -111,12 +110,66 @@ def create_db(db_url: str | None = None):
     )
 
 
+def resolve_model_parts(
+    provider: str = "openai",
+    model_id: str = "gpt-5.4-mini",
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> tuple[type[Model], dict[str, Any]]:
+    """Resolve the concrete Agno model class and its constructor kwargs.
+
+    Shared by the legacy singleton factory (transitional until the T4/T5
+    rollout retires the AgentOS webhook) and by LLMAccess, which composes the
+    governed mixin on top of the returned class (specs/013 T7).
+
+    Returns:
+        Tuple of (model class, constructor kwargs without ``retries``).
+    """
+    normalized = provider.lower().strip()
+
+    if normalized == "openai":
+        from agno.models.openai import OpenAIChat
+
+        kwargs: dict[str, Any] = {"id": model_id}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+        return OpenAIChat, kwargs
+
+    if normalized == "openrouter":
+        kwargs = {"id": model_id}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+        return SafeOpenRouter, kwargs
+
+    if normalized == "openai-like":
+        from agno.models.openai import OpenAILike
+
+        if not base_url:
+            raise ValueError(
+                "LLM_BASE_URL is required when LLM_PROVIDER=openai-like. "
+                "Example: https://api.groq.com/openai/v1"
+            )
+        kwargs = {"id": model_id, "base_url": base_url}
+        if api_key:
+            kwargs["api_key"] = api_key
+        return OpenAILike, kwargs
+
+    raise ValueError(
+        f"Unsupported LLM_PROVIDER: {provider!r}. Use one of: openai, openrouter, openai-like"
+    )
+
+
 def create_model(
     provider: str = "openai",
     model_id: str = "gpt-5.4-mini",
     base_url: str | None = None,
     api_key: str | None = None,
-):
+    retries: int = 0,
+) -> Model:
     """Create the LLM model instance for the configured provider.
 
     Providers:
@@ -130,50 +183,16 @@ def create_model(
         model_id: Model ID (e.g. "gpt-5.4-mini", "anthropic/claude-3.5-sonnet").
         base_url: Custom base URL (required for openai-like).
         api_key: Optional API key override (otherwise from env vars).
+        retries: Model-level retries; the approved policy is explicitly 0.
 
     Returns:
         Configured model instance.
     """
-    provider = provider.lower().strip()
-
-    if provider == "openai":
-        from agno.models.openai import OpenAIChat
-
-        kwargs: dict = {"id": model_id}
-        if api_key:
-            kwargs["api_key"] = api_key
-        if base_url:
-            kwargs["base_url"] = base_url
-        return OpenAIChat(**kwargs)
-
-    if provider == "openrouter":
-        kwargs = {"id": model_id}
-        if api_key:
-            kwargs["api_key"] = api_key
-        if base_url:
-            kwargs["base_url"] = base_url
-        return SafeOpenRouter(**kwargs)
-
-    if provider == "openai-like":
-        from agno.models.openai import OpenAILike
-
-        if not base_url:
-            raise ValueError(
-                "LLM_BASE_URL is required when LLM_PROVIDER=openai-like. "
-                "Example: https://api.groq.com/openai/v1"
-            )
-        kwargs = {"id": model_id, "base_url": base_url}
-        if api_key:
-            kwargs["api_key"] = api_key
-        return OpenAILike(**kwargs)
-
-    raise ValueError(
-        f"Unsupported LLM_PROVIDER: {provider!r}. "
-        "Use one of: openai, openrouter, openai-like"
-    )
+    model_cls, kwargs = resolve_model_parts(provider, model_id, base_url, api_key)
+    return model_cls(retries=retries, **kwargs)
 
 
-def create_model_from_settings(settings: "Settings"):
+def create_model_from_settings(settings: "Settings") -> Model:
     """Create the LLM model from application settings.
 
     Single source of truth for provider/model/base_url/api_key resolution,
@@ -202,11 +221,12 @@ def create_model_from_settings(settings: "Settings"):
 
 
 def create_ancora_agent(
-    model,
-    tools: list,
+    model: Model | str,
+    tools: list[Any],
     instructions: list[str],
-    db=None,
-    tool_call_limit: int = 8,
+    db: Any = None,
+    tool_call_limit: int = 12,
+    retries: int = 0,
 ) -> Agent:
     """Create the AncoraMind agent.
 
@@ -215,7 +235,9 @@ def create_ancora_agent(
         tools: List of plain Python functions — Agno auto-converts to tools.
         instructions: List of instruction strings (one per markdown prompt file).
         db: Agno database for session persistence.
-        tool_call_limit: Maximum tool calls allowed in one agent run.
+        tool_call_limit: Hard safety ceiling for tool calls in one agent run
+            (the approved specs/013 target is 12).
+        retries: Agent-level retries; the approved policy is explicitly 0.
 
     Returns:
         Configured Agno Agent instance.
@@ -226,12 +248,11 @@ def create_ancora_agent(
         db=db,
         tools=tools,
         tool_call_limit=tool_call_limit,
+        retries=retries,
         instructions=instructions,
         add_history_to_context=True,
         num_history_runs=10,
         add_datetime_to_context=True,
         markdown=True,
-        description=(
-            "AncoraMind — tu asistente personal inteligente con memoria operativa."
-        ),
+        description=("AncoraMind — tu asistente personal inteligente con memoria operativa."),
     )

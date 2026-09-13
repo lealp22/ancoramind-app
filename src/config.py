@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     llm_model: str = "gpt-5.4-mini"
     llm_base_url: str | None = None
-    agent_tool_call_limit: int = Field(default=8, ge=1, le=20)
-    """Hard cap for tool calls in a single agent run; prevents runaway loops."""
+    agent_tool_call_limit: int = Field(default=12, ge=1, le=20)
+    """Hard safety cap for tool calls in a single agent run (specs/013 T7 target)."""
 
     # ── Telegram ──────────────────────────────────────
     telegram_token: str = ""

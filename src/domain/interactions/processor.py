@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class InteractionAgentRunner(Protocol):
-    """Infrastructure port for one Agent execution; T7 replaces its implementation."""
+    """Infrastructure port for one governed Agent execution (T7 runner)."""
 
     async def run(
         self,
@@ -36,6 +36,8 @@ class InteractionAgentRunner(Protocol):
         session_id: str,
         run_id: str,
         correlation_id: UUID,
+        telegram_update_id: int,
+        telegram_message_id: int | None = None,
     ) -> str: ...
 
 
@@ -198,6 +200,8 @@ class InteractionProcessor:
                 session_id=session_id,
                 run_id=run_id,
                 correlation_id=interaction.correlation_id,
+                telegram_update_id=interaction.telegram_update_id,
+                telegram_message_id=interaction.telegram_message_id,
             )
             if not content.strip():
                 await self._mark_terminal(
