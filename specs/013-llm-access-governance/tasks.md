@@ -81,17 +81,17 @@ adaptador temporal Agno por `LLMAccess` y Agent per-run.
 
 ## T6: RuntimeConfigManager and admin API
 
-- [ ] Definir schemas Pydantic con `extra="forbid"` e invariantes cross-field.
-- [ ] Implementar revisiones inmutables, active pointer y activations append-only.
-- [ ] Implementar bootstrap desde environment y last-known-good.
-- [ ] Implementar `snapshot()` sin I/O y snapshots inmutables por run.
-- [ ] Implementar activación compare-and-swap y rollback.
-- [ ] Crear API administrativa protegida: status, validate, create revision,
+- [x] Definir schemas Pydantic con `extra="forbid"` e invariantes cross-field.
+- [x] Implementar revisiones inmutables, active pointer y activations append-only.
+- [x] Implementar bootstrap desde environment y last-known-good.
+- [x] Implementar `snapshot()` sin I/O y snapshots inmutables por run.
+- [x] Implementar activación compare-and-swap y rollback.
+- [x] Crear API administrativa protegida: status, validate, create revision,
       activate y rollback.
-- [ ] Crear scripts `curl`/PowerShell sin exposición de secretos.
+- [x] Crear scripts `curl`/PowerShell sin exposición de secretos.
 - [ ] Añadir `LISTEN/NOTIFY`, reconexión y reconciliación lenta en un incremento
       posterior al funcionamiento con una réplica.
-- [ ] Añadir tests de activación concurrente, revisión inválida y notificación
+- [x] Añadir tests de activación concurrente, revisión inválida y notificación
       perdida.
 
 **Acceptance:** C, D, T y U.

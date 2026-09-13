@@ -88,6 +88,48 @@ Con admission activado, faltan `ANCORA_DATABASE_URL`, `TELEGRAM_BOT_ID`,
 allowlist no vacía hacen fallar el arranque de forma segura. La allowlist vacía
 **no** significa «todos» en este modo.
 
+### Control plane runtime (T6 de specs/013)
+
+El control plane crea revisiones inmutables y activa una sola revisión para
+futuros runs:
+
+```env
+RUNTIME_CONFIG_ADMIN_ENABLED=false
+RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE=ancoramind-default
+```
+
+El token administrativo nunca se incluye en revisiones, logs ni Git:
+
+```env
+RUNTIME_CONFIG_ADMIN_TOKEN=<railway-secret-only>
+```
+
+Reglas:
+
+- Schemas cerrados con `extra="forbid"` en todas las capas.
+- Revisiones inmutables y activaciones append-only.
+- `snapshot()` nunca hace I/O y es inmutable por run.
+- Una revisión inválida conserva el último snapshot válido.
+- Sin PostgreSQL al iniciar, usa bootstrap environment y las mutaciones
+  devuelven `503`.
+- Activación CAS con conflicto explícito `409`.
+- Bearer obligatorio, CORS no habilitado y la API no se expone como tool.
+- El operador se audita mediante `X-Ancora-Admin-Actor`.
+
+Endpoints iniciales:
+
+```text
+GET  /admin/runtime-config/status
+POST /admin/runtime-config/validate
+POST /admin/runtime-config/revisions
+POST /admin/runtime-config/revisions/{revision}/activate
+POST /admin/runtime-config/rollback
+```
+
+`LISTEN/NOTIFY` queda explícitamente para el incremento posterior con una
+réplica. El comando inicial es `scripts/runtime_config.py`; no incorpora
+secretos en argumentos, archivos de configuración versionados ni respuestas.
+
 Defaults iniciales de admission: 5 requests por usuario en 10 s, 10/minuto,
 120/hora, 20 interacciones `accepted` globales y 5 por chat. La evaluación usa
 PostgreSQL y un advisory lock transaccional; no depende de memoria del proceso.
@@ -231,6 +273,9 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `TELEGRAM_PROCESSOR_ENABLED` | Inicia processor T5; requiere admission habilitado | `false` |
 | `TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS` | Cadencia de recuperación del processor | `1.0` |
 | `TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY` | Máximo de chats procesados a la vez | `2` |
+| `RUNTIME_CONFIG_ADMIN_ENABLED` | Expone la API admin T6; fail-closed sin DB/token | `false` |
+| `RUNTIME_CONFIG_ADMIN_TOKEN` | Bearer HTTPS admin; solo Railway secrets | — |
+| `RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE` | Ruta lógica bootstrap sin secrets | `ancoramind-default` |
 | `NGROK_URL` | URL del túnel para el webhook | — |
 | `PORT` | Puerto HTTP inyectado por Railway | `7777` local |
 | `AGENT_OS_HOST` | Host HTTP opcional | `localhost` dev / `0.0.0.0` prod |

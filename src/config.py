@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     """Start the T5 processor; requires the same trusted admission prerequisites."""
     telegram_processor_poll_interval_seconds: float = Field(default=1.0, gt=0)
     telegram_processor_global_concurrency: int = Field(default=2, ge=1, le=20)
+
+    # ── Governed runtime config control plane (T6 / specs-013) ──
+    runtime_config_admin_enabled: bool = False
+    """Expose protected runtime-config admin API; disabled by default."""
+    runtime_config_admin_token: str = ""
+    """Bearer token for the HTTPS admin API; Railway secret only."""
+    runtime_config_bootstrap_default_route: str = "ancoramind-default"
+    """Secret-free logical route used before the DB control plane is available."""
     app_env: str = "development"
 
     # ── ngrok ─────────────────────────────────────────

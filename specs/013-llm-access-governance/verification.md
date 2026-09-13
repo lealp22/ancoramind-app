@@ -41,8 +41,8 @@
 |---|---|---|---|
 | A | Mismo update concurrente varias veces → una interaction y un Agent run | ✅ T5 local | Claim único + processor llama runner una vez; E2E Railway pendiente |
 | B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ T3 | Dos IDs Railway → dos deliveries, segunda `duplicate=true`, mismo `correlation_id` |
-| C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ⏳ | |
-| D | Config inválida → last-known-good/bootstrap permanece | ⏳ | |
+| C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ T6 local | Manager cachea snapshot y CAS actualiza futuros runs; E2E Railway pendiente |
+| D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
 | E | Primary falla → no se supera attempt budget | ⏳ | |
 | F | Circuit open → cero llamadas al upstream afectado | ⏳ | |
 | G | Rate/budget agotado → no hay inferencia adicional | ⏳ | |
@@ -58,8 +58,8 @@
 | Q | Gateway caído → fail closed sin OpenRouter directo | ⏳ | |
 | R | Collector caído → aplicación continúa | ⏳ | |
 | S | Logs/traces no contienen contenido personal | ⏳ | |
-| T | Activaciones concurrentes → compare-and-swap evita pisadas | ⏳ | |
-| U | Run activo durante cambio → conserva revisión anterior | ⏳ | |
+| T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
+| U | Run activo durante cambio → conserva revisión anterior | ✅ T6 | Snapshots futuros por run y publish no muta snapshot hasta CAS correcto |
 | V | Duplicate delivery → no consume rate limit | ✅ T4 | Duplicate se detecta antes del contador durable y conserva correlation ID |
 | W | Rate limit superado → `2xx` y cero inferencias | ✅ T4 | burst/min/hora/cola ⇒ `rejected`, `200`, sin Agent |
 | X | Tool call 12 → permitida si queda budget | ⏳ | |
@@ -149,6 +149,20 @@
 - `TELEGRAM_PROCESSOR_ENABLED=false` por defecto. El adaptador
   `AgnoInteractionRunner` es temporal y T7 lo sustituirá por `LLMAccess` y un
   Agent per-run.
+
+## T6 — RuntimeConfigManager and admin API verification (2026-09-14)
+
+- `RuntimeConfiguration` usa schemas Pydantic cerrados con `extra="forbid"` en
+  routing, budgets, concurrencia, admission, gateway y observabilidad.
+- Checksum SHA-256 canónico y estable; `validate_runtime_config()` bloquea claves
+  sensibles sin persistirlas.
+- `RuntimeConfigManager` mantiene snapshot in-memory last-known-good: bootstrap
+  secret-free sin I/O, y revisión activa tras `initialize()`.
+- CAS atómico con auditoría append-only; rollback usa la misma ruta con motivo
+  prefijado.
+- Admin API con Bearer obligatorio, actor obligatorio, sin CORS y sin tools LLM.
+- Invalidación multi-proceso queda explícitamente pendiente: swap directo con
+  una réplica y `LISTEN/NOTIFY` en incremento posterior.
 
 ## Limitations and remaining evidence
 

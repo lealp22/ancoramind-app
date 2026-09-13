@@ -23,6 +23,7 @@ from src.config import Settings
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
 from src.domain.reminders.worker import RemindersWorker
+from src.domain.runtime_config.service import RuntimeConfigManager
 from src.notifications.telegram import TelegramNotifier
 from src.repositories.database import get_session
 
@@ -144,4 +145,32 @@ def install_interaction_processor_lifespan(
                 logger.info("Telegram interaction processor stopped")
 
     app.router.lifespan_context = interaction_processor_lifespan
+    return True
+
+
+def install_runtime_config_manager_lifespan(
+    app: FastAPI,
+    settings: Settings,
+    manager: RuntimeConfigManager,
+) -> bool:
+    """Initialize the T6 in-memory snapshot before accepting application traffic."""
+    previous_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def runtime_config_lifespan(application: FastAPI) -> AsyncIterator[Any]:
+        async with previous_lifespan(application) as state:
+            await manager.initialize()
+            application.state.runtime_config_manager = manager
+            logger.info(
+                "Runtime config initialized (source=%s, revision=%s, database_available=%s)",
+                manager.snapshot().source,
+                manager.snapshot().revision,
+                manager.database_available,
+            )
+            try:
+                yield state
+            finally:
+                del application.state.runtime_config_manager
+
+    app.router.lifespan_context = runtime_config_lifespan
     return True

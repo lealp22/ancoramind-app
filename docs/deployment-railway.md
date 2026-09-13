@@ -94,6 +94,15 @@ TELEGRAM_PROCESSOR_ENABLED=false
 # TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS=1.0
 # TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY=2
 
+# T6 runtime-config control plane is implemented but must remain disabled in
+# production until a controlled admin rollout is explicitly approved.
+RUNTIME_CONFIG_ADMIN_ENABLED=false
+# Keep RUNTIME_CONFIG_ADMIN_TOKEN only as a Railway secret; never in Git/logs.
+# RUNTIME_CONFIG_ADMIN_TOKEN=
+# Logical route used before PostgreSQL initialization succeeds. It must exist in
+# the approved bootstrap configuration and contain no secrets.
+# RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE=ancoramind-default
+
 LLM_PROVIDER=<openai|openrouter|openai-like>
 LLM_MODEL=<modelo-elegido>
 OPENAI_API_KEY=<si-aplica>
@@ -137,6 +146,13 @@ haya revisado la superficie de seguridad del Gateway.
 > Railway, ejecutar el runbook de rollout: comprobar migración `head`, secret,
 > bot ID, allowlist, backlog `accepted=0`, una réplica y logs; después validar un
 > único update de prueba. No activar T5 con T4 apagado.
+>
+> **T6:** el control plane runtime implementado crea/activa revisiones tipadas e
+> inmutables, cachea un snapshot in-memory para futuros runs y audita cada cambio
+> con actor/motivo. Mantener `RUNTIME_CONFIG_ADMIN_ENABLED=false` en producción
+> hasta aprobar un rollout administrativo controlado. El token viaja únicamente en
+> `Authorization: Bearer` y `RUNTIME_CONFIG_ADMIN_TOKEN` vive solo en Railway
+> secrets; no aceptar secrets en revisiones ni habilitar CORS.
 
 ## 4. Primer deployment y healthcheck
 

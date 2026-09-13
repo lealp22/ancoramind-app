@@ -15,8 +15,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 217 unit
-  tests passing; 43 integration tests requieren PostgreSQL/Docker (se omiten sin
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 240 unit
+  tests passing; 49 integration tests requieren PostgreSQL/Docker (se omiten sin
   esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
 ---
@@ -109,14 +109,14 @@ prompts/                 ← Assets de IA versionados (identity, soul, tool_cont
 │                           channels/telegram.md, skills/)
 migrations/              ← Alembic canónico (baseline + revisiones); init.sql
 │                           refleja head para bootstrap fresh — BL-12/specs/013
-scripts/                 ← run-e2e.sh + telegram_webhook.py (registro/estado seguro)
+scripts/                 ← run-e2e.sh + telegram_webhook.py + runtime_config.py (admin T6)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (T2–T5 implementados)
-tests/unit/              ← 217 tests
-tests/integration/        ← 43 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+                            013-llm-access-governance (T2–T6 implementados)
+tests/unit/              ← 240 tests
+tests/integration/        ← 49 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -253,7 +253,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T5 implementados; runtime/OTel pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T6 implementados; LLMAccess/runtime E2E/OTel pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

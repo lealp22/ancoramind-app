@@ -23,6 +23,12 @@ from src.agent.instructions import assemble_instructions
 from src.agent.lifecycle import (
     install_interaction_processor_lifespan,
     install_reminder_worker_lifespan,
+    install_runtime_config_manager_lifespan,
+)
+from src.agent.runtime_config_admin import (
+    create_runtime_config_manager,
+    install_runtime_config_admin_api,
+    validate_runtime_config_admin_settings,
 )
 from src.agent.server import resolve_server_config
 from src.agent.telegram_admission import (
@@ -208,6 +214,8 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         logger.error("TELEGRAM_TOKEN is required. Set it in .env or environment.")
         sys.exit(1)
     validate_telegram_admission_settings(settings)
+    validate_runtime_config_admin_settings(settings)
+    runtime_config_manager = create_runtime_config_manager(settings, get_session)
 
     # ── Database (Agno runtime) ───────────────────────
     db = create_db(db_url=settings.db_url)
@@ -242,10 +250,16 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     # ── AgentOS + Telegram ────────────────────────────
     allowlist = settings.allowed_user_ids
     base_app: FastAPI | None = None
-    if settings.telegram_admission_enabled:
+    if settings.telegram_admission_enabled or settings.runtime_config_admin_enabled:
         base_app = FastAPI()
+    if settings.telegram_admission_enabled:
+        assert base_app is not None
         install_telegram_admission_endpoint(base_app, settings, get_session)
         logger.info("AncoraMind durable Telegram admission enabled at /telegram/webhook")
+    if settings.runtime_config_admin_enabled:
+        assert base_app is not None
+        install_runtime_config_admin_api(base_app, settings, runtime_config_manager)
+        logger.info("Runtime config admin API enabled at /admin/runtime-config")
 
     agent_os = AgentOS(
         agents=[ancora_agent],
@@ -266,6 +280,10 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         "AgentOS app created — webhook: /telegram/webhook (%s)",
         "AncoraMind admission" if settings.telegram_admission_enabled else "AgentOS",
     )
+
+    # ── Runtime config (T6) ────────────────────────────
+    # Install it before workers: outer worker wrappers enter this lifecycle first.
+    install_runtime_config_manager_lifespan(app, settings, runtime_config_manager)
 
     # ── Reminder worker (BL-5) ─────────────────────────
     _register_reminder_worker(app, settings)

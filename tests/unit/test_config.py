@@ -23,6 +23,9 @@ class TestSettings:
         monkeypatch.delenv("TELEGRAM_PROCESSOR_ENABLED", raising=False)
         monkeypatch.delenv("TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS", raising=False)
         monkeypatch.delenv("TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY", raising=False)
+        monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_ENABLED", raising=False)
+        monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_TOKEN", raising=False)
+        monkeypatch.delenv("RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE", raising=False)
         monkeypatch.delenv("APP_ENV", raising=False)
         monkeypatch.delenv("LOG_LEVEL", raising=False)
         monkeypatch.delenv("APP_DEBUG", raising=False)
@@ -38,6 +41,9 @@ class TestSettings:
         assert settings.telegram_processor_enabled is False
         assert settings.telegram_processor_poll_interval_seconds == 1.0
         assert settings.telegram_processor_global_concurrency == 2
+        assert settings.runtime_config_admin_enabled is False
+        assert settings.runtime_config_admin_token == ""
+        assert settings.runtime_config_bootstrap_default_route == "ancoramind-default"
         assert settings.app_debug is False
 
     def test_env_override(self, monkeypatch):
@@ -74,6 +80,17 @@ class TestSettings:
         assert settings.telegram_processor_enabled is True
         assert settings.telegram_processor_poll_interval_seconds == 2.5
         assert settings.telegram_processor_global_concurrency == 4
+
+    def test_runtime_config_admin_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("RUNTIME_CONFIG_ADMIN_ENABLED", "true")
+        monkeypatch.setenv("RUNTIME_CONFIG_ADMIN_TOKEN", "admin-secret")
+        monkeypatch.setenv("RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE", "ancoramind-fast")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.runtime_config_admin_enabled is True
+        assert settings.runtime_config_admin_token == "admin-secret"
+        assert settings.runtime_config_bootstrap_default_route == "ancoramind-fast"
 
     @pytest.mark.parametrize("value", ["0", "21"])
     def test_agent_tool_call_limit_rejects_unsafe_values(self, monkeypatch, value):
