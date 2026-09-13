@@ -9,6 +9,7 @@ import os
 import sys
 from typing import Any
 
+from agno.agent import Agent
 from agno.os.app import AgentOS
 from agno.os.interfaces.telegram import Telegram
 from fastapi import FastAPI
@@ -19,15 +20,24 @@ from src.agent.ancora_agent import (
     create_model_from_settings,
 )
 from src.agent.instructions import assemble_instructions
-from src.agent.lifecycle import install_reminder_worker_lifespan
+from src.agent.lifecycle import (
+    install_interaction_processor_lifespan,
+    install_reminder_worker_lifespan,
+)
 from src.agent.server import resolve_server_config
+from src.agent.telegram_admission import (
+    install_telegram_admission_endpoint,
+    validate_telegram_admission_settings,
+)
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
+from src.repositories.database import get_session
 
 logger = logging.getLogger(__name__)
 
 # ── Optional domain tools (require ANCORA_DATABASE_URL) ──
 _NOTE_TOOLS: list[Any] = []
+
 
 def _init_domain_tools(settings: Settings) -> list[Any]:
     """Initialize domain tools if the domain database is configured.
@@ -38,10 +48,7 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
     tools: list[Any] = []
 
     if not settings.ancora_database_url:
-        logger.info(
-            "ANCORA_DATABASE_URL not set — domain tools skipped "
-            "(notes, vehicles, etc.)"
-        )
+        logger.info("ANCORA_DATABASE_URL not set — domain tools skipped (notes, vehicles, etc.)")
         return tools
 
     try:
@@ -67,10 +74,7 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         )
 
         tools.extend([search_documents, get_document, analyze_document])
-        logger.info(
-            "Document tools registered: "
-            "search_documents, get_document, analyze_document"
-        )
+        logger.info("Document tools registered: search_documents, get_document, analyze_document")
 
         from src.agent.tools.maintenance import (
             execute_vehicle_maintenance,
@@ -84,11 +88,17 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             propose_vehicle,
         )
 
-        tools.extend([
-            find_vehicle, get_vehicle_summary, get_vehicle_maintenance_history,
-            propose_vehicle, execute_vehicle,
-            propose_vehicle_maintenance, execute_vehicle_maintenance,
-        ])
+        tools.extend(
+            [
+                find_vehicle,
+                get_vehicle_summary,
+                get_vehicle_maintenance_history,
+                propose_vehicle,
+                execute_vehicle,
+                propose_vehicle_maintenance,
+                execute_vehicle_maintenance,
+            ]
+        )
         logger.info(
             "Vehicle tools registered: find_vehicle, get_vehicle_summary, "
             "get_vehicle_maintenance_history, propose/execute_vehicle, "
@@ -106,10 +116,16 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             propose_reminder,
         )
 
-        tools.extend([
-            list_reminders, propose_reminder, execute_reminder,
-            check_calendar, propose_calendar_event, execute_calendar_event,
-        ])
+        tools.extend(
+            [
+                list_reminders,
+                propose_reminder,
+                execute_reminder,
+                check_calendar,
+                propose_calendar_event,
+                execute_calendar_event,
+            ]
+        )
         logger.info(
             "Reminder + Calendar tools registered: list/propose/execute_reminder, "
             "check_calendar, propose/execute_calendar_event"
@@ -131,13 +147,23 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             propose_todo_list_rename,
         )
 
-        tools.extend([
-            list_todo_lists, propose_todo_list, execute_todo_list,
-            propose_todo_list_rename, propose_todo_list_delete,
-            list_todo_items, propose_todo_item, propose_todo_item_update,
-            propose_todo_item_complete, propose_todo_item_reopen,
-            propose_todo_item_move, propose_todo_item_delete, execute_todo_item,
-        ])
+        tools.extend(
+            [
+                list_todo_lists,
+                propose_todo_list,
+                execute_todo_list,
+                propose_todo_list_rename,
+                propose_todo_list_delete,
+                list_todo_items,
+                propose_todo_item,
+                propose_todo_item_update,
+                propose_todo_item_complete,
+                propose_todo_item_reopen,
+                propose_todo_item_move,
+                propose_todo_item_delete,
+                execute_todo_item,
+            ]
+        )
         logger.info(
             "Todo tools registered: list/propose/execute_todo_list (+rename/delete), "
             "list/propose/execute_todo_item (+update/complete/reopen/move/delete)"
@@ -145,8 +171,7 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
 
     except Exception:
         logger.warning(
-            "Failed to initialize domain database — "
-            "domain tools will not be available",
+            "Failed to initialize domain database — domain tools will not be available",
             exc_info=True,
         )
 
@@ -156,6 +181,15 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
 def _register_reminder_worker(app: FastAPI, settings: Settings) -> None:
     """Install the auto-gated reminder-worker FastAPI lifespan (BL-22)."""
     install_reminder_worker_lifespan(app, settings)
+
+
+def _register_interaction_processor(
+    app: FastAPI,
+    settings: Settings,
+    agent: Agent,
+) -> None:
+    """Install the auto-gated T5 processor after the existing app lifespan."""
+    install_interaction_processor_lifespan(app, settings, agent)
 
 
 def create_app() -> tuple[FastAPI, AgentOS]:
@@ -173,6 +207,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     if not settings.telegram_token:
         logger.error("TELEGRAM_TOKEN is required. Set it in .env or environment.")
         sys.exit(1)
+    validate_telegram_admission_settings(settings)
 
     # ── Database (Agno runtime) ───────────────────────
     db = create_db(db_url=settings.db_url)
@@ -206,6 +241,12 @@ def create_app() -> tuple[FastAPI, AgentOS]:
 
     # ── AgentOS + Telegram ────────────────────────────
     allowlist = settings.allowed_user_ids
+    base_app: FastAPI | None = None
+    if settings.telegram_admission_enabled:
+        base_app = FastAPI()
+        install_telegram_admission_endpoint(base_app, settings, get_session)
+        logger.info("AncoraMind durable Telegram admission enabled at /telegram/webhook")
+
     agent_os = AgentOS(
         agents=[ancora_agent],
         db=db,
@@ -216,13 +257,19 @@ def create_app() -> tuple[FastAPI, AgentOS]:
                 reply_to_bot_messages=False,
             )
         ],
+        base_app=base_app,
+        on_route_conflict="preserve_base_app",
     )
 
     app = agent_os.get_app()
-    logger.info("AgentOS app created — webhook: /telegram/webhook")
+    logger.info(
+        "AgentOS app created — webhook: /telegram/webhook (%s)",
+        "AncoraMind admission" if settings.telegram_admission_enabled else "AgentOS",
+    )
 
     # ── Reminder worker (BL-5) ─────────────────────────
     _register_reminder_worker(app, settings)
+    _register_interaction_processor(app, settings, ancora_agent)
 
     return app, agent_os
 

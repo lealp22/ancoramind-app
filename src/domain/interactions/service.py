@@ -1,0 +1,140 @@
+"""Use cases for durable interaction admission and recovery primitives."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from src.domain.interactions.admission import TelegramAdmissionPolicy
+from src.domain.interactions.models import (
+    InteractionStatus,
+    TelegramAdmissionLimits,
+    TelegramAdmissionResult,
+    TelegramDeliveryCreate,
+    TelegramInteraction,
+    TelegramInteractionCreate,
+    normalize_telegram_update,
+)
+from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.repositories.interactions import TelegramInteractionsRepository
+
+
+class TelegramInteractionService:
+    """Domain service for ledger invariants; HTTP admission belongs to T4."""
+
+    def __init__(
+        self,
+        repository: TelegramInteractionsRepository,
+        payload_cipher: TelegramPayloadCipher,
+    ):
+        self._repository = repository
+        self._payload_cipher = payload_cipher
+
+    async def record_accepted_update(
+        self,
+        *,
+        bot_id: int,
+        update: dict[str, Any],
+        railway_request_id: str | None,
+        http_status: int = 200,
+    ) -> TelegramAdmissionResult:
+        """Normalize/encrypt an accepted update and atomically ledger its delivery."""
+        normalized = normalize_telegram_update(update)
+        encrypted = self._payload_cipher.encrypt(normalized.model_dump(mode="json"))
+        interaction = TelegramInteractionCreate(
+            bot_id=bot_id,
+            telegram_update_id=normalized.update_id,
+            telegram_message_id=normalized.message_id,
+            chat_id=normalized.chat_id,
+            telegram_user_id=normalized.telegram_user_id,
+            update_type=normalized.update_type,
+            payload_ciphertext=encrypted.ciphertext,
+            payload_key_version=encrypted.key_version,
+            payload_fingerprint=encrypted.fingerprint,
+        )
+        return await self._repository.admit(
+            interaction,
+            TelegramDeliveryCreate(
+                railway_request_id=railway_request_id,
+                http_status=http_status,
+                delivery_status="durable",
+            ),
+        )
+
+    async def admit_update(
+        self,
+        *,
+        bot_id: int,
+        update: dict[str, Any],
+        railway_request_id: str | None,
+        limits: TelegramAdmissionLimits,
+        policy: TelegramAdmissionPolicy,
+        http_status: int = 200,
+    ) -> TelegramAdmissionResult:
+        """Apply deterministic policy then atomically persist durable admission."""
+        normalized = normalize_telegram_update(update)
+        decision = policy.evaluate(normalized)
+        encrypted = (
+            self._payload_cipher.encrypt(normalized.model_dump(mode="json"))
+            if decision.status is InteractionStatus.ACCEPTED
+            else None
+        )
+        interaction = TelegramInteractionCreate(
+            bot_id=bot_id,
+            telegram_update_id=normalized.update_id,
+            telegram_message_id=normalized.message_id,
+            chat_id=normalized.chat_id,
+            telegram_user_id=normalized.telegram_user_id,
+            update_type=normalized.update_type,
+            status=decision.status,
+            payload_ciphertext=encrypted.ciphertext if encrypted else None,
+            payload_key_version=encrypted.key_version if encrypted else None,
+            payload_fingerprint=encrypted.fingerprint if encrypted else None,
+            error_class="admission_rejected"
+            if decision.status is InteractionStatus.REJECTED
+            else None,
+            error_detail_code=decision.error_detail_code,
+        )
+        return await self._repository.admit_with_limits(
+            interaction,
+            TelegramDeliveryCreate(
+                railway_request_id=railway_request_id,
+                http_status=http_status,
+                delivery_status="received",
+            ),
+            limits,
+        )
+
+    async def claim_agent_start(self, correlation_id: UUID) -> TelegramInteraction | None:
+        """Claim an accepted interaction exactly once for future T5 processing."""
+        return await self._repository.claim_agent_start(correlation_id)
+
+    async def mark_terminal(
+        self,
+        correlation_id: UUID,
+        status: InteractionStatus,
+        *,
+        error_class: str | None = None,
+        error_detail_code: str | None = None,
+    ) -> TelegramInteraction | None:
+        """Persist a terminal state and enforce its payload-retention policy."""
+        if status not in {
+            InteractionStatus.IGNORED,
+            InteractionStatus.REJECTED,
+            InteractionStatus.COMPLETED,
+            InteractionStatus.FAILED_CONTROLLED,
+            InteractionStatus.FAILED_DEFINITIVE,
+            InteractionStatus.FAILED_AMBIGUOUS,
+        }:
+            raise ValueError("mark_terminal requires a terminal interaction status")
+        return await self._repository.update_status(
+            correlation_id,
+            status,
+            error_class=error_class,
+            error_detail_code=error_detail_code,
+        )
+
+    async def purge_expired_payloads(self, now: datetime | None = None) -> int:
+        """Purge expired failed-ambiguous payloads while preserving audit metadata."""
+        return await self._repository.purge_expired_payloads(now)

@@ -58,6 +58,68 @@ Las variables del proceso tienen prioridad sobre `.env`. Si cambias entre
 Docker local y Supabase, abre una terminal nueva o recarga `.env`; de lo
 contrario, una URL antigua exportada puede seguir apuntando a `localhost`.
 
+### Ledger y admission Telegram (T3–T4 de specs/013)
+
+El ledger durable tiene cifrado de payload recuperable. T4 añade un endpoint
+propio `POST /telegram/webhook`, preservando la URL pública, y lo instala delante
+de la ruta Telegram de AgentOS cuando `TELEGRAM_ADMISSION_ENABLED=true`.
+
+El endpoint valida el secret, exige chat privado y allowlist, registra el
+`X-Railway-Request-Id`, deduplica por `bot_id + update_id`, aplica límites
+durables y devuelve `200` solo tras el commit. Un update duplicado no consume
+cuota. Todavía no inicia Agno ni envía respuestas: T5 procesará después los
+claims `accepted`.
+
+El flag permanece desactivado por defecto. Antes de activarlo, configura estas
+variables exclusivamente como secrets de Railway/environment; no las incluyas en
+revisiones runtime, logs ni Git:
+
+```env
+# Generar una clave nueva: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+TELEGRAM_PAYLOAD_ENCRYPTION_KEY=<fernet-url-safe-base64-key>
+TELEGRAM_PAYLOAD_KEY_VERSION=1
+TELEGRAM_BOT_ID=<id-numerico-de-getMe>
+TELEGRAM_ADMISSION_ENABLED=true
+ALLOWED_TELEGRAM_USER_IDS=<id-telegram-permitido>
+```
+
+Con admission activado, faltan `ANCORA_DATABASE_URL`, `TELEGRAM_BOT_ID`,
+`TELEGRAM_WEBHOOK_SECRET_TOKEN`, `TELEGRAM_PAYLOAD_ENCRYPTION_KEY` o una
+allowlist no vacía hacen fallar el arranque de forma segura. La allowlist vacía
+**no** significa «todos» en este modo.
+
+Defaults iniciales de admission: 5 requests por usuario en 10 s, 10/minuto,
+120/hora, 20 interacciones `accepted` globales y 5 por chat. La evaluación usa
+PostgreSQL y un advisory lock transaccional; no depende de memoria del proceso.
+
+### Processor y outbox Telegram (T5 de specs/013)
+
+T5 añade un processor in-process, pero permanece apagado por defecto:
+
+```env
+TELEGRAM_PROCESSOR_ENABLED=false
+TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS=1.0
+TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY=2
+```
+
+Solo puede arrancar si T4 admission también está activado y satisface sus
+prerrequisitos fail-closed. Al iniciar, el processor marca como
+`failed_ambiguous` cualquier interacción recuperada en `agent_started` o
+`delivery_started`; nunca reejecuta el Agent ni reenvía una entrega incierta.
+Recupera de forma segura `accepted` y `response_ready`.
+
+Para cada run, usa lock por chat y usuario, un semáforo global de dos y una cola
+ordenada por chat/fecha/update. Persiste una `logical_response` cifrada y las
+filas de delivery por chunk antes de `sendMessage`; el streaming visible queda
+desactivado y solo refresca `typing`. El adaptador `AgnoInteractionRunner` es
+temporal: T7 lo reemplazará por `LLMAccess` y un Agent por run.
+
+El texto y los datos mínimos recuperables del update se serializan de forma
+determinista, se cifran con Fernet y se guardan como `BYTEA`; el ledger conserva
+un HMAC no reversible para correlación. Estados terminales normales eliminan el
+payload inmediatamente. `failed_ambiguous` lo retiene hasta siete días y una
+purga explícita elimina el ciphertext conservando metadata de auditoría.
+
 ### Alternativa local: PostgreSQL via Docker
 
 ```bash
@@ -69,15 +131,31 @@ docker compose down
 
 ### Aplicar migraciones
 
-Migraciones idempotentes en `migrations/init.sql` (schema `ancora`, 8 tablas).
-No se usa Alembic de momento (se introducirá cuando haya necesidad real).
-En Supabase, el baseline ya está registrado como migración `ancora_baseline`.
+Alembic es la historia canónica del schema `ancora`. Lee
+`ANCORA_DATABASE_URL` de las variables del proceso o `.env` y convierte la URL
+`postgresql+asyncpg` a `postgresql+psycopg` para ejecutar las revisiones.
 
 ```bash
-# PowerShell:
+# PowerShell o Git Bash: aplicar hasta head
+alembic upgrade head
+
+# Ver revisión actual e historial
+alembic current
+alembic history
+
+# Deshacer solo la última revisión
+alembic downgrade -1
+```
+
+`migrations/init.sql` refleja el mismo schema que `head` y se conserva para
+bootstrap fresh/local. Es idempotente, pero los upgrades sobre bases existentes
+deben hacerse con Alembic.
+
+```bash
+# Bootstrap fresh alternativo — PowerShell:
 Get-Content migrations/init.sql | docker compose exec -T postgres psql -U ancora -d ancoramind
 
-# Git Bash:
+# Bootstrap fresh alternativo — Git Bash:
 docker compose exec -T postgres psql -U ancora -d ancoramind < migrations/init.sql
 ```
 
@@ -140,6 +218,19 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `AGENT_TOOL_CALL_LIMIT` | Límite duro de tools por ejecución; evita bucles de tool-calling | `8` |
 | `TELEGRAM_TOKEN` | Token del bot (de @BotFather) | — |
 | `TELEGRAM_WEBHOOK_SECRET_TOKEN` | Secret que Telegram envía al webhook en producción | — |
+| `TELEGRAM_PAYLOAD_ENCRYPTION_KEY` | Clave Fernet para payload recuperable del ledger | — |
+| `TELEGRAM_PAYLOAD_KEY_VERSION` | Versión de la clave Fernet | `1` |
+| `TELEGRAM_ADMISSION_ENABLED` | Activa endpoint propio durable; requiere secretos/DB/allowlist | `false` |
+| `TELEGRAM_BOT_ID` | ID numérico de `getMe`, identidad durable del bot | `0` |
+| `TELEGRAM_ADMISSION_USER_BURST` | Máximo por usuario en ventana burst | `5` |
+| `TELEGRAM_ADMISSION_BURST_WINDOW_SECONDS` | Ventana burst en segundos | `10` |
+| `TELEGRAM_ADMISSION_USER_REQUESTS_PER_MINUTE` | Máximo por usuario/minuto | `10` |
+| `TELEGRAM_ADMISSION_USER_REQUESTS_PER_HOUR` | Máximo por usuario/hora | `120` |
+| `TELEGRAM_ADMISSION_PENDING_GLOBAL` | Capacidad máxima global en `accepted` | `20` |
+| `TELEGRAM_ADMISSION_QUEUED_PER_CHAT` | Capacidad máxima `accepted` por chat | `5` |
+| `TELEGRAM_PROCESSOR_ENABLED` | Inicia processor T5; requiere admission habilitado | `false` |
+| `TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS` | Cadencia de recuperación del processor | `1.0` |
+| `TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY` | Máximo de chats procesados a la vez | `2` |
 | `NGROK_URL` | URL del túnel para el webhook | — |
 | `PORT` | Puerto HTTP inyectado por Railway | `7777` local |
 | `AGENT_OS_HOST` | Host HTTP opcional | `localhost` dev / `0.0.0.0` prod |
@@ -151,7 +242,7 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `SUPABASE_URL` | URL base del proyecto (backend `supabase`) | — |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave server-side de Storage | — |
 | `SUPABASE_STORAGE_BUCKET` | Bucket privado de documentos | `ancora-documents` |
-| `ALLOWED_TELEGRAM_USER_IDS` | Allowlist de user IDs (coma-separados) | vacío = todos |
+| `ALLOWED_TELEGRAM_USER_IDS` | Allowlist de user IDs (coma-separados); obligatoria con admission | vacío = todos solo en modo AgentOS legado; fail-closed en admission |
 | `ANCORA_TEST_DATABASE_URL` | BD custom para integration tests (si no: docker compose) | — |
 | `ANCORA_TEST_DATABASE` | Nombre de la BD dedicada de integration tests | `ancoramind_test` |
 | `ANCORA_TEST_ADMIN_DSN` | DSN admin para crear la BD de integration tests | docker compose |

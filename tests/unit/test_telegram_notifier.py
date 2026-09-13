@@ -1,10 +1,13 @@
 """Unit tests for the Telegram notifier (BL-5, specs/010)."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import httpx
+import pytest
 
+from src.domain.interactions.processor import TelegramSendError
 from src.domain.reminders.models import Reminder
 from src.notifications.telegram import (
     LATE_THRESHOLD_SECONDS,
@@ -33,7 +36,7 @@ def _reminder(
 
 
 class TestFormatReminderMessage:
-    def test_includes_title_description_and_scheduled_date(self):
+    def test_includes_title_description_and_scheduled_date(self) -> None:
         reminder = _reminder(title="Renovar seguro", description="Llamar a la correduría")
         text = format_reminder_message(reminder)
         assert "Renovar seguro" in text
@@ -41,19 +44,19 @@ class TestFormatReminderMessage:
         assert "Programado para:" in text
         assert "retraso" not in text
 
-    def test_omits_description_when_missing(self):
+    def test_omits_description_when_missing(self) -> None:
         text = format_reminder_message(_reminder(description=None))
         assert "Programado para:" in text
         assert text.count("\n") == 1  # only title + scheduled line
 
-    def test_adds_late_note_when_fired_long_after_trigger(self):
+    def test_adds_late_note_when_fired_long_after_trigger(self) -> None:
         reminder = _reminder(minutes_ago=30)
         late_by = timedelta(seconds=LATE_THRESHOLD_SECONDS + 60)
         now = reminder.trigger_at + late_by
         text = format_reminder_message(reminder, now=now)
         assert "retraso" in text
 
-    def test_no_late_note_within_threshold(self):
+    def test_no_late_note_within_threshold(self) -> None:
         reminder = _reminder(minutes_ago=1)
         now = reminder.trigger_at + timedelta(seconds=LATE_THRESHOLD_SECONDS - 1)
         text = format_reminder_message(reminder, now=now)
@@ -61,11 +64,14 @@ class TestFormatReminderMessage:
 
 
 class TestTelegramNotifier:
-    def _client(self, handler) -> httpx.AsyncClient:
+    def _client(
+        self,
+        handler: Callable[[httpx.Request], httpx.Response],
+    ) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
-    async def test_send_reminder_success(self):
-        requests = []
+    async def test_send_reminder_success(self) -> None:
+        requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
@@ -81,22 +87,22 @@ class TestTelegramNotifier:
         assert b'"chat_id":452022640' in body
         assert b"parse_mode" not in body  # plain text (untrusted DATA, §2.8)
 
-    async def test_send_reminder_api_rejection(self):
+    async def test_send_reminder_api_rejection(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(400, json={"ok": False, "description": "Bad Request"})
 
         notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
         assert await notifier.send_reminder(_reminder()) is False
 
-    async def test_send_reminder_network_error(self):
+    async def test_send_reminder_network_error(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("network down")
 
         notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
         assert await notifier.send_reminder(_reminder()) is False
 
-    async def test_send_reminder_rejects_non_numeric_user_id(self):
-        requests = []
+    async def test_send_reminder_rejects_non_numeric_user_id(self) -> None:
+        requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             requests.append(request)
@@ -107,3 +113,42 @@ class TestTelegramNotifier:
 
         assert delivered is False
         assert requests == []  # no HTTP call for non-Telegram user ids
+
+    async def test_send_text_returns_confirmed_message_id(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 77}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        assert await notifier.send_text(452022640, "respuesta final") == 77
+
+    async def test_send_text_classifies_4xx_as_definitive(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"ok": False, "description": "Bad Request"})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        with pytest.raises(TelegramSendError) as exc_info:
+            await notifier.send_text(452022640, "respuesta final")
+
+        assert exc_info.value.definitive is True
+
+    async def test_send_text_classifies_transport_failure_as_ambiguous(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("network down")
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        with pytest.raises(TelegramSendError) as exc_info:
+            await notifier.send_text(452022640, "respuesta final")
+
+        assert exc_info.value.definitive is False
+
+    async def test_close_only_closes_notifier_owned_client(self) -> None:
+        external_client = self._client(lambda _: httpx.Response(200, json={"ok": True}))
+        external_notifier = TelegramNotifier(token="123456:ABC", client=external_client)
+
+        await external_notifier.close()
+
+        assert external_client.is_closed is False
+        await external_client.aclose()

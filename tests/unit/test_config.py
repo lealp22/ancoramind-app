@@ -17,6 +17,12 @@ class TestSettings:
         monkeypatch.delenv("AGNO_DATABASE_URL", raising=False)
         monkeypatch.delenv("LLM_MODEL", raising=False)
         monkeypatch.delenv("AGENT_TOOL_CALL_LIMIT", raising=False)
+        monkeypatch.delenv("TELEGRAM_ADMISSION_ENABLED", raising=False)
+        monkeypatch.delenv("TELEGRAM_BOT_ID", raising=False)
+        monkeypatch.delenv("TELEGRAM_ADMISSION_USER_BURST", raising=False)
+        monkeypatch.delenv("TELEGRAM_PROCESSOR_ENABLED", raising=False)
+        monkeypatch.delenv("TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS", raising=False)
+        monkeypatch.delenv("TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY", raising=False)
         monkeypatch.delenv("APP_ENV", raising=False)
         monkeypatch.delenv("LOG_LEVEL", raising=False)
         monkeypatch.delenv("APP_DEBUG", raising=False)
@@ -26,6 +32,12 @@ class TestSettings:
         assert settings.agent_tool_call_limit == 8
         assert settings.app_env == "development"
         assert settings.telegram_token == ""
+        assert settings.telegram_admission_enabled is False
+        assert settings.telegram_bot_id == 0
+        assert settings.telegram_admission_user_burst == 5
+        assert settings.telegram_processor_enabled is False
+        assert settings.telegram_processor_poll_interval_seconds == 1.0
+        assert settings.telegram_processor_global_concurrency == 2
         assert settings.app_debug is False
 
     def test_env_override(self, monkeypatch):
@@ -40,6 +52,28 @@ class TestSettings:
         assert settings.agent_tool_call_limit == 5
         assert settings.app_env == "production"
         assert settings.log_level == "DEBUG"
+
+    def test_telegram_admission_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("TELEGRAM_ADMISSION_ENABLED", "true")
+        monkeypatch.setenv("TELEGRAM_BOT_ID", "987654")
+        monkeypatch.setenv("TELEGRAM_ADMISSION_USER_BURST", "3")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.telegram_admission_enabled is True
+        assert settings.telegram_bot_id == 987654
+        assert settings.telegram_admission_user_burst == 3
+
+    def test_telegram_processor_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("TELEGRAM_PROCESSOR_ENABLED", "true")
+        monkeypatch.setenv("TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS", "2.5")
+        monkeypatch.setenv("TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY", "4")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.telegram_processor_enabled is True
+        assert settings.telegram_processor_poll_interval_seconds == 2.5
+        assert settings.telegram_processor_global_concurrency == 4
 
     @pytest.mark.parametrize("value", ["0", "21"])
     def test_agent_tool_call_limit_rejects_unsafe_values(self, monkeypatch, value):

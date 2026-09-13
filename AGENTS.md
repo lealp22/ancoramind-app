@@ -15,9 +15,9 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 186 unit
-  tests passing; 24 integration tests requieren PostgreSQL/Docker (se omiten sin
-  esa infraestructura). Ruff limpio en `src/ tests/ scripts/` (gate global en CI).
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 217 unit
+  tests passing; 43 integration tests requieren PostgreSQL/Docker (se omiten sin
+  esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
 ---
 
@@ -82,20 +82,21 @@ src/
 │   ├── instructions.py  ← assemble_instructions(): carga prompts/*.md → list[str]
 │   ├── lifecycle.py     ← lifespan FastAPI: worker recordatorios auto-gated (BL-22)
 │   ├── server.py        ← host/PORT/reload para local y Railway
-│   ├── telegram_webhook.py ← estado actual: helper de registro; target specs/013: admission propio
+│   ├── telegram_webhook.py ← helper de registro; telegram_admission.py ← endpoint T4
 │   ├── context.py       ← legado; UserContext canónico está en security/
 │   └── tools/           ← Thin adapters (UNA función por capability)
 │       ├── system.py      notes.py      documents.py
 │       ├── vehicles.py    maintenance.py (propose/execute)
 │       ├── reminders.py   calendar.py    todos.py (propose/execute estricto)
 ├── domain/              ← Lógica de negocio (el producto — sin imports de Agno*)
-│   ├── notes/ documents/ vehicles/ reminders/ calendar/ todos/ actions/
+│   ├── notes/ documents/ vehicles/ reminders/ calendar/ todos/ actions/ interactions/
 │   └── (cada uno: models.py + service.py; calendar tiene provider.py Protocol;
 │       reminders tiene worker.py sin dependencia de FastAPI; documents aún
 │       contiene la excepción Agno que specs/013 abstraerá)
 ├── repositories/        ← Acceso PostgreSQL (sqlalchemy async, text() parametrizado)
 │   ├── database.py      ← init_database(), get_session() — llamar init al arrancar
-│   └── notes, documents, vehicles, maintenance, reminders, calendar, todos, actions
+│   └── notes, documents, vehicles, maintenance, reminders, calendar, todos, actions,
+│       interactions (ledger Telegram durable — T3 specs/013)
 ├── storage/             ← base.py (DocumentStorage Protocol), local.py, supabase_storage.py,
 │                           factory.py (DOCUMENT_STORAGE_BACKEND: local|supabase — ADR-002)
 ├── security/            ← user_context.py (UserContext.from_run_context)
@@ -106,16 +107,16 @@ AGENTS.md                 ← Esta guía (jerarquía: manda junto con docs/archi
 BACKLOG.md                ← Lista viva y priorizada de pendientes (fuente única de verdad)
 prompts/                 ← Assets de IA versionados (identity, soul, tool_contract,
 │                           channels/telegram.md, skills/)
-migrations/init.sql      ← Schema completo del dominio (10 tablas + indexes;
-│                           aplicado también como baseline en Supabase — ADR-002)
+migrations/              ← Alembic canónico (baseline + revisiones); init.sql
+│                           refleja head para bootstrap fresh — BL-12/specs/013
 scripts/                 ← run-e2e.sh + telegram_webhook.py (registro/estado seguro)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (diseño aprobado, pendiente)
-tests/unit/              ← 186 tests
-tests/integration/        ← 24 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+                            013-llm-access-governance (T2–T5 implementados)
+tests/unit/              ← 217 tests
+tests/integration/        ← 43 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, adding-tools (guía para nuevas tools),
@@ -175,10 +176,10 @@ si hay error 404, cambiar `LLM_MODEL` en `.env`.
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests unitarios (179 passing)
+# Tests unitarios (217 passing)
 python -m pytest tests/unit/ -v
 
-# Integration tests (24 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (43 — PostgreSQL dockerizado; se saltan sin Docker)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
@@ -189,17 +190,20 @@ python -m src.main
 docker compose up postgres -d
 docker compose down
 
-# Aplicar migraciones (PowerShell)
+# Aplicar migraciones canónicas (PowerShell o Git Bash)
+alembic upgrade head
+
+# Bootstrap fresh alternativo (PowerShell)
 Get-Content migrations/init.sql | docker compose exec -T postgres psql -U ancora -d ancoramind
 
-# Aplicar migraciones (Git Bash)
+# Bootstrap fresh alternativo (Git Bash)
 docker compose exec -T postgres psql -U ancora -d ancoramind < migrations/init.sql
 
 # Instalar dependencias
 pip install -e ".[dev]"
 
 # Lint (gate global — también en CI)
-ruff check src/ tests/ scripts/
+ruff check src/ tests/ scripts/ migrations/
 
 # Type checking (informativo; no es gate CI y actualmente tiene deuda previa)
 mypy src/
@@ -249,7 +253,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 diseño aprobado; implementación pendiente (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T5 implementados; runtime/OTel pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
@@ -292,9 +296,10 @@ multi-agent, WhatsApp, web frontend, microservices, event sourcing.
    Ejecutar `pytest tests/unit/` antes de dar nada por terminado.
 4. **Cambiar prompts/models/tool descriptions** = cambio evaluable (gobernanza).
    Anotarlo en el commit.
-5. **Migraciones:** añadir a `migrations/init.sql` (idempotente, `IF NOT EXISTS`).
-   Specs/013 introduce cambios sobre tablas con datos y activa la necesidad real
-   de resolver BL-12/Alembic antes del ledger productivo.
+5. **Migraciones:** Alembic es la historia canónica desde BL-12/specs/013.
+   Añadir una revisión en `migrations/versions/` y mantener `migrations/init.sql`
+   equivalente a `head` para bootstrap fresh. Probar fresh install, upgrade sobre
+   datos y downgrade de la última revisión.
 6. **Jerarquía de docs:** si algo contradice entre documentos, este fichero y
    `docs/architecture.md` mandan sobre el resto.
 7. **Cambios de inferencia/config/telemetry:** seguir specs/013. No añadir retries,

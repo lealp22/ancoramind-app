@@ -14,9 +14,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from agno.agent import Agent
 from fastapi import FastAPI
 
+from src.agent.interaction_runner import AgnoInteractionRunner
+from src.agent.telegram_admission import validate_telegram_admission_settings
 from src.config import Settings
+from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.interactions.processor import InteractionProcessor
 from src.domain.reminders.worker import RemindersWorker
 from src.notifications.telegram import TelegramNotifier
 from src.repositories.database import get_session
@@ -73,4 +78,70 @@ def install_reminder_worker_lifespan(app: FastAPI, settings: Settings) -> bool:
                 logger.info("Reminder worker stopped")
 
     app.router.lifespan_context = reminder_worker_lifespan
+    return True
+
+
+def install_interaction_processor_lifespan(
+    app: FastAPI,
+    settings: Settings,
+    agent: Agent,
+) -> bool:
+    """Install the T5 processor lifecycle only for an explicitly enabled rollout.
+
+    The processor is intentionally gated behind durable admission. It does not
+    share in-memory state with the webhook and is always stopped before the
+    wrapped lifecycle exits.
+    """
+    if not settings.telegram_processor_enabled:
+        logger.info("Telegram interaction processor disabled (TELEGRAM_PROCESSOR_ENABLED=false)")
+        return False
+    if not settings.telegram_admission_enabled:
+        logger.info("Telegram interaction processor skipped — durable admission is disabled")
+        return False
+    validate_telegram_admission_settings(settings)
+
+    previous_lifespan = app.router.lifespan_context
+    payload_cipher = TelegramPayloadCipher(
+        settings.telegram_payload_encryption_key,
+        settings.telegram_payload_key_version,
+    )
+
+    @asynccontextmanager
+    async def interaction_processor_lifespan(application: FastAPI) -> AsyncIterator[Any]:
+        async with previous_lifespan(application) as state:
+            notifier = TelegramNotifier(settings.telegram_token)
+            processor = InteractionProcessor(
+                session_factory=get_session,
+                payload_cipher=payload_cipher,
+                agent_runner=AgnoInteractionRunner(agent),
+                sender=notifier,
+                global_concurrency=settings.telegram_processor_global_concurrency,
+            )
+            ambiguous = await processor.recover_once()
+            if ambiguous:
+                logger.warning(
+                    "Telegram processor marked %d in-flight interaction(s) failed_ambiguous",
+                    ambiguous,
+                )
+            task = asyncio.create_task(
+                processor.run_forever(settings.telegram_processor_poll_interval_seconds),
+                name="telegram-interaction-processor",
+            )
+            application.state.telegram_interaction_processor_task = task
+            logger.info(
+                "Telegram interaction processor started (interval=%ss, concurrency=%s)",
+                settings.telegram_processor_poll_interval_seconds,
+                settings.telegram_processor_global_concurrency,
+            )
+            try:
+                yield state
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                del application.state.telegram_interaction_processor_task
+                await notifier.close()
+                logger.info("Telegram interaction processor stopped")
+
+    app.router.lifespan_context = interaction_processor_lifespan
     return True

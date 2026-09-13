@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 186 unit passing; integration requiere PostgreSQL/Docker — Ruff limpio
-en `src/ tests/ scripts/`
+Tests: 217 unit + 43 integration passing — Ruff limpio en
+`src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 diseño aprobado — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T5 implementados — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -47,9 +47,20 @@ La telemetría de producto de Agno se desactivará al activar la observabilidad
 propia. Defaults aprobados: 120 s, 6 model calls, 12 tool calls como hard safety
 ceiling, 8 requests Gateway y concurrencia global 2.
 
-**Estado (2026-09-13):** diseño aprobado; implementación no iniciada. El runtime
-actual sigue usando el webhook Telegram de AgentOS, provider/model de environment
-y OpenRouter directo. Ver `specs/013-llm-access-governance/`.
+**Estado (2026-09-13):** T2 aporta Alembic y el schema reproducible. T3 aporta el
+ledger reusable: identidad durable `UNIQUE(bot_id, telegram_update_id)`, auditoría
+de cada delivery Railway, `correlation_id` estable, claim atómico
+`accepted → agent_started`, payload Telegram normalizado/cifrado con Fernet y
+purga por retención. T4 instala, detrás de `TELEGRAM_ADMISSION_ENABLED=false` por
+defecto, el endpoint propio estable: secret, private-chat, allowlist fail-closed,
+deduplicación durable, rate/cola PostgreSQL y `2xx` solo tras commit. T5 debe
+conectar el processor/Agent al claim; mientras tanto el rollout flag no se activa
+en producción. **Actualización T5:** processor in-process auto-gated que reclama
+`accepted`, aplica locks chat/usuario + semáforo global 2, persiste outbox cifrada
+antes de delivery, refresca `typing` sin streaming y marca estados post-efecto
+como `failed_ambiguous` tras restart. Usa un adaptador temporal del Agent actual;
+T7 debe sustituirlo por `LLMAccess` y factory per-run. Provider/model continúan
+en environment y OpenRouter sigue directo. Ver `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update
 ejecuta el Agent como máximo una vez, el modelo cambia sin redeploy, ningún run
@@ -187,17 +198,15 @@ cancelándolo siempre en `finally`. Preferible a enviar/borrar un mensaje
 extensión en la capa `agent/` y seguir ADR-001 (no tocar domain). Añadir tests
 de cancelación en éxito y error. Post-MVP salvo que la latencia empeore.
 
-### BL-12 · Introducir Alembic como sistema de migraciones
-`migrations/init.sql` cubre el POC (idempotente, `IF NOT EXISTS`), pero no
-permite modificar tablas existentes con datos (añadir columna, cambiar tipo,
-backfills). Alembic ya está en `pyproject.toml` como dependencia (`>=1.13.0`).
-Baseline: registrar `init.sql` como la migración inicial (revision) y desde
-ahí solo migraciones incrementales.
-**Criterio de cierre:** `alembic upgrade head` ejecuta el schema completo en
-una BD vacía; `alembic downgrade -1` deshace correctamente la última migración;
-`migrations/init.sql` sigue para despliegues fresh sin Alembic (opcional).
-**Previsto para:** antes del primer feature que modifique el schema sobre
-datos existentes (BL-4, BL-6 o BL-7).
+### BL-12 · Introducir Alembic como sistema de migraciones ✅ implementado — 2026-09-13
+Alembic es la historia canónica del schema `ancora`: revisión
+`0001_ancora_baseline` idempotente para adoptar bases preexistentes y
+`0002_llm_governance` para los cambios aditivos de specs/013.
+`migrations/init.sql` se mantiene equivalente a `head` para bootstrap fresh.
+Verificado contra PostgreSQL Docker: instalación vacía, adopción de schema sin
+versionar conservando datos, ejecución doble de `init.sql`, upgrade a head y
+downgrade `-1` que retira solo specs/013. Tres integration tests nuevos; Alembic
+y las revisiones se incluyen en la imagen Docker y Ruff/CI cubren `migrations/`.
 
 ### BL-13 · Diseño Soft Personal memory (mini-ADR)
 La "memoria soft personal" (preferencias, personalización) está definida en
@@ -244,6 +253,10 @@ NO instalado — diseño solo hasta BL-6.
 | BL-5 · Background worker de recordatorios (asyncio in-process + TelegramNotifier outbound; worker arranca con la app — ADR-003, documentado para BL-18/Railway) | specs/010 | 2026-09-09 |
 | BL-21 · Listas TODO (múltiples listas por usuario: dominio + repo + 12 tools + skill + tablas; spec redactada retroactivamente — ver specs/011/verification.md) | specs/011 | 2026-09-10 |
 | BL-22 · Migrar reminder worker a FastAPI lifespan (preserva lifecycle AgentOS; auto-gates + cancelación limpia) | specs/012 | 2026-09-10 |
+| BL-12 · Alembic canónico + baseline/adopción + migración specs/013 + lifecycle tests | specs/013 T2 | 2026-09-13 |
+| BL-23 · Interaction ledger durable (cipher/Fernet, deliveries, claim y retención) | specs/013 T3 | 2026-09-13 |
+| BL-23 · Telegram admission feature-flagged (secret, private chat, allowlist, rate/queue durable) | specs/013 T4 | 2026-09-13 |
+| BL-23 · Processor/outbox Telegram (claim, recovery, chunks, delivery states y typing) | specs/013 T5 | 2026-09-13 |
 
 ---
 

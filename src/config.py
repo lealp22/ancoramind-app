@@ -28,6 +28,23 @@ class Settings(BaseSettings):
     # ── Telegram ──────────────────────────────────────
     telegram_token: str = ""
     telegram_webhook_secret_token: str = ""
+    telegram_payload_encryption_key: str = ""
+    """Fernet key for recoverable Telegram payloads; Railway secret only."""
+    telegram_payload_key_version: int = Field(default=1, ge=1)
+    telegram_bot_id: int = Field(default=0, ge=0)
+    """Numeric Telegram bot identity from getMe; required for durable admission."""
+    telegram_admission_enabled: bool = False
+    """Enable the AncoraMind-owned /telegram/webhook admission endpoint."""
+    telegram_admission_user_burst: int = Field(default=5, ge=1)
+    telegram_admission_burst_window_seconds: int = Field(default=10, ge=1)
+    telegram_admission_user_requests_per_minute: int = Field(default=10, ge=1)
+    telegram_admission_user_requests_per_hour: int = Field(default=120, ge=1)
+    telegram_admission_pending_global: int = Field(default=20, ge=1)
+    telegram_admission_queued_per_chat: int = Field(default=5, ge=1)
+    telegram_processor_enabled: bool = False
+    """Start the T5 processor; requires the same trusted admission prerequisites."""
+    telegram_processor_poll_interval_seconds: float = Field(default=1.0, gt=0)
+    telegram_processor_global_concurrency: int = Field(default=2, ge=1, le=20)
     app_env: str = "development"
 
     # ── ngrok ─────────────────────────────────────────
@@ -35,7 +52,7 @@ class Settings(BaseSettings):
 
     # ── PostgreSQL ────────────────────────────────────
     agno_database_url: str = ""
-# ── Document Storage ─────────────────────────────
+    # ── Document Storage ─────────────────────────────
     document_storage_path: str = "./data/documents"
     document_storage_backend: str = "local"
     """Backend: local | supabase"""

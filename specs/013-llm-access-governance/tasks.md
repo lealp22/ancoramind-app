@@ -17,63 +17,67 @@
 
 ## T2: Estrategia de migraciones
 
-- [ ] Resolver BL-12 introduciendo Alembic o una estrategia equivalente
+- [x] Resolver BL-12 introduciendo Alembic o una estrategia equivalente
       explícitamente aprobada antes de modificar producción.
-- [ ] Crear migraciones aditivas para las tablas de specs/013 y las extensiones
+- [x] Crear migraciones aditivas para las tablas de specs/013 y las extensiones
       de `action_proposals`.
-- [ ] Mantener `migrations/init.sql` como baseline fresh idempotente si sigue
+- [x] Mantener `migrations/init.sql` como baseline fresh idempotente si sigue
       aportando valor operacional.
-- [ ] Probar upgrade sobre una BD con datos existentes.
-- [ ] Probar instalación desde cero.
-- [ ] Probar downgrade de la última migración sin pérdida no documentada.
-- [ ] Actualizar `tests/integration/conftest.py` para limpiar las nuevas tablas.
+- [x] Probar upgrade sobre una BD con datos existentes.
+- [x] Probar instalación desde cero.
+- [x] Probar downgrade de la última migración sin pérdida no documentada.
+- [x] Actualizar `tests/integration/conftest.py` para limpiar las nuevas tablas.
 
 **Gate:** no desplegar el ledger contra producción sin una ruta de migración
 reproducible y validada.
 
 ## T3: Interaction ledger
 
-- [ ] Crear modelos de interacción, delivery y estados terminales.
-- [ ] Implementar repositorio async con `sqlalchemy.text()` parametrizado.
-- [ ] Añadir `UNIQUE(bot_id, telegram_update_id)` y claim atómico.
-- [ ] Registrar `railway_request_id`, `telegram_message_id` y `correlation_id`.
-- [ ] Normalizar y cifrar el payload recuperable; mantener claves solo en
+- [x] Crear modelos de interacción, delivery y estados terminales.
+- [x] Implementar repositorio async con `sqlalchemy.text()` parametrizado.
+- [x] Añadir `UNIQUE(bot_id, telegram_update_id)` y claim atómico.
+- [x] Registrar `railway_request_id`, `telegram_message_id` y `correlation_id`.
+- [x] Normalizar y cifrar el payload recuperable; mantener claves solo en
       Railway secrets.
-- [ ] Implementar retención y eliminación del payload según estado.
-- [ ] Añadir tests unitarios e integración de concurrencia y duplicados.
+- [x] Implementar retención y eliminación del payload según estado.
+- [x] Añadir tests unitarios e integración de concurrencia y duplicados.
 
-**Acceptance:** A, B y V.
+**Acceptance:** B y V implementadas en ledger/admission. A queda parcial hasta
+que T5 conecte el claim con una única ejecución real del Agent.
 
 ## T4: Telegram admission endpoint
 
-- [ ] Crear endpoint `/telegram/webhook` propiedad de AncoraMind delante de
+- [x] Crear endpoint `/telegram/webhook` propiedad de AncoraMind delante de
       Agno, conservando la URL pública existente.
-- [ ] Validar `X-Telegram-Bot-Api-Secret-Token`.
-- [ ] Aplicar private-chat enforcement real.
-- [ ] Aplicar `ALLOWED_TELEGRAM_USER_IDS` como allowlist real.
-- [ ] Implementar rate limit burst/minuto/hora y capacidad de cola.
-- [ ] Devolver `2xx` solo después del commit durable.
-- [ ] Reconocer duplicados/rechazos con `2xx` sin IA.
-- [ ] Devolver `500/503` si no puede persistirse un update nuevo.
-- [ ] Añadir tests de seguridad para grupos, canales y usuarios no autorizados.
+- [x] Validar `X-Telegram-Bot-Api-Secret-Token`.
+- [x] Aplicar private-chat enforcement real.
+- [x] Aplicar `ALLOWED_TELEGRAM_USER_IDS` como allowlist real.
+- [x] Implementar rate limit burst/minuto/hora y capacidad de cola.
+- [x] Devolver `2xx` solo después del commit durable.
+- [x] Reconocer duplicados/rechazos con `2xx` sin IA.
+- [x] Devolver `500/503` si no puede persistirse un update nuevo.
+- [x] Añadir tests de seguridad para grupos, canales y usuarios no autorizados.
 
-**Acceptance:** N, O y W.
+**Acceptance:** N, O, V y W implementados en admission HTTP. La ejecución del
+Agent sigue pendiente de T5; el feature flag permanece desactivado por defecto.
 
 ## T5: Processor, state machine and response outbox
 
-- [ ] Implementar la máquina de estados de interacción.
-- [ ] Crear worker in-process con claim atómico de `accepted`.
-- [ ] Ordenar procesamiento por chat.
-- [ ] Aplicar locks por chat/usuario y semáforo global.
-- [ ] Crear `logical_responses` y delivery tracking por chunk.
-- [ ] Persistir respuesta lógica antes de enviar a Telegram.
-- [ ] Desactivar inicialmente el streaming visible en Telegram y refrescar
+- [x] Implementar la máquina de estados de interacción.
+- [x] Crear worker in-process con claim atómico de `accepted`.
+- [x] Ordenar procesamiento por chat.
+- [x] Aplicar locks por chat/usuario y semáforo global.
+- [x] Crear `logical_responses` y delivery tracking por chunk.
+- [x] Persistir respuesta lógica antes de enviar a Telegram.
+- [x] Desactivar inicialmente el streaming visible en Telegram y refrescar
       `typing` durante runs largos.
-- [ ] Implementar recuperación de `accepted`/`response_ready` y transición de
+- [x] Implementar recuperación de `accepted`/`response_ready` y transición de
       estados ambiguos sin replay.
-- [ ] Añadir crash-injection tests en cada frontera crítica.
+- [x] Añadir crash-injection tests en cada frontera crítica.
 
-**Acceptance:** J, K, L y M.
+**Acceptance:** J, K, L y M implementados en processor/outbox. El processor y
+admission continúan detrás de flags `false` por defecto; T7 reemplazará el
+adaptador temporal Agno por `LLMAccess` y Agent per-run.
 
 ## T6: RuntimeConfigManager and admin API
 

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 import httpx
 
+from src.domain.interactions.processor import TelegramSendError
 from src.domain.reminders.models import Reminder
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ class TelegramNotifier:
     def __init__(self, token: str, client: httpx.AsyncClient | None = None):
         self._token = token
         self._client = client or httpx.AsyncClient(timeout=10.0)
+        self._owns_client = client is None
 
     async def send_reminder(self, reminder: Reminder) -> bool:
         """Send the reminder message; True only on confirmed delivery."""
@@ -94,3 +96,54 @@ class TelegramNotifier:
             )
             return False
         return True
+
+    async def send_text(self, chat_id: int, text: str) -> int:
+        """Send one persisted response chunk and return Telegram's message ID.
+
+        The T5 processor records ``sending`` before this non-idempotent request.
+        Transport uncertainty is marked ambiguous so the caller never resends a
+        message that Telegram may already have accepted.
+        """
+        try:
+            response = await self._client.post(
+                f"{API_BASE_URL}/bot{self._token}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+            )
+        except httpx.HTTPError as exc:
+            raise TelegramSendError(
+                "Telegram sendMessage transport failure",
+                definitive=False,
+            ) from exc
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        if response.status_code != 200 or not body.get("ok"):
+            raise TelegramSendError(
+                f"Telegram sendMessage rejected with HTTP {response.status_code}",
+                definitive=400 <= response.status_code < 500,
+            )
+        result = body.get("result")
+        message_id = result.get("message_id") if isinstance(result, dict) else None
+        if not isinstance(message_id, int):
+            raise TelegramSendError(
+                "Telegram sendMessage response lacks message_id",
+                definitive=False,
+            )
+        return message_id
+
+    async def send_typing(self, chat_id: int) -> None:
+        """Refresh Telegram's typing indicator without sending user content."""
+        try:
+            await self._client.post(
+                f"{API_BASE_URL}/bot{self._token}/sendChatAction",
+                json={"chat_id": chat_id, "action": "typing"},
+            )
+        except httpx.HTTPError:
+            logger.debug("Telegram typing indicator request failed", exc_info=True)
+
+    async def close(self) -> None:
+        """Close the internally-owned HTTP client during application shutdown."""
+        if self._owns_client:
+            await self._client.aclose()

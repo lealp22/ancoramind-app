@@ -75,6 +75,25 @@ TELEGRAM_TOKEN=<bot-production-token>
 TELEGRAM_WEBHOOK_SECRET_TOKEN=<secret-aleatorio>
 ALLOWED_TELEGRAM_USER_IDS=452022640
 
+# T4 durable admission is implemented but deliberately disabled until T5
+# connects the processor/Agent claim. Do not enable it in production yet.
+TELEGRAM_ADMISSION_ENABLED=false
+# Required together when the controlled rollout enables admission:
+# TELEGRAM_BOT_ID=<numeric-getMe-id>
+# TELEGRAM_PAYLOAD_ENCRYPTION_KEY=<fernet-key>
+# TELEGRAM_PAYLOAD_KEY_VERSION=1
+# TELEGRAM_ADMISSION_USER_BURST=5
+# TELEGRAM_ADMISSION_BURST_WINDOW_SECONDS=10
+# TELEGRAM_ADMISSION_USER_REQUESTS_PER_MINUTE=10
+# TELEGRAM_ADMISSION_USER_REQUESTS_PER_HOUR=120
+# TELEGRAM_ADMISSION_PENDING_GLOBAL=20
+# TELEGRAM_ADMISSION_QUEUED_PER_CHAT=5
+
+# T5 processor is implemented but disabled until a controlled T4+T5 rollout.
+TELEGRAM_PROCESSOR_ENABLED=false
+# TELEGRAM_PROCESSOR_POLL_INTERVAL_SECONDS=1.0
+# TELEGRAM_PROCESSOR_GLOBAL_CONCURRENCY=2
+
 LLM_PROVIDER=<openai|openrouter|openai-like>
 LLM_MODEL=<modelo-elegido>
 OPENAI_API_KEY=<si-aplica>
@@ -105,6 +124,19 @@ lo consume en producción y escucha en `0.0.0.0` sin autoreload.
 No añadas todavía variables de LiteLLM, OTLP o Grafana a producción hasta que
 las fases T10/T11 de specs/013 estén implementadas, tengan privacy tests y se
 haya revisado la superficie de seguridad del Gateway.
+
+> **Rollout T4/T5:** cuando se active `TELEGRAM_ADMISSION_ENABLED=true`, el
+> endpoint estable `/telegram/webhook` pasa a ser propiedad de AncoraMind y
+> requiere `ANCORA_DATABASE_URL`, `TELEGRAM_BOT_ID`, secret Telegram, clave
+> Fernet y una allowlist no vacía. T4 persiste/deduplica/rechaza de forma durable;
+> no activarlo en producción hasta que T5 procese de forma segura las filas
+> `accepted`.
+
+> **T5:** el processor implementado reclama `accepted`, persiste una outbox
+> cifrada y entrega chunks con estado durable. Antes de activar ambos flags en
+> Railway, ejecutar el runbook de rollout: comprobar migración `head`, secret,
+> bot ID, allowlist, backlog `accepted=0`, una réplica y logs; después validar un
+> único update de prueba. No activar T5 con T4 apagado.
 
 ## 4. Primer deployment y healthcheck
 
