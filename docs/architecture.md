@@ -1,6 +1,6 @@
 # AncoraMind Architecture
 
-> **Versión:** 1.0 | **Estado:** POC/MVP | **Última actualización:** 2026-08-23
+> **Versión:** 1.1 | **Estado:** POC/MVP | **Última actualización:** 2026-09-13
 
 ---
 
@@ -68,6 +68,28 @@ La arquitectura contiene **dos áreas deliberadamente separadas**:
 | **AncoraMind Core** (determinista) | Quién es el usuario, qué puede consultar/modificar, confirmación, persistencia |
 
 > El LLM puede decidir **qué capability solicitar**. No puede decidir **qué permisos tiene**.
+
+### 2.4 Acceso LLM gobernado (target aprobado)
+
+El acceso a modelos es una capability de infraestructura gobernada, no una
+llamada directa dispersa desde el Agent. El target de BL-23/specs/013 es:
+
+```text
+Agent → logical route → Governed LLM Access → LiteLLM Proxy
+      → OpenRouter → provider/model físico
+```
+
+- Cada ejecución captura una revisión inmutable de configuración runtime.
+- Toda inferencia comparte `ExecutionContext`, budget, coste y correlación.
+- Los secrets permanecen en Railway environment y nunca en configuración
+  dinámica.
+- El Gateway falla cerrado; una caída no habilita bypass directo.
+- `tool_call_limit=12` será un hard safety ceiling, no la protección principal.
+
+Esta sección describe arquitectura aprobada **pendiente de implementación**. El
+runtime actual continúa usando provider/model de environment y OpenRouter
+directo hasta completar specs/013.
+
 ---
 
 ## 3. Diagrama de arquitectura
@@ -79,12 +101,13 @@ flowchart TB
 
     USER --> TG[Telegram]
 
-    TG --> AGNO[Agno AgentOS]
+    TG --> ADMISSION[Telegram Admission / Idempotency]
+    ADMISSION --> AGNO[Agno AgentOS]
 
     subgraph Runtime["Agent Runtime — Agno"]
         AGNO --> AGENT[AncoraMind Agent]
 
-        AGENT <--> LLM[LLM Provider]
+        AGENT <--> LLMACCESS[Governed LLM Access]
 
         AGENT <--> TOOLS[Tool Registry]
 
@@ -94,6 +117,9 @@ flowchart TB
         CONTEXT[Instructions / Context]
         CONTEXT --> AGENT
     end
+
+    LLMACCESS --> GATEWAY[LiteLLM Proxy]
+    GATEWAY --> LLM[OpenRouter / LLM Provider]
 
     TOOLS --> ADAPTERS[AncoraMind Tool Adapters]
 
@@ -119,7 +145,12 @@ flowchart TB
     COREAUDIT[(Audit / Provenance)]
 
     POLICY --> COREAUDIT
+
+    ADMISSION --> INTERACTIONS[(Interaction Ledger)]
 ```
+
+> El diagrama representa el target de specs/013. Admission, Interaction Ledger
+> y LiteLLM todavía no forman parte del runtime implementado.
 
 ---
 
@@ -132,9 +163,10 @@ flowchart TB
 | **Base de datos canónica** | PostgreSQL | Schemas separados: `agno_runtime` / `ancora` |
 | **Almacenamiento documental** | Filesystem local (POC), S3/MinIO/R2 (prod) | Abstracción `DocumentStorage` |
 | **Canal** | Telegram (private chats only) | Gestionado por AgentOS |
-| **LLM** | Configurable (provider, model, base URL) | Sin lock-in |
+| **LLM** | Rutas lógicas + LiteLLM Proxy (target specs/013) | OpenRouter upstream; config runtime versionada |
 | **Validación** | Pydantic | Schemas para extracciones estructuradas |
-| **Despliegue** | Docker + Docker Compose | Preparado para Railway/VPS |
+| **Observabilidad** | OpenTelemetry Collector + Grafana Cloud (target specs/013) | Metadata-only; auditoría durable en PostgreSQL |
+| **Despliegue** | Docker + Railway | Una réplica inicial; servicios privados para Gateway/Collector |
 | **Migraciones** | Alembic | Propiedad exclusiva de AncoraMind |
 
 ---
@@ -282,7 +314,14 @@ def get_vehicle_summary(vehicle_reference: str | None = None):
 
 - Solo **private chats**
 - Grupos, supergrupos y canales deben rechazarse antes de cualquier acceso
-- Gestionado por AgentOS (webhook, entrada, streaming, sesiones)
+- El target de specs/013 introduce admission propio antes de AgentOS: secret,
+  allowlist, idempotencia durable, rate limit y correlación
+- Mismo `bot_id + update_id` → como máximo una ejecución Agent y una respuesta
+  o acción lógica persistida
+- Semántica de crash: `accepted` es recuperable; después de `agent_started` no
+  hay replay automático y un resultado incierto queda `failed_ambiguous`
+- Hasta implementar specs/013, webhook, entrada, streaming y sesiones siguen
+  gestionados directamente por AgentOS
 
 ---
 
@@ -325,6 +364,24 @@ Estados: `pending_confirmation`, `confirmed`, `discarded`, `executed`, `failed`.
 - Private document storage with path traversal protection
 - Secrets via environment variables
 - File size limits + MIME validation + filename sanitization
+- Idempotencia, rate limiting, concurrency y execution budget son controles
+  distintos y no se sustituyen entre sí (target specs/013)
+- API administrativa de runtime config separada del Agent y nunca expuesta como
+  tool del LLM
+- LiteLLM y OpenTelemetry Collector solo por red privada Railway
+
+### 14.1 Observabilidad y privacidad (target aprobado)
+
+- OpenTelemetry es el estándar; Grafana Cloud es el backend inicial mediante un
+  Collector upstream privado
+- Collector/Grafana fallan abiertos respecto a la funcionalidad; LiteLLM falla
+  cerrado respecto a inferencia
+- La telemetría de producto de Agno se desactivará al activar la observabilidad
+  propia
+- Logs/traces usan allowlist de metadata: no prompts, mensajes, respuestas,
+  documentos, extracciones ni argumentos/resultados completos de tools
+- PostgreSQL conserva auditoría durable; Grafana se usa para diagnóstico,
+  métricas y alertas
 
 ---
 

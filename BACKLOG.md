@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-10
+Última actualización: 2026-09-13
 
 ---
 
@@ -23,8 +23,38 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 171 unit passing; integration requiere PostgreSQL/Docker — Ruff limpio
+Tests: 186 unit passing; integration requiere PostgreSQL/Docker — Ruff limpio
 en `src/ tests/ scripts/`
+
+---
+
+## P0 — Hardening transversal de ejecución e inferencia
+
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 diseño aprobado — specs/013 + ADR-004/005/006
+
+Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
+
+```text
+Telegram → admission/idempotency → Agno → logical route
+→ LiteLLM Proxy → OpenRouter → provider/model
+```
+
+Incluye idempotencia durable por `update_id`, semántica at-most-once del Agent,
+private-chat/allowlist reales, rate/concurrency limits, execution budget,
+configuración runtime versionada y cacheada, rutas lógicas, LiteLLM privado y
+fail closed, coste/circuit breaker, y OpenTelemetry Collector + Grafana Cloud.
+La telemetría de producto de Agno se desactivará al activar la observabilidad
+propia. Defaults aprobados: 120 s, 6 model calls, 12 tool calls como hard safety
+ceiling, 8 requests Gateway y concurrencia global 2.
+
+**Estado (2026-09-13):** diseño aprobado; implementación no iniciada. El runtime
+actual sigue usando el webhook Telegram de AgentOS, provider/model de environment
+y OpenRouter directo. Ver `specs/013-llm-access-governance/`.
+
+**Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update
+ejecuta el Agent como máximo una vez, el modelo cambia sin redeploy, ningún run
+supera su budget, LiteLLM falla cerrado, la interacción es trazable por
+`correlation_id` y no se exporta contenido personal.
 
 ---
 

@@ -1,6 +1,6 @@
 # AncoraMind — AI Governance
 
-> **Versión:** 1.0 | **Estado:** POC/MVP | **Última actualización:** 2026-08-23
+> **Versión:** 1.1 | **Estado:** POC/MVP | **Última actualización:** 2026-09-13
 
 ---
 
@@ -37,7 +37,8 @@ evals/
 | Skills | Git | ✅ |
 | Tool contracts | Git | ✅ |
 | Schemas de extracción | Git | ✅ |
-| Model configuration | Git (config) | ✅ |
+| Bootstrap/secrets de modelo | Railway environment | ✅ |
+| Runtime model configuration | PostgreSQL revisions + schema version (target specs/013) | ✅ |
 | Evaluation datasets | Git | ✅ |
 | Policies | Git | ✅ |
 
@@ -70,14 +71,32 @@ Registrar por ejecución relevante:
 
 | Campo | Ejemplo |
 |---|---|
-| `provider` | `openai`, `anthropic`, `groq` |
-| `model` | `gpt-4o`, `claude-3.5-sonnet` |
+| `logical_route` | `ancoramind-default` |
+| `effective_gateway_route` | `ancoramind-default-r43` |
+| `provider` | `openrouter`, `openai`, `anthropic` |
+| `model` | `openai/gpt-*`, `anthropic/claude-*` |
+| `config_version` | `43` |
 | `temperature` | `0.7` |
 | `max_tokens` | `4096` |
+| `input_tokens` / `output_tokens` | `1200` / `180` |
+| `cost` / `cost_source` | `0.0031` / `gateway` |
 
 En extracciones importantes registrar además: `prompt_version`, `schema_version`.
 
 > Cambiar de modelo debe considerarse un cambio evaluable.
+
+### Acceso LLM gobernado (target specs/013)
+
+- Toda inferencia debe pasar por `LLMAccess`; no se crean providers físicos en
+  servicios o tools.
+- Cada run usa un `RuntimeConfigSnapshot` inmutable y un `ExecutionBudget`.
+- Provider/model se resuelven mediante rutas lógicas versionadas en LiteLLM.
+- API keys y credenciales permanecen fuera de las revisiones runtime.
+- El Gateway falla cerrado; no existe bypass directo en caso de caída.
+- Retries, fallbacks y circuit breaker deben tener un propietario y un límite
+  agregado para evitar amplification.
+- La configuración runtime se valida y activa atómicamente; una revisión
+  inválida no sustituye last-known-good.
 
 ---
 
@@ -175,8 +194,32 @@ Debe poder reconstruirse una operación relevante:
 | `timestamp` | Cuándo ocurrió |
 | `result` | Resultado de la operación |
 | `source` | Documento/extracción de origen |
+| `correlation_id` | Identidad transversal de la interacción |
+| `telegram_update_id` | Identidad del update por bot |
+| `railway_request_id` | Delivery HTTP concreta |
+| `agno_run_id` / `session_id` | Ejecución y conversación runtime |
+| `gateway_request_id` | Llamada al Gateway |
+| `config_version` | Revisión inmutable usada por el run |
 
 Cuando interviene IA: `model`, `prompt_version`.
+
+La auditoría durable vive en PostgreSQL. Los sistemas de observabilidad pueden
+perder o muestrear eventos y no sustituyen al ledger canónico.
+
+### Idempotencia de canal y acciones (target specs/013)
+
+```text
+same bot_id + telegram_update_id
+=> at most one Agent execution
+=> at most one persisted logical response/action
+```
+
+- Los duplicados se reconocen con `2xx` sin IA.
+- Rate limiting no sustituye a idempotencia.
+- Después de `agent_started` no hay replay automático; un resultado incierto se
+  registra como `failed_ambiguous`.
+- ActionProposal, acciones canónicas y respuestas lógicas añaden idempotency
+  keys defensivas.
 
 ---
 
@@ -223,9 +266,30 @@ Una capability solo debe tener acceso a lo que necesita.
 - Runtime-derived identity (LLM nunca proporciona user_id)
 - No arbitrary SQL Tools — parameterized DB access
 - Secrets via environment variables
+- LLM Gateway y OpenTelemetry Collector solo por red privada
+- Control plane administrativo separado del Agent y no expuesto como tool
+- Idempotencia, rate limit, concurrency y execution budget como barreras
+  independientes
 
 ### Datos no confiables
 
 Contenido de documentos, PDF, OCR, summary, filename, emails, web, MCP externo = **DATA, no INSTRUCTIONS**.
 
 > **Aunque el LLM se equivoque, el Core no permite romper la frontera de autorización.**
+
+---
+
+## 12. Observability Governance (target specs/013)
+
+- OpenTelemetry es el estándar de instrumentación y OTLP el protocolo de
+  exportación.
+- Un OpenTelemetry Collector upstream privado aplica allowlist/redaction,
+  memory limits, batch y cola/retry acotados antes de Grafana Cloud.
+- Collector/Grafana fallan abiertos respecto a la funcionalidad; la caída de
+  observabilidad no bloquea al usuario.
+- La telemetría de producto de Agno se desactiva cuando la observabilidad propia
+  entra en servicio.
+- No registrar prompts, mensajes, respuestas, documentos, extracciones ni
+  argumentos/resultados completos de tools.
+- IDs de alta cardinalidad se usan en spans/logs, no como labels de métricas.
+- Toda nueva instrumentación requiere tests de privacidad antes de producción.

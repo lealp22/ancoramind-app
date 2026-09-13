@@ -69,6 +69,10 @@ docker compose up -d
 | [Architecture](docs/architecture.md) | Full architecture reference |
 | [Governance](docs/governance.md) | AI governance policies |
 | [ADR-001](docs/adr/ADR-001-agno-runtime.md) | Agno runtime decision |
+| [Spec-013](specs/013-llm-access-governance/spec.md) | Governed LLM access, Telegram admission and observability target |
+| [ADR-004](docs/adr/ADR-004-telegram-admission-at-most-once.md) | Telegram idempotency and at-most-once Agent execution |
+| [ADR-005](docs/adr/ADR-005-governed-llm-access-runtime-config.md) | Runtime model configuration and LiteLLM Gateway |
+| [ADR-006](docs/adr/ADR-006-opentelemetry-observability.md) | OpenTelemetry and Grafana Cloud observability |
 | [Development](docs/development.md) | Local development guide |
 | [Quick Start](docs/quick-start.md) | Guía de arranque rápido diario |
 | [E2E Deployment](docs/deployment-e2e.md) | Step-by-step Telegram + PostgreSQL deployment |
@@ -85,6 +89,8 @@ docker compose up -d
 | Database | PostgreSQL |
 | Channel | Telegram (private chats) |
 | Validation | Pydantic |
+| LLM Gateway | LiteLLM Proxy target (BL-23/specs/013; not implemented yet) |
+| Observability | OpenTelemetry Collector + Grafana Cloud target (not implemented yet) |
 | Deployment | Docker local; Railway prepared for managed deployment |
 
 ---
@@ -117,6 +123,8 @@ docs/               ← Architecture, governance, ADRs
 - [x] M3: Document Memory (attachment → storage → extraction)
 - [x] M4: Vehicle Vertical Slice (invoice → maintenance → query)
 - [x] M5: Calendar & Reminders
+- [ ] BL-23: Governed LLM Access, durable Telegram admission and OpenTelemetry
+      (design approved in specs/013; implementation pending)
 - [ ] MVP: Usable personal assistant (E2E Telegram validation)
 
 ### Capabilities (19 tools)

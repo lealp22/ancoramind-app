@@ -4,6 +4,12 @@
 > estable para Telegram, Supabase como PostgreSQL/Storage y CI/CD desde GitHub.
 > No usar ngrok en este flujo.
 
+> **Estado BL-23 (2026-09-13):** LiteLLM Proxy, PostgreSQL dedicado del Gateway,
+> OpenTelemetry Collector y el admission Telegram durable están aprobados en
+> specs/013 pero **todavía no están desplegados**. Esta guía describe el servicio
+> actual de una sola aplicación hasta que las fases correspondientes se
+> implementen y verifiquen.
+
 ## Arquitectura de producción
 
 ```text
@@ -12,6 +18,17 @@ Telegram ── HTTPS webhook ──> Railway (AncoraMind / AgentOS)
                                      ├── Supabase Storage
                                      └── proveedor LLM
 ```
+
+Target aprobado, pendiente de implementación:
+
+```text
+Telegram → AncoraMind admission → Agno → LiteLLM privado → OpenRouter
+                                      └→ OTel Collector → Grafana Cloud
+```
+
+LiteLLM y el Collector se comunicarán por private networking de Railway y no
+tendrán dominio público. La caída de LiteLLM será fail closed; la caída del
+Collector/Grafana será fail open respecto a la funcionalidad.
 
 El dominio Railway permanece estable entre deployments. El webhook se registra
 una vez contra `https://<service>.up.railway.app/telegram/webhook`, no en cada
@@ -23,7 +40,9 @@ commit.
 2. No copies `.env` al repositorio ni al Docker image. Las variables se cargan
    exclusivamente en Railway → **Variables**.
 3. Mantén Supabase como infraestructura canónica. No añadas una base de datos
-   Railway ni ejecutes DDL desde Railway: `ancora_baseline` ya está aplicado.
+   Railway para datos `ancora` ni ejecutes DDL desde Railway: el baseline ya está
+   aplicado. La futura DB Railway de LiteLLM será infraestructura separada y
+   sustituible, sin acceso al schema canónico.
 4. Genera un secret aleatorio para `TELEGRAM_WEBHOOK_SECRET_TOKEN`:
 
    ```powershell
@@ -62,6 +81,9 @@ OPENAI_API_KEY=<si-aplica>
 OPENROUTER_API_KEY=<si-aplica>
 LLM_BASE_URL=<solo-openai-like>
 
+# Estado actual: Agno envía telemetría mínima por defecto.
+# Target specs/013, todavía no implementado: AGNO_TELEMETRY=false y OTLP privado.
+
 AGNO_DATABASE_URL=postgresql+psycopg://<session-pooler>
 ANCORA_DATABASE_URL=postgresql+asyncpg://<session-pooler>
 
@@ -79,6 +101,10 @@ REMINDER_POLL_INTERVAL_SECONDS=60
 
 No configures `NGROK_URL`. Railway proporciona `PORT` automáticamente; la app
 lo consume en producción y escucha en `0.0.0.0` sin autoreload.
+
+No añadas todavía variables de LiteLLM, OTLP o Grafana a producción hasta que
+las fases T10/T11 de specs/013 estén implementadas, tengan privacy tests y se
+haya revisado la superficie de seguridad del Gateway.
 
 ## 4. Primer deployment y healthcheck
 

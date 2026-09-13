@@ -161,6 +161,25 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
+### Target de configuración dinámica (BL-23/specs/013)
+
+La tabla anterior describe el runtime **actual**. El diseño aprobado para
+provider/model, budgets, rutas lógicas y políticas operativas es PostgreSQL con
+`RuntimeConfigManager` cacheado en memoria. Las API keys, tokens y credenciales
+OTLP seguirán en environment.
+
+Hasta implementar specs/013:
+
+- cambiar `LLM_PROVIDER`/`LLM_MODEL` requiere restart/deployment;
+- `AGENT_TOOL_CALL_LIMIT` sigue teniendo default efectivo 8;
+- no existe LiteLLM Proxy ni configuración runtime activa;
+- la telemetría de producto de Agno sigue habilitada por default.
+
+El target aprobado será default 12 como hard safety ceiling, junto con budget de
+120 s, 6 model calls y 8 Gateway requests. No adelantar estos cambios de forma
+aislada: deben implementarse con sus tests y la frontera `LLMAccess` de
+specs/013.
+
 ## Project Conventions
 
 - **No Agno inheritance in domain code** — domain services are plain Python
