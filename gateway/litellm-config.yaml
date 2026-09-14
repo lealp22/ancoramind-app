@@ -1,23 +1,44 @@
-# T11 LiteLLM Proxy pilot. This file contains no secrets: Railway injects
+# T11/T12 LiteLLM Proxy pilot. This file contains no secrets: Railway injects
 # DATABASE_URL, LITELLM_MASTER_KEY, LITELLM_SALT_KEY and OPENROUTER_API_KEY.
 # Every user-facing model_name is an immutable AncoraMind RuntimeConfig alias.
+# T12: retries/cross-model fallbacks stay at zero; the per-deployment circuit
+# breaker (allowed_fails/cooldown_time) fast-fails during cooldown, and the
+# model_info rpm/tpm entries are per-route capacity ceilings. The per-key
+# RPM/TPM/max-parallel limits are applied on the AncoraMind virtual key by
+# scripts/litellm_create_virtual_key.py.
 
 model_list:
   - model_name: ancoramind-default-r1
     litellm_params:
       model: openrouter/gpt-5.4-mini
       api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      rpm: 60
+      tpm: 250000
   - model_name: ancoramind-fast-r1
     litellm_params:
       model: openrouter/gpt-5.4-mini
       api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      rpm: 60
+      tpm: 250000
   - model_name: ancoramind-vision-r1
     litellm_params:
       model: openrouter/gpt-5.4-mini
       api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      rpm: 60
+      tpm: 250000
 
 router_settings:
   num_retries: 0
+  # Circuit breaker (CLOSED -> OPEN -> HALF_OPEN): after more than
+  # allowed_fails failures within a minute the deployment enters a
+  # cooldown_time cooldown and the proxy fast-fails ("No deployments
+  # available"); the first request after the cooldown probes the upstream
+  # again. Matches runtime config gateway.cooldown_seconds (60).
+  allowed_fails: 3
+  cooldown_time: 60
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

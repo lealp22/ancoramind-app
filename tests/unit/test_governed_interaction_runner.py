@@ -14,6 +14,7 @@ from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
 from src.domain.interactions.processor import InteractionAgentRunner
 from src.domain.llm_access.context import current_execution_context
+from src.domain.llm_access.cost_governance import CostGovernanceError, SpendSummary
 from src.domain.llm_access.models import (
     ExecutionBudget,
     ExecutionBudgetExceededError,
@@ -22,6 +23,7 @@ from src.domain.llm_access.models import (
 )
 from src.domain.runtime_config.models import (
     RuntimeConfigSnapshot,
+    RuntimeConfiguration,
     bootstrap_runtime_configuration,
     config_checksum,
 )
@@ -240,3 +242,78 @@ async def test_runner_cancels_run_after_approved_runtime_budget() -> None:
     assert len(started_calls) == 1
     with pytest.raises(GovernanceViolationError):
         current_execution_context()
+
+
+def _snapshot_with_cost_governance() -> RuntimeConfigSnapshot:
+    payload = bootstrap_runtime_configuration().model_dump(mode="json", by_alias=True)
+    payload["cost_governance"] = {
+        "external_hard_limit_usd": 20.0,
+        "alert_threshold_pct": 60,
+        "strong_alert_threshold_pct": 80,
+        "hard_stop_threshold_pct": 90,
+        "daily_budget_usd": 1.0,
+        "monthly_budget_usd": 15.0,
+        "route_monthly_budgets_usd": {},
+    }
+    config = RuntimeConfiguration.model_validate(payload)
+    return RuntimeConfigSnapshot(
+        revision=4,
+        checksum=config_checksum(config),
+        source="database",
+        config=config,
+    )
+
+
+class _FakeSpendReader:
+    def __init__(self, summary: SpendSummary) -> None:
+        self.summary = summary
+        self.calls: list[object] = []
+
+    async def summarize_spend(self, *, now: object) -> SpendSummary:
+        self.calls.append(now)
+        return self.summary
+
+
+async def test_cost_hard_stop_runs_before_any_agent_creation() -> None:
+    factory = _FakeFactory()
+    reader = _FakeSpendReader(SpendSummary(today_usd=1.0, month_usd=1.0))
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot_with_cost_governance()),
+        factory=factory,
+        spend_reader=reader,
+    )
+
+    with pytest.raises(CostGovernanceError) as exc_info:
+        await runner.run(
+            "hola",
+            user_id="88",
+            session_id="tg:ancoramind:77",
+            run_id="run-cost",
+            correlation_id=uuid4(),
+            telegram_update_id=9001,
+        )
+
+    assert exc_info.value.limit == "daily_budget_exhausted"
+    assert factory.created_contexts == []
+    assert factory.agent.calls == []
+    assert len(reader.calls) == 1
+
+
+async def test_cost_governance_without_spend_reader_fails_closed() -> None:
+    factory = _FakeFactory()
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot_with_cost_governance()),
+        factory=factory,
+    )
+
+    with pytest.raises(GovernanceViolationError, match="spend reader"):
+        await runner.run(
+            "hola",
+            user_id="88",
+            session_id="tg:ancoramind:77",
+            run_id="run-cost",
+            correlation_id=uuid4(),
+            telegram_update_id=9001,
+        )
+
+    assert factory.created_contexts == []

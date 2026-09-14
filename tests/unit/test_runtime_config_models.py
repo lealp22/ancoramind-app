@@ -113,6 +113,21 @@ def test_pricing_snapshot_validates_routes_and_prices() -> None:
             }
         }
     }
+    # T12: paid routes require the full cost-governance invariant (hard limit,
+    # period budgets and a per-interaction cost ceiling).
+    payload["cost_governance"] = {
+        "external_hard_limit_usd": 20.0,
+        "alert_threshold_pct": 60,
+        "strong_alert_threshold_pct": 80,
+        "hard_stop_threshold_pct": 90,
+        "daily_budget_usd": 1.0,
+        "monthly_budget_usd": 15.0,
+        "route_monthly_budgets_usd": {},
+    }
+    payload["execution_budget"] = {
+        **payload["execution_budget"],
+        "max_estimated_cost_usd": 0.05,
+    }
 
     result = validate_runtime_config(payload)
 
@@ -122,6 +137,23 @@ def test_pricing_snapshot_validates_routes_and_prices() -> None:
     assert price is not None
     assert price.input_cost_per_1m_usd == 1.0
     assert config.pricing.route_price("ancoramind-fast-r1") is None
+
+
+def test_pricing_without_cost_governance_is_rejected() -> None:
+    payload = _payload()
+    payload["pricing"] = {
+        "routes": {
+            "ancoramind-default-r1": {
+                "input_cost_per_1m_usd": 1.0,
+                "output_cost_per_1m_usd": 2.0,
+            }
+        }
+    }
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is False
+    assert any("paid routes require cost governance" in error for error in result.errors)
 
 
 def test_pricing_rejects_entries_without_any_price() -> None:

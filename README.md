@@ -89,7 +89,7 @@ docker compose up -d
 | Database | PostgreSQL |
 | Channel | Telegram (private chats) |
 | Validation | Pydantic |
-| LLM Gateway | LiteLLM Proxy pilot implemented locally; private Railway rollout pending (T11) |
+| LLM Gateway | LiteLLM Proxy pilot implemented locally (T11/T12: circuit breaker, rate limits, cost governance); private Railway rollout pending |
 | Observability | Metadata-only OpenTelemetry; private Collector/Grafana rollout prepared |
 | Deployment | Docker local; Railway prepared for managed deployment |
 
@@ -123,10 +123,11 @@ docs/               ← Architecture, governance, ADRs
 - [x] M3: Document Memory (attachment → storage → extraction)
 - [x] M4: Vehicle Vertical Slice (invoice → maintenance → query)
 - [x] M5: Calendar & Reminders
-- [x] BL-23 T2–T11: governed LLM access, durable admission, execution budget,
-      document extraction port, metadata-only OpenTelemetry and the LiteLLM
-      Gateway pilot (Railway rollout of Collector/Grafana/LiteLLM, benchmark
-      with a real key and E2E remain pending)
+- [x] BL-23 T2–T12: governed LLM access, durable admission, execution budget,
+      document extraction port, metadata-only OpenTelemetry, the LiteLLM
+      Gateway pilot and cost/reliability governance (circuit breaker, rate
+      limits, spend budgets with run-start hard stop) (Railway rollout of
+      Collector/Grafana/LiteLLM, benchmark with a real key and E2E remain pending)
 - [ ] MVP: Usable personal assistant (E2E Telegram validation)
 
 ### Capabilities (19 tools)

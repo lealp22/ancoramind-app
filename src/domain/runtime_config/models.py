@@ -162,6 +162,54 @@ class PricingConfig(RuntimeConfigModel):
         return self.routes.get(effective_gateway_route)
 
 
+class CostGovernanceConfig(RuntimeConfigModel):
+    """Approved spend ceilings and relative thresholds (specs/013 T12).
+
+    The external hard limit (100%) belongs to OpenRouter. AncoraMind alerts at
+    60%/80% and hard-stops inference at 90% so the external limit is never
+    reached. Period and route budgets are absolute USD caps per calendar day,
+    month, or logical route per month.
+    """
+
+    external_hard_limit_usd: float = Field(gt=0, le=100_000)
+    alert_threshold_pct: int = Field(ge=1, le=99)
+    strong_alert_threshold_pct: int = Field(ge=2, le=99)
+    hard_stop_threshold_pct: int = Field(ge=3, le=99)
+    daily_budget_usd: float | None = Field(default=None, gt=0, le=100_000)
+    monthly_budget_usd: float | None = Field(default=None, gt=0, le=100_000)
+    route_monthly_budgets_usd: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("route_monthly_budgets_usd")
+    @classmethod
+    def validate_route_budget_names(cls, value: dict[str, float]) -> dict[str, float]:
+        invalid = [name for name in value if not ROUTE_NAME_PATTERN.fullmatch(name)]
+        if invalid:
+            raise ValueError("route budget keys must be logical route names")
+        if any(budget <= 0 for budget in value.values()):
+            raise ValueError("route budgets must be positive")
+        return value
+
+    @model_validator(mode="after")
+    def validate_thresholds_and_budgets(self) -> CostGovernanceConfig:
+        if not (
+            self.alert_threshold_pct
+            < self.strong_alert_threshold_pct
+            < self.hard_stop_threshold_pct
+        ):
+            raise ValueError("alert thresholds must be strictly increasing and below 100")
+        for label, budget in (
+            ("daily_budget_usd", self.daily_budget_usd),
+            ("monthly_budget_usd", self.monthly_budget_usd),
+            *(
+                (f"route_monthly_budgets_usd[{route}]", budget)
+                for route, budget in self.route_monthly_budgets_usd.items()
+            ),
+        ):
+            if budget is not None and budget > self.external_hard_limit_usd:
+                raise ValueError(f"{label} cannot exceed the external hard limit")
+        return self
+
+
 class RuntimeConfiguration(RuntimeConfigModel):
     """Portable, secret-free configuration held in immutable DB revisions."""
 
@@ -173,6 +221,7 @@ class RuntimeConfiguration(RuntimeConfigModel):
     gateway: GatewayConfig
     observability: ObservabilityConfig
     pricing: PricingConfig | None = None
+    cost_governance: CostGovernanceConfig | None = None
 
     @model_validator(mode="after")
     def validate_runtime_limits(self) -> RuntimeConfiguration:
@@ -180,6 +229,12 @@ class RuntimeConfiguration(RuntimeConfigModel):
             raise ValueError("gateway timeout cannot exceed total runtime budget")
         if self.concurrency.global_ > self.concurrency.pending_global:
             raise ValueError("global concurrency cannot exceed pending_global")
+        if self.cost_governance is not None:
+            unknown_route_budgets = set(self.cost_governance.route_monthly_budgets_usd) - set(
+                self.routing.routes
+            )
+            if unknown_route_budgets:
+                raise ValueError("route budgets must reference configured logical routes")
         if self.pricing is not None:
             effective_routes = {
                 route.effective_gateway_route for route in self.routing.routes.values()
@@ -187,6 +242,15 @@ class RuntimeConfiguration(RuntimeConfigModel):
             unknown_pricing_routes = set(self.pricing.routes) - effective_routes
             if unknown_pricing_routes:
                 raise ValueError("pricing routes must reference configured Gateway aliases")
+            if self.cost_governance is None:
+                raise ValueError("paid routes require cost governance with an external hard limit")
+            if (
+                self.cost_governance.daily_budget_usd is None
+                or self.cost_governance.monthly_budget_usd is None
+            ):
+                raise ValueError("paid routes require daily and monthly budgets")
+            if self.execution_budget.max_estimated_cost_usd is None:
+                raise ValueError("paid routes require a per-interaction estimated-cost ceiling")
         return self
 
 
@@ -290,6 +354,7 @@ def bootstrap_runtime_configuration(
                 "trace_sample_rate": 1.0,
             },
             "pricing": None,
+            "cost_governance": None,
         }
     )
 

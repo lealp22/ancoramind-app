@@ -208,18 +208,53 @@ real y la revisión de superficie productiva requieren un rollout explícito.
 
 ## T12: Reliability and cost governance
 
-- [ ] Configurar cooldown/circuit y probar `CLOSED/OPEN/HALF_OPEN`.
-- [ ] Aplicar RPM, TPM y max parallel requests por virtual key/ruta.
-- [ ] Persistir spend logs y coste real/estimado sin contenido.
-- [ ] Configurar budgets por route, día y mes.
-- [ ] Alertar al 60%/80% y hacer hard stop al 90% del límite externo.
-- [ ] Mantener el hard limit de OpenRouter al 100%.
-- [ ] Verificar qué intentos internos expone OpenRouter para evitar falsa
-      contabilidad.
-- [ ] Evaluar un único retry o fallback cross-model futuro solo con datos y sin
-      superar el attempt budget.
+- [x] Configurar cooldown/circuit y probar `CLOSED/OPEN/HALF_OPEN`
+      (`router_settings.allowed_fails: 3` + `cooldown_time: 60` en
+      `gateway/litellm-config.yaml`, igual a `gateway.cooldown_seconds` del
+      runtime config). Validado localmente con un deployment de upstream muerto:
+      3 fallos consecutivos abrieron el circuit, las siguientes llamadas
+      fast-failaron con `No deployments available` (429) **sin ninguna llamada
+      al upstream**, y tras el cooldown la siguiente petición probó el upstream
+      de nuevo (HALF_OPEN → CLOSED).
+- [x] Aplicar RPM, TPM y max parallel requests por virtual key/ruta
+      (`model_info.rpm/tpm` por alias + `rpm_limit`/`tpm_limit`/
+      `max_parallel_requests` en `scripts/litellm_create_virtual_key.py`).
+      Enforcement verificado localmente: key con `rpm_limit=2` ⇒ 429
+      fast-fail (<50 ms) sin tocar el upstream.
+- [x] Persistir spend logs y coste real/estimado sin contenido:
+      `ancora.llm_usage_events` ya persiste coste estimado/real por llamada;
+      `LlmUsageRepository.summarize_spend` lo agrega por día/mes/ruta
+      (coste real con precedencia sobre el estimado, sin contenido).
+- [x] Configurar budgets por route, día y mes (`CostGovernanceConfig` en el
+      runtime config: `daily_budget_usd`, `monthly_budget_usd`,
+      `route_monthly_budgets_usd`; invariante: rutas de pago exigen pricing +
+      cost governance + coste máximo por interacción).
+- [x] Alertar al 60%/80% y hacer hard stop al 90% del límite externo
+      (`evaluate_cost_governance` al inicio de cada run: contadores
+      metadata-only `ancora.cost_governance.alert`; hard stop ⇒
+      `CostGovernanceError` → `failed_controlled` sin replay, sin inferencia).
+- [x] Mantener el hard limit de OpenRouter al 100%: el hard stop de AncoraMind
+      al 90% preserva el margen restante para que el límite externo nunca se
+      alcance; opcionalmente la virtual key lleva `max_budget`+
+      `budget_duration` como backstop en el propio Gateway. OpenRouter expone
+      `GET /api/v1/key` (`limit`/`limit_remaining`/usage diario/semanal/mensual)
+      para reconciliar el límite externo en el rollout.
+- [x] Verificar qué intentos internos expone OpenRouter para evitar falsa
+      contabilidad (investigado y documentado en verification.md: el response
+      incluye `usage.cost`/`cost_details` del intento servido, un objeto de
+      routing con `attempt` y el endpoint seleccionado, y `usage` refleja sólo
+      el intento final; la verificación con clave real queda pendiente del
+      rollout).
+- [x] Evaluar un único retry o fallback cross-model futuro solo con datos y
+      sin superar el attempt budget — **decisión: mantener 0 por ahora**.
+      Requiere antes el benchmark T11 con clave real y datos de fallos
+      reales; el attempt budget ya reserva 2 attempts por llamada lógica para
+      esa evolución sin amplificar el volumen.
 
-**Acceptance:** E y F.
+**Acceptance:** E y F verificados localmente (attempt budget intacto con
+retries a 0; circuit open ⇒ cero llamadas al upstream). El benchmark con
+clave real y la reconciliación de coste real con OpenRouter quedan pendientes
+del rollout Railway.
 
 ## T13: Hardening, runbooks and closure
 

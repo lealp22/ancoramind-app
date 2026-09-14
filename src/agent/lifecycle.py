@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
 from src.agent.llm_access import AgnoLLMAccess, LlmUsageRecorder
+from src.agent.spend_reader import SessionSpendReader
 from src.agent.telegram_admission import validate_telegram_admission_settings
 from src.config import Settings
 from src.domain.interactions.payloads import TelegramPayloadCipher
@@ -149,6 +150,7 @@ def install_interaction_processor_lifespan(
     agent_runner = GovernedInteractionRunner(
         config_manager=runtime_config_manager,
         factory=agent_factory,
+        spend_reader=SessionSpendReader(get_session),
     )
 
     @asynccontextmanager

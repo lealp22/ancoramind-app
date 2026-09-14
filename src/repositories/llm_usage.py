@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.llm_access.cost_governance import SpendSummary
 from src.domain.llm_access.models import LlmUsageEventCreate
 
 
@@ -64,3 +67,40 @@ class LlmUsageRepository:
         except Exception:
             await self._session.rollback()
             raise
+
+    async def summarize_spend(self, *, now: datetime | None = None) -> SpendSummary:
+        """Aggregate the AncoraMind spend log for cost governance (T12).
+
+        Actual cost (provider-reported) takes precedence over the estimate;
+        the query never touches message or argument content. Day and month
+        boundaries are calendar-based in UTC.
+        """
+        reference = datetime.now(tz=UTC) if now is None else now.astimezone(UTC)
+        day_start = reference.replace(hour=0, minute=0, second=0, microsecond=0)
+        month_start = day_start.replace(day=1)
+        rows = (
+            await self._session.execute(
+                text("""
+                    SELECT
+                        logical_route,
+                        COALESCE(SUM(COALESCE(actual_cost, estimated_cost, 0)), 0) AS month_usd,
+                        COALESCE(
+                            SUM(COALESCE(actual_cost, estimated_cost, 0))
+                                FILTER (WHERE created_at >= :day_start),
+                            0
+                        ) AS today_usd
+                    FROM ancora.llm_usage_events
+                    WHERE created_at >= :month_start
+                    GROUP BY logical_route
+                """),
+                {"day_start": day_start, "month_start": month_start},
+            )
+        ).fetchall()
+        route_month = {
+            str(row.logical_route): float(row.month_usd) for row in rows if row.month_usd
+        }
+        return SpendSummary(
+            today_usd=sum(float(row.today_usd or 0) for row in rows),
+            month_usd=sum(route_month.values()),
+            route_month_usd=route_month,
+        )

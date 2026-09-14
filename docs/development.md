@@ -321,6 +321,11 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LITELLM_PROXY_BASE_URL` | URL privada del LiteLLM Proxy (requerida si el modo está activo) | — |
 | `LITELLM_PROXY_VIRTUAL_KEY` | Key exclusiva AncoraMind creada con el script T11 | — |
 | `LITELLM_PROXY_DEFAULT_ROUTE` | Alias del Gateway usado por el AgentOS legado | `ancoramind-default-r1` |
+| `LITELLM_VIRTUAL_KEY_RPM` | T12: RPM por virtual key en la creación de la key | `60` |
+| `LITELLM_VIRTUAL_KEY_TPM` | T12: TPM por virtual key en la creación de la key | `250000` |
+| `LITELLM_VIRTUAL_KEY_MAX_PARALLEL_REQUESTS` | T12: max parallel por virtual key | `4` |
+| `LITELLM_VIRTUAL_KEY_MAX_BUDGET_USD` | T12: backstop USD opcional en el Gateway | — |
+| `LITELLM_VIRTUAL_KEY_BUDGET_DURATION` | T12: ventana de rotación del backstop | `30d` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
 ### Runtime dinámico y LLMAccess (BL-23/specs/013)
@@ -343,6 +348,12 @@ Todavía quedan límites deliberados:
 - T11 deja el pilot del Gateway validado localmente; el rollout Railway
   (PostgreSQL dedicado + servicio privado), el benchmark con clave real y la
   revisión de superficie productiva requieren aprobación explícita.
+- T12 añade `CostGovernanceConfig` (límite externo + umbrales 60/80/90 + budgets
+  día/mes/ruta) con invariante en rutas de pago. El runner evalúa el spend
+  agregado de `llm_usage_events` al inicio de cada run (fail-closed si hay
+  gobernanza sin reader); hard stop ⇒ `failed_controlled` sin replay. El
+  Gateway declara circuit breaker (`allowed_fails/cooldown_time`) y RPM/TPM por
+  alias + límites por virtual key. Retries/fallbacks siguen a 0 por decisión.
 
 ## Project Conventions
 

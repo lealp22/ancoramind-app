@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 328 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 352 unit
   tests passing; 51 integration tests requieren PostgreSQL/Docker (se omiten sin
   esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
@@ -129,7 +129,7 @@ docs/                    ← architecture, governance, development, quick-start,
                            adr/ADR-004-telegram-admission-at-most-once.md,
                            adr/ADR-005-governed-llm-access-runtime-config.md,
                            adr/ADR-006-opentelemetry-observability.md
-gateway/                 ← LiteLLM Proxy pilot (T11): config sin secretos, Dockerfile
+gateway/                 ← LiteLLM Proxy pilot (T11/T12): config sin secretos, circuit breaker + RPM/TPM
                            con imagen fijada por digest y compose local de validación
 observability/           ← Manifiesto del OTel Collector privado (T10)
 ```
@@ -267,7 +267,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T11 implementados localmente; rollout Railway (Collector/Grafana/LiteLLM) y E2E pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T12 implementados localmente; rollout Railway (Collector/Grafana/LiteLLM) y E2E pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

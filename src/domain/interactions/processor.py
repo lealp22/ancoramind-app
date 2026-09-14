@@ -21,6 +21,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import ExecutionBudgetExceededError
 from src.observability import get_telemetry, log_context_scope
 from src.repositories.interactions import TelegramInteractionsRepository
@@ -254,6 +255,21 @@ class InteractionProcessor:
                     return True
             except asyncio.CancelledError:
                 raise
+            except CostGovernanceError as exc:
+                # The spend ceiling was evaluated before any inference: the
+                # failure is deterministic, so it is controlled — never replayed.
+                get_telemetry().mark_error(span, type(exc).__name__)
+                get_telemetry().counter(
+                    "ancora.cost_governance.hard_stop",
+                    attributes={"ancora.cost.limit": exc.limit},
+                )
+                await self._mark_terminal(
+                    interaction.id,
+                    InteractionStatus.FAILED_CONTROLLED,
+                    error_class="CostGovernanceError",
+                    error_detail_code=exc.limit,
+                )
+                return True
             except ExecutionBudgetExceededError as exc:
                 get_telemetry().mark_error(span, type(exc).__name__)
                 get_telemetry().counter(

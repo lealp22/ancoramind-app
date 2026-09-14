@@ -210,17 +210,30 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    ```
 
    `/docs`, `/redoc` y `/openapi.json` deben devolver 404.
-5. Crea la virtual key exclusiva de AncoraMind (restringida a los tres aliases):
+5. Crea la virtual key exclusiva de AncoraMind (restringida a los tres aliases,
+   con límites RPM/TPM/max-parallel T12):
 
    ```powershell
    $env:LITELLM_PROXY_ADMIN_URL='http://<servicio>.railway.internal:4000'
    $env:LITELLM_MASTER_KEY='<sk-master>'
+   $env:LITELLM_VIRTUAL_KEY_RPM='60'
+   $env:LITELLM_VIRTUAL_KEY_TPM='250000'
+   $env:LITELLM_VIRTUAL_KEY_MAX_PARALLEL_REQUESTS='4'
+   # Opcional: backstop USD en el propio Gateway (rotación 30d)
+   # $env:LITELLM_VIRTUAL_KEY_MAX_BUDGET_USD='<external_hard_limit>'
+   # $env:LITELLM_VIRTUAL_KEY_BUDGET_DURATION='30d'
    python scripts/litellm_create_virtual_key.py
    ```
 
    La key se imprime una sola vez; guárdala como secreto
    `LITELLM_PROXY_VIRTUAL_KEY` del servicio AncoraMind. Nunca en Git/logs ni en
    revisiones runtime.
+
+   **Circuit breaker (T12):** `gateway/litellm-config.yaml` declara
+   `allowed_fails: 3` + `cooldown_time: 60` (igual a `gateway.cooldown_seconds`
+   del runtime config); un deployment con fallos repetidos entra en cooldown y
+   el proxy fast-faila sin llamar al upstream afectado (transición automática
+   OPEN→HALF_OPEN→CLOSED).
 6. En el servicio AncoraMind, activa el modo Gateway (fail-closed; sin estas
    variables la app no arranca en ese modo):
 
@@ -238,6 +251,17 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    `ancora.llm_usage_events` registra `provider=litellm`-vía-Gateway; después
    ejecuta el benchmark p50/p95/p99+TTFT frente a OpenRouter directo (T11,
    con clave real) antes de declarar el pilot cerrado.
+
+8. **Cost governance (T12):** activa en una revisión runtime `cost_governance`
+   (`external_hard_limit_usd` = hard limit OpenRouter al 100%,
+   `daily_budget_usd`, `monthly_budget_usd`, `route_monthly_budgets_usd`
+   opcional, umbrales 60/80/90%) junto con `pricing` y
+   `max_estimated_cost_usd` por interacción (invariante: rutas de pago exigen
+   las tres). El runner evalúa el spend al inicio de cada run: alertas 60/80%
+   en telemetría, hard stop al 90% (`failed_controlled`, sin replay).
+   Reconcilia con `GET https://openrouter.ai/api/v1/key`
+   (`limit`/`limit_remaining`, usage diario/semanal/mensual) antes de subir
+   los techos.
 
 Validación local sin Railway (sin coste, claves dummy):
 

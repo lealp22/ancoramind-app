@@ -240,7 +240,11 @@ def test_unique_llm_call_ids_per_model_call() -> None:
 
 
 def _priced_snapshot() -> RuntimeConfigSnapshot:
-    from src.domain.runtime_config.models import PricingConfig, RoutePricing
+    from src.domain.runtime_config.models import (
+        CostGovernanceConfig,
+        PricingConfig,
+        RoutePricing,
+    )
 
     base = bootstrap_runtime_configuration()
     priced = base.model_copy(
@@ -252,7 +256,20 @@ def _priced_snapshot() -> RuntimeConfigSnapshot:
                         output_cost_per_1m_usd=2.0,
                     )
                 }
-            )
+            ),
+            # T12: paid routes require the full cost-governance invariant.
+            "cost_governance": CostGovernanceConfig(
+                external_hard_limit_usd=20.0,
+                alert_threshold_pct=60,
+                strong_alert_threshold_pct=80,
+                hard_stop_threshold_pct=90,
+                daily_budget_usd=1.0,
+                monthly_budget_usd=15.0,
+                route_monthly_budgets_usd={},
+            ),
+            "execution_budget": base.execution_budget.model_copy(
+                update={"max_estimated_cost_usd": 0.05}
+            ),
         }
     )
     return RuntimeConfigSnapshot(

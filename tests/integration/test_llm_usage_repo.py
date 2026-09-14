@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -132,3 +133,54 @@ async def test_usage_event_llm_call_id_is_unique(session: AsyncSession) -> None:
 
     with pytest.raises(IntegrityError):
         await repository.record(event)
+
+
+async def test_summarize_spend_aggregates_costs_per_route_and_period(
+    session: AsyncSession,
+) -> None:
+    manager = RuntimeConfigManager(
+        session_factory=get_session,
+        bootstrap=bootstrap_runtime_configuration(),
+    )
+    await manager.initialize()
+    interaction_id = await _interaction_id(session)
+    repository = LlmUsageRepository(session)
+    now = datetime.now(tz=UTC)
+    last_month = (now.replace(day=1) - timedelta(days=1)).replace(day=15, hour=12)
+
+    def _event(route: str, *, estimated: float, actual: float | None, created_at: datetime):
+        return LlmUsageEventCreate(
+            interaction_id=interaction_id,
+            llm_call_id=uuid4(),
+            config_revision=manager.snapshot().revision,
+            logical_route=route,
+            effective_gateway_route=f"{route}-r1",
+            estimated_cost=estimated,
+            actual_cost=actual,
+            status="completed",
+            created_at=created_at,
+        )
+
+    # Actual cost wins over the estimate; last-month spend stays out of both periods.
+    await repository.record(
+        _event("ancoramind-default", estimated=0.0004, actual=0.0003, created_at=now)
+    )
+    await repository.record(
+        _event("ancoramind-fast", estimated=0.0002, actual=None, created_at=now)
+    )
+    await repository.record(
+        _event(
+            "ancoramind-default",
+            estimated=0.0100,
+            actual=None,
+            created_at=last_month,
+        )
+    )
+
+    summary = await repository.summarize_spend(now=now)
+
+    assert summary.today_usd == pytest.approx(0.0003 + 0.0002)
+    assert summary.month_usd == pytest.approx(0.0005)
+    assert summary.route_month_usd["ancoramind-default"] == pytest.approx(0.0003)
+    assert summary.route_month_usd["ancoramind-fast"] == pytest.approx(0.0002)
+    assert "ancoramind-vision" not in summary.route_month_usd

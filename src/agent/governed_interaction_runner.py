@@ -3,22 +3,32 @@
 Builds the ExecutionContext from a durable interaction, binds it through a
 ContextVar scope, captures the immutable config snapshot at run start and
 executes one per-run Agent with an explicit ``run_id`` (specs/013 T7).
+
+T12: when the snapshot configures cost governance, the runner first evaluates
+the aggregated spend ceilings and fails closed before any Agent or inference
+is created.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
+from datetime import UTC, datetime
 from uuid import UUID
 
 from agno.run import RunContext
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.domain.llm_access.context import execution_context_scope
+from src.domain.llm_access.cost_governance import (
+    LlmSpendReader,
+    evaluate_cost_governance,
+)
 from src.domain.llm_access.models import (
     ExecutionBudget,
     ExecutionBudgetExceededError,
     ExecutionContext,
+    GovernanceViolationError,
     generate_traceparent,
     governance_metadata,
 )
@@ -33,9 +43,16 @@ from src.observability import (
 class GovernedInteractionRunner:
     """Run one governed Agent execution through the T5 processor port."""
 
-    def __init__(self, *, config_manager: RuntimeConfigManager, factory: GovernedAgentFactory):
+    def __init__(
+        self,
+        *,
+        config_manager: RuntimeConfigManager,
+        factory: GovernedAgentFactory,
+        spend_reader: LlmSpendReader | None = None,
+    ):
         self._config_manager = config_manager
         self._factory = factory
+        self._spend_reader = spend_reader
 
     async def run(
         self,
@@ -50,6 +67,15 @@ class GovernedInteractionRunner:
     ) -> str:
         """Execute one governed non-streaming run with trusted identity."""
         snapshot = self._config_manager.snapshot()
+        if snapshot.config.cost_governance is not None:
+            if self._spend_reader is None:
+                raise GovernanceViolationError(
+                    "cost governance is configured but no spend reader is wired"
+                )
+            evaluate_cost_governance(
+                snapshot.config,
+                await self._spend_reader.summarize_spend(now=datetime.now(tz=UTC)),
+            )
         context = ExecutionContext(
             correlation_id=correlation_id,
             telegram_update_id=telegram_update_id,

@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 328 unit + 51 integration passing — Ruff limpio en
+Tests: 352 unit + 52 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T11 implementados localmente — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T12 implementados localmente — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -92,7 +92,14 @@ AgentOS legado componen únicamente `OpenAILike` hacia el Gateway privado con la
 virtual key exclusiva (`scripts/litellm_create_virtual_key.py`); fail-closed
 verificado con el Gateway real (key inválida ⇒ 401 del Gateway; upstream dummy ⇒
 401 sin bypass). Falta el rollout Railway (PostgreSQL dedicado + servicio
-privado), el benchmark con clave real y la revisión de superficie productiva. Ver
+privado), el benchmark con clave real y la revisión de superficie productiva.
+**Actualización T12:** implementada la gobernanza de coste y fiabilidad:
+`CostGovernanceConfig` (límite externo + umbrales 60/80/90 + budgets día/mes/ruta)
+con invariante en rutas de pago; el runner evalúa el spend al inicio del run
+con hard stop `failed_controlled` sin replay; el Gateway declara circuit
+breaker (`allowed_fails`/`cooldown_time`, transiciones CLOSED/OPEN/HALF_OPEN
+validadas localmente) y RPM/TPM por alias + por virtual key (enforcement 429
+verificado); retries/fallbacks mantienen 0 por decisión documentada. Ver
 `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update

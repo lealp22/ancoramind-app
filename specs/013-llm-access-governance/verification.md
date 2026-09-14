@@ -1,6 +1,6 @@
 # Verification: 013 — Governed LLM Access and Telegram Admission
 
-> **Estado:** 🔶 T2–T11 implementados y validados localmente; rollout Railway
+> **Estado:** 🔶 T2–T12 implementados y validados localmente; rollout Railway
 > (Collector/Grafana/LiteLLM), dashboards/alertas, benchmark con clave real y
 > E2E siguen pendientes.
 > **Diseño aprobado:** 2026-09-13
@@ -23,8 +23,8 @@
 
 | Check | Resultado | Evidencia |
 |---|---|---|
-| Unit tests | ✅ T11 | 328 passed; admission, config, LLMAccess, budget, extraction port, privacidad OTel y modo Gateway cubiertos |
-| Integration tests | ✅ T11 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
+| Unit tests | ✅ T12 | 352 passed; admission, config, LLMAccess, budget, extraction port, privacidad OTel, modo Gateway y gobernanza de coste cubiertos |
+| Integration tests | ✅ T12 | 52 passed; ledger, admission, processor, runtime config, usage/coste y agregación de spend por día/mes/ruta |
 | Ruff | ✅ T4 | `ruff check src/ tests/ scripts/ migrations/` |
 | mypy del alcance T2 | ✅ | 4 ficheros nuevos sin issues |
 | mypy del alcance T3 | ✅ | domain, repository, config y tests nuevos sin issues |
@@ -45,8 +45,8 @@
 | B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ T3 | Dos IDs Railway → dos deliveries, segunda `duplicate=true`, mismo `correlation_id` |
 | C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ T6 local | Manager cachea snapshot y CAS actualiza futuros runs; E2E Railway pendiente |
 | D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
-| E | Primary falla → no se supera attempt budget | ⏳ | |
-| F | Circuit open → cero llamadas al upstream afectado | ⏳ | |
+| E | Primary falla → no se supera attempt budget | ✅ T12 local | Retries Gateway/LiteLLM a 0 verificados con el Gateway real; num_retries=0 sin fallbacks; el budget ya valida 2 attempts/call como techo para su evolución |
+| F | Circuit open → cero llamadas al upstream afectado | ✅ T12 local | Con `allowed_fails:2`/`cooldown_time:10` y upstream muerto: 3 fallos abrieron el circuit; 429 `No deployments available` fast-fail sin llamadas al upstream; tras cooldown el probe volvió al upstream (HALF_OPEN→CLOSED) |
 | G | Rate/budget agotado → no hay inferencia adicional | ✅ T8 local | Model/Gateway/coste bloquean antes del provider; timeout cancela el run; processor registra el límite sin replay |
 | H | Tool loop → fingerprint/budget lo detiene | ✅ T8 local | HMAC canónico + hook async; Agno `StopAgentRun` corta la repetición sin una tercera inferencia |
 | I | Interacción completa trazable por `correlation_id` | ✅ T10 local | Spans/logs metadata-only para admission, queue, Agent, LLM, tools y delivery; IDs excluidos de labels de métricas |
@@ -309,3 +309,59 @@
 - La garantía at-most-once cubre la ejecución del Agent y la persistencia lógica;
   Telegram `sendMessage` no ofrece exactly-once externo.
 - Completar esta sección al cerrar la spec con cualquier limitación residual.
+## T12 — Reliability and cost governance verification (2026-09-14)
+
+- **Circuit breaker (CLOSED/OPEN/HALF_OPEN)**: `gateway/litellm-config.yaml`
+  declara `router_settings.allowed_fails: 3` y `cooldown_time: 60` (igual al
+  runtime config `gateway.cooldown_seconds`). Validado localmente con un
+  contenedor LiteLLM DB-less y un upstream muerto (`circuit-test-r1`):
+  - 3 llamadas consecutivas ⇒ `code=500` `upstream_connection_error`
+    (CLOSED, intentos reales al upstream).
+  - 4ª/5ª llamada ⇒ `code=429` `NO_DEPLOYMENTS` (OPEN, fast-fail **sin
+    ninguna llamada al upstream**).
+  - Tras 12 s (> `cooldown_time=10`) ⇒ 6ª llamada ⇒ `code=500`
+    `upstream_connection_error` (HALF_OPEN ⇒ CLOSED, probe al upstream).
+  Esto demuestra que el Gateway impide llamadas al upstream afectado mientras
+  el circuit está abierto y respeta la transición automática.
+
+- **Rate limits por virtual key/ruta**: `model_info.rpm/tpm` por alias en el
+  config canónico; el script `scripts/litellm_create_virtual_key.py` crea la
+  key con `rpm_limit`/`tpm_limit`/`max_parallel_requests` (defaults 60/250000/4).
+  Enforcement verificado localmente: key con `rpm_limit=2` ⇒ 3ª petición
+  `429` en <50 ms **sin tocar el upstream**.
+
+- **Spend logs y cost governance**: `ancora.llm_usage_events` persiste coste
+  estimado/real por llamada (sin contenido). `LlmUsageRepository.summarize_spend`
+  agrega por día/mes/ruta (coste real con precedencia sobre el estimado).
+  `CostGovernanceConfig` en el runtime config declara `external_hard_limit_usd`,
+  umbrales 60/80/90%, `daily_budget_usd`, `monthly_budget_usd` y
+  `route_monthly_budgets_usd`. Invariante: rutas de pago exigen `pricing` +
+  `cost_governance` + `max_estimated_cost_usd` (validación en
+  `RuntimeConfiguration.validate_runtime_limits`).
+
+- **Evaluación al inicio del run**: `GovernedInteractionRunner.run` llama a
+  `evaluate_cost_governance(config, spend_summary)` **antes** de crear el
+  Agent o cualquier inferencia. Alertas metadata-only en contadores
+  `ancora.cost_governance.alert` (60%/80% del límite externo); hard stop
+  `CostGovernanceError` mapeado a `failed_controlled` con `error_detail_code`
+  (`external_monthly_hard_stop`, `daily_budget_exhausted`,
+  `monthly_budget_exhausted`, `route_monthly_budget_exhausted`) — **nunca
+  replay** y **cero inferencia**.
+
+- **Hard limit externo (OpenRouter 100%)**: el hard stop interno al 90%
+  preserva el 10% restante; opcionalmente la virtual key puede llevar
+  `max_budget`+`budget_duration` como backstop en el Gateway. OpenRouter
+  expone `GET /api/v1/key` con `limit`/`limit_remaining` y usage
+  diario/semanal/mensual para reconciliación en el rollout.
+
+- **Contabilidad de fallbacks internos (OpenRouter)**: investigación en la
+  API reference de OpenRouter confirma que el response incluye `usage.cost`/
+  `cost_details` del intento servido, un objeto de routing con `attempt` y el
+  endpoint seleccionado; `usage` refleja **sólo el intento final** (fallbacks
+  internos no suman tokens/coste duplicados). La verificación con clave real
+  queda pendiente del rollout Railway.
+
+- **Retry/fallback cross-model**: decisión explícita de mantener 0 por ahora.
+  El attempt budget ya reserva 2 attempts por llamada lógica para esa
+  evolución sin amplificar el volumen; requiere benchmark T11 con clave real
+  y datos de fallos reales antes de habilitar.
