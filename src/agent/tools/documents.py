@@ -23,24 +23,36 @@ def _get_storage() -> DocumentStorage:
     from src.config import Settings
     from src.storage.factory import create_storage
 
-    return create_storage(Settings())  # type: ignore[call-arg]
+    return create_storage(Settings())
 
 
-async def _get_document_service():
+async def _get_document_service() -> DocumentService:
     """Create a DocumentService with fresh DB session.
 
-    The extraction model is built via create_model_from_settings() so it
-    honors LLM_PROVIDER/LLM_MODEL/LLM_BASE_URL from settings — same factory
-    as the main agent (BL-10).
+    Extraction inference goes through the T9 ``AgnoDocumentExtractionAdapter``
+    backed by LLMAccess: inside a governed run it shares that run's snapshot,
+    budget, cost and trace (usage audited under the interaction); on the
+    transitional AgentOS path it runs on a standalone bootstrap-scoped governed
+    context without usage rows (no interaction exists to reference).
     """
-    from src.agent.ancora_agent import create_model_from_settings
+    from src.agent.document_extraction import AgnoDocumentExtractionAdapter
+    from src.agent.llm_access import AgnoLLMAccess, LlmUsageRecorder
     from src.config import Settings
 
+    settings = Settings()
     session = await get_session()
+    llm_access = AgnoLLMAccess(
+        settings=settings,
+        usage_recorder=LlmUsageRecorder(get_session).record,
+    )
+    standalone_llm_access = AgnoLLMAccess(settings=settings, usage_recorder=None)
     return DocumentService(
         repository=DocumentsRepository(session),
         storage=_get_storage(),
-        model=create_model_from_settings(Settings()),  # type: ignore[call-arg]
+        extraction_port=AgnoDocumentExtractionAdapter(
+            llm_access=llm_access,
+            standalone_llm_access=standalone_llm_access,
+        ),
     )
 
 

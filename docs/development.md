@@ -159,8 +159,9 @@ un Agent nuevo por run y exige `LLMAccess` para cada model turn. El provider
 directo sigue siendo transitorio dentro de `LLMAccess` hasta LiteLLM (T11).
 
 El hard safety ceiling actual es `AGENT_TOOL_CALL_LIMIT=12`; Agent y Model usan
-retries explícitos a cero. La extracción documental directa sigue pendiente de
-T9 y el webhook AgentOS legado permanece solo mientras T4/T5 no estén activados.
+retries explícitos a cero. La extracción documental usa `DocumentExtractionPort`
+(T9) detrás de `LLMAccess`; el webhook AgentOS legado permanece solo mientras
+T4/T5 no estén activados.
 
 T8 completa el presupuesto en los runs gobernados: aplica deadline total de
 120 segundos, límites de model/Gateway calls, coste estimado y real opcional por
@@ -323,7 +324,8 @@ Todavía quedan límites deliberados:
 - cambiar el provider/model físico de environment sigue requiriendo restart;
 - OpenRouter/provider directo solo está permitido dentro de `LLMAccess` hasta
   desplegar LiteLLM privado y fail-closed (T11);
-- la extracción documental directa se migra en T9;
+- la extracción documental ya pasa por `DocumentExtractionPort`/`LLMAccess`
+  (T9); el path AgentOS legado usa un contexto bootstrap standalone;
 - telemetría OpenTelemetry y desactivación de telemetría Agno pertenecen a T10.
 
 ## Project Conventions

@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 304 unit + 51 integration passing — Ruff limpio en
+Tests: 315 unit + 51 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T8 implementados — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T9 implementados — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -72,7 +72,14 @@ solo mientras T4/T5 sigan apagados. **Actualización T8:** el budget aplica
 deadline de 120 s, techos de model/Gateway calls, límite de 12 tools, HMAC de
 argumentos canónicos y bloqueo de repetición; `StopAgentRun` corta el loop tras
 una tool rechazada. Pricing opcional versionado permite coste estimado/real sin
-I/O por call; agotamiento queda auditado como `failed_ambiguous` sin replay. Ver
+I/O por call; agotamiento queda auditado como `failed_ambiguous` sin replay. **Actualización T9:** la extracción documental ya
+no crea `agno.agent.Agent` en el dominio: `DocumentService` usa el port
+`DocumentExtractionPort`, cuyo adaptador Agno pasa por `LLMAccess`. Dentro de un
+run gobernado comparte snapshot, budget, coste y trace (el usage se audita bajo
+la interacción); en el path AgentOS legado usa un contexto bootstrap standalone
+sin filas de usage (no existe interacción referenciable). `ai_extractions`
+registra provider/model reales y los fallos dejan metadata observable sin
+contenido. Ver
 `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update

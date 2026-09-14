@@ -21,7 +21,7 @@
 
 | Check | Resultado | Evidencia |
 |---|---|---|
-| Unit tests | ✅ T8 | 304 passed; admission, config, LLMAccess y execution budget cubiertos |
+| Unit tests | ✅ T9 | 315 passed; admission, config, LLMAccess, execution budget y extraction port cubiertos |
 | Integration tests | ✅ T8 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
 | Ruff | ✅ T4 | `ruff check src/ tests/ scripts/ migrations/` |
 | mypy del alcance T2 | ✅ | 4 ficheros nuevos sin issues |
@@ -54,7 +54,7 @@
 | M | Crash durante delivery → no reenvío automático ambiguo | ✅ T5 | Recovery marca `restart_during_delivery`, sin `sendMessage` adicional |
 | N | Grupo/canal Telegram → no alcanza el Agent | ✅ T4 | `non_private_chat`, `200`, sin payload ni llamada Agno |
 | O | Usuario no allowlisted → no alcanza el Agent | ✅ T4 | `user_not_allowlisted`, `200`, sin payload ni llamada Agno |
-| P | Extracción documental comparte config, budget y trace | ⏳ | |
+| P | Extracción documental comparte config, budget y trace | ✅ T9 local | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
 | Q | Gateway caído → fail closed sin OpenRouter directo | 🔶 T7 parcial | Runs T5 usan LLMAccess; LiteLLM fail-closed llega en T11 |
 | R | Collector caído → aplicación continúa | ⏳ | |
 | S | Logs/traces no contienen contenido personal | ⏳ | |
@@ -205,6 +205,32 @@
 - Pricing opcional versionado por alias Gateway estima el coste antes de llamar
   y reconcilia coste basado en tokens tras la respuesta; `llm_usage_events`
   persiste estimado, actual y fuente sin contenido personal.
+
+## T9 — Document extraction port verification (2026-09-14)
+
+- `DocumentExtractionPort` y `DocumentExtractionOutcome` viven en
+  `src/domain/documents/extraction.py` sin ninguna dependencia de Agno; un test
+  de regresión inspecciona el fuente de `DocumentService` y falla si reaparece
+  un import del runtime o un silenciamiento de excepciones.
+- `DocumentService` ya no construye `agno.agent.Agent`: solicita la extracción
+  al port y persiste en `ai_extractions` el provider/model reales devueltos por
+  la inferencia (no constantes del servicio).
+- El adaptador `AgnoDocumentExtractionAdapter` resuelve el modelo por
+  `LLMAccess`. Dentro de un run gobernado reutiliza el `ExecutionContext` del
+  run: mismo snapshot, deadline, contadores model/Gateway, coste y trace; el
+  test con un `GovernedModel` real demuestra que la extracción consume
+  `model_calls`/`gateway_requests` del run (acceptance P).
+- Fuera de un run gobernado (webhook AgentOS legado) el adaptador crea un
+  contexto bootstrap standalone con budget propio por la misma frontera
+  `LLMAccess`, fail-closed si no hay frontera standalone configurada; no escribe
+  `llm_usage_events` porque `interaction_id` tiene FK a `telegram_interactions`
+  y no existe interacción que referenciar.
+- Los fallos de inferencia dejan metadata observable y acotada
+  (`error_class`, provider, model, document_id) sin contenido del documento ni
+  prompt; Agno absorbe errores de modelo en `RunOutput(status=error)` y el
+  adaptador los mapea a `AgentRunError` sin exponer el texto de la excepción.
+- El consumo del prompt de extracción (versión 1.0) y sus instrucciones no
+  cambió respecto a la implementación pre-T9.
 
 ## Limitations and remaining evidence
 

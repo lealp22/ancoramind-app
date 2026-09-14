@@ -36,8 +36,8 @@ def _ingest_result(filename: str, mime_type: str, size: int):
 
 async def test_analyze_document_receives_telegram_photo(monkeypatch):
     service = AsyncMock()
-    service.ingest.side_effect = lambda user, content, filename, mime: (
-        _ingest_result(filename, mime, len(content))
+    service.ingest.side_effect = lambda user, content, filename, mime: _ingest_result(
+        filename, mime, len(content)
     )
 
     async def get_service():
@@ -64,8 +64,8 @@ async def test_analyze_document_receives_telegram_file_and_sanitizes_name(
     monkeypatch,
 ):
     service = AsyncMock()
-    service.ingest.side_effect = lambda user, content, filename, mime: (
-        _ingest_result(filename, mime, len(content))
+    service.ingest.side_effect = lambda user, content, filename, mime: _ingest_result(
+        filename, mime, len(content)
     )
 
     async def get_service():
@@ -92,24 +92,26 @@ async def test_analyze_document_without_media_does_not_create_service(monkeypatc
     get_service.assert_not_awaited()
 
 
-async def test_get_document_service_uses_settings_model_factory(monkeypatch):
-    """BL-10: the extraction model must come from create_model_from_settings,
-    not a hardcoded OpenAIChat — so LLM_PROVIDER/LLM_MODEL are respected."""
+async def test_get_document_service_uses_governed_extraction_port(monkeypatch):
+    """T9: extraction inference must come from the LLMAccess-backed adapter,
+    not a directly constructed model — so it shares the governed frontier."""
 
-    class _FakeModel:
-        id = "fake-model-id"
-
-    monkeypatch.setattr(
-        "src.agent.ancora_agent.create_model_from_settings",
-        lambda settings: _FakeModel(),
-    )
+    class _FakeSettings:
+        llm_provider = "openai"
+        llm_model = "fake-model"
+        llm_base_url = None
+        openrouter_api_key = None
+        openai_api_key = None
 
     async def fake_get_session():
         return object()
 
     monkeypatch.setattr(document_tools, "get_session", fake_get_session)
     monkeypatch.setattr(document_tools, "_get_storage", lambda: object())
+    monkeypatch.setattr("src.config.Settings", lambda: _FakeSettings())
 
     service = await document_tools._get_document_service()
 
-    assert service.model_id == "fake-model-id"
+    from src.agent.document_extraction import AgnoDocumentExtractionAdapter
+
+    assert isinstance(service._extraction_port, AgnoDocumentExtractionAdapter)

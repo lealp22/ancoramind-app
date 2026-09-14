@@ -111,9 +111,9 @@ adaptador temporal Agno por `LLMAccess` y Agent per-run.
 - [x] Configurar retries de Agent y Model explícitamente a 0.
 
 **Acceptance:** Q parcial, X e Y parcialmente implementados en el processor
-T5+T7. El webhook legado AgentOS y la extracción documental directa quedan como
-excepciones transitorias hasta T4/T5 rollout y T9 respectivamente; LiteLLM
-fail-closed pertenece a T11.
+T5+T7. El webhook legado AgentOS y la extracción documental directa quedaban
+como excepciones transitorias (la extracción se resolvió en T9; el webhook
+permanece hasta el rollout T4/T5); LiteLLM fail-closed pertenece a T11.
 
 ## T8: Execution budget
 
@@ -133,15 +133,18 @@ límite agregado y los 2 attempts por llamada lógica para esa evolución.
 
 ## T9: Document extraction port
 
-- [ ] Definir `DocumentExtractionPort` fuera de Agno.
-- [ ] Eliminar la creación directa de `agno.agent.Agent` en el dominio.
-- [ ] Implementar un adaptador de extracción mediante `LLMAccess`.
-- [ ] Compartir config, deadline, contadores, coste y trace del run principal.
-- [ ] Registrar provider/model reales en `ai_extractions`.
-- [ ] Sustituir el `except Exception: pass` por resultado controlado y metadata
+- [x] Definir `DocumentExtractionPort` fuera de Agno.
+- [x] Eliminar la creación directa de `agno.agent.Agent` en el dominio.
+- [x] Implementar un adaptador de extracción mediante `LLMAccess`.
+- [x] Compartir config, deadline, contadores, coste y trace del run principal.
+- [x] Registrar provider/model reales en `ai_extractions`.
+- [x] Sustituir el `except Exception: pass` por resultado controlado y metadata
       observable sin exponer contenido.
 
-**Acceptance:** P.
+**Acceptance:** P implementado en runs gobernados. El path AgentOS legado usa
+un contexto bootstrap standalone gobernado (misma frontera `LLMAccess`, budget
+propio) sin filas de `llm_usage_events` porque no existe interacción que
+referenciar; su retiro llega con el rollout T4/T5.
 
 ## T10: OpenTelemetry and privacy
 

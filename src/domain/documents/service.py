@@ -1,12 +1,14 @@
 """Document domain service — ingestion, storage, extraction, and search.
 
 Framework-independent. Pipeline orchestration for the document lifecycle.
+Extraction inference goes through the domain-owned ``DocumentExtractionPort``
+(specs/013 T9); no runtime framework is imported here.
 """
 
+import logging
 from uuid import UUID
 
-from agno.models.base import Model
-
+from src.domain.documents.extraction import DocumentExtractionPort
 from src.domain.documents.models import (
     AIExtraction,
     AIExtractionCreate,
@@ -19,6 +21,8 @@ from src.repositories.documents import DocumentsRepository
 from src.security.user_context import UserContext
 from src.storage.base import DocumentStorage
 
+logger = logging.getLogger(__name__)
+
 
 class DocumentService:
     """Service for managing the document lifecycle."""
@@ -30,17 +34,11 @@ class DocumentService:
         self,
         repository: DocumentsRepository,
         storage: DocumentStorage,
-        model: Model,
-        provider: str = "openai",
-    ):
+        extraction_port: DocumentExtractionPort,
+    ) -> None:
         self._repo = repository
         self._storage = storage
-        self._model = model
-        self._provider = provider
-
-    @property
-    def model_id(self) -> str:
-        return self._model.id
+        self._extraction_port = extraction_port
 
     # ── Pipeline ────────────────────────────────────────
 
@@ -79,15 +77,12 @@ class DocumentService:
         return DocumentWithExtraction(document=doc, extraction=extraction)
 
     async def _extract(self, doc: Document) -> AIExtraction | None:
-        """Run AI extraction on a document.
+        """Run AI extraction through the governed port.
 
         Currently handles text-based documents. Images/PDFs require
         multimodal model support (future enhancement).
         """
-        # For now, extract based on filename + metadata
-        # Full OCR/vision will be added when multimodal model is available
-        extraction_result = await self._run_extraction(
-            document=doc,
+        outcome = await self._extraction_port.extract(
             prompt=(
                 f"Analyze this document metadata:\n"
                 f"Filename: {doc.original_filename}\n"
@@ -99,51 +94,31 @@ class DocumentService:
             schema=GenericDocumentExtraction,
         )
 
-        if extraction_result is None:
+        if outcome.status != "completed" or outcome.extraction is None:
+            # Observable, content-free failure metadata: the document stays
+            # archived while the extraction gap remains auditable. T9 removes
+            # the previous silent swallowing of inference failures.
+            logger.warning(
+                "Document extraction did not complete "
+                "(document_id=%s, status=%s, error_class=%s, provider=%s, model=%s)",
+                doc.id,
+                outcome.status,
+                outcome.error_class,
+                outcome.provider,
+                outcome.model,
+            )
             return None
-
-        extraction_data = extraction_result.model_dump()
 
         return await self._repo.create_extraction(
             AIExtractionCreate(
                 document_id=doc.id,
-                provider=self._provider,
-                model=self.model_id,
+                provider=outcome.provider,
+                model=outcome.model,
                 prompt_version=self.EXTRACTION_PROMPT_VERSION,
                 schema_version=self.EXTRACTION_SCHEMA_VERSION,
-                extraction=extraction_data,
+                extraction=outcome.extraction.model_dump(),
             )
         )
-
-    async def _run_extraction(
-        self,
-        document: Document,
-        prompt: str,
-        schema: type,
-    ) -> GenericDocumentExtraction | None:
-        """Run an AI extraction using the agent's model with structured output."""
-        try:
-            from agno.agent import Agent
-
-            agent = Agent(
-                model=self._model,
-                output_schema=schema,
-                instructions=[
-                    "Extract structured information from the document description.",
-                    "Be precise. Use null for unknown fields.",
-                ],
-                markdown=False,
-            )
-
-            response = await agent.arun(prompt)
-            if response and response.content:
-                if isinstance(response.content, schema):
-                    return response.content
-                # Handle dict response
-                return schema(**response.content)
-        except Exception:
-            pass
-        return None
 
     # ── Queries ─────────────────────────────────────────
 
