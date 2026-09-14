@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 315 unit + 51 integration passing — Ruff limpio en
+Tests: 324 unit + 51 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T9 implementados — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T10 implementados localmente — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -43,8 +43,8 @@ Incluye idempotencia durable por `update_id`, semántica at-most-once del Agent,
 private-chat/allowlist reales, rate/concurrency limits, execution budget,
 configuración runtime versionada y cacheada, rutas lógicas, LiteLLM privado y
 fail closed, coste/circuit breaker, y OpenTelemetry Collector + Grafana Cloud.
-La telemetría de producto de Agno se desactivará al activar la observabilidad
-propia. Defaults aprobados: 120 s, 6 model calls, 12 tool calls como hard safety
+La telemetría de producto de Agno está desactivada con la observabilidad propia.
+Defaults aprobados: 120 s, 6 model calls, 12 tool calls como hard safety
 ceiling, 8 requests Gateway y concurrencia global 2.
 
 **Estado (2026-09-13):** T2 aporta Alembic y el schema reproducible. T3 aporta el
@@ -79,7 +79,12 @@ run gobernado comparte snapshot, budget, coste y trace (el usage se audita bajo
 la interacción); en el path AgentOS legado usa un contexto bootstrap standalone
 sin filas de usage (no existe interacción referenciable). `ai_extractions`
 registra provider/model reales y los fallos dejan metadata observable sin
-contenido. Ver
+contenido. **Actualización T10:** Agno product telemetry queda desactivada en
+Agent, AgentOS, entorno local y Docker. `src/observability/` emite JSON y OTel
+metadata-only con allowlist; el exporter OTLP al Collector privado es opcional y
+fail-open. El manifiesto `observability/otel-collector.yaml` aplica redacción,
+memory limiter, batch y cola/retry antes de Grafana. Falta crear el servicio
+Collector privado y dashboards/alertas en Railway mediante rollout explícito. Ver
 `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update

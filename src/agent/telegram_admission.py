@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -21,6 +22,7 @@ from src.domain.interactions.admission import TelegramAdmissionPolicy
 from src.domain.interactions.models import TelegramAdmissionLimits
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.service import TelegramInteractionService
+from src.observability import get_telemetry, log_context_scope
 from src.repositories.interactions import TelegramInteractionsRepository
 
 logger = logging.getLogger(__name__)
@@ -66,32 +68,63 @@ def install_telegram_admission_endpoint(
     async def telegram_webhook(request: Request) -> dict[str, Any]:
         _validate_secret(request, settings.telegram_webhook_secret_token)
         update = await _parse_update(request)
+        attributes = {
+            "telegram.update_id": update["update_id"],
+            "railway.request_id": request.headers.get("x-railway-request-id"),
+        }
 
         session: AsyncSession | None = None
-        try:
-            session = await session_factory()
-            result = await make_service(session).admit_update(
-                bot_id=settings.telegram_bot_id,
-                update=update,
-                railway_request_id=request.headers.get("x-railway-request-id"),
-                limits=_admission_limits(settings),
-                policy=TelegramAdmissionPolicy(set(settings.allowed_user_ids)),
-            )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Malformed Telegram update",
-            ) from None
-        except (SQLAlchemyError, RuntimeError):
-            # Do not include the exception: it could contain SQL details or request data.
-            logger.warning("Telegram admission could not persist the interaction")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Telegram admission temporarily unavailable",
-            ) from None
-        finally:
-            if session is not None:
-                await session.close()
+        started = time.perf_counter()
+        with (
+            log_context_scope(attributes),
+            get_telemetry().span(
+                "telegram.webhook.delivery",
+                attributes,
+            ) as span,
+        ):
+            try:
+                session = await session_factory()
+                result = await make_service(session).admit_update(
+                    bot_id=settings.telegram_bot_id,
+                    update=update,
+                    railway_request_id=request.headers.get("x-railway-request-id"),
+                    limits=_admission_limits(settings),
+                    policy=TelegramAdmissionPolicy(set(settings.allowed_user_ids)),
+                )
+            except ValueError:
+                get_telemetry().mark_error(span, "MalformedTelegramUpdate")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Malformed Telegram update",
+                ) from None
+            except (SQLAlchemyError, RuntimeError):
+                # Do not include the exception: it could contain SQL details or request data.
+                get_telemetry().mark_error(span, "AdmissionPersistenceError")
+                logger.warning("Telegram admission could not persist the interaction")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Telegram admission temporarily unavailable",
+                ) from None
+            finally:
+                get_telemetry().duration_ms(
+                    "ancora.telegram.admission.duration",
+                    (time.perf_counter() - started) * 1000,
+                    attributes={"ancora.status": "completed"},
+                )
+                if session is not None:
+                    await session.close()
+
+        result_attributes = {
+            **attributes,
+            "ancora.correlation_id": str(result.interaction.correlation_id),
+            "ancora.interaction_id": str(result.interaction.id),
+            "ancora.admission.status": result.interaction.status.value,
+            "ancora.duplicate": result.duplicate,
+        }
+        get_telemetry().counter(
+            "ancora.telegram.admissions",
+            attributes=result_attributes,
+        )
 
         return {
             "status": result.interaction.status.value,

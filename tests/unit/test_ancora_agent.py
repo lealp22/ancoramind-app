@@ -86,6 +86,7 @@ def test_create_ancora_agent_applies_tool_call_limit():
 
     assert agent.tool_call_limit == 5
     assert agent.retries == 0
+    assert agent.telemetry is False
 
 
 def test_create_ancora_agent_defaults_to_approved_tool_ceiling_and_zero_retries():
@@ -93,6 +94,7 @@ def test_create_ancora_agent_defaults_to_approved_tool_ceiling_and_zero_retries(
 
     assert agent.tool_call_limit == 12
     assert agent.retries == 0
+    assert agent.telemetry is False
 
 
 def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):
@@ -126,7 +128,8 @@ def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):
             },
         }
     ]
-    assert "Dropped 3 malformed OpenRouter tool call(s)" in caplog.text
+    assert caplog.records[-1].name == "src.agent.ancora_agent"
+    assert caplog.records[-1].levelname == "WARNING"
 
 
 def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog):
@@ -146,7 +149,8 @@ def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog):
     assert populated.content == "¡Hola! ¿En qué puedo ayudarte?"
     assert response.tool_calls is None
     assert populated.tool_calls is None
-    assert "Dropped 3 malformed OpenRouter tool call(s)" in caplog.text
+    assert caplog.records[-1].name == "src.agent.ancora_agent"
+    assert caplog.records[-1].levelname == "WARNING"
 
 
 def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
@@ -182,7 +186,8 @@ def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
             },
         }
     ]
-    assert "Dropped 1 malformed streaming OpenRouter tool call(s)" in caplog.text
+    assert caplog.records[-1].name == "src.agent.ancora_agent"
+    assert caplog.records[-1].levelname == "WARNING"
 
 
 def test_safe_openrouter_normalizes_only_malformed_streaming_tool_calls_to_none(caplog):
@@ -200,7 +205,8 @@ def test_safe_openrouter_normalizes_only_malformed_streaming_tool_calls_to_none(
 
     assert assistant_message.content == "¡Hola! ¿En qué puedo ayudarte?"
     assert assistant_message.tool_calls is None
-    assert "Dropped 1 malformed streaming OpenRouter tool call(s)" in caplog.text
+    assert caplog.records[-1].name == "src.agent.ancora_agent"
+    assert caplog.records[-1].levelname == "WARNING"
 
 
 def test_safe_openrouter_stops_stream_loop_after_only_malformed_tool_calls(monkeypatch):

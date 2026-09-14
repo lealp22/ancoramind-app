@@ -1,7 +1,7 @@
 # ADR-006 — OpenTelemetry como estándar de observabilidad
 
-> **Status:** Accepted (diseño aprobado 2026-09-13; implementación pendiente —
-> specs/013, BL-23)
+> **Status:** Accepted; implementación base completada el 2026-09-14 (T10).
+> El despliegue real del Collector privado/Grafana sigue sujeto a rollout Railway.
 > **Contexto:** AncoraMind necesita explicar y controlar el flujo Telegram →
 > Agent → tools → Gateway → provider sin registrar indiscriminadamente datos
 > personales.
@@ -10,10 +10,10 @@
 
 ## Contexto
 
-El estado actual usa logs textuales y telemetría de producto de Agno habilitada
-por default. No existe correlación end-to-end, métricas propias de coste/budget o
-un pipeline bajo control de AncoraMind. Grafana Cloud es el backend inicial
-preferido, pero el código no debe acoplarse a un vendor.
+El estado previo usaba logs textuales y telemetría de producto de Agno habilitada
+por default. T10 introduce logs JSON metadata-only, trazas/métricas OTel propias,
+correlación por `correlation_id` y un manifiesto de Collector versionado. Grafana
+Cloud sigue siendo el backend inicial, pero el código no se acopla a ese vendor.
 
 ## Decisión
 
@@ -36,6 +36,9 @@ preferido, pero el código no debe acoplarse a un vendor.
     acotados antes de exportar.
 11. **Sampling inicial** — 100% metadata-only durante hardening; errores,
     fallbacks, budgets y circuits conservarán prioridad en una política futura.
+12. **Implementación T10** — `src/observability/` aplica allowlist estricta;
+    las métricas excluyen IDs de alta cardinalidad y los logs no serializan ni el
+    mensaje ni argumentos posicionales. El exporter OTLP es opcional y fail-open.
 
 ## Separación de responsabilidades
 

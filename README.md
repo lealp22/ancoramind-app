@@ -90,7 +90,7 @@ docker compose up -d
 | Channel | Telegram (private chats) |
 | Validation | Pydantic |
 | LLM Gateway | LiteLLM Proxy target (BL-23/specs/013; not implemented yet) |
-| Observability | OpenTelemetry Collector + Grafana Cloud target (not implemented yet) |
+| Observability | Metadata-only OpenTelemetry; private Collector/Grafana rollout prepared |
 | Deployment | Docker local; Railway prepared for managed deployment |
 
 ---
@@ -123,8 +123,9 @@ docs/               ← Architecture, governance, ADRs
 - [x] M3: Document Memory (attachment → storage → extraction)
 - [x] M4: Vehicle Vertical Slice (invoice → maintenance → query)
 - [x] M5: Calendar & Reminders
-- [ ] BL-23: Governed LLM Access, durable Telegram admission and OpenTelemetry
-      (design approved in specs/013; implementation pending)
+- [x] BL-23 T2–T10: governed LLM access, durable admission, execution budget,
+      document extraction port and metadata-only OpenTelemetry (Collector/Grafana
+      Railway rollout, T11 LiteLLM and E2E remain pending)
 - [ ] MVP: Usable personal assistant (E2E Telegram validation)
 
 ### Capabilities (19 tools)

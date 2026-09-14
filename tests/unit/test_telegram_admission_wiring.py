@@ -53,3 +53,5 @@ def test_create_app_preserves_ancoramind_webhook_route_when_admission_enabled(
         ("/telegram/webhook", {"POST"}),
     ]
     assert captured["on_route_conflict"] == "preserve_base_app"
+    assert captured["telemetry"] is False
+    assert captured["tracing"] is False

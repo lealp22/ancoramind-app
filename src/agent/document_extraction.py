@@ -35,6 +35,7 @@ from src.domain.runtime_config.models import (
     bootstrap_runtime_configuration,
     config_checksum,
 )
+from src.observability import get_telemetry, telemetry_attributes_from_execution_context
 
 if TYPE_CHECKING:
     from src.domain.llm_access.access import LLMAccess
@@ -118,48 +119,64 @@ class AgnoDocumentExtractionAdapter:
         """Run one structured-output Agno Agent turn over the governed model."""
         provider = str(getattr(model, "provider", None) or "")
         model_id = str(getattr(model, "id", None) or "")
+        context = current_execution_context()
+        observability = context.config.config.observability
+        attributes = {
+            **telemetry_attributes_from_execution_context(context),
+            "ancora.route": self._route_name,
+            "gen_ai.provider.name": provider,
+            "gen_ai.request.model": model_id,
+        }
         agent = Agent(
             model=model,
             output_schema=schema,
             instructions=list(EXTRACTION_INSTRUCTIONS),
             markdown=False,
             retries=0,
+            telemetry=False,
         )
-        try:
-            response = await agent.arun(prompt)
-        except Exception as exc:
-            # Bounded, content-free failure metadata (specs/013 T9): the
-            # inference error class is observable instead of silently ignored.
-            logger.warning(
-                "Document extraction inference failed (error_class=%s, provider=%s, model=%s)",
-                type(exc).__name__,
-                provider,
-                model_id,
-            )
-            return DocumentExtractionOutcome(
-                extraction=None,
-                provider=provider,
-                model=model_id,
-                status="failed",
-                error_class=type(exc).__name__,
-            )
-        run_status = getattr(response, "status", None)
-        if str(getattr(run_status, "value", run_status)).upper() == "ERROR":
-            # Agno absorbs model errors into RunOutput(status=error) and places
-            # the exception text in content; only the bounded class marker is
-            # surfaced, never the message (it may embed provider payloads).
-            logger.warning(
-                "Document extraction agent run errored (provider=%s, model=%s)",
-                provider,
-                model_id,
-            )
-            return DocumentExtractionOutcome(
-                extraction=None,
-                provider=provider,
-                model=model_id,
-                status="failed",
-                error_class="AgentRunError",
-            )
+        with get_telemetry().span(
+            "agno.agent.run",
+            attributes,
+            enabled=observability.traces_enabled,
+        ) as span:
+            try:
+                response = await agent.arun(prompt)
+            except Exception as exc:
+                get_telemetry().mark_error(span, type(exc).__name__)
+                # Bounded, content-free failure metadata (specs/013 T9): the
+                # inference error class is observable instead of silently ignored.
+                logger.warning(
+                    "Document extraction inference failed (error_class=%s, provider=%s, model=%s)",
+                    type(exc).__name__,
+                    provider,
+                    model_id,
+                )
+                return DocumentExtractionOutcome(
+                    extraction=None,
+                    provider=provider,
+                    model=model_id,
+                    status="failed",
+                    error_class=type(exc).__name__,
+                )
+            run_status = getattr(response, "status", None)
+            if str(getattr(run_status, "value", run_status)).upper() == "ERROR":
+                get_telemetry().mark_error(span, "AgentRunError")
+                # Agno absorbs model errors into RunOutput(status=error) and places
+                # the exception text in content; only the bounded class marker is
+                # surfaced, never the message (it may embed provider payloads).
+                logger.warning(
+                    "Document extraction agent run errored (provider=%s, model=%s)",
+                    provider,
+                    model_id,
+                )
+                return DocumentExtractionOutcome(
+                    extraction=None,
+                    provider=provider,
+                    model=model_id,
+                    status="failed",
+                    error_class="AgentRunError",
+                )
         content = getattr(response, "content", None)
         extraction = _coerce_content(content, schema)
         if extraction is None:

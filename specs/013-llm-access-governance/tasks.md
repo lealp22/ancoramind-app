@@ -148,20 +148,27 @@ referenciar; su retiro llega con el rollout T4/T5.
 
 ## T10: OpenTelemetry and privacy
 
-- [ ] Desactivar telemetría de producto con `Agent(telemetry=False)`,
+- [x] Desactivar telemetría de producto con `Agent(telemetry=False)`,
       `AgentOS(telemetry=False)` y `AGNO_TELEMETRY=false`.
-- [ ] Añadir logs JSON estructurados con `correlation_id`.
-- [ ] Instrumentar admission, queue, Agent, LLM, tools, budget y delivery.
-- [ ] Exponer métricas agregadas de volumen, latencia, tokens, coste, errores,
-      retries, fallbacks, rate limits y circuit.
-- [ ] Desplegar OpenTelemetry Collector upstream como servicio privado Railway.
-- [ ] Configurar allowlist/redaction, memory limiter, batch y cola/retry acotados.
-- [ ] Exportar por OTLP a Grafana Cloud.
-- [ ] Propagar W3C `traceparent` hacia LiteLLM.
-- [ ] Crear tests que fallen si logs/traces contienen contenido sensible.
-- [ ] Crear dashboards y alertas iniciales.
+- [x] Añadir logs JSON estructurados con `correlation_id`.
+- [x] Instrumentar admission, queue, Agent, LLM, tools, budget y delivery.
+- [x] Exponer métricas agregadas de volumen, latencia, tokens, coste, errores y
+      budget. Retries/fallbacks/rate limits/circuit se instrumentarán al
+      introducir sus mecanismos efectivos en T11/T12.
+- [x] Versionar configuración del OpenTelemetry Collector upstream privado Railway.
+- [x] Configurar allowlist/redaction, memory limiter, batch y cola/retry acotados.
+- [x] Implementar exporter OTLP opcional al Collector y validar el manifiesto
+      localmente con la imagen fijada.
+- [ ] Desplegar Collector privado en Railway y confirmar exportación real a
+      Grafana Cloud (requiere secretos y rollout explícito).
+- [x] Propagar W3C `traceparent` hacia el Gateway/provider transitorio.
+- [x] Crear tests que fallen si logs/traces contienen contenido sensible.
+- [ ] Crear dashboards y alertas iniciales (requiere instancia Grafana Cloud real).
 
-**Acceptance:** I, R y S.
+**Acceptance:** I, R y S implementados localmente. El provisionamiento/despliegue
+real del servicio Collector privado (checklist pendiente arriba) y
+dashboards/alertas de Grafana requieren un rollout Railway explícito y no se
+ejecutan desde el repositorio.
 
 ## T11: LiteLLM Proxy pilot
 

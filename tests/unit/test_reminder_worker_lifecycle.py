@@ -11,6 +11,7 @@ from fastapi import FastAPI
 import src.agent.lifecycle as lifecycle_module
 from src.agent.lifecycle import (
     install_interaction_processor_lifespan,
+    install_observability_lifespan,
     install_reminder_worker_lifespan,
 )
 from src.config import Settings
@@ -54,6 +55,25 @@ async def test_auto_gates_keep_existing_lifespan(monkeypatch: pytest.MonkeyPatch
 
     assert not install_reminder_worker_lifespan(app, _settings(telegram_token=""))
     assert app.router.lifespan_context is original
+
+
+async def test_observability_lifespan_shuts_down_best_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = FastAPI()
+    calls: list[str] = []
+
+    def shutdown() -> None:
+        calls.append("shutdown")
+        raise RuntimeError("collector unavailable")
+
+    monkeypatch.setattr(lifecycle_module, "shutdown_observability", shutdown)
+    install_observability_lifespan(app)
+
+    async with app.router.lifespan_context(app):
+        calls.append("running")
+
+    assert calls == ["running", "shutdown"]
 
 
 async def test_lifespan_starts_cancels_and_cleans_worker_task(

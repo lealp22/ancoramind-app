@@ -20,9 +20,11 @@ from agno.models.base import Model
 
 from src.domain.llm_access.context import current_execution_context
 from src.domain.llm_access.models import (
+    ExecutionBudgetExceededError,
     ExecutionContext,
     LlmUsageEventCreate,
 )
+from src.observability import get_telemetry, telemetry_attributes_from_execution_context
 
 logger = logging.getLogger(__name__)
 
@@ -50,27 +52,68 @@ class GovernedModelMixin:
         context = current_execution_context()
         llm_call_id = LlmUsageEventCreate.new_call_id()
         estimated_cost = _estimate_call_cost(context, self._governed_effective_route, args, kwargs)
-        context.budget.reserve_model_call(estimated_cost)
-        started = time.perf_counter()
+        observability = context.config.config.observability
+        attributes = {
+            **telemetry_attributes_from_execution_context(context),
+            "ancora.route": self._governed_route_name,
+            "ancora.effective_route": self._governed_effective_route,
+            "gen_ai.provider.name": str(getattr(self, "provider", "") or ""),
+            "gen_ai.request.model": str(getattr(self, "id", "") or ""),
+        }
         try:
-            # ``super()`` resolves to the concrete provider class at runtime;
-            # the mixin itself has no base, hence the ignore.
-            response = await super().ainvoke(*args, **kwargs)  # type: ignore[misc]
-        except asyncio.CancelledError:
-            # Never await audit writes while the run is being cancelled.
-            raise
-        except BaseException as exc:
-            await self._governed_record(
-                context=context,
-                llm_call_id=llm_call_id,
-                status="error",
-                error_class=type(exc).__name__,
-                latency_ms=_elapsed_ms(started),
-                response=None,
-                estimated_cost=estimated_cost or None,
+            context.budget.reserve_model_call(estimated_cost)
+        except ExecutionBudgetExceededError as exc:
+            get_telemetry().counter(
+                "ancora.execution_budget.exceeded",
+                attributes={"ancora.budget.limit": exc.limit},
+                enabled=observability.metrics_enabled,
             )
             raise
-        actual_cost = _actual_call_cost(context, self._governed_effective_route, response)
+        started = time.perf_counter()
+        with get_telemetry().span(
+            "gen_ai.model.call",
+            attributes,
+            enabled=observability.traces_enabled,
+        ) as span:
+            try:
+                # ``super()`` resolves to the concrete provider class at runtime;
+                # the mixin itself has no base, hence the ignore.
+                response = await super().ainvoke(*args, **kwargs)  # type: ignore[misc]
+            except asyncio.CancelledError:
+                # Never await audit writes while the run is being cancelled.
+                raise
+            except BaseException as exc:
+                get_telemetry().mark_error(span, type(exc).__name__)
+                await self._governed_record(
+                    context=context,
+                    llm_call_id=llm_call_id,
+                    status="error",
+                    error_class=type(exc).__name__,
+                    latency_ms=_elapsed_ms(started),
+                    response=None,
+                    estimated_cost=estimated_cost or None,
+                )
+                get_telemetry().counter(
+                    "ancora.llm.calls",
+                    attributes={
+                        **attributes,
+                        "ancora.status": "error",
+                        "error.type": type(exc).__name__,
+                    },
+                    enabled=observability.metrics_enabled,
+                )
+                raise
+            actual_cost = _actual_call_cost(context, self._governed_effective_route, response)
+            span_attributes = {
+                "gen_ai.usage.input_tokens": _safe_int(getattr(response, "input_tokens", None)),
+                "gen_ai.usage.output_tokens": _safe_int(getattr(response, "output_tokens", None)),
+                "gen_ai.usage.total_tokens": _safe_int(getattr(response, "total_tokens", None)),
+                "gen_ai.usage.estimated_cost_usd": estimated_cost or None,
+                "gen_ai.usage.actual_cost_usd": actual_cost,
+            }
+            for key, value in span_attributes.items():
+                if value is not None:
+                    span.set_attribute(key, value)
         context.budget.settle_actual_cost(actual_cost)
         await self._governed_record(
             context=context,
@@ -82,6 +125,44 @@ class GovernedModelMixin:
             estimated_cost=estimated_cost or None,
             actual_cost=actual_cost,
         )
+        metric_attributes = {**attributes, "ancora.status": "completed"}
+        get_telemetry().counter(
+            "ancora.llm.calls",
+            attributes=metric_attributes,
+            enabled=observability.metrics_enabled,
+        )
+        get_telemetry().duration_ms(
+            "ancora.llm.call.duration",
+            _elapsed_ms(started),
+            attributes=metric_attributes,
+            enabled=observability.metrics_enabled,
+        )
+        for metric_name, value in (
+            ("ancora.llm.input_tokens", _safe_int(getattr(response, "input_tokens", None))),
+            ("ancora.llm.output_tokens", _safe_int(getattr(response, "output_tokens", None))),
+            ("ancora.llm.total_tokens", _safe_int(getattr(response, "total_tokens", None))),
+        ):
+            if value is not None:
+                get_telemetry().counter(
+                    metric_name,
+                    value,
+                    attributes=metric_attributes,
+                    enabled=observability.metrics_enabled,
+                )
+        if estimated_cost > 0:
+            get_telemetry().counter(
+                "ancora.llm.estimated_cost_usd",
+                estimated_cost,
+                attributes=metric_attributes,
+                enabled=observability.metrics_enabled,
+            )
+        if actual_cost is not None:
+            get_telemetry().counter(
+                "ancora.llm.actual_cost_usd",
+                actual_cost,
+                attributes=metric_attributes,
+                enabled=observability.metrics_enabled,
+            )
         return response
 
     def invoke(self, *args: Any, **kwargs: Any) -> Any:

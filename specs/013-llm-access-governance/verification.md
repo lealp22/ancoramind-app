@@ -1,6 +1,7 @@
 # Verification: 013 — Governed LLM Access and Telegram Admission
 
-> **Estado:** ⏳ pendiente de implementación
+> **Estado:** 🔶 T2–T10 implementados y validados localmente; rollout Railway
+> del Collector/Grafana, dashboards/alertas, T11 y E2E siguen pendientes.
 > **Diseño aprobado:** 2026-09-13
 
 ---
@@ -21,8 +22,8 @@
 
 | Check | Resultado | Evidencia |
 |---|---|---|
-| Unit tests | ✅ T9 | 315 passed; admission, config, LLMAccess, execution budget y extraction port cubiertos |
-| Integration tests | ✅ T8 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
+| Unit tests | ✅ T10 | 324 passed; admission, config, LLMAccess, budget, extraction port y privacidad OTel cubiertos |
+| Integration tests | ✅ T10 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
 | Ruff | ✅ T4 | `ruff check src/ tests/ scripts/ migrations/` |
 | mypy del alcance T2 | ✅ | 4 ficheros nuevos sin issues |
 | mypy del alcance T3 | ✅ | domain, repository, config y tests nuevos sin issues |
@@ -30,7 +31,7 @@
 | Migration fresh install | ✅ | `0001` → `0002` sobre BD temporal vacía |
 | Migration upgrade over existing data | ✅ | Schema sin versionar adoptado; nota semilla preservada |
 | Migration downgrade | ✅ | `downgrade -1` conserva baseline/datos y retira specs/013 |
-| Privacy tests | ⏳ | |
+| Privacy tests | ✅ T10 | Allowlist, logs JSON sin mensaje/args, no IDs en metric labels y Collector redactado |
 | LiteLLM latency benchmark | ⏳ | |
 | Load/concurrency tests | ⏳ | |
 | Crash-injection tests | ⏳ | |
@@ -47,7 +48,7 @@
 | F | Circuit open → cero llamadas al upstream afectado | ⏳ | |
 | G | Rate/budget agotado → no hay inferencia adicional | ✅ T8 local | Model/Gateway/coste bloquean antes del provider; timeout cancela el run; processor registra el límite sin replay |
 | H | Tool loop → fingerprint/budget lo detiene | ✅ T8 local | HMAC canónico + hook async; Agno `StopAgentRun` corta la repetición sin una tercera inferencia |
-| I | Interacción completa trazable por `correlation_id` | ⏳ | |
+| I | Interacción completa trazable por `correlation_id` | ✅ T10 local | Spans/logs metadata-only para admission, queue, Agent, LLM, tools y delivery; IDs excluidos de labels de métricas |
 | J | Crash antes de `agent_started` → recuperable | ✅ T5 | `accepted` se lista y reclama ordenadamente |
 | K | Crash después de `agent_started` → `failed_ambiguous`, sin replay | ✅ T5 | Recovery marca `restart_after_agent_started`; runner no vuelve a llamarse |
 | L | Crash tras `response_ready` → delivery recuperable | ✅ T5 | Recovery conserva `response_ready` y entrega outbox existente |
@@ -56,8 +57,8 @@
 | O | Usuario no allowlisted → no alcanza el Agent | ✅ T4 | `user_not_allowlisted`, `200`, sin payload ni llamada Agno |
 | P | Extracción documental comparte config, budget y trace | ✅ T9 local | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
 | Q | Gateway caído → fail closed sin OpenRouter directo | 🔶 T7 parcial | Runs T5 usan LLMAccess; LiteLLM fail-closed llega en T11 |
-| R | Collector caído → aplicación continúa | ⏳ | |
-| S | Logs/traces no contienen contenido personal | ⏳ | |
+| R | Collector caído → aplicación continúa | ✅ T10 local | Setup/export/shutdown OTel fail-open; test simula fallo de exporter y el Collector config valida con endpoint dummy |
+| S | Logs/traces no contienen contenido personal | ✅ T10 local | Allowlist, JSON sin mensaje/args, redacción Collector y privacy tests bloquean prompts/mensajes/respuestas/args/results |
 | T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
 | U | Run activo durante cambio → conserva revisión anterior | ✅ T6 | Snapshots futuros por run y publish no muta snapshot hasta CAS correcto |
 | V | Duplicate delivery → no consume rate limit | ✅ T4 | Duplicate se detecta antes del contador durable y conserva correlation ID |
@@ -231,6 +232,38 @@
   adaptador los mapea a `AgentRunError` sin exponer el texto de la excepción.
 - El consumo del prompt de extracción (versión 1.0) y sus instrucciones no
   cambió respecto a la implementación pre-T9.
+
+## T10 — OpenTelemetry and privacy verification (2026-09-14)
+
+- `AGNO_TELEMETRY=false` se fija antes de importar Agno en `src.main` y en la
+  imagen Docker. Los tres constructores de `Agent`, y `AgentOS`, reciben
+  `telemetry=False`; AgentOS también recibe `tracing=False` para no activar su
+  pipeline propio. Tests de factory/wiring lo comprueban explícitamente.
+- `src/observability/telemetry.py` es la única fachada de telemetría: acepta
+  exclusivamente una allowlist de metadata técnica. `correlation_id`, IDs Agno,
+  Telegram y Railway pueden ser atributos de spans/logs, pero se eliminan de las
+  etiquetas de métricas para evitar cardinalidad no acotada.
+- Los logs se serializan como JSON metadata-only: no llaman a `getMessage()` ni
+  serializan `record.msg` o argumentos posicionales. Así, incluso un f-string o
+  una excepción con datos del provider no salen por este formatter.
+- Spans y métricas cubren webhook/admission, espera de cola, Agent run, modelo,
+  tools, límites de budget y envío Telegram. Modelo/tools exportan sólo rutas,
+  provider/model, tokens, coste, latencia, status y error class; nunca prompts,
+  mensajes, respuestas, documentos ni argumentos/resultados.
+- `traceparent` W3C generado por el run se propaga como header hacia el
+  Gateway/provider transitorio; no se depende de la telemetría de Agno para esa
+  correlación.
+- El SDK crea exporter OTLP gRPC sólo si `OTEL_EXPORTER_OTLP_ENDPOINT` existe.
+  Configuración, exportación y shutdown son fail-open; un test fuerza un fallo
+  de exporter y confirma que el objeto de telemetría queda utilizable.
+- `observability/otel-collector.yaml` está validado contra
+  `otel/opentelemetry-collector-contrib:0.138.0` con endpoint/credencial dummy.
+  Incluye `memory_limiter`, borrado defensivo de claves de contenido, `batch` y
+  cola/retry acotados antes de Grafana. No se desplegó un Collector Railway ni
+  se contactó Grafana Cloud: eso exige secrets y rollout explícito.
+- Los privacy tests prueban allowlist, exclusión de IDs de labels de métricas,
+  logs sin texto/args y que el context manager OTel no altera las excepciones de
+  negocio instrumentadas.
 
 ## Limitations and remaining evidence
 

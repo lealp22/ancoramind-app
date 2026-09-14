@@ -249,6 +249,7 @@ def create_ancora_agent(
         tools=tools,
         tool_call_limit=tool_call_limit,
         retries=retries,
+        telemetry=False,
         instructions=instructions,
         add_history_to_context=True,
         num_history_runs=10,

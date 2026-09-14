@@ -165,7 +165,7 @@ flowchart TB
 | **Canal** | Telegram (private chats only) | Gestionado por AgentOS |
 | **LLM** | Rutas lógicas + LiteLLM Proxy (target specs/013) | OpenRouter upstream; config runtime versionada |
 | **Validación** | Pydantic | Schemas para extracciones estructuradas |
-| **Observabilidad** | OpenTelemetry Collector + Grafana Cloud (target specs/013) | Metadata-only; auditoría durable en PostgreSQL |
+| **Observabilidad** | OpenTelemetry metadata-only + Collector/Grafana Cloud | Código y manifiesto T10 listos; rollout privado Railway pendiente |
 | **Despliegue** | Docker + Railway | Una réplica inicial; servicios privados para Gateway/Collector |
 | **Migraciones** | Alembic | Propiedad exclusiva de AncoraMind |
 
@@ -370,14 +370,14 @@ Estados: `pending_confirmation`, `confirmed`, `discarded`, `executed`, `failed`.
   tool del LLM
 - LiteLLM y OpenTelemetry Collector solo por red privada Railway
 
-### 14.1 Observabilidad y privacidad (target aprobado)
+### 14.1 Observabilidad y privacidad (T10 implementado localmente)
 
 - OpenTelemetry es el estándar; Grafana Cloud es el backend inicial mediante un
-  Collector upstream privado
+  Collector upstream privado cuyo manifiesto vive en `observability/`
 - Collector/Grafana fallan abiertos respecto a la funcionalidad; LiteLLM falla
   cerrado respecto a inferencia
-- La telemetría de producto de Agno se desactivará al activar la observabilidad
-  propia
+- La telemetría de producto de Agno está desactivada en Agent, AgentOS, entorno
+  local y Docker; AncoraMind usa su propia fachada metadata-only
 - Logs/traces usan allowlist de metadata: no prompts, mensajes, respuestas,
   documentos, extracciones ni argumentos/resultados completos de tools
 - PostgreSQL conserva auditoría durable; Grafana se usa para diagnóstico,

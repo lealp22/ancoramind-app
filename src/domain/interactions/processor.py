@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol
@@ -21,6 +22,7 @@ from src.domain.interactions.models import (
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.llm_access.models import ExecutionBudgetExceededError
+from src.observability import get_telemetry, log_context_scope
 from src.repositories.interactions import TelegramInteractionsRepository
 
 logger = logging.getLogger(__name__)
@@ -144,8 +146,14 @@ class InteractionProcessor:
         user_key = interaction.telegram_user_id if interaction.telegram_user_id is not None else -1
         chat_lock = self._chat_locks.setdefault(chat_key, asyncio.Lock())
         user_lock = self._user_locks.setdefault(user_key, asyncio.Lock())
+        queued_at = time.perf_counter()
 
         async with chat_lock, user_lock, self._global_semaphore:
+            get_telemetry().duration_ms(
+                "ancora.interaction.queue.wait",
+                (time.perf_counter() - queued_at) * 1000,
+                attributes={"ancora.queue.status": "acquired"},
+            )
             if interaction.status is InteractionStatus.ACCEPTED:
                 return await self._run_agent(interaction)
             if interaction.status is InteractionStatus.RESPONSE_READY:
@@ -190,72 +198,93 @@ class InteractionProcessor:
         if claimed is None:
             return False
 
+        attributes = {
+            "ancora.correlation_id": str(interaction.correlation_id),
+            "ancora.interaction_id": str(interaction.id),
+            "telegram.update_id": interaction.telegram_update_id,
+            "telegram.message_id": interaction.telegram_message_id,
+            "agno.run_id": run_id,
+            "agno.session_id": session_id,
+        }
+
         typing_task = asyncio.create_task(
             self._refresh_typing(interaction.chat_id),
             name=f"telegram-typing-{interaction.id}",
         )
-        try:
-            content = await self._agent_runner.run(
-                input_text,
-                user_id=str(interaction.telegram_user_id),
-                session_id=session_id,
-                run_id=run_id,
-                correlation_id=interaction.correlation_id,
-                telegram_update_id=interaction.telegram_update_id,
-                telegram_message_id=interaction.telegram_message_id,
-            )
-            if not content.strip():
-                await self._mark_terminal(
-                    interaction.id,
-                    InteractionStatus.FAILED_CONTROLLED,
-                    error_class="EmptyAgentResponse",
-                    error_detail_code="agent_returned_empty_content",
+        started = time.perf_counter()
+        with (
+            log_context_scope(attributes),
+            get_telemetry().span("interaction.process", attributes) as span,
+        ):
+            try:
+                content = await self._agent_runner.run(
+                    input_text,
+                    user_id=str(interaction.telegram_user_id),
+                    session_id=session_id,
+                    run_id=run_id,
+                    correlation_id=interaction.correlation_id,
+                    telegram_update_id=interaction.telegram_update_id,
+                    telegram_message_id=interaction.telegram_message_id,
                 )
-                return True
-            encrypted = self._payload_cipher.encrypt({"content": content})
-            chunks = split_telegram_message(content)
-            response = await self._persist_response(
-                interaction.id,
-                content_ciphertext=encrypted.ciphertext,
-                content_key_version=encrypted.key_version,
-                content_length=len(content),
-                chunk_count=len(chunks),
-            )
-            if response is None:
-                # The run already happened; never run it again if persistence raced or failed.
+                if not content.strip():
+                    await self._mark_terminal(
+                        interaction.id,
+                        InteractionStatus.FAILED_CONTROLLED,
+                        error_class="EmptyAgentResponse",
+                        error_detail_code="agent_returned_empty_content",
+                    )
+                    return True
+                encrypted = self._payload_cipher.encrypt({"content": content})
+                chunks = split_telegram_message(content)
+                response = await self._persist_response(
+                    interaction.id,
+                    content_ciphertext=encrypted.ciphertext,
+                    content_key_version=encrypted.key_version,
+                    content_length=len(content),
+                    chunk_count=len(chunks),
+                )
+                if response is None:
+                    # The run already happened; never run it again if persistence raced or failed.
+                    await self._mark_terminal(
+                        interaction.id,
+                        InteractionStatus.FAILED_AMBIGUOUS,
+                        error_class="OutboxPersistenceError",
+                        error_detail_code="response_ready_transition_missing",
+                    )
+                    return True
+            except asyncio.CancelledError:
+                raise
+            except ExecutionBudgetExceededError as exc:
+                get_telemetry().mark_error(span, type(exc).__name__)
+                get_telemetry().counter(
+                    "ancora.execution_budget.exceeded",
+                    attributes={"ancora.budget.limit": exc.limit},
+                )
                 await self._mark_terminal(
                     interaction.id,
                     InteractionStatus.FAILED_AMBIGUOUS,
-                    error_class="OutboxPersistenceError",
-                    error_detail_code="response_ready_transition_missing",
+                    error_class="ExecutionBudgetExceededError",
+                    error_detail_code=exc.limit,
                 )
                 return True
-        except asyncio.CancelledError:
-            raise
-        except ExecutionBudgetExceededError as exc:
-            # The budget stopped the run deterministically, but prior tools may
-            # have had effects. Keep at-most-once semantics: do not replay and
-            # retain an explicit operational reason for T10 telemetry/runbooks.
-            await self._mark_terminal(
-                interaction.id,
-                InteractionStatus.FAILED_AMBIGUOUS,
-                error_class="ExecutionBudgetExceededError",
-                error_detail_code=exc.limit,
-            )
-            return True
-        except Exception:
-            # Agent/tools may have had external effects; do not replay.
-            await self._mark_terminal(
-                interaction.id,
-                InteractionStatus.FAILED_AMBIGUOUS,
-                error_class="AgentRunError",
-                error_detail_code="agent_run_failed_after_claim",
-            )
-            return True
-        finally:
-            typing_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await typing_task
+            except Exception:
+                get_telemetry().mark_error(span, "AgentRunError")
+                await self._mark_terminal(
+                    interaction.id,
+                    InteractionStatus.FAILED_AMBIGUOUS,
+                    error_class="AgentRunError",
+                    error_detail_code="agent_run_failed_after_claim",
+                )
+                return True
+            finally:
+                get_telemetry().duration_ms(
+                    "ancora.interaction.process.duration",
+                    (time.perf_counter() - started) * 1000,
+                    attributes={"ancora.status": "completed"},
+                )
+                typing_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await typing_task
 
         response_ready = interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
         return await self._deliver_response(response_ready)
@@ -319,14 +348,43 @@ class InteractionProcessor:
                 )
                 return True
             try:
-                message_id = await self._sender.send_text(
-                    interaction.chat_id,
-                    chunks[claimed.chunk_index],
-                )
-                await self._mark_chunk_delivered(claimed.id, message_id)
+                attributes = {
+                    "ancora.correlation_id": str(interaction.correlation_id),
+                    "ancora.interaction_id": str(interaction.id),
+                    "telegram.update_id": interaction.telegram_update_id,
+                }
+                started = time.perf_counter()
+                with (
+                    log_context_scope(attributes),
+                    get_telemetry().span("telegram.response.send", attributes) as span,
+                ):
+                    try:
+                        message_id = await self._sender.send_text(
+                            interaction.chat_id,
+                            chunks[claimed.chunk_index],
+                        )
+                        await self._mark_chunk_delivered(claimed.id, message_id)
+                        get_telemetry().counter(
+                            "ancora.telegram.deliveries",
+                            attributes={"ancora.delivery.status": "completed"},
+                        )
+                    finally:
+                        get_telemetry().duration_ms(
+                            "ancora.telegram.delivery.duration",
+                            (time.perf_counter() - started) * 1000,
+                            attributes={"ancora.delivery.status": "completed"},
+                        )
             except asyncio.CancelledError:
                 raise
             except TelegramSendError as exc:
+                get_telemetry().mark_error(span, type(exc).__name__)
+                get_telemetry().counter(
+                    "ancora.telegram.deliveries",
+                    attributes={
+                        "ancora.delivery.status": "error",
+                        "error.type": type(exc).__name__,
+                    },
+                )
                 await self._fail_delivery(
                     interaction.id,
                     response.id,
@@ -338,6 +396,14 @@ class InteractionProcessor:
                 )
                 return True
             except Exception:
+                get_telemetry().mark_error(span, "TelegramSendUnknownError")
+                get_telemetry().counter(
+                    "ancora.telegram.deliveries",
+                    attributes={
+                        "ancora.delivery.status": "error",
+                        "error.type": "TelegramSendUnknownError",
+                    },
+                )
                 await self._fail_delivery(
                     interaction.id,
                     response.id,

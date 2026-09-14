@@ -9,6 +9,10 @@ import os
 import sys
 from typing import Any
 
+# Must be set before importing Agno so local execution has the same privacy
+# posture as the Docker image (specs/013 T10).
+os.environ["AGNO_TELEMETRY"] = "false"
+
 from agno.os.app import AgentOS
 from agno.os.interfaces.telegram import Telegram
 from fastapi import FastAPI
@@ -21,6 +25,7 @@ from src.agent.ancora_agent import (
 from src.agent.instructions import assemble_instructions
 from src.agent.lifecycle import (
     install_interaction_processor_lifespan,
+    install_observability_lifespan,
     install_reminder_worker_lifespan,
     install_runtime_config_manager_lifespan,
 )
@@ -37,6 +42,7 @@ from src.agent.telegram_admission import (
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
 from src.domain.runtime_config.service import RuntimeConfigManager
+from src.observability import configure_observability
 from src.repositories.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -210,13 +216,13 @@ def _register_interaction_processor(
 
 
 def create_app() -> tuple[FastAPI, AgentOS]:
-    """Build the AgentOS application with AncoraMind agent and Telegram interface."""
     settings = Settings()
 
     logging.basicConfig(
         level=getattr(logging, settings.log_level.upper(), logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+    configure_observability(settings)
 
     logger.info("Starting AncoraMind — env: %s", settings.app_env)
 
@@ -285,6 +291,8 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         ],
         base_app=base_app,
         on_route_conflict="preserve_base_app",
+        tracing=False,
+        telemetry=False,
     )
 
     app = agent_os.get_app()
@@ -307,6 +315,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         instructions=instructions,
         runtime_config_manager=runtime_config_manager,
     )
+    install_observability_lifespan(app)
 
     return app, agent_os
 

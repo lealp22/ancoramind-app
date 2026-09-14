@@ -1,0 +1,65 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # Reject large batches before memory pressure harms the Collector process.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  # Defense in depth: the application allowlist is authoritative, while these
+  # actions remove common content-bearing attributes if another client sends
+  # them through this Collector in the future.
+  attributes/redact-content:
+    actions:
+      - key: gen_ai.prompt
+        action: delete
+      - key: gen_ai.completion
+        action: delete
+      - key: message.content
+        action: delete
+      - key: http.request.body
+        action: delete
+      - key: http.response.body
+        action: delete
+      - key: ancora.tool.arguments
+        action: delete
+      - key: ancora.tool.result
+        action: delete
+      - key: document.content
+        action: delete
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  otlphttp/grafana:
+    endpoint: ${env:GRAFANA_OTLP_ENDPOINT}
+    headers:
+      Authorization: ${env:GRAFANA_OTLP_AUTHORIZATION}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 1000
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact-content, batch]
+      exporters: [otlphttp/grafana]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact-content, batch]
+      exporters: [otlphttp/grafana]

@@ -311,6 +311,11 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `REMINDER_WORKER_ENABLED` | Arranca el worker de recordatorios (auto-gated con DB + token) | `true` |
 | `REMINDER_POLL_INTERVAL_SECONDS` | Segundos entre ciclos de escaneo del worker | `60` |
 | `LOG_LEVEL` | Nivel de logging | `INFO` |
+| `OBSERVABILITY_JSON_LOGS` | Logs JSON metadata-only; el mensaje/args no se serializan | `true` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint gRPC del Collector privado; vacío = exporter desactivado fail-open | vacío |
+| `OTEL_EXPORTER_OTLP_INSECURE` | Transporte sin TLS hacia private networking Railway | `true` |
+| `OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS` | Timeout acotado de exportación OTLP | `3` |
+| `OTEL_EXPORT_INTERVAL_MILLIS` | Intervalo de exportación de métricas | `30000` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
 ### Runtime dinámico y LLMAccess (BL-23/specs/013)
@@ -326,12 +331,14 @@ Todavía quedan límites deliberados:
   desplegar LiteLLM privado y fail-closed (T11);
 - la extracción documental ya pasa por `DocumentExtractionPort`/`LLMAccess`
   (T9); el path AgentOS legado usa un contexto bootstrap standalone;
-- telemetría OpenTelemetry y desactivación de telemetría Agno pertenecen a T10.
+- T10 fuerza `AGNO_TELEMETRY=false` y `telemetry=False`, emite trazas/métricas
+  OTel y logs JSON metadata-only mediante allowlist. El exporter al Collector
+  privado es opcional/fail-open; el rollout real Railway/Grafana sigue pendiente.
 
 ## Project Conventions
 
-- **No Agno inheritance in domain code** — domain services are plain Python
-  (única excepción documentada: extracción IA en `domain/documents/service.py`)
+- **No Agno inheritance in domain code** — domain services are plain Python;
+  extracción documental usa el port `DocumentExtractionPort`.
 - **Tools are thin adapters** — they call domain services, never contain business logic
 - **Parameterized queries only** — no string interpolation in SQL
 - **User context from runtime, never from LLM**

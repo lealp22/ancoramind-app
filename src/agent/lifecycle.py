@@ -26,9 +26,32 @@ from src.domain.interactions.processor import InteractionProcessor
 from src.domain.reminders.worker import RemindersWorker
 from src.domain.runtime_config.service import RuntimeConfigManager
 from src.notifications.telegram import TelegramNotifier
+from src.observability.telemetry import shutdown_observability
 from src.repositories.database import get_session
 
 logger = logging.getLogger(__name__)
+
+
+def install_observability_lifespan(app: FastAPI) -> None:
+    """Flush metadata-only telemetry after all application work has stopped.
+
+    Exporter shutdown is best-effort inside ``shutdown_observability``: a
+    Collector outage must never turn a healthy process shutdown into a failure.
+    """
+    previous_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def observability_lifespan(application: FastAPI) -> AsyncIterator[Any]:
+        try:
+            async with previous_lifespan(application) as state:
+                yield state
+        finally:
+            try:
+                shutdown_observability()
+            except Exception:
+                logger.warning("Observability shutdown failed; continuing application shutdown")
+
+    app.router.lifespan_context = observability_lifespan
 
 
 def install_reminder_worker_lifespan(app: FastAPI, settings: Settings) -> bool:

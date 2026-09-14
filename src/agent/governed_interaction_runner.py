@@ -23,6 +23,11 @@ from src.domain.llm_access.models import (
     governance_metadata,
 )
 from src.domain.runtime_config.service import RuntimeConfigManager
+from src.observability import (
+    get_telemetry,
+    log_context_scope,
+    telemetry_attributes_from_execution_context,
+)
 
 
 class GovernedInteractionRunner:
@@ -60,34 +65,54 @@ class GovernedInteractionRunner:
             traceparent=generate_traceparent(),
         )
         with execution_context_scope(context):
-            agent = self._factory.create_for_run(context)
-            run_context = RunContext(
-                run_id=run_id,
-                session_id=session_id,
-                user_id=user_id,
-                metadata=governance_metadata(context),
-            )
-            try:
-                output = await asyncio.wait_for(
-                    agent.arun(
-                        input_text,
-                        stream=False,
-                        user_id=user_id,
-                        session_id=session_id,
-                        run_id=run_id,
-                        run_context=run_context,
-                    ),
-                    timeout=context.budget.seconds_remaining(),
+            observability = context.config.config.observability
+            attributes = telemetry_attributes_from_execution_context(context)
+            with (
+                log_context_scope(attributes),
+                get_telemetry().span(
+                    "agno.agent.run",
+                    attributes,
+                    enabled=observability.traces_enabled,
+                ) as span,
+            ):
+                agent = self._factory.create_for_run(context)
+                run_context = RunContext(
+                    run_id=run_id,
+                    session_id=session_id,
+                    user_id=user_id,
+                    metadata=governance_metadata(context),
                 )
-            except TimeoutError as exc:
-                # Controlled stop: the Agent (and any partially executed tool)
-                # was cancelled by the approved runtime budget. Tools may have
-                # produced external effects, so the interaction is never
-                # replayed automatically (specs/013 crash semantics).
-                raise ExecutionBudgetExceededError(
-                    "max_runtime_seconds",
-                    "Agent run cancelled after the approved runtime budget",
-                ) from exc
+                started = time.perf_counter()
+                try:
+                    output = await asyncio.wait_for(
+                        agent.arun(
+                            input_text,
+                            stream=False,
+                            user_id=user_id,
+                            session_id=session_id,
+                            run_id=run_id,
+                            run_context=run_context,
+                        ),
+                        timeout=context.budget.seconds_remaining(),
+                    )
+                except TimeoutError as exc:
+                    get_telemetry().mark_error(span, "ExecutionBudgetExceededError")
+                    get_telemetry().counter(
+                        "ancora.execution_budget.exceeded",
+                        attributes={"ancora.budget.limit": "max_runtime_seconds"},
+                        enabled=observability.metrics_enabled,
+                    )
+                    raise ExecutionBudgetExceededError(
+                        "max_runtime_seconds",
+                        "Agent run cancelled after the approved runtime budget",
+                    ) from exc
+                finally:
+                    get_telemetry().duration_ms(
+                        "ancora.agent.run.duration",
+                        (time.perf_counter() - started) * 1000,
+                        attributes={"ancora.status": "completed"},
+                        enabled=observability.metrics_enabled,
+                    )
         if not isinstance(output.content, str):
             raise ValueError("Governed interaction run returned non-text content")
         return output.content

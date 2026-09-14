@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 315 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 324 unit
   tests passing; 51 integration tests requieren PostgreSQL/Docker (se omiten sin
   esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
@@ -116,8 +116,8 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (T2–T9 implementados)
-tests/unit/              ← 315 tests
+                            013-llm-access-governance (T2–T10 implementados localmente)
+tests/unit/              ← 324 tests
 tests/integration/        ← 51 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
@@ -255,7 +255,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T9 implementados; T10/T11 y E2E pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T10 implementados localmente; rollout Collector/Grafana, T11 y E2E pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

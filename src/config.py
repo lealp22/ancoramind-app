@@ -109,6 +109,13 @@ class Settings(BaseSettings):
 
     # ── Observability ────────────────────────────────
     log_level: str = "INFO"
+    observability_json_logs: bool = True
+    """Emit structured metadata-only logs; enabled by default for every environment."""
+    otel_exporter_otlp_endpoint: str = ""
+    """Private Collector gRPC endpoint. Empty keeps OTLP exporting disabled/fail-open."""
+    otel_exporter_otlp_insecure: bool = True
+    otel_exporter_otlp_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    otel_export_interval_millis: int = Field(default=30000, ge=1000, le=300000)
 
     # ── Application ──────────────────────────────────
     app_debug: bool = False

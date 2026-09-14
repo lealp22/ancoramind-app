@@ -115,6 +115,7 @@ def test_factory_creates_agent_with_snapshot_ceilings_and_zero_retries() -> None
 
     assert agent.tool_call_limit == snapshot.config.execution_budget.max_tool_calls == 12
     assert agent.retries == 0
+    assert agent.telemetry is False
     assert isinstance(agent.model, OpenAIChat)
     assert agent.id == "ancoramind-governed"
 
@@ -144,3 +145,11 @@ def test_factory_uses_run_snapshot_for_tool_ceiling() -> None:
     )
 
     assert factory.create_for_run(context).tool_call_limit == 3
+
+
+def test_model_for_propagates_the_w3c_traceparent_to_the_gateway_request() -> None:
+    context = _context(_snapshot())
+
+    model = _access().model_for("ancoramind-default", context)
+
+    assert model.extra_headers == {"traceparent": context.traceparent}

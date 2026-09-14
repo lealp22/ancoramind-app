@@ -28,6 +28,8 @@ class TestSettings:
         monkeypatch.delenv("RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE", raising=False)
         monkeypatch.delenv("APP_ENV", raising=False)
         monkeypatch.delenv("LOG_LEVEL", raising=False)
+        monkeypatch.delenv("OBSERVABILITY_JSON_LOGS", raising=False)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
         monkeypatch.delenv("APP_DEBUG", raising=False)
 
         settings = Settings(_env_file=None)
@@ -45,6 +47,8 @@ class TestSettings:
         assert settings.runtime_config_admin_token == ""
         assert settings.runtime_config_bootstrap_default_route == "ancoramind-default"
         assert settings.app_debug is False
+        assert settings.observability_json_logs is True
+        assert settings.otel_exporter_otlp_endpoint == ""
 
     def test_env_override(self, monkeypatch):
         """Environment variables should override defaults."""
@@ -58,6 +62,17 @@ class TestSettings:
         assert settings.agent_tool_call_limit == 5
         assert settings.app_env == "production"
         assert settings.log_level == "DEBUG"
+
+    def test_observability_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("OBSERVABILITY_JSON_LOGS", "false")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.internal:4317")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_INSECURE", "false")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.observability_json_logs is False
+        assert settings.otel_exporter_otlp_endpoint == "http://collector.internal:4317"
+        assert settings.otel_exporter_otlp_insecure is False
 
     def test_telegram_admission_env_overrides(self, monkeypatch):
         monkeypatch.setenv("TELEGRAM_ADMISSION_ENABLED", "true")

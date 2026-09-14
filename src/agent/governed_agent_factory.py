@@ -64,6 +64,7 @@ class GovernedAgentFactory:
             tools=self._tools,
             tool_call_limit=snapshot.config.execution_budget.max_tool_calls,
             retries=0,
+            telemetry=False,
             tool_hooks=self._tool_hooks or None,
             instructions=self._instructions,
             add_history_to_context=True,

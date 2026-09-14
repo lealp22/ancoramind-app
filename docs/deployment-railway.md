@@ -4,11 +4,10 @@
 > estable para Telegram, Supabase como PostgreSQL/Storage y CI/CD desde GitHub.
 > No usar ngrok en este flujo.
 
-> **Estado BL-23 (2026-09-13):** LiteLLM Proxy, PostgreSQL dedicado del Gateway,
-> OpenTelemetry Collector y el admission Telegram durable están aprobados en
-> specs/013 pero **todavía no están desplegados**. Esta guía describe el servicio
-> actual de una sola aplicación hasta que las fases correspondientes se
-> implementen y verifiquen.
+> **Estado BL-23 (2026-09-14):** el código de OpenTelemetry metadata-only y el
+> manifiesto del Collector están implementados y validados localmente. LiteLLM,
+> PostgreSQL dedicado del Gateway y el despliegue real del Collector/Grafana en
+> Railway siguen pendientes de un rollout explícito.
 
 ## Arquitectura de producción
 
@@ -109,8 +108,15 @@ OPENAI_API_KEY=<si-aplica>
 OPENROUTER_API_KEY=<si-aplica>
 LLM_BASE_URL=<solo-openai-like>
 
-# Estado actual: Agno envía telemetría mínima por defecto.
-# Target specs/013, todavía no implementado: AGNO_TELEMETRY=false y OTLP privado.
+# T10: la aplicación y Docker fuerzan AGNO_TELEMETRY=false. No habilitar
+# tracing/telemetry propio de Agno: AncoraMind exporta sólo metadata allowlisted.
+OBSERVABILITY_JSON_LOGS=true
+# Tras crear el servicio privado Collector (sección 3.1), usar únicamente su
+# hostname privado de Railway, sin dominio público ni Grafana directo.
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://ancoramind-otel-collector.railway.internal:4317
+# OTEL_EXPORTER_OTLP_INSECURE=true
+# OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS=3
+# OTEL_EXPORT_INTERVAL_MILLIS=30000
 
 AGNO_DATABASE_URL=postgresql+psycopg://<session-pooler>
 ANCORA_DATABASE_URL=postgresql+asyncpg://<session-pooler>
@@ -130,9 +136,43 @@ REMINDER_POLL_INTERVAL_SECONDS=60
 No configures `NGROK_URL`. Railway proporciona `PORT` automáticamente; la app
 lo consume en producción y escucha en `0.0.0.0` sin autoreload.
 
-No añadas todavía variables de LiteLLM, OTLP o Grafana a producción hasta que
-las fases T10/T11 de specs/013 estén implementadas, tengan privacy tests y se
-haya revisado la superficie de seguridad del Gateway.
+No añadas variables de LiteLLM a producción hasta T11. Las variables OTLP se
+añaden únicamente al servicio AncoraMind después de crear y validar el Collector
+privado descrito a continuación; nunca apuntan directamente a Grafana Cloud.
+
+### 3.1 Collector OpenTelemetry privado (T10)
+
+1. Railway → **New Service** → **Docker Image**:
+   `otel/opentelemetry-collector-contrib:0.138.0`.
+2. Sube el fichero versionado `observability/otel-collector.yaml` como config del
+   servicio y usa como comando:
+
+   ```text
+   --config=/etc/otelcol/config.yaml
+   ```
+
+3. No generes dominio público ni TCP proxy. El receptor gRPC `4317` se consume
+   exclusivamente por private networking de Railway.
+4. En el servicio Collector, define **solo como Railway secrets**:
+
+   ```env
+   GRAFANA_OTLP_ENDPOINT=<endpoint-otlp-http-grafana-cloud>
+   GRAFANA_OTLP_AUTHORIZATION=Basic <token-grafana-cloud>
+   ```
+
+5. En el servicio AncoraMind, define `OTEL_EXPORTER_OTLP_ENDPOINT` con el host
+   privado del Collector y las variables OTLP comentadas arriba. No copies los
+   secretos de Grafana al servicio AncoraMind.
+6. Valida primero que la app sigue respondiendo a `/health` con Collector apagado
+   o con endpoint inaccesible: el pipeline es **fail-open**. Después revisa que
+   Grafana recibe sólo atributos allowlisted: rutas, status, error class, tokens,
+   coste, latencia y correlación; nunca prompts, mensajes, respuestas, documentos
+   ni argumentos/resultados de tools.
+
+El Collector aplica defensa en profundidad: `memory_limiter`, redacción de claves
+de contenido conocidas, `batch` y cola/retry acotados antes del exporter Grafana.
+El fichero se valida en CI/local con la imagen fijada `0.138.0` y valores dummy;
+esa validación no contacta Grafana.
 
 > **Rollout T4/T5:** cuando se active `TELEGRAM_ADMISSION_ENABLED=true`, el
 > endpoint estable `/telegram/webhook` pasa a ser propiedad de AncoraMind y

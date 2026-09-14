@@ -84,15 +84,18 @@ class TelegramNotifier:
                 json=payload,
             )
         except httpx.HTTPError as exc:
-            logger.error("Telegram delivery failed for reminder %s: %s", reminder.id, exc)
+            logger.error(
+                "Telegram reminder delivery failed (reminder_id=%s, error_class=%s)",
+                reminder.id,
+                type(exc).__name__,
+            )
             return False
 
         if response.status_code != 200:
             logger.error(
-                "Telegram API rejected reminder %s: HTTP %d %s",
+                "Telegram API rejected reminder (reminder_id=%s, http_status=%d)",
                 reminder.id,
                 response.status_code,
-                response.text[:200],
             )
             return False
         return True

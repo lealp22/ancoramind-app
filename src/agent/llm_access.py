@@ -82,6 +82,10 @@ class AgnoLLMAccess:
             base_url=self._settings.llm_base_url,
             api_key=self._resolve_api_key(),
         )
+        if execution_context.traceparent:
+            headers = dict(kwargs.get("extra_headers") or {})
+            headers["traceparent"] = execution_context.traceparent
+            kwargs["extra_headers"] = headers
         return build_governed_model(
             base_cls,
             kwargs,
