@@ -258,14 +258,47 @@ del rollout Railway.
 
 ## T13: Hardening, runbooks and closure
 
-- [ ] Ejecutar load tests y duplicados concurrentes.
-- [ ] Ejecutar crash injection y reinicios/deploys durante cada estado.
-- [ ] Validar E2E Telegram completo en Railway.
-- [ ] Probar rotación de admin token, payload key, LiteLLM key y credenciales OTLP.
-- [ ] Validar retención/borrado y acceso a Grafana Cloud.
-- [ ] Crear runbooks de Gateway down, circuit open, budget exhausted,
+> T13 opera bajo una restricción explícita de alcance: todo el hardening que
+> requiera recursos externos (Railway, Grafana Cloud, Telegram real, OpenRouter
+> con clave real) se deja como checklist pendiente del rollout. T13 solo
+> entrega hardening verificable localmente (carga/crash/retención/runbooks) y
+> marca como pendientes E2E Railway, rotación real de secretos, dashboards y
+> `verification.md` con evidencia real. BL-23 no se cierra en T13: queda en
+> estado "implementado localmente, E2E pendiente".
+
+- [x] Ejecutar load tests y duplicados concurrentes (local, sin costes externos).
+      `tests/integration/test_hardening_013.py`: 20 duplicados → 1
+      interaction/20 deliveries/1 claim; burst de 5 updates → 5 runs
+      ordenados, exactamente-once.
+- [x] Ejecutar crash injection y reinicios/deploys durante cada estado (local).
+      Misma suite: `agent_started` → `failed_ambiguous` sin replay ni delivery;
+      `delivery_started` → `failed_ambiguous` sin reenvío; `response_ready` →
+      delivery sin rerun del Agent.
+- [x] Validar retención/borrado con el cifrado/purga implementados (local).
+      Misma suite: `failed_ambiguous` + 8 días → ciphertext/version
+      borrados, fingerprint y metadata conservados.
+- [x] Crear runbooks de Gateway down, circuit open, budget exhausted,
       `failed_ambiguous`, Collector down y rollback de config.
-- [ ] Ejecutar unit tests, integration tests, Ruff y checks de migración.
-- [ ] Completar `verification.md` con evidencia real.
-- [ ] Actualizar BACKLOG, AGENTS, README y deployment docs al estado implementado.
-- [ ] Cerrar BL-23 solo cuando la matriz A–Y esté verificada.
+      Entregado `docs/runbooks-013.md` (§0–§7 + §8 pendientes de rollout).
+- [x] Ejecutar unit tests, integration tests, Ruff y checks de migración.
+      Gates finales T13 abajo (352 unit + 59 integration, Ruff, mypy T13,
+      Alembic head 0003, Docker build/smoke).
+- [x] Completar `verification.md` con evidencia local y marcar el resto ⏳.
+      Header T2–T13, filas de hardening T13 y sección T13 añadidas; E2E,
+      rotación real, Grafana y benchmark quedan ⏳ explícitos.
+- [x] Actualizar BACKLOG, AGENTS, README y deployment docs al estado implementado.
+      (AGENTS/ BACKLOG/ README/ deployment-railway/ development/ runbooks-013
+      actualizados en T13; ver resumen final.)
+- [x] Dejar E2E Telegram en Railway, rotación real, acceso Grafana y benchmark
+      con clave real como pendientes explícitos del rollout (no cierran BL-23).
+      Checklist en `docs/runbooks-013.md` §8 y `verification.md`.
+- [ ] Cerrar BL-23 solo cuando la matriz A–Y esté verificada (pendiente:
+      E2E Railway + evidencia real).
+
+### Entregables T13 (añadidos en esta tarea)
+
+| Entregable | Fichero |
+|---|---|
+| Runbooks operativos (Gateway down, circuit open, budget, ambiguous, Collector, rollback) | `docs/runbooks-013.md` |
+| Checklist de rollout Railway/Grafana/Telegram pendiente | `docs/runbooks-013.md` §8 + `specs/013/verification.md` |
+| Tests de carga/crash/retención verificables localmente | `tests/integration/test_hardening_013.py` (extendido en T13) |

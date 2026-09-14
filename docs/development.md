@@ -328,6 +328,14 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LITELLM_VIRTUAL_KEY_BUDGET_DURATION` | T12: ventana de rotación del backstop | `30d` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
+### Runbooks operativos specs/013 (T13)
+
+Ver [`docs/runbooks-013.md`](runbooks-013.md): Gateway down (fail closed),
+circuit open, budget exhausted (`failed_controlled` sin replay),
+`failed_ambiguous` (sin replay/reenvío), Collector down (fail open),
+rollback CAS de config y checklist pendiente del rollout (E2E Railway,
+benchmark con clave real, Grafana, rotación real).
+
 ### Runtime dinámico y LLMAccess (BL-23/specs/013)
 
 T6 implementa `RuntimeConfigManager` cacheado en memoria; T7 captura ese

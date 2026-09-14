@@ -1,9 +1,9 @@
 # Verification: 013 — Governed LLM Access and Telegram Admission
 
-> **Estado:** 🔶 T2–T12 implementados y validados localmente; rollout Railway
+> **Estado:** 🔶 T2–T13 implementados y validados localmente; rollout Railway
 > (Collector/Grafana/LiteLLM), dashboards/alertas, benchmark con clave real y
-> E2E siguen pendientes.
-> **Diseño aprobado:** 2026-09-13
+> E2E siguen pendientes. **BL-23 no se cierra en T13.**
+> **Diseño aprobado:** 2026-09-13 · **Hardening local T13:** 2026-09-14
 
 ---
 
@@ -33,9 +33,10 @@
 | Migration upgrade over existing data | ✅ | Schema sin versionar adoptado; nota semilla preservada |
 | Migration downgrade | ✅ | `downgrade -1` conserva baseline/datos y retira specs/013 |
 | Privacy tests | ✅ T10 | Allowlist, logs JSON sin mensaje/args, no IDs en metric labels y Collector redactado |
-| LiteLLM latency benchmark | ⏳ | |
-| Load/concurrency tests | ⏳ | |
-| Crash-injection tests | ⏳ | |
+| Hardening T13 (load/crash/retención) | ✅ T13 local | `tests/integration/test_hardening_013.py`: 7 passed (duplicados, burst ordenado, crash agent/delivery, recovery response_ready, purga, orden estable) |
+| LiteLLM latency benchmark | ⏳ | Pendiente del rollout (clave real) |
+| Load/concurrency tests | ✅ T13 local | Ver fila anterior; E2E Railway pendiente |
+| Crash-injection tests | ✅ T13 local | Ver fila anterior; reinicios/deploys reales pendientes |
 
 ## Acceptance matrix
 
@@ -309,6 +310,35 @@
 - La garantía at-most-once cubre la ejecución del Agent y la persistencia lógica;
   Telegram `sendMessage` no ofrece exactly-once externo.
 - Completar esta sección al cerrar la spec con cualquier limitación residual.
+
+## T13 — Hardening, runbooks and closure verification (2026-09-14)
+
+- **Suite local nueva**: `tests/integration/test_hardening_013.py` (7 tests,
+  PostgreSQL Docker real, sin servicios externos):
+  - 20 deliveries concurrentes del mismo `update_id` → 1 interaction, 20
+    deliveries, claim único (A/B bajo carga).
+  - Burst de 5 updates distintos en el mismo chat → 5 runs ordenados,
+    exactamente-once, 5 deliveries.
+  - Crash tras `agent_started` → `recover_once` marca `failed_ambiguous`
+    (`restart_after_agent_started`); `run_once` posterior no ejecuta el
+    Agent ni envía nada (J/K).
+  - Crash tras `delivery_started` → `failed_ambiguous`, sin reenvío (M).
+  - Restart con `response_ready` pendiente → delivery sin rerun del Agent,
+    estado final `completed` (L).
+  - `failed_ambiguous` + 8 días → `purge_expired_payloads` borra
+    ciphertext/version y conserva fingerprint + metadata.
+  - `list_recoverable_work` estable entre ciclos (mismo orden por consulta;
+    el orden primario es `(chat_id, received_at, update_id)`).
+- **Hallazgo documentado**: filas admitidas en el mismo milisegundo no
+  garantizan orden por `update_id` (el `ORDER BY` usa `received_at` primero);
+  el contrato exigible es estabilidad + exactamente-once por chat, no
+  ordenación causal por `update_id`.
+- **Runbooks**: `docs/runbooks-013.md` (§0 mapa síntoma→runbook, §1 Gateway
+  down, §2 circuit open, §3 budget, §4 ambiguous, §5 matriz crash local,
+  §6 Collector, §7 rollback CAS, §8 checklist rollout + rotación).
+- **No cierra BL-23**: pendientes E2E Railway, rotación real de secretos,
+  Grafana/dashboards, benchmark con clave real y `verification.md` con
+  evidencia real (ver `docs/runbooks-013.md` §8).
 ## T12 — Reliability and cost governance verification (2026-09-14)
 
 - **Circuit breaker (CLOSED/OPEN/HALF_OPEN)**: `gateway/litellm-config.yaml`

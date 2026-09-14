@@ -123,11 +123,13 @@ docs/               ← Architecture, governance, ADRs
 - [x] M3: Document Memory (attachment → storage → extraction)
 - [x] M4: Vehicle Vertical Slice (invoice → maintenance → query)
 - [x] M5: Calendar & Reminders
-- [x] BL-23 T2–T12: governed LLM access, durable admission, execution budget,
+- [x] BL-23 T2–T13: governed LLM access, durable admission, execution budget,
       document extraction port, metadata-only OpenTelemetry, the LiteLLM
-      Gateway pilot and cost/reliability governance (circuit breaker, rate
-      limits, spend budgets with run-start hard stop) (Railway rollout of
-      Collector/Grafana/LiteLLM, benchmark with a real key and E2E remain pending)
+      Gateway pilot, cost/reliability governance (circuit breaker, rate
+      limits, spend budgets with run-start hard stop) and local hardening
+      (load/crash/retention suite + operational runbooks) (Railway rollout of
+      Collector/Grafana/LiteLLM, benchmark with a real key and E2E remain pending;
+      BL-23 stays open)
 - [ ] MVP: Usable personal assistant (E2E Telegram validation)
 
 ### Capabilities (19 tools)

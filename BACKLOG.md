@@ -30,7 +30,7 @@ Tests: 352 unit + 52 integration passing — Ruff limpio en
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T12 implementados localmente — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T13 implementados localmente — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -99,8 +99,15 @@ con invariante en rutas de pago; el runner evalúa el spend al inicio del run
 con hard stop `failed_controlled` sin replay; el Gateway declara circuit
 breaker (`allowed_fails`/`cooldown_time`, transiciones CLOSED/OPEN/HALF_OPEN
 validadas localmente) y RPM/TPM por alias + por virtual key (enforcement 429
-verificado); retries/fallbacks mantienen 0 por decisión documentada. Ver
-`specs/013-llm-access-governance/`.
+verificado); retries/fallbacks mantienen 0 por decisión documentada.
+**Actualización T13:** hardening verificable localmente —
+`tests/integration/test_hardening_013.py` (20 duplicados → 1 claim, burst
+ordenado exactamente-once, crash tras `agent_started`/`delivery_started` →
+`failed_ambiguous` sin replay/reenvío, `response_ready` recuperable, purga de
+retención, orden estable) — y runbooks operativos en `docs/runbooks-013.md`.
+E2E Railway, rotación real, Grafana/dashboards y benchmark con clave real
+quedan como checklist pendiente del rollout (§8); **BL-23 no se cierra en T13**.
+Ver `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update
 ejecuta el Agent como máximo una vez, el modelo cambia sin redeploy, ningún run

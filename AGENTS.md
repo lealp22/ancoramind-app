@@ -122,7 +122,9 @@ tests/unit/              ← 328 tests
 tests/integration/        ← 51 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
-                           deployment-e2e, adding-tools (guía para nuevas tools),
+                           deployment-e2e, deployment-railway, runbooks-013
+                           (operación specs/013), adding-tools (guía para nuevas
+                           tools),
                            adr/ADR-001-agno-runtime.md,
                            adr/ADR-002-supabase-infrastructure.md,
                            adr/ADR-003-reminder-worker.md,
@@ -267,7 +269,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T12 implementados localmente; rollout Railway (Collector/Grafana/LiteLLM) y E2E pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T13 implementados localmente; rollout Railway (Collector/Grafana/LiteLLM) y E2E pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

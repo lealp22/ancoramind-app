@@ -7,7 +7,9 @@
 > **Estado BL-23 (2026-09-14):** el código de OpenTelemetry metadata-only y el
 > manifiesto del Collector están implementados y validados localmente. LiteLLM,
 > PostgreSQL dedicado del Gateway y el despliegue real del Collector/Grafana en
-> Railway siguen pendientes de un rollout explícito.
+> Railway siguen pendientes de un rollout explícito. Los runbooks operativos
+> están en `docs/runbooks-013.md` (T13); E2E, rotación real, dashboards y
+> benchmark con clave real son checklist pendiente, no parte de T13.
 
 ## Arquitectura de producción
 
