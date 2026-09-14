@@ -535,8 +535,11 @@ HMAC(tool_name + canonical_json(arguments))
 Los argumentos no se exportan; el HMAC usa una clave interna en Railway.
 
 Se aprovecharán `tool_hooks`, eventos de model request, `RunContext.metadata`,
-`run_id`, métricas de `RunOutput` y `StopAgentRun` de Agno 2.9.0. No se
-reimplementará su loop agentic.
+`run_id`, métricas de `RunOutput` y `StopAgentRun` de Agno 2.9.0. En esta
+versión `StopAgentRun` se importa desde `agno.exceptions`, no desde
+`agno.agent`. El hook async transforma una violación de presupuesto en ese
+control de flujo para terminar el loop después de la tool rechazada, sin una
+nueva inferencia. No se reimplementará el loop agentic.
 
 ## 14. Document extraction
 

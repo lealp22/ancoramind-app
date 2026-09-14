@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     """Start the T5 processor; requires the same trusted admission prerequisites."""
     telegram_processor_poll_interval_seconds: float = Field(default=1.0, gt=0)
     telegram_processor_global_concurrency: int = Field(default=2, ge=1, le=20)
+    execution_budget_fingerprint_key: str = ""
+    """Explicit HMAC key for tool-call fingerprints; when empty, a dedicated
+    subkey is derived from TELEGRAM_PAYLOAD_ENCRYPTION_KEY (Railway secrets only)."""
 
     # ── Governed runtime config control plane (T6 / specs-013) ──
     runtime_config_admin_enabled: bool = False
@@ -88,6 +91,21 @@ class Settings(BaseSettings):
         if not raw:
             return []
         return [int(uid.strip()) for uid in raw.split(",") if uid.strip()]
+
+    @property
+    def budget_fingerprint_key(self) -> str | None:
+        """HMAC key for tool-call fingerprints (T8).
+
+        Prefers an explicit ``EXECUTION_BUDGET_FINGERPRINT_KEY`` and otherwise
+        derives a dedicated subkey from the payload encryption secret, so the
+        governed processor path (which already requires that secret) always has
+        a fingerprint key available.
+        """
+        if self.execution_budget_fingerprint_key:
+            return self.execution_budget_fingerprint_key
+        from src.domain.llm_access.fingerprints import derive_fingerprint_key
+
+        return derive_fingerprint_key(self.telegram_payload_encryption_key)
 
     # ── Observability ────────────────────────────────
     log_level: str = "INFO"

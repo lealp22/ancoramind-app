@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import time
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -14,6 +16,7 @@ from src.domain.interactions.processor import InteractionAgentRunner
 from src.domain.llm_access.context import current_execution_context
 from src.domain.llm_access.models import (
     ExecutionBudget,
+    ExecutionBudgetExceededError,
     ExecutionContext,
     GovernanceViolationError,
 )
@@ -188,3 +191,52 @@ def test_runner_port_signature_matches_domain_protocol() -> None:
 
 def _uuid() -> UUID:  # pragma: no cover - helper kept for future tests
     return uuid4()
+
+
+async def test_runner_cancels_run_after_approved_runtime_budget() -> None:
+    base = bootstrap_runtime_configuration()
+    tight = base.model_copy(
+        update={
+            "execution_budget": base.execution_budget.model_copy(update={"max_runtime_seconds": 1}),
+            "gateway": base.gateway.model_copy(update={"request_timeout_seconds": 1}),
+        }
+    )
+    snapshot = RuntimeConfigSnapshot(
+        revision=5,
+        checksum=config_checksum(tight),
+        source="database",
+        config=tight,
+    )
+    factory = _FakeFactory()
+    started_calls: list[float] = []
+
+    class _SlowAgent:
+        async def arun(self, input_text: str, **kwargs: Any) -> Any:
+            started_calls.append(time.monotonic())
+            await asyncio.sleep(1.5)
+
+            class _Output:
+                content = "nunca llega"
+
+            return _Output()
+
+    factory.agent = _SlowAgent()  # type: ignore[assignment]
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(snapshot),
+        factory=factory,
+    )
+
+    with pytest.raises(ExecutionBudgetExceededError) as exc_info:
+        await runner.run(
+            "hola",
+            user_id="88",
+            session_id="tg:ancoramind:77",
+            run_id="run-slow",
+            correlation_id=uuid4(),
+            telegram_update_id=9001,
+        )
+
+    assert exc_info.value.limit == "max_runtime_seconds"
+    assert len(started_calls) == 1
+    with pytest.raises(GovernanceViolationError):
+        current_execution_context()

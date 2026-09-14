@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 270 unit + 51 integration passing — Ruff limpio en
+Tests: 304 unit + 51 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T7 implementados — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T8 implementados — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -68,7 +68,11 @@ compone un Agent por run con `run_id` explícito, retries 0 y ceiling 12; cada
 model turn pasa por `LLMAccess`/`GovernedModel` y persiste metadata de uso sin
 contenido personal. El provider directo sigue limitado a esta frontera hasta
 LiteLLM/T11; la extracción documental se migra en T9 y AgentOS legado persiste
-solo mientras T4/T5 sigan apagados. Ver
+solo mientras T4/T5 sigan apagados. **Actualización T8:** el budget aplica
+deadline de 120 s, techos de model/Gateway calls, límite de 12 tools, HMAC de
+argumentos canónicos y bloqueo de repetición; `StopAgentRun` corta el loop tras
+una tool rechazada. Pricing opcional versionado permite coste estimado/real sin
+I/O por call; agotamiento queda auditado como `failed_ambiguous` sin replay. Ver
 `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update

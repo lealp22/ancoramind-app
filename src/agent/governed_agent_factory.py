@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from agno.agent import Agent
 
+from src.agent.tool_budget_hooks import build_budget_tool_hook
 from src.domain.llm_access.models import ExecutionContext
 
 if TYPE_CHECKING:
     from src.domain.llm_access.access import LLMAccess
+
+logger = logging.getLogger(__name__)
 
 
 class GovernedAgentFactory:
@@ -22,11 +26,21 @@ class GovernedAgentFactory:
         db: Any,
         tools: list[Any],
         instructions: list[str],
+        fingerprint_key: str | None = None,
     ):
         self._llm_access = llm_access
         self._db = db
         self._tools = tools
         self._instructions = instructions
+        self._tool_hooks: list[Any] = []
+        if fingerprint_key:
+            self._tool_hooks.append(build_budget_tool_hook(fingerprint_key))
+        else:
+            logger.warning(
+                "Governed tool budget hook disabled: no fingerprint key is available. "
+                "Tool hard ceiling and model-call ceilings stay enforced, but identical "
+                "repetition detection is inactive (specs/013 T8)."
+            )
 
     def create_for_run(
         self,
@@ -50,6 +64,7 @@ class GovernedAgentFactory:
             tools=self._tools,
             tool_call_limit=snapshot.config.execution_budget.max_tool_calls,
             retries=0,
+            tool_hooks=self._tool_hooks or None,
             instructions=self._instructions,
             add_history_to_context=True,
             num_history_runs=10,

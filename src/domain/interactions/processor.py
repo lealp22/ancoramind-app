@@ -20,6 +20,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.llm_access.models import ExecutionBudgetExceededError
 from src.repositories.interactions import TelegramInteractionsRepository
 
 logger = logging.getLogger(__name__)
@@ -231,6 +232,17 @@ class InteractionProcessor:
                 return True
         except asyncio.CancelledError:
             raise
+        except ExecutionBudgetExceededError as exc:
+            # The budget stopped the run deterministically, but prior tools may
+            # have had effects. Keep at-most-once semantics: do not replay and
+            # retain an explicit operational reason for T10 telemetry/runbooks.
+            await self._mark_terminal(
+                interaction.id,
+                InteractionStatus.FAILED_AMBIGUOUS,
+                error_class="ExecutionBudgetExceededError",
+                error_detail_code=exc.limit,
+            )
+            return True
         except Exception:
             # Agent/tools may have had external effects; do not replay.
             await self._mark_terminal(

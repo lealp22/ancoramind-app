@@ -117,17 +117,19 @@ fail-closed pertenece a T11.
 
 ## T8: Execution budget
 
-- [ ] Implementar deadline total de 120 segundos.
-- [ ] Limitar a 6 model calls lógicas y 8 Gateway requests por update.
-- [ ] Limitar a 2 intentos Gateway por llamada lógica.
-- [ ] Integrar tool hooks de Agno y el hard ceiling de 12.
-- [ ] Calcular fingerprints HMAC de tool + argumentos canónicos.
-- [ ] Bloquear repetición posterior a éxito y acotar retries tras error.
-- [ ] Hacer los contadores seguros frente a tools async concurrentes.
-- [ ] Implementar estimación/reserva/reconciliación de coste.
-- [ ] Detener el run de forma controlada con estado y telemetry explícitos.
+- [x] Implementar deadline total de 120 segundos.
+- [x] Limitar a 6 model calls lógicas y 8 Gateway requests por update.
+- [x] Limitar a 2 intentos Gateway por llamada lógica.
+- [x] Integrar tool hooks de Agno y el hard ceiling de 12.
+- [x] Calcular fingerprints HMAC de tool + argumentos canónicos.
+- [x] Bloquear repetición posterior a éxito y acotar retries tras error.
+- [x] Hacer los contadores seguros frente a tools async concurrentes.
+- [x] Implementar estimación/reserva/reconciliación de coste.
+- [x] Detener el run de forma controlada con estado y telemetry explícitos.
 
-**Acceptance:** G y H.
+**Acceptance:** G y H implementados en runs gobernados. El Gateway no tiene
+retries/fallbacks activos hasta T11/T12, pero el budget ya reserva y valida el
+límite agregado y los 2 attempts por llamada lógica para esa evolución.
 
 ## T9: Document extraction port
 

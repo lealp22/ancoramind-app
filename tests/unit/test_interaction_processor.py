@@ -16,6 +16,7 @@ from src.domain.interactions.models import InteractionStatus, TelegramInteractio
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor, TelegramSendError
+from src.domain.llm_access.models import ExecutionBudgetExceededError
 from src.repositories.interactions import TelegramInteractionsRepository
 
 
@@ -89,6 +90,46 @@ async def test_agent_failure_after_claim_is_marked_ambiguous(
         InteractionStatus.FAILED_AMBIGUOUS,
         error_class="AgentRunError",
         error_detail_code="agent_run_failed_after_claim",
+    )
+
+
+async def test_budget_exhaustion_after_claim_records_the_budget_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    repo.claim_agent_start_with_run_id.return_value = interaction.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "hola"}).ciphertext}
+    )
+    runner = AsyncMock()
+    runner.run.side_effect = ExecutionBudgetExceededError(
+        "max_model_calls", "logical model-call ceiling"
+    )
+    sender = AsyncMock()
+    sender.send_typing.return_value = None
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+    )
+
+    assert await processor._run_agent(accepted) is True
+    repo.update_status.assert_awaited_once_with(
+        accepted.id,
+        InteractionStatus.FAILED_AMBIGUOUS,
+        error_class="ExecutionBudgetExceededError",
+        error_detail_code="max_model_calls",
     )
 
 

@@ -64,6 +64,9 @@ async def test_usage_event_round_trip_contains_metadata_not_personal_content(
         input_tokens=10,
         output_tokens=20,
         total_tokens=30,
+        estimated_cost=0.0004,
+        actual_cost=0.0003,
+        cost_source="pricing_snapshot",
         latency_ms=45,
         time_to_first_token_ms=12,
         status="completed",
@@ -77,7 +80,8 @@ async def test_usage_event_round_trip_contains_metadata_not_personal_content(
                 SELECT interaction_id, llm_call_id, config_revision, logical_route,
                     effective_gateway_route, provider, model, provider_request_id,
                     input_tokens, output_tokens, total_tokens, latency_ms,
-                    time_to_first_token_ms, retry_count, fallback_used, status,
+                    time_to_first_token_ms, estimated_cost, actual_cost, cost_source,
+                    retry_count, fallback_used, status,
                     error_class
                 FROM ancora.llm_usage_events
                 WHERE llm_call_id = :llm_call_id
@@ -94,6 +98,9 @@ async def test_usage_event_round_trip_contains_metadata_not_personal_content(
     assert row.provider_request_id == "provider-request-1"
     assert (row.input_tokens, row.output_tokens, row.total_tokens) == (10, 20, 30)
     assert (row.latency_ms, row.time_to_first_token_ms) == (45, 12)
+    assert float(row.estimated_cost) == pytest.approx(0.0004)
+    assert float(row.actual_cost) == pytest.approx(0.0003)
+    assert row.cost_source == "pricing_snapshot"
     assert row.retry_count == 0
     assert row.fallback_used is False
     assert row.status == "completed"

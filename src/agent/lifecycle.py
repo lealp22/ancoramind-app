@@ -121,6 +121,7 @@ def install_interaction_processor_lifespan(
         db=db,
         tools=tools,
         instructions=instructions,
+        fingerprint_key=settings.budget_fingerprint_key,
     )
     agent_runner = GovernedInteractionRunner(
         config_manager=runtime_config_manager,

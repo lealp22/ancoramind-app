@@ -7,6 +7,7 @@ executes one per-run Agent with an explicit ``run_id`` (specs/013 T7).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import (
     ExecutionBudget,
+    ExecutionBudgetExceededError,
     ExecutionContext,
     generate_traceparent,
     governance_metadata,
@@ -65,14 +67,27 @@ class GovernedInteractionRunner:
                 user_id=user_id,
                 metadata=governance_metadata(context),
             )
-            output = await agent.arun(
-                input_text,
-                stream=False,
-                user_id=user_id,
-                session_id=session_id,
-                run_id=run_id,
-                run_context=run_context,
-            )
+            try:
+                output = await asyncio.wait_for(
+                    agent.arun(
+                        input_text,
+                        stream=False,
+                        user_id=user_id,
+                        session_id=session_id,
+                        run_id=run_id,
+                        run_context=run_context,
+                    ),
+                    timeout=context.budget.seconds_remaining(),
+                )
+            except TimeoutError as exc:
+                # Controlled stop: the Agent (and any partially executed tool)
+                # was cancelled by the approved runtime budget. Tools may have
+                # produced external effects, so the interaction is never
+                # replayed automatically (specs/013 crash semantics).
+                raise ExecutionBudgetExceededError(
+                    "max_runtime_seconds",
+                    "Agent run cancelled after the approved runtime budget",
+                ) from exc
         if not isinstance(output.content, str):
             raise ValueError("Governed interaction run returned non-text content")
         return output.content

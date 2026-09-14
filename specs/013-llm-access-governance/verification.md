@@ -21,8 +21,8 @@
 
 | Check | Resultado | Evidencia |
 |---|---|---|
-| Unit tests | ✅ T4 | 205 passed; admission/config/wiring cubiertos |
-| Integration tests | ✅ T4 | 40 passed; ledger, admission HTTP, límites y migraciones |
+| Unit tests | ✅ T8 | 304 passed; admission, config, LLMAccess y execution budget cubiertos |
+| Integration tests | ✅ T8 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
 | Ruff | ✅ T4 | `ruff check src/ tests/ scripts/ migrations/` |
 | mypy del alcance T2 | ✅ | 4 ficheros nuevos sin issues |
 | mypy del alcance T3 | ✅ | domain, repository, config y tests nuevos sin issues |
@@ -45,8 +45,8 @@
 | D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
 | E | Primary falla → no se supera attempt budget | ⏳ | |
 | F | Circuit open → cero llamadas al upstream afectado | ⏳ | |
-| G | Rate/budget agotado → no hay inferencia adicional | ⏳ | |
-| H | Tool loop → fingerprint/budget lo detiene | ⏳ | |
+| G | Rate/budget agotado → no hay inferencia adicional | ✅ T8 local | Model/Gateway/coste bloquean antes del provider; timeout cancela el run; processor registra el límite sin replay |
+| H | Tool loop → fingerprint/budget lo detiene | ✅ T8 local | HMAC canónico + hook async; Agno `StopAgentRun` corta la repetición sin una tercera inferencia |
 | I | Interacción completa trazable por `correlation_id` | ⏳ | |
 | J | Crash antes de `agent_started` → recuperable | ✅ T5 | `accepted` se lista y reclama ordenadamente |
 | K | Crash después de `agent_started` → `failed_ambiguous`, sin replay | ✅ T5 | Recovery marca `restart_after_agent_started`; runner no vuelve a llamarse |
@@ -184,6 +184,27 @@
 - El webhook legado AgentOS y la creación directa de Agent en documentos siguen
   siendo excepciones transitorias: el primero hasta activar T4/T5 y el segundo
   hasta T9. No se consideran evidencia de cobertura universal de LLMAccess.
+
+## T8 — Execution Budget verification (2026-09-14)
+
+- `ExecutionBudget` aplica deadline total, 6 model calls, 8 Gateway requests,
+  12 tools y dos attempts Gateway por llamada lógica. Los retries/fallbacks de
+  Gateway permanecen en cero hasta T11/T12, pero su techo ya se valida.
+- `GovernedInteractionRunner` usa `asyncio.wait_for` con el tiempo restante del
+  budget; el timeout se convierte en `ExecutionBudgetExceededError`.
+- El processor registra una violación como `failed_ambiguous` con el límite
+  concreto (`error_detail_code`) y nunca reejecuta un Agent que pudo invocar
+  tools con efectos.
+- `GovernedAgentFactory` instala un hook async de Agno. El hook calcula HMAC de
+  nombre + JSON canónico de argumentos con una clave Railway/derivada; no guarda
+  ni exporta argumentos. La repetición tras éxito se bloquea y un fallo solo
+  admite un segundo intento.
+- En Agno 2.9.0 `StopAgentRun` se importa de `agno.exceptions`. La prueba real
+  con `Agent.arun()` confirma que el hook async se espera para una tool async y
+  que una tool repetida termina el loop sin una tercera model call.
+- Pricing opcional versionado por alias Gateway estima el coste antes de llamar
+  y reconcilia coste basado en tokens tras la respuesta; `llm_usage_events`
+  persiste estimado, actual y fuente sin contenido personal.
 
 ## Limitations and remaining evidence
 

@@ -162,6 +162,15 @@ El hard safety ceiling actual es `AGENT_TOOL_CALL_LIMIT=12`; Agent y Model usan
 retries explícitos a cero. La extracción documental directa sigue pendiente de
 T9 y el webhook AgentOS legado permanece solo mientras T4/T5 no estén activados.
 
+T8 completa el presupuesto en los runs gobernados: aplica deadline total de
+120 segundos, límites de model/Gateway calls, coste estimado y real opcional por
+snapshot de pricing, y un hook async de Agno para tools. Este hook calcula un
+HMAC de `tool + argumentos canónicos` con
+`EXECUTION_BUDGET_FINGERPRINT_KEY` (o una subclave derivada de
+`TELEGRAM_PAYLOAD_ENCRYPTION_KEY`), sin persistir ni exportar argumentos. Una
+tool idéntica que ya tuvo éxito se bloquea; tras fallo solo hay un segundo intento
+permitido. Agno recibe `StopAgentRun` y termina el loop sin otra inferencia.
+
 El texto y los datos mínimos recuperables del update se serializan de forma
 determinista, se cifran con Fernet y se guardan como `BYTEA`; el ledger conserva
 un HMAC no reversible para correlación. Estados terminales normales eliminan el
@@ -314,7 +323,6 @@ Todavía quedan límites deliberados:
 - cambiar el provider/model físico de environment sigue requiriendo restart;
 - OpenRouter/provider directo solo está permitido dentro de `LLMAccess` hasta
   desplegar LiteLLM privado y fail-closed (T11);
-- no hay todavía tool hooks/budget completo de tools y costes (T8);
 - la extracción documental directa se migra en T9;
 - telemetría OpenTelemetry y desactivación de telemetría Agno pertenecen a T10.
 

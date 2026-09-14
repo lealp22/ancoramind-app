@@ -93,3 +93,84 @@ def test_legitimate_token_budget_field_is_not_treated_as_a_secret() -> None:
 
     assert result.valid is True
     assert result.checksum is not None
+
+
+def test_pricing_is_optional_in_the_bootstrap_configuration() -> None:
+    result = validate_runtime_config(_payload())
+
+    assert result.valid is True
+    config = RuntimeConfiguration.model_validate(_payload())
+    assert config.pricing is None
+
+
+def test_pricing_snapshot_validates_routes_and_prices() -> None:
+    payload = _payload()
+    payload["pricing"] = {
+        "routes": {
+            "ancoramind-default-r1": {
+                "input_cost_per_1m_usd": 1.0,
+                "output_cost_per_1m_usd": 2.0,
+            }
+        }
+    }
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is True
+    config = RuntimeConfiguration.model_validate(payload)
+    price = config.pricing.route_price("ancoramind-default-r1")
+    assert price is not None
+    assert price.input_cost_per_1m_usd == 1.0
+    assert config.pricing.route_price("ancoramind-fast-r1") is None
+
+
+def test_pricing_rejects_entries_without_any_price() -> None:
+    payload = _payload()
+    payload["pricing"] = {"routes": {"ancoramind-default-r1": {"input_cost_per_1m_usd": None}}}
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is False
+    assert any("at least one token price" in error for error in result.errors)
+
+
+def test_pricing_rejects_unknown_fields_and_negative_prices() -> None:
+    payload = _payload()
+    payload["pricing"] = {
+        "routes": {
+            "ancoramind-default-r1": {
+                "input_cost_per_1m_usd": -1.0,
+                "output_cost_per_1m_usd": 2.0,
+            }
+        }
+    }
+    result = validate_runtime_config(payload)
+    assert result.valid is False
+
+    payload = _payload()
+    payload["pricing"] = {"routes": {"ancoramind-default-r1": {"api_key": "never"}}}
+    result = validate_runtime_config(payload)
+    assert result.valid is False
+    assert any("sensitive configuration key" in error for error in result.errors)
+
+
+def test_pricing_rejects_unknown_gateway_alias() -> None:
+    payload = _payload()
+    payload["pricing"] = {"routes": {"ancoramind-unknown-r1": {"input_cost_per_1m_usd": 1.0}}}
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is False
+    assert any("pricing routes" in error for error in result.errors)
+
+
+def test_tool_repeat_limit_requires_one_initial_successful_execution() -> None:
+    payload = _payload()
+    execution_budget = payload["execution_budget"]
+    assert isinstance(execution_budget, dict)
+    execution_budget["max_same_tool_args_after_success"] = 0
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is False
+    assert any("max_same_tool_args_after_success" in error for error in result.errors)

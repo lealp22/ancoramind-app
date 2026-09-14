@@ -77,7 +77,7 @@ class ExecutionBudgetConfig(RuntimeConfigModel):
     max_runtime_seconds: int = Field(ge=1, le=600)
     max_model_calls: int = Field(ge=1, le=50)
     max_tool_calls: int = Field(ge=1, le=20)
-    max_same_tool_args_after_success: int = Field(ge=0, le=5)
+    max_same_tool_args_after_success: int = Field(ge=1, le=5)
     max_gateway_requests: int = Field(ge=1, le=100)
     max_gateway_attempts_per_model_call: int = Field(ge=1, le=5)
     max_output_tokens: int = Field(ge=1, le=32768)
@@ -139,6 +139,29 @@ class ObservabilityConfig(RuntimeConfigModel):
     trace_sample_rate: float = Field(ge=0, le=1)
 
 
+class RoutePricing(RuntimeConfigModel):
+    """Optional per-route pricing snapshot for cost estimation (USD per 1M tokens)."""
+
+    input_cost_per_1m_usd: float | None = Field(default=None, ge=0)
+    output_cost_per_1m_usd: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_has_price(self) -> RoutePricing:
+        if self.input_cost_per_1m_usd is None and self.output_cost_per_1m_usd is None:
+            raise ValueError("route pricing must declare at least one token price")
+        return self
+
+
+class PricingConfig(RuntimeConfigModel):
+    """Static pricing snapshot; avoids DB/disk reads on the per-call path."""
+
+    routes: dict[str, RoutePricing] = Field(default_factory=dict)
+
+    def route_price(self, effective_gateway_route: str) -> RoutePricing | None:
+        """Return the pricing entry for a versioned Gateway alias, when known."""
+        return self.routes.get(effective_gateway_route)
+
+
 class RuntimeConfiguration(RuntimeConfigModel):
     """Portable, secret-free configuration held in immutable DB revisions."""
 
@@ -149,6 +172,7 @@ class RuntimeConfiguration(RuntimeConfigModel):
     admission: AdmissionConfig
     gateway: GatewayConfig
     observability: ObservabilityConfig
+    pricing: PricingConfig | None = None
 
     @model_validator(mode="after")
     def validate_runtime_limits(self) -> RuntimeConfiguration:
@@ -156,6 +180,13 @@ class RuntimeConfiguration(RuntimeConfigModel):
             raise ValueError("gateway timeout cannot exceed total runtime budget")
         if self.concurrency.global_ > self.concurrency.pending_global:
             raise ValueError("global concurrency cannot exceed pending_global")
+        if self.pricing is not None:
+            effective_routes = {
+                route.effective_gateway_route for route in self.routing.routes.values()
+            }
+            unknown_pricing_routes = set(self.pricing.routes) - effective_routes
+            if unknown_pricing_routes:
+                raise ValueError("pricing routes must reference configured Gateway aliases")
         return self
 
 
@@ -258,6 +289,7 @@ def bootstrap_runtime_configuration(
                 "content_capture": False,
                 "trace_sample_rate": 1.0,
             },
+            "pricing": None,
         }
     )
 

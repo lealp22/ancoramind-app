@@ -49,7 +49,8 @@ class GovernedModelMixin:
         """Run one governed logical model call with budget and usage audit."""
         context = current_execution_context()
         llm_call_id = LlmUsageEventCreate.new_call_id()
-        context.budget.reserve_model_call()
+        estimated_cost = _estimate_call_cost(context, self._governed_effective_route, args, kwargs)
+        context.budget.reserve_model_call(estimated_cost)
         started = time.perf_counter()
         try:
             # ``super()`` resolves to the concrete provider class at runtime;
@@ -66,8 +67,11 @@ class GovernedModelMixin:
                 error_class=type(exc).__name__,
                 latency_ms=_elapsed_ms(started),
                 response=None,
+                estimated_cost=estimated_cost or None,
             )
             raise
+        actual_cost = _actual_call_cost(context, self._governed_effective_route, response)
+        context.budget.settle_actual_cost(actual_cost)
         await self._governed_record(
             context=context,
             llm_call_id=llm_call_id,
@@ -75,6 +79,8 @@ class GovernedModelMixin:
             error_class=None,
             latency_ms=_elapsed_ms(started),
             response=response,
+            estimated_cost=estimated_cost or None,
+            actual_cost=actual_cost,
         )
         return response
 
@@ -105,12 +111,15 @@ class GovernedModelMixin:
         error_class: str | None,
         latency_ms: int,
         response: Any,
+        estimated_cost: float | None = None,
+        actual_cost: float | None = None,
     ) -> None:
         recorder = self._governed_recorder
         if recorder is None:
             return
         provider = str(getattr(self, "provider", None) or "")
         model_id = str(getattr(self, "id", "") or "")
+        cost_source = "pricing_snapshot" if (estimated_cost or actual_cost) else None
         event = LlmUsageEventCreate(
             interaction_id=context.correlation_id,
             llm_call_id=llm_call_id,
@@ -123,6 +132,9 @@ class GovernedModelMixin:
             output_tokens=_safe_int(getattr(response, "output_tokens", None)),
             total_tokens=_safe_int(getattr(response, "total_tokens", None)),
             provider_request_id=_provider_request_id(response),
+            estimated_cost=estimated_cost,
+            actual_cost=actual_cost,
+            cost_source=cost_source,
             latency_ms=latency_ms,
             time_to_first_token_ms=_duration_ms(getattr(response, "time_to_first_token", None)),
             status=status,
@@ -205,6 +217,70 @@ def _provider_request_id(response: Any) -> str | None:
         if isinstance(request_id, str) and request_id:
             return request_id[:255]
     return None
+
+
+_APPROX_CHARS_PER_TOKEN = 4
+
+
+def _messages_char_count(args: tuple[Any, ...], kwargs: dict[str, Any]) -> int:
+    """Approximate prompt size by summing message content lengths."""
+    for candidate in (*args, *kwargs.values()):
+        if not isinstance(candidate, list) or not candidate:
+            continue
+        first = candidate[0]
+        if hasattr(first, "content"):
+            return sum(len(str(getattr(item, "content", None) or "")) for item in candidate)
+        if isinstance(first, dict) and "content" in first:
+            return sum(len(str(item.get("content") or "")) for item in candidate)
+    return 0
+
+
+def _estimate_call_cost(
+    context: ExecutionContext,
+    effective_route: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> float:
+    """Estimate the call cost from the snapshot pricing (no I/O on this path)."""
+    pricing = context.config.config.pricing
+    if pricing is None:
+        return 0.0
+    price = pricing.route_price(effective_route)
+    if price is None:
+        return 0.0
+    budget_config = context.config.config.execution_budget
+    cost = 0.0
+    if price.input_cost_per_1m_usd is not None:
+        input_tokens = max(1, _messages_char_count(args, kwargs) // _APPROX_CHARS_PER_TOKEN)
+        cost += input_tokens * price.input_cost_per_1m_usd / 1_000_000
+    if price.output_cost_per_1m_usd is not None:
+        cost += budget_config.max_output_tokens * price.output_cost_per_1m_usd / 1_000_000
+    return cost
+
+
+def _actual_call_cost(
+    context: ExecutionContext,
+    effective_route: str,
+    response: Any,
+) -> float | None:
+    """Reconcile actual cost from provider usage when pricing is configured."""
+    pricing = context.config.config.pricing
+    if pricing is None:
+        return None
+    price = pricing.route_price(effective_route)
+    if price is None:
+        return None
+    cost = 0.0
+    seen = False
+    input_tokens = _safe_int(getattr(response, "input_tokens", None))
+    output_tokens = _safe_int(getattr(response, "output_tokens", None))
+    if input_tokens is not None and price.input_cost_per_1m_usd is not None:
+        cost += input_tokens * price.input_cost_per_1m_usd / 1_000_000
+        seen = True
+    if output_tokens is not None and price.output_cost_per_1m_usd is not None:
+        cost += output_tokens * price.output_cost_per_1m_usd / 1_000_000
+        seen = True
+    return cost if seen else None
 
 
 __all__ = [

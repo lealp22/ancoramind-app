@@ -23,14 +23,16 @@ class LlmUsageRepository:
                         interaction_id, llm_call_id, config_revision, logical_route,
                         effective_gateway_route, gateway_request_id, provider_request_id,
                         provider, model, input_tokens, output_tokens, total_tokens,
-                        estimated_cost, cost_source, latency_ms, time_to_first_token_ms,
-                        retry_count, fallback_used, status, error_class, created_at
+                        estimated_cost, actual_cost, cost_source, latency_ms,
+                        time_to_first_token_ms, retry_count, fallback_used, status,
+                        error_class, created_at
                     ) VALUES (
                         :interaction_id, :llm_call_id, :config_revision, :logical_route,
                         :effective_gateway_route, :gateway_request_id, :provider_request_id,
                         :provider, :model, :input_tokens, :output_tokens, :total_tokens,
-                        :estimated_cost, :cost_source, :latency_ms, :time_to_first_token_ms,
-                        :retry_count, :fallback_used, :status, :error_class, :created_at
+                        :estimated_cost, :actual_cost, :cost_source, :latency_ms,
+                        :time_to_first_token_ms, :retry_count, :fallback_used, :status,
+                        :error_class, :created_at
                     )
                 """),
                 {
@@ -47,6 +49,7 @@ class LlmUsageRepository:
                     "output_tokens": event.output_tokens,
                     "total_tokens": event.total_tokens,
                     "estimated_cost": event.estimated_cost,
+                    "actual_cost": event.actual_cost,
                     "cost_source": event.cost_source,
                     "latency_ms": event.latency_ms,
                     "time_to_first_token_ms": event.time_to_first_token_ms,
