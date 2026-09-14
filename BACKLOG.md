@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 324 unit + 51 integration passing — Ruff limpio en
+Tests: 328 unit + 51 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T10 implementados localmente — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T11 implementados localmente — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -84,7 +84,15 @@ Agent, AgentOS, entorno local y Docker. `src/observability/` emite JSON y OTel
 metadata-only con allowlist; el exporter OTLP al Collector privado es opcional y
 fail-open. El manifiesto `observability/otel-collector.yaml` aplica redacción,
 memory limiter, batch y cola/retry antes de Grafana. Falta crear el servicio
-Collector privado y dashboards/alertas en Railway mediante rollout explícito. Ver
+Collector privado y dashboards/alertas en Railway mediante rollout explícito. **Actualización T11:** el pilot del LiteLLM Gateway está implementado y
+validado localmente: `gateway/` fija la imagen por digest, expone sólo los
+aliases versionados, desactiva Swagger/Redoc/OpenAPI (404 verificado) y mantiene
+retries/fallbacks en 0. Con `LITELLM_PROXY_ENABLED=true`, `LLMAccess` y el
+AgentOS legado componen únicamente `OpenAILike` hacia el Gateway privado con la
+virtual key exclusiva (`scripts/litellm_create_virtual_key.py`); fail-closed
+verificado con el Gateway real (key inválida ⇒ 401 del Gateway; upstream dummy ⇒
+401 sin bypass). Falta el rollout Railway (PostgreSQL dedicado + servicio
+privado), el benchmark con clave real y la revisión de superficie productiva. Ver
 `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update

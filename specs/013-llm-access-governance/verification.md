@@ -1,7 +1,8 @@
 # Verification: 013 — Governed LLM Access and Telegram Admission
 
-> **Estado:** 🔶 T2–T10 implementados y validados localmente; rollout Railway
-> del Collector/Grafana, dashboards/alertas, T11 y E2E siguen pendientes.
+> **Estado:** 🔶 T2–T11 implementados y validados localmente; rollout Railway
+> (Collector/Grafana/LiteLLM), dashboards/alertas, benchmark con clave real y
+> E2E siguen pendientes.
 > **Diseño aprobado:** 2026-09-13
 
 ---
@@ -22,8 +23,8 @@
 
 | Check | Resultado | Evidencia |
 |---|---|---|
-| Unit tests | ✅ T10 | 324 passed; admission, config, LLMAccess, budget, extraction port y privacidad OTel cubiertos |
-| Integration tests | ✅ T10 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
+| Unit tests | ✅ T11 | 328 passed; admission, config, LLMAccess, budget, extraction port, privacidad OTel y modo Gateway cubiertos |
+| Integration tests | ✅ T11 | 51 passed; ledger, admission, processor, runtime config, usage/coste y migraciones |
 | Ruff | ✅ T4 | `ruff check src/ tests/ scripts/ migrations/` |
 | mypy del alcance T2 | ✅ | 4 ficheros nuevos sin issues |
 | mypy del alcance T3 | ✅ | domain, repository, config y tests nuevos sin issues |
@@ -56,7 +57,7 @@
 | N | Grupo/canal Telegram → no alcanza el Agent | ✅ T4 | `non_private_chat`, `200`, sin payload ni llamada Agno |
 | O | Usuario no allowlisted → no alcanza el Agent | ✅ T4 | `user_not_allowlisted`, `200`, sin payload ni llamada Agno |
 | P | Extracción documental comparte config, budget y trace | ✅ T9 local | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
-| Q | Gateway caído → fail closed sin OpenRouter directo | 🔶 T7 parcial | Runs T5 usan LLMAccess; LiteLLM fail-closed llega en T11 |
+| Q | Gateway caído → fail closed sin OpenRouter directo | ✅ T11 local | `LITELLM_PROXY_ENABLED` fail-closed; LLMAccess sólo compone `OpenAILike`→Gateway; smoke real: key inválida ⇒ 401 Gateway, upstream dummy ⇒ 401 sin fallback |
 | R | Collector caído → aplicación continúa | ✅ T10 local | Setup/export/shutdown OTel fail-open; test simula fallo de exporter y el Collector config valida con endpoint dummy |
 | S | Logs/traces no contienen contenido personal | ✅ T10 local | Allowlist, JSON sin mensaje/args, redacción Collector y privacy tests bloquean prompts/mensajes/respuestas/args/results |
 | T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
@@ -176,8 +177,10 @@
   cero. Cambios de runtime posteriores afectan únicamente a nuevos runs.
 - `AgnoLLMAccess` resuelve la ruta lógica del snapshot y compone el mixin
   gobernado sobre la clase física existente, preservando `SafeOpenRouter`.
-  Mientras T11 no despliegue LiteLLM, el provider directo se permite solo dentro
-  de esta frontera transitoria.
+  El provider directo era la excepción transitoria hasta T11; con
+  `LITELLM_PROXY_ENABLED=true` (modo Gateway implementado en T11) la frontera
+  compone únicamente `OpenAILike` hacia el LiteLLM privado y no conoce
+  secretos del provider.
 - Cada model turn gobernado genera `llm_call_id`, registra revisión, rutas,
   provider/model, tokens, latencia, TTFT y `error_class` en
   `ancora.llm_usage_events`. Una caída de auditoría es fail-open y no expone
@@ -232,6 +235,40 @@
   adaptador los mapea a `AgentRunError` sin exponer el texto de la excepción.
 - El consumo del prompt de extracción (versión 1.0) y sus instrucciones no
   cambió respecto a la implementación pre-T9.
+
+## T11 — LiteLLM Proxy pilot verification (2026-09-14)
+
+- Modo Gateway implementado sin bypass: con `LITELLM_PROXY_ENABLED=true`,
+  `Settings` falla cerrado si falta `LITELLM_PROXY_BASE_URL` o
+  `LITELLM_PROXY_VIRTUAL_KEY`. `AgnoLLMAccess.model_for` y el AgentOS legado
+  componen únicamente `OpenAILike` hacia el `/v1` privado del Gateway, usando
+  el alias versionado del snapshot (`ancoramind-*-rN`) como `model` y la
+  virtual key como credencial. Los tests cubren alias/URL/key/label/traceparent
+  y que ni el model ni el key del provider directo se usan en ese modo.
+- `gateway/litellm-config.yaml` no contiene secretos (todo vía `os.environ/...`)
+  y expone exactamente los tres aliases del bootstrap del runtime config.
+  `gateway/Dockerfile` fija la imagen por digest
+  (`ghcr.io/berriai/litellm@sha256:a3715fa7…c62bf`) y fuerza
+  `NO_DOCS`/`NO_REDOC`/`NO_OPENAPI`; el `CMD` no repite el entrypoint `litellm`.
+- Validación local reproducible (`gateway/docker-compose.litellm.yml`:
+  PostgreSQL 16 aislado + LiteLLM): readiness 200; `/docs`, `/redoc` y
+  `/openapi.json` devuelven 404; `/v1/models` lista sólo los tres aliases;
+  `/key/generate` crea una virtual key restringida a esos aliases.
+- Fail-closed verificado con el Gateway real y una OPENROUTER_API_KEY dummy:
+  virtual key inválida ⇒ 401 `token_not_found_in_db` del propio LiteLLM;
+  virtual key válida ⇒ 401 desde OpenRouter con
+  `Received Model Group=ancoramind-default-r1`, demostrando enrutado por el
+  Gateway y ausencia de bypass directo. LiteLLM informa
+  `Available Model Group Fallbacks=None` (retries/fallbacks en 0).
+- `scripts/litellm_create_virtual_key.py` crea la key exclusiva
+  AncoraMind/environment contra un proxy healthy; la key se imprime una sola
+  vez y se guarda como secreto Railway `LITELLM_PROXY_VIRTUAL_KEY`, nunca en
+  Git ni en revisiones runtime.
+- Pendiente de rollout Railway explícito: PostgreSQL dedicado del Gateway,
+  servicio LiteLLM privado, benchmark p50/p95/p99+TTFT con clave real y
+  revisión de superficies productivas. El estado actual de Railway
+  (`ancoramind-app` con deployment `NEEDS_APPROVAL` desde 2026-09-12) se
+  inspectó en modo lectura y no se crearon recursos de pago.
 
 ## T10 — OpenTelemetry and privacy verification (2026-09-14)
 

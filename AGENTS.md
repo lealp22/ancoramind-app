@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 324 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 328 unit
   tests passing; 51 integration tests requieren PostgreSQL/Docker (se omiten sin
   esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
@@ -112,12 +112,13 @@ prompts/                 ← Assets de IA versionados (identity, soul, tool_cont
 migrations/              ← Alembic canónico (baseline + revisiones); init.sql
 │                           refleja head para bootstrap fresh — BL-12/specs/013
 scripts/                 ← run-e2e.sh + telegram_webhook.py + runtime_config.py (admin T6)
+                            + litellm_create_virtual_key.py (T11 Gateway)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (T2–T10 implementados localmente)
-tests/unit/              ← 324 tests
+                            013-llm-access-governance (T2–T11 implementados localmente)
+tests/unit/              ← 328 tests
 tests/integration/        ← 51 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
@@ -128,6 +129,9 @@ docs/                    ← architecture, governance, development, quick-start,
                            adr/ADR-004-telegram-admission-at-most-once.md,
                            adr/ADR-005-governed-llm-access-runtime-config.md,
                            adr/ADR-006-opentelemetry-observability.md
+gateway/                 ← LiteLLM Proxy pilot (T11): config sin secretos, Dockerfile
+                           con imagen fijada por digest y compose local de validación
+observability/           ← Manifiesto del OTel Collector privado (T10)
 ```
 
 ***\*Sin excepciones:*** `domain/` no importa Agno. La extracción documental
@@ -160,6 +164,14 @@ y pasa por `LLMAccess`.
 | `openai` | `OpenAIChat` | `OPENAI_API_KEY` | opcional |
 | `openrouter` | `OpenRouter` | `OPENROUTER_API_KEY` | automático |
 | `openai-like` | `OpenAILike` | `OPENAI_API_KEY` | **requerido** |
+
+Modo Gateway (T11): con `LITELLM_PROXY_ENABLED=true` la tabla anterior se ignora
+— `LLMAccess` y el AgentOS legado componen únicamente `OpenAILike` hacia el
+LiteLLM privado (`LITELLM_PROXY_BASE_URL` + `LITELLM_PROXY_VIRTUAL_KEY`,
+fail-closed si faltan), usando el alias versionado del snapshot como `model`.
+La virtual key se crea con `scripts/litellm_create_virtual_key.py`; los secretos
+del provider viven sólo en el Gateway (`gateway/litellm-config.yaml` no contiene
+secretos). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
 
 Modelo default: `gpt-5.4-mini`. Los modelos free de OpenRouter caducan —
 si hay error 404, cambiar `LLM_MODEL` en `.env`.
@@ -255,7 +267,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T10 implementados localmente; rollout Collector/Grafana, T11 y E2E pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T11 implementados localmente; rollout Railway (Collector/Grafana/LiteLLM) y E2E pendientes (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

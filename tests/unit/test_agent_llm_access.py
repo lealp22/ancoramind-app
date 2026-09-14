@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from agno.models.openai import OpenAIChat
+from agno.models.openai import OpenAIChat, OpenAILike
 
 from src.agent.ancora_agent import SafeOpenRouter
 from src.agent.governed_agent_factory import GovernedAgentFactory
@@ -152,4 +152,28 @@ def test_model_for_propagates_the_w3c_traceparent_to_the_gateway_request() -> No
 
     model = _access().model_for("ancoramind-default", context)
 
+    assert model.extra_headers == {"traceparent": context.traceparent}
+
+
+def test_model_for_uses_private_litellm_alias_instead_of_direct_provider() -> None:
+    settings = Settings(
+        llm_provider="openrouter",
+        llm_model="must-not-reach-openrouter-directly",
+        openrouter_api_key="provider-secret-that-must-not-be-used",
+        litellm_proxy_enabled=True,
+        litellm_proxy_base_url="http://litellm.railway.internal:4000",
+        litellm_proxy_virtual_key="sk-ancoramind-only",
+    )
+    context = _context(_snapshot())
+
+    model = AgnoLLMAccess(settings=settings, usage_recorder=None).model_for(
+        "ancoramind-fast", context
+    )
+
+    assert isinstance(model, OpenAILike)
+    assert isinstance(model, GovernedModelMixin)
+    assert model.id == "ancoramind-fast-r1"
+    assert str(model.base_url).rstrip("/") == "http://litellm.railway.internal:4000/v1"
+    assert model.api_key == "sk-ancoramind-only"
+    assert model._governed_provider_label == "litellm"
     assert model.extra_headers == {"traceparent": context.traceparent}

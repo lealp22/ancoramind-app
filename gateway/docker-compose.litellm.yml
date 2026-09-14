@@ -1,0 +1,30 @@
+services:
+  litellm-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  litellm:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://litellm:litellm@litellm-postgres:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Set a local sk- master key}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?Set a persistent local salt key}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?Set an OpenRouter key for a real inference smoke}
+      NO_DOCS: "True"
+      NO_REDOC: "True"
+      NO_OPENAPI: "True"
+    depends_on:
+      litellm-postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4000:4000"

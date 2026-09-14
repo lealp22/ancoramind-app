@@ -1,6 +1,6 @@
 """AncoraMind — Application configuration via Pydantic Settings."""
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     agent_tool_call_limit: int = Field(default=12, ge=1, le=20)
     """Hard safety cap for tool calls in a single agent run (specs/013 T7 target)."""
+    litellm_proxy_enabled: bool = False
+    """Route all application inference through the private LiteLLM Proxy (T11)."""
+    litellm_proxy_base_url: str = ""
+    """Private OpenAI-compatible LiteLLM /v1 URL; never expose the proxy publicly."""
+    litellm_proxy_virtual_key: str = ""
+    """AncoraMind-only LiteLLM virtual key; Railway secret and never a runtime revision."""
+    litellm_proxy_default_route: str = "ancoramind-default-r1"
+    """Versioned LiteLLM alias used by the transitional AgentOS singleton."""
 
     # ── Telegram ──────────────────────────────────────
     telegram_token: str = ""
@@ -124,3 +132,22 @@ class Settings(BaseSettings):
     def db_url(self) -> str | None:
         """Return the database URL for Agno, or None for default SQLite."""
         return self.agno_database_url if self.agno_database_url else None
+
+    @model_validator(mode="after")
+    def validate_litellm_proxy_settings(self) -> "Settings":
+        """Fail closed: an enabled Gateway may not silently fall back to a provider."""
+        if not self.litellm_proxy_enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("LITELLM_PROXY_BASE_URL", self.litellm_proxy_base_url),
+                ("LITELLM_PROXY_VIRTUAL_KEY", self.litellm_proxy_virtual_key),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise ValueError("LITELLM_PROXY_ENABLED requires: " + ", ".join(missing))
+        if not self.litellm_proxy_default_route.strip():
+            raise ValueError("LITELLM_PROXY_DEFAULT_ROUTE must not be blank")
+        return self

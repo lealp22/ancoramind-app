@@ -156,7 +156,8 @@ filas de delivery por chunk antes de `sendMessage`; el streaming visible queda
 desactivado y solo refresca `typing`. T7 ya usa `GovernedInteractionRunner`:
 captura el snapshot runtime, crea `ExecutionContext` y `ExecutionBudget`, enlaza
 un Agent nuevo por run y exige `LLMAccess` para cada model turn. El provider
-directo sigue siendo transitorio dentro de `LLMAccess` hasta LiteLLM (T11).
+directo era transitorio hasta T11: con `LITELLM_PROXY_ENABLED=true` la frontera
+compone sólo `OpenAILike` hacia el LiteLLM privado (fail-closed, sin bypass).
 
 El hard safety ceiling actual es `AGENT_TOOL_CALL_LIMIT=12`; Agent y Model usan
 retries explícitos a cero. La extracción documental usa `DocumentExtractionPort`
@@ -316,6 +317,10 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `OTEL_EXPORTER_OTLP_INSECURE` | Transporte sin TLS hacia private networking Railway | `true` |
 | `OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS` | Timeout acotado de exportación OTLP | `3` |
 | `OTEL_EXPORT_INTERVAL_MILLIS` | Intervalo de exportación de métricas | `30000` |
+| `LITELLM_PROXY_ENABLED` | T11: enruta toda la inferencia por el Gateway privado (fail-closed) | `false` |
+| `LITELLM_PROXY_BASE_URL` | URL privada del LiteLLM Proxy (requerida si el modo está activo) | — |
+| `LITELLM_PROXY_VIRTUAL_KEY` | Key exclusiva AncoraMind creada con el script T11 | — |
+| `LITELLM_PROXY_DEFAULT_ROUTE` | Alias del Gateway usado por el AgentOS legado | `ancoramind-default-r1` |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
 ### Runtime dinámico y LLMAccess (BL-23/specs/013)
@@ -327,13 +332,17 @@ es `AGENT_TOOL_CALL_LIMIT=12`; Agent y Model usan retries explícitos a cero.
 Todavía quedan límites deliberados:
 
 - cambiar el provider/model físico de environment sigue requiriendo restart;
-- OpenRouter/provider directo solo está permitido dentro de `LLMAccess` hasta
-  desplegar LiteLLM privado y fail-closed (T11);
+- con el Gateway desactivado, OpenRouter/provider directo solo está permitido
+  dentro de `LLMAccess`; con `LITELLM_PROXY_ENABLED=true` (T11) no existe ruta
+  directa y un Gateway caído falla cerrado sin fallback;
 - la extracción documental ya pasa por `DocumentExtractionPort`/`LLMAccess`
   (T9); el path AgentOS legado usa un contexto bootstrap standalone;
 - T10 fuerza `AGNO_TELEMETRY=false` y `telemetry=False`, emite trazas/métricas
   OTel y logs JSON metadata-only mediante allowlist. El exporter al Collector
-  privado es opcional/fail-open; el rollout real Railway/Grafana sigue pendiente.
+  privado es opcional/fail-open; el rollout real Railway/Grafana sigue pendiente;
+- T11 deja el pilot del Gateway validado localmente; el rollout Railway
+  (PostgreSQL dedicado + servicio privado), el benchmark con clave real y la
+  revisión de superficie productiva requieren aprobación explícita.
 
 ## Project Conventions
 

@@ -46,6 +46,7 @@ class GovernedModelMixin:
     _governed_route_name: str
     _governed_effective_route: str
     _governed_revision: int
+    _governed_provider_label: str | None
 
     async def ainvoke(self, *args: Any, **kwargs: Any) -> Any:
         """Run one governed logical model call with budget and usage audit."""
@@ -57,7 +58,8 @@ class GovernedModelMixin:
             **telemetry_attributes_from_execution_context(context),
             "ancora.route": self._governed_route_name,
             "ancora.effective_route": self._governed_effective_route,
-            "gen_ai.provider.name": str(getattr(self, "provider", "") or ""),
+            "gen_ai.provider.name": self._governed_provider_label
+            or str(getattr(self, "provider", "") or ""),
             "gen_ai.request.model": str(getattr(self, "id", "") or ""),
         }
         try:
@@ -198,7 +200,7 @@ class GovernedModelMixin:
         recorder = self._governed_recorder
         if recorder is None:
             return
-        provider = str(getattr(self, "provider", None) or "")
+        provider = self._governed_provider_label or str(getattr(self, "provider", None) or "")
         model_id = str(getattr(self, "id", "") or "")
         cost_source = "pricing_snapshot" if (estimated_cost or actual_cost) else None
         event = LlmUsageEventCreate(
@@ -258,6 +260,7 @@ def build_governed_model[T: Model](
     route_name: str,
     effective_route: str,
     revision: int,
+    provider_label: str | None = None,
 ) -> T:
     """Instantiate the governed model and attach its governance state.
 
@@ -271,6 +274,7 @@ def build_governed_model[T: Model](
     governed._governed_route_name = route_name
     governed._governed_effective_route = effective_route
     governed._governed_revision = revision
+    governed._governed_provider_label = provider_label
     return model
 
 

@@ -172,19 +172,39 @@ ejecutan desde el repositorio.
 
 ## T11: LiteLLM Proxy pilot
 
-- [ ] Provisionar PostgreSQL Railway dedicado para LiteLLM.
-- [ ] Desplegar LiteLLM como servicio privado, con imagen/version digest fijado.
-- [ ] Desactivar Swagger, Redoc y OpenAPI en producción.
-- [ ] Crear virtual key exclusiva para AncoraMind/environment.
-- [ ] Mantener provider keys y master key únicamente en Railway secrets.
-- [ ] Crear aliases lógicos versionados.
-- [ ] Configurar OpenRouter como upstream con fallback interno.
-- [ ] Mantener inicialmente retries y cross-model fallback de LiteLLM a 0.
-- [ ] Verificar fail closed y ausencia de bypass.
-- [ ] Ejecutar benchmark p50/p95/p99 y TTFT frente a OpenRouter directo.
-- [ ] Revisar advisories y superficies de administración antes de producción.
+- [ ] Provisionar PostgreSQL Railway dedicado para LiteLLM (rollout pendiente:
+      requiere aprobación de coste y creación real del servicio).
+- [ ] Desplegar LiteLLM como servicio privado en Railway. La imagen/version
+      digest ya está fijada (`gateway/Dockerfile`,
+      `ghcr.io/berriai/litellm@sha256:a3715fa7…c62bf`) y validada localmente.
+- [x] Desactivar Swagger, Redoc y OpenAPI (`NO_DOCS`/`NO_REDOC`/`NO_OPENAPI`;
+      verificado localmente: `/docs`, `/redoc` y `/openapi.json` devuelven 404).
+- [x] Crear virtual key exclusiva para AncoraMind/environment
+      (`scripts/litellm_create_virtual_key.py`, restringida a los tres aliases;
+      enforcement verificado: key inválida ⇒ 401 del propio Gateway).
+- [x] Mantener provider keys y master key fuera del repositorio: el config usa
+      exclusivamente `os.environ/...`; los secretos viven en Railway/local env.
+- [x] Crear aliases lógicos versionados (`gateway/litellm-config.yaml` expone
+      `ancoramind-default-r1`, `ancoramind-fast-r1`, `ancoramind-vision-r1`).
+- [x] Configurar OpenRouter como upstream (modelos `openrouter/...`); el
+      fallback interno entre providers lo conserva OpenRouter
+      (`openrouter_provider_fallback` del runtime config).
+- [x] Mantener inicialmente retries y cross-model fallback de LiteLLM a 0
+      (`router_settings.num_retries: 0`; el smoke confirmó
+      `Available Model Group Fallbacks=None`).
+- [x] Verificar fail closed y ausencia de bypass: `LITELLM_PROXY_ENABLED=true`
+      exige URL privada + virtual key (Settings fail-closed); `LLMAccess` y el
+      AgentOS legado componen únicamente `OpenAILike` hacia el Gateway con el
+      alias del snapshot. Smoke local con OpenRouter dummy ⇒ 401 del upstream
+      sin fallback.
+- [ ] Ejecutar benchmark p50/p95/p99 y TTFT frente a OpenRouter directo
+      (requiere una OPENROUTER_API_KEY real y el rollout Railway).
+- [ ] Revisar advisories y superficies de administración antes de producción
+      (documentación ya desactivada; revisión de superficie en el rollout).
 
-**Acceptance:** Q completo.
+**Acceptance:** Q implementado localmente (fail closed sin bypass verificado
+con el Gateway real). El despliegue Railway privado, el benchmark con clave
+real y la revisión de superficie productiva requieren un rollout explícito.
 
 ## T12: Reliability and cost governance
 

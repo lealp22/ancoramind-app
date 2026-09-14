@@ -4,7 +4,7 @@ from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
 from agno.models.base import MessageData
 from agno.models.message import Message
-from agno.models.openai import OpenAIChat
+from agno.models.openai import OpenAIChat, OpenAILike
 from agno.models.response import ModelResponse
 from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
@@ -74,6 +74,25 @@ def test_create_model_from_settings_resolves_openai_api_key():
     assert isinstance(model, OpenAIChat)
     assert model.id == "gpt-5.4-mini"
     assert model.retries == 0
+
+
+def test_create_model_from_settings_uses_litellm_proxy_when_enabled():
+    settings = Settings(
+        llm_provider="openrouter",
+        llm_model="direct-provider-model-must-not-be-used",
+        openrouter_api_key="provider-secret-that-must-not-be-used",
+        litellm_proxy_enabled=True,
+        litellm_proxy_base_url="http://litellm.railway.internal:4000",
+        litellm_proxy_virtual_key="sk-ancoramind-only",
+        litellm_proxy_default_route="ancoramind-default-r1",
+    )
+
+    model = create_model_from_settings(settings)
+
+    assert isinstance(model, OpenAILike)
+    assert model.id == "ancoramind-default-r1"
+    assert str(model.base_url).rstrip("/") == "http://litellm.railway.internal:4000/v1"
+    assert model.api_key == "sk-ancoramind-only"
 
 
 def test_create_ancora_agent_applies_tool_call_limit():

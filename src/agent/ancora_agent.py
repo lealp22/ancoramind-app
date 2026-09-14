@@ -206,6 +206,14 @@ def create_model_from_settings(settings: "Settings") -> Model:
     Returns:
         Configured model instance.
     """
+    if settings.litellm_proxy_enabled:
+        return create_model(
+            provider="openai-like",
+            model_id=settings.litellm_proxy_default_route,
+            base_url=_litellm_v1_base_url(settings.litellm_proxy_base_url),
+            api_key=settings.litellm_proxy_virtual_key,
+        )
+
     api_key = None
     if settings.llm_provider == "openrouter" and settings.openrouter_api_key:
         api_key = settings.openrouter_api_key
@@ -218,6 +226,12 @@ def create_model_from_settings(settings: "Settings") -> Model:
         base_url=settings.llm_base_url,
         api_key=api_key,
     )
+
+
+def _litellm_v1_base_url(base_url: str) -> str:
+    """Normalize a private LiteLLM Proxy URL to its OpenAI-compatible ``/v1`` API."""
+    normalized = base_url.rstrip("/")
+    return normalized if normalized.endswith("/v1") else f"{normalized}/v1"
 
 
 def create_ancora_agent(

@@ -17,6 +17,9 @@ class TestSettings:
         monkeypatch.delenv("AGNO_DATABASE_URL", raising=False)
         monkeypatch.delenv("LLM_MODEL", raising=False)
         monkeypatch.delenv("AGENT_TOOL_CALL_LIMIT", raising=False)
+        monkeypatch.delenv("LITELLM_PROXY_ENABLED", raising=False)
+        monkeypatch.delenv("LITELLM_PROXY_BASE_URL", raising=False)
+        monkeypatch.delenv("LITELLM_PROXY_VIRTUAL_KEY", raising=False)
         monkeypatch.delenv("TELEGRAM_ADMISSION_ENABLED", raising=False)
         monkeypatch.delenv("TELEGRAM_BOT_ID", raising=False)
         monkeypatch.delenv("TELEGRAM_ADMISSION_USER_BURST", raising=False)
@@ -35,6 +38,7 @@ class TestSettings:
         settings = Settings(_env_file=None)
         assert settings.llm_model == "gpt-5.4-mini"
         assert settings.agent_tool_call_limit == 12
+        assert settings.litellm_proxy_enabled is False
         assert settings.app_env == "development"
         assert settings.telegram_token == ""
         assert settings.telegram_admission_enabled is False
@@ -73,6 +77,26 @@ class TestSettings:
         assert settings.observability_json_logs is False
         assert settings.otel_exporter_otlp_endpoint == "http://collector.internal:4317"
         assert settings.otel_exporter_otlp_insecure is False
+
+    def test_litellm_proxy_requires_private_url_and_virtual_key(self) -> None:
+        with pytest.raises(ValidationError, match="LITELLM_PROXY_BASE_URL"):
+            Settings(litellm_proxy_enabled=True)
+
+        with pytest.raises(ValidationError, match="LITELLM_PROXY_VIRTUAL_KEY"):
+            Settings(
+                litellm_proxy_enabled=True,
+                litellm_proxy_base_url="http://litellm.railway.internal:4000",
+            )
+
+    def test_litellm_proxy_settings_are_loaded_when_complete(self) -> None:
+        settings = Settings(
+            litellm_proxy_enabled=True,
+            litellm_proxy_base_url="http://litellm.railway.internal:4000",
+            litellm_proxy_virtual_key="sk-ancoramind-only",
+        )
+
+        assert settings.litellm_proxy_enabled is True
+        assert settings.litellm_proxy_default_route == "ancoramind-default-r1"
 
     def test_telegram_admission_env_overrides(self, monkeypatch):
         monkeypatch.setenv("TELEGRAM_ADMISSION_ENABLED", "true")

@@ -136,9 +136,10 @@ REMINDER_POLL_INTERVAL_SECONDS=60
 No configures `NGROK_URL`. Railway proporciona `PORT` automáticamente; la app
 lo consume en producción y escucha en `0.0.0.0` sin autoreload.
 
-No añadas variables de LiteLLM a producción hasta T11. Las variables OTLP se
-añaden únicamente al servicio AncoraMind después de crear y validar el Collector
-privado descrito a continuación; nunca apuntan directamente a Grafana Cloud.
+No añadas variables de LiteLLM a producción hasta completar el rollout de la
+sección 3.2. Las variables OTLP se añaden únicamente al servicio AncoraMind
+después de crear y validar el Collector privado descrito a continuación; nunca
+apuntan directamente a Grafana Cloud.
 
 ### 3.1 Collector OpenTelemetry privado (T10)
 
@@ -173,6 +174,80 @@ El Collector aplica defensa en profundidad: `memory_limiter`, redacción de clav
 de contenido conocidas, `batch` y cola/retry acotados antes del exporter Grafana.
 El fichero se valida en CI/local con la imagen fijada `0.138.0` y valores dummy;
 esa validación no contacta Grafana.
+
+### 3.2 LiteLLM Gateway privado (T11)
+
+El pilot está implementado y validado localmente (`gateway/`). El rollout Railway
+crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explícita:
+
+1. **PostgreSQL dedicado del Gateway** — Railway → **New** → **Database** →
+   **Add PostgreSQL**. Nómbralo p. ej. `litellm-db`. No compartas la BD canónica
+   `ancora` ni la de `agno_runtime`: la DB de LiteLLM es infraestructura
+   sustituible (virtual keys, spend logs, config).
+2. **Servicio LiteLLM** — Railway → **New Service** → **GitHub Repo** apuntando
+   a este repositorio con **root directory** `gateway/` (usa `gateway/Dockerfile`,
+   imagen fijada por digest `ghcr.io/berriai/litellm@sha256:a3715fa7…c62bf`).
+   No generes dominio público ni TCP proxy: el `4000` se consume por private
+   networking (`http://<servicio>.railway.internal:4000`).
+3. Variables del servicio LiteLLM (todas secretos):
+
+   ```env
+   DATABASE_URL=${{litellm-db.DATABASE_URL}}
+   LITELLM_MASTER_KEY=<sk-master-aleatorio>
+   LITELLM_SALT_KEY=<sk-salt-aleatorio-no-rotable>
+   OPENROUTER_API_KEY=<clave-real-openrouter>
+   NO_DOCS=True
+   NO_REDOC=True
+   NO_OPENAPI=True
+   ```
+
+   `LITELLM_SALT_KEY` cifra credenciales en la BD y no puede rotarse después de
+   añadir modelos: genérala una vez y guárdala solo en Railway.
+4. Espera deployment **SUCCESS** y valida desde tu terminal:
+
+   ```powershell
+   curl http://<servicio>.railway.internal:4000/health/readiness   # desde Railway shell/agent
+   ```
+
+   `/docs`, `/redoc` y `/openapi.json` deben devolver 404.
+5. Crea la virtual key exclusiva de AncoraMind (restringida a los tres aliases):
+
+   ```powershell
+   $env:LITELLM_PROXY_ADMIN_URL='http://<servicio>.railway.internal:4000'
+   $env:LITELLM_MASTER_KEY='<sk-master>'
+   python scripts/litellm_create_virtual_key.py
+   ```
+
+   La key se imprime una sola vez; guárdala como secreto
+   `LITELLM_PROXY_VIRTUAL_KEY` del servicio AncoraMind. Nunca en Git/logs ni en
+   revisiones runtime.
+6. En el servicio AncoraMind, activa el modo Gateway (fail-closed; sin estas
+   variables la app no arranca en ese modo):
+
+   ```env
+   LITELLM_PROXY_ENABLED=true
+   LITELLM_PROXY_BASE_URL=http://<servicio-litellm>.railway.internal:4000
+   LITELLM_PROXY_VIRTUAL_KEY=<sk-virtual-key>
+   LITELLM_PROXY_DEFAULT_ROUTE=ancoramind-default-r1
+   ```
+
+   Con el modo activo, la app deja de usar `OPENROUTER_API_KEY`/
+   `OPENAI_API_KEY`; puedes retirarlas del servicio AncoraMind (quedan sólo en
+   LiteLLM). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
+7. Valida con un update de prueba que la respuesta llega y que
+   `ancora.llm_usage_events` registra `provider=litellm`-vía-Gateway; después
+   ejecuta el benchmark p50/p95/p99+TTFT frente a OpenRouter directo (T11,
+   con clave real) antes de declarar el pilot cerrado.
+
+Validación local sin Railway (sin coste, claves dummy):
+
+```powershell
+$env:LITELLM_MASTER_KEY='sk-local-master'; $env:LITELLM_SALT_KEY='sk-local-salt'
+$env:OPENROUTER_API_KEY='dummy'
+docker compose -p ancoramind-litellm -f gateway/docker-compose.litellm.yml up -d --build
+# readiness/docs/aliases/key: ver specs/013 verification T11
+docker compose -p ancoramind-litellm -f gateway/docker-compose.litellm.yml down -v
+```
 
 > **Rollout T4/T5:** cuando se active `TELEGRAM_ADMISSION_ENABLED=true`, el
 > endpoint estable `/telegram/webhook` pasa a ser propiedad de AncoraMind y

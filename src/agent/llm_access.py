@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agent.ancora_agent import resolve_model_parts
+from src.agent.ancora_agent import _litellm_v1_base_url, resolve_model_parts
 from src.agent.governed_model import UsageRecorder, build_governed_model
 from src.config import Settings
 from src.domain.llm_access.models import (
@@ -76,12 +76,22 @@ class AgnoLLMAccess:
                 f"Logical route {route_name!r} is not defined in the active "
                 f"runtime configuration (revision {snapshot.revision})"
             )
-        base_cls, kwargs = resolve_model_parts(
-            provider=self._settings.llm_provider,
-            model_id=self._settings.llm_model,
-            base_url=self._settings.llm_base_url,
-            api_key=self._resolve_api_key(),
-        )
+        if self._settings.litellm_proxy_enabled:
+            base_cls, kwargs = resolve_model_parts(
+                provider="openai-like",
+                model_id=route.effective_gateway_route,
+                base_url=_litellm_v1_base_url(self._settings.litellm_proxy_base_url),
+                api_key=self._settings.litellm_proxy_virtual_key,
+            )
+            provider_label = "litellm"
+        else:
+            base_cls, kwargs = resolve_model_parts(
+                provider=self._settings.llm_provider,
+                model_id=self._settings.llm_model,
+                base_url=self._settings.llm_base_url,
+                api_key=self._resolve_api_key(),
+            )
+            provider_label = self._settings.llm_provider
         if execution_context.traceparent:
             headers = dict(kwargs.get("extra_headers") or {})
             headers["traceparent"] = execution_context.traceparent
@@ -93,6 +103,7 @@ class AgnoLLMAccess:
             route_name=route_name,
             effective_route=route.effective_gateway_route,
             revision=snapshot.revision,
+            provider_label=provider_label,
         )
 
     def _resolve_api_key(self) -> str | None:

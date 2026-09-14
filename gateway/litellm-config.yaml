@@ -1,0 +1,27 @@
+# T11 LiteLLM Proxy pilot. This file contains no secrets: Railway injects
+# DATABASE_URL, LITELLM_MASTER_KEY, LITELLM_SALT_KEY and OPENROUTER_API_KEY.
+# Every user-facing model_name is an immutable AncoraMind RuntimeConfig alias.
+
+model_list:
+  - model_name: ancoramind-default-r1
+    litellm_params:
+      model: openrouter/gpt-5.4-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: ancoramind-fast-r1
+    litellm_params:
+      model: openrouter/gpt-5.4-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+  - model_name: ancoramind-vision-r1
+    litellm_params:
+      model: openrouter/gpt-5.4-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+
+router_settings:
+  num_retries: 0
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+
+litellm_settings:
+  drop_params: false
