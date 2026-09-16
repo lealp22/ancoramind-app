@@ -152,6 +152,40 @@ async def test_usage_event_llm_call_id_is_unique(session: AsyncSession) -> None:
         await repository.record(event)
 
 
+async def test_usage_summary_keeps_unknown_costs_null(session: AsyncSession) -> None:
+    manager = RuntimeConfigManager(
+        session_factory=get_session,
+        bootstrap=bootstrap_runtime_configuration(),
+    )
+    await manager.initialize()
+    interaction_id = await _interaction_id(session)
+    event = LlmUsageEventCreate(
+        interaction_id=interaction_id,
+        llm_call_id=uuid4(),
+        config_revision=manager.snapshot().revision,
+        logical_route="ancoramind-default",
+        effective_gateway_route="ancoramind-default-r1",
+        provider="litellm",
+        model="ancoramind-default-r1",
+        status="completed",
+    )
+
+    await LlmUsageRepository(session).record(event)
+
+    summary = (
+        await session.execute(
+            text("""
+                SELECT estimated_cost, actual_cost
+                FROM ancora.telegram_interactions
+                WHERE id = :interaction_id
+            """),
+            {"interaction_id": interaction_id},
+        )
+    ).one()
+    assert summary.estimated_cost is None
+    assert summary.actual_cost is None
+
+
 async def test_summarize_spend_aggregates_costs_per_route_and_period(
     session: AsyncSession,
 ) -> None:

@@ -75,10 +75,14 @@ class LlmUsageRepository:
                     SET config_revision = COALESCE(config_revision, :config_revision),
                         model_call_count = model_call_count + 1,
                         gateway_request_count = gateway_request_count + 1,
-                        estimated_cost = COALESCE(estimated_cost, 0)
-                            + COALESCE(:estimated_cost, 0),
-                        actual_cost = COALESCE(actual_cost, 0)
-                            + COALESCE(:actual_cost, 0),
+                        estimated_cost = CASE
+                            WHEN estimated_cost IS NULL AND :estimated_cost IS NULL THEN NULL
+                            ELSE COALESCE(estimated_cost, 0) + COALESCE(:estimated_cost, 0)
+                        END,
+                        actual_cost = CASE
+                            WHEN actual_cost IS NULL AND :actual_cost IS NULL THEN NULL
+                            ELSE COALESCE(actual_cost, 0) + COALESCE(:actual_cost, 0)
+                        END,
                         updated_at = :updated_at
                     WHERE id = :interaction_id
                 """),
