@@ -125,6 +125,25 @@ async def test_usage_event_round_trip_contains_metadata_not_personal_content(
     assert float(interaction_summary.estimated_cost) == pytest.approx(0.0004)
     assert float(interaction_summary.actual_cost) == pytest.approx(0.0003)
 
+    await LlmUsageRepository(session).record(
+        event.model_copy(
+            update={"llm_call_id": uuid4(), "estimated_cost": 0.0002, "actual_cost": 0.0001}
+        )
+    )
+    aggregated_summary = (
+        await session.execute(
+            text("""
+                SELECT model_call_count, gateway_request_count, estimated_cost, actual_cost
+                FROM ancora.telegram_interactions
+                WHERE id = :interaction_id
+            """),
+            {"interaction_id": interaction_id},
+        )
+    ).one()
+    assert (aggregated_summary.model_call_count, aggregated_summary.gateway_request_count) == (2, 2)
+    assert float(aggregated_summary.estimated_cost) == pytest.approx(0.0006)
+    assert float(aggregated_summary.actual_cost) == pytest.approx(0.0004)
+
 
 async def test_usage_event_llm_call_id_is_unique(session: AsyncSession) -> None:
     manager = RuntimeConfigManager(
