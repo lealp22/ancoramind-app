@@ -76,12 +76,12 @@ class LlmUsageRepository:
                         model_call_count = model_call_count + 1,
                         gateway_request_count = gateway_request_count + 1,
                         estimated_cost = CASE
-                            WHEN :estimated_cost IS NULL THEN estimated_cost
+                            WHEN CAST(:estimated_cost AS NUMERIC(18, 8)) IS NULL THEN estimated_cost
                             ELSE COALESCE(estimated_cost, 0)
                                 + CAST(:estimated_cost AS NUMERIC(18, 8))
                         END,
                         actual_cost = CASE
-                            WHEN :actual_cost IS NULL THEN actual_cost
+                            WHEN CAST(:actual_cost AS NUMERIC(18, 8)) IS NULL THEN actual_cost
                             ELSE COALESCE(actual_cost, 0)
                                 + CAST(:actual_cost AS NUMERIC(18, 8))
                         END,
