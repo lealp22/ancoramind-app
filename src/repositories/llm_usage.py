@@ -18,7 +18,13 @@ class LlmUsageRepository:
         self._session = session
 
     async def record(self, event: LlmUsageEventCreate) -> None:
-        """Insert the usage event; correlation content is never stored."""
+        """Insert one usage event and atomically refresh its interaction summary.
+
+        The per-call event is the detailed durable audit. ``telegram_interactions``
+        keeps a metadata-only summary for operator runbooks, so both writes must
+        commit or roll back together. No prompt, response, tool argument or tool
+        result is involved in either statement.
+        """
         try:
             await self._session.execute(
                 text("""
@@ -61,6 +67,27 @@ class LlmUsageRepository:
                     "status": event.status,
                     "error_class": event.error_class,
                     "created_at": event.created_at,
+                },
+            )
+            await self._session.execute(
+                text("""
+                    UPDATE ancora.telegram_interactions
+                    SET config_revision = COALESCE(config_revision, :config_revision),
+                        model_call_count = model_call_count + 1,
+                        gateway_request_count = gateway_request_count + 1,
+                        estimated_cost = COALESCE(estimated_cost, 0)
+                            + COALESCE(:estimated_cost, 0),
+                        actual_cost = COALESCE(actual_cost, 0)
+                            + COALESCE(:actual_cost, 0),
+                        updated_at = :updated_at
+                    WHERE id = :interaction_id
+                """),
+                {
+                    "interaction_id": event.interaction_id,
+                    "config_revision": event.config_revision,
+                    "estimated_cost": event.estimated_cost,
+                    "actual_cost": event.actual_cost,
+                    "updated_at": event.created_at,
                 },
             )
             await self._session.commit()

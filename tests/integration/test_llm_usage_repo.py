@@ -108,6 +108,23 @@ async def test_usage_event_round_trip_contains_metadata_not_personal_content(
     assert row.error_class is None
     assert "personal content" not in str(row)
 
+    interaction_summary = (
+        await session.execute(
+            text("""
+                SELECT config_revision, model_call_count, gateway_request_count,
+                    estimated_cost, actual_cost
+                FROM ancora.telegram_interactions
+                WHERE id = :interaction_id
+            """),
+            {"interaction_id": interaction_id},
+        )
+    ).one()
+    assert interaction_summary.config_revision == manager.snapshot().revision
+    assert interaction_summary.model_call_count == 1
+    assert interaction_summary.gateway_request_count == 1
+    assert float(interaction_summary.estimated_cost) == pytest.approx(0.0004)
+    assert float(interaction_summary.actual_cost) == pytest.approx(0.0003)
+
 
 async def test_usage_event_llm_call_id_is_unique(session: AsyncSession) -> None:
     manager = RuntimeConfigManager(
