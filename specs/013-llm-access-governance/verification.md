@@ -1,8 +1,10 @@
 # Verification: 013 — Governed LLM Access and Telegram Admission
 
-> **Estado:** 🔶 T2–T13 implementados y validados localmente; rollout Railway
-> (Collector/Grafana/LiteLLM), dashboards/alertas, benchmark con clave real y
-> E2E siguen pendientes. **BL-23 no se cierra en T13.**
+> **Estado:** 🔶 T2–T13 implementados y validados localmente; el rollout
+> Railway de LiteLLM privado y admission/processor Telegram está validado el
+> 16 de septiembre de 2026. Collector/Grafana, dashboards/alertas, benchmark
+> con clave real, pruebas E2E negativas/duplicados y rotación real siguen
+> pendientes. **BL-23 permanece abierto.**
 > **Diseño aprobado:** 2026-09-13 · **Hardening local T13:** 2026-09-14
 
 ---
@@ -11,12 +13,12 @@
 
 | Campo | Valor |
 |---|---|
-| Commit | Pendiente |
+| Commit desplegado | `086f1fa2d7fec7bea14d059f024d5581593f4af4` (`fix(ledger): type nullable cost parameters`) |
 | Python | 3.12.10 |
 | Agno | Baseline: 2.9.0 |
-| LiteLLM | Pendiente |
-| PostgreSQL | Docker `pgvector/pgvector:pg16` |
-| Railway environment | Pendiente |
+| LiteLLM | `v1.100.1` fijado por digest `a3715fa7…c62bf` |
+| PostgreSQL | Supabase canónico `ancoramind_project` + PostgreSQL privado del Gateway Railway |
+| Railway environment | `ancoramind-app` / `production` / `europe-west4-drams3a` |
 | Grafana Cloud region | Pendiente |
 
 ## Automated checks
@@ -34,7 +36,7 @@
 | Migration downgrade | ✅ | `downgrade -1` conserva baseline/datos y retira specs/013 |
 | Privacy tests | ✅ T10 | Allowlist, logs JSON sin mensaje/args, no IDs en metric labels y Collector redactado |
 | Hardening T13 (load/crash/retención) | ✅ T13 local | `tests/integration/test_hardening_013.py`: 7 passed (duplicados, burst ordenado, crash agent/delivery, recovery response_ready, purga, orden estable) |
-| LiteLLM latency benchmark | ⏳ | Pendiente del rollout (clave real) |
+| LiteLLM latency benchmark | ⏳ | Gateway real desplegado; pendiente comparar p50/p95/p99 y TTFT con OpenRouter directo usando una clave real |
 | Load/concurrency tests | ✅ T13 local | Ver fila anterior; E2E Railway pendiente |
 | Crash-injection tests | ✅ T13 local | Ver fila anterior; reinicios/deploys reales pendientes |
 
@@ -42,7 +44,7 @@
 
 | ID | Escenario | Resultado | Evidencia |
 |---|---|---|---|
-| A | Mismo update concurrente varias veces → una interaction y un Agent run | ✅ T5 local | Claim único + processor llama runner una vez; E2E Railway pendiente |
+| A | Mismo update concurrente varias veces → una interaction y un Agent run | 🔶 E2E parcial | Un update real recorrió admission → claim → Agent → outbox → Telegram una vez; la concurrencia/duplicados reales siguen pendientes |
 | B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ T3 | Dos IDs Railway → dos deliveries, segunda `duplicate=true`, mismo `correlation_id` |
 | C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ T6 local | Manager cachea snapshot y CAS actualiza futuros runs; E2E Railway pendiente |
 | D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
@@ -58,7 +60,7 @@
 | N | Grupo/canal Telegram → no alcanza el Agent | ✅ T4 | `non_private_chat`, `200`, sin payload ni llamada Agno |
 | O | Usuario no allowlisted → no alcanza el Agent | ✅ T4 | `user_not_allowlisted`, `200`, sin payload ni llamada Agno |
 | P | Extracción documental comparte config, budget y trace | ✅ T9 local | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
-| Q | Gateway caído → fail closed sin OpenRouter directo | ✅ T11 local | `LITELLM_PROXY_ENABLED` fail-closed; LLMAccess sólo compone `OpenAILike`→Gateway; smoke real: key inválida ⇒ 401 Gateway, upstream dummy ⇒ 401 sin fallback |
+| Q | Gateway caído → fail closed sin OpenRouter directo | ✅ local + Railway wiring | `LITELLM_PROXY_ENABLED=true` con URL privada y virtual key; la app arranca sólo con ambos secrets y el update real atravesó LiteLLM privado. La caída real del Gateway sigue pendiente como prueba controlada |
 | R | Collector caído → aplicación continúa | ✅ T10 local | Setup/export/shutdown OTel fail-open; test simula fallo de exporter y el Collector config valida con endpoint dummy |
 | S | Logs/traces no contienen contenido personal | ✅ T10 local | Allowlist, JSON sin mensaje/args, redacción Collector y privacy tests bloquean prompts/mensajes/respuestas/args/results |
 | T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
@@ -70,16 +72,54 @@
 
 ## Production validation
 
-- [ ] Webhook estable conserva `/telegram/webhook`.
+- [x] Webhook estable conserva `/telegram/webhook`: admission propia respondió
+  `200` el 16 de septiembre de 2026 sin cambiar la URL pública.
 - [ ] Duplicate delivery real de Telegram no repite Agent/LLM.
-- [ ] Cambio de ruta/modelo real sin deployment.
-- [ ] LiteLLM privado y sin superficie de administración pública.
-- [ ] Fail-closed de Gateway validado.
+- [ ] Cambio de ruta/modelo real sin deployment mediante la API admin/CAS.
+- [x] LiteLLM privado y sin superficie de administración pública: servicio
+  `LiteLLM` en `europe-west4-drams3a`, sin dominio ni TCP proxy; aliases
+  `ancoramind-default-r1`, `ancoramind-fast-r1` y `ancoramind-vision-r1`
+  confirmados al arrancar.
+- [x] Gateway privado usado por un update real: LiteLLM registró
+  `POST /v1/chat/completions → 200`; el usage durable registró
+  `provider=litellm`, `effective_gateway_route=ancoramind-default-r1`,
+  `retry_count=0` y `fallback_used=false`.
+- [ ] Fail-closed de Gateway validado mediante caída controlada en Railway.
 - [ ] Collector/Grafana fail-open validado.
-- [ ] Circuit open y cooldown validados.
+- [ ] Circuit open y cooldown validados en Railway.
 - [ ] Coste real reconciliado con OpenRouter.
-- [ ] Búsqueda por `correlation_id` reconstruye el flujo completo.
+- [x] Búsqueda por `correlation_id` reconstruye un flujo real sin contenido:
+  `c76dd55a-54cd-41f4-96d2-29e2ac5d226c` tuvo una delivery HTTP, un Agent
+  run, un usage event LiteLLM, outbox cifrada y un chunk Telegram completado.
 - [ ] No se detecta contenido sensible en Grafana o logs Railway.
+
+## Railway rollout evidence (2026-09-16)
+
+- El schema canónico Supabase `ancoramind_project` fue adoptado y migrado a
+  `ancora.alembic_version = 0003_telegram_admission_indexes`. Las tablas del
+  ledger, runtime config, outbox y usage existen; ambos índices de admission
+  existen. Los datos previos se conservaron (2 notas, 1 vehículo y 1 propuesta).
+- `ancoramind-app` ejecuta el commit `086f1fa2d7fec7bea14d059f024d5581593f4af4`.
+  GitHub Actions del mismo commit finalizó correctamente, incluidos unit e
+  integration tests PostgreSQL Docker.
+- Gateway: LiteLLM `v1.100.1` fijado por digest, Postgres y Redis están
+  co-localizados con AncoraMind en `europe-west4-drams3a`. LiteLLM no tiene
+  dominio público ni TCP proxy. La virtual key exclusiva está en Railway como
+  secreto y no se registra en Git ni en esta evidencia.
+- T4 admission se validó con una interacción real `accepted`: payload cifrado
+  (Fernet key version 1), fingerprint presente, delivery HTTP `200` y cero
+  model/Gateway/tools/outbox mientras el processor estaba desactivado.
+- T5 processor se validó con un update real posterior: la interacción
+  `c76dd55a-54cd-41f4-96d2-29e2ac5d226c` siguió
+  `accepted → agent_started → response_ready → delivery_started → completed`.
+  Persistió una respuesta lógica cifrada de un chunk, recibió Telegram message
+  ID y registró exactamente un `llm_usage_events` y un resumen de interacción
+  con `config_revision=1`, `model_call_count=1` y
+  `gateway_request_count=1`.
+- El primer update T5 anterior al fix de ledger conserva contadores agregados a
+  cero; no se reescribió retrospectivamente para preservar la auditoría. El
+  fix posterior sincroniza usage y summary en una transacción y está cubierto
+  por integración PostgreSQL en CI.
 
 ## T2 — Migration strategy verification (2026-09-13)
 

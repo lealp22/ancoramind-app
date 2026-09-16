@@ -105,8 +105,19 @@ verificado); retries/fallbacks mantienen 0 por decisión documentada.
 ordenado exactamente-once, crash tras `agent_started`/`delivery_started` →
 `failed_ambiguous` sin replay/reenvío, `response_ready` recuperable, purga de
 retención, orden estable) — y runbooks operativos en `docs/runbooks-013.md`.
-E2E Railway, rotación real, Grafana/dashboards y benchmark con clave real
-quedan como checklist pendiente del rollout (§8); **BL-23 no se cierra en T13**.
+**Actualización rollout Railway (2026-09-16):** Supabase canónico migrado a
+Alembic head `0003_telegram_admission_indexes`, LiteLLM privado + Postgres +
+Redis co-localizados en `europe-west4-drams3a`, sin dominio/TCP proxy; la app
+opera fail-closed con virtual key exclusiva. T4 admission y T5 processor están
+activos y un update E2E real quedó trazado por `correlation_id`, con outbox
+cifrada, delivery Telegram completada y un uso LiteLLM persistido. El commit
+`086f1fa` corrigió además la sincronización transaccional del resumen de uso
+(`config_revision`, model/Gateway counts y costes) y pasó CI completo.
+Pendientes: duplicate delivery/concurrencia real, pruebas negativas de
+allowlist/grupo, cambio de runtime config sin redeploy, caída/circuit del
+Gateway en Railway, Collector/Grafana + dashboards/alertas, benchmark con clave
+real, reconciliación de costes y rotación real. **BL-23 permanece abierto**
+hasta verificar la matriz A–Y completa.
 Ver `specs/013-llm-access-governance/`.
 
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update
