@@ -175,7 +175,7 @@ La virtual key se crea con `scripts/litellm_create_virtual_key.py`; los secretos
 del provider viven sólo en el Gateway (`gateway/litellm-config.yaml` no contiene
 secretos). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
 
-Modelo default: `gpt-5.4-mini`. Los modelos free de OpenRouter caducan —
+Modelo default: `gpt-5.6-luna`. Los modelos free de OpenRouter caducan —
 si hay error 404, cambiar `LLM_MODEL` en `.env`.
 
 ---

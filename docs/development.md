@@ -272,7 +272,7 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LLM_PROVIDER` | `openai` \| `openrouter` \| `openai-like` | `openai` |
 | `OPENAI_API_KEY` | API key (openai y openai-like) | — |
 | `OPENROUTER_API_KEY` | API key (openrouter) | — |
-| `LLM_MODEL` | Modelo | `gpt-5.4-mini` |
+| `LLM_MODEL` | Modelo | `gpt-5.6-luna` |
 | `LLM_BASE_URL` | Endpoint custom (obligatorio en `openai-like`) | — |
 | `AGENT_TOOL_CALL_LIMIT` | Límite duro de tools por ejecución; evita bucles de tool-calling | `8` |
 | `TELEGRAM_TOKEN` | Token del bot (de @BotFather) | — |

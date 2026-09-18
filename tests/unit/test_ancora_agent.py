@@ -65,14 +65,14 @@ def test_create_model_from_settings_resolves_openrouter_api_key():
 def test_create_model_from_settings_resolves_openai_api_key():
     settings = Settings(
         llm_provider="openai",
-        llm_model="gpt-5.4-mini",
+        llm_model="gpt-5.6-luna",
         openai_api_key="test-key",
     )
 
     model = create_model_from_settings(settings)
 
     assert isinstance(model, OpenAIChat)
-    assert model.id == "gpt-5.4-mini"
+    assert model.id == "gpt-5.6-luna"
     assert model.retries == 0
 
 

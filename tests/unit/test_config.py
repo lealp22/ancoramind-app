@@ -36,7 +36,7 @@ class TestSettings:
         monkeypatch.delenv("APP_DEBUG", raising=False)
 
         settings = Settings(_env_file=None)
-        assert settings.llm_model == "gpt-5.4-mini"
+        assert settings.llm_model == "gpt-5.6-luna"
         assert settings.agent_tool_call_limit == 12
         assert settings.litellm_proxy_enabled is False
         assert settings.app_env == "development"
