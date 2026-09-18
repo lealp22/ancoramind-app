@@ -2,9 +2,10 @@
 
 > **Estado:** 🔶 T2–T13 implementados y validados localmente; el rollout
 > Railway de LiteLLM privado y admission/processor Telegram está validado el
-> 16 de septiembre de 2026. Collector/Grafana, dashboards/alertas, benchmark
-> con clave real, pruebas E2E negativas/duplicados y rotación real siguen
-> pendientes. **BL-23 permanece abierto.**
+> 16 de septiembre de 2026. Las pruebas de duplicados y negativas reales
+> (A/B/V/N/O) se validaron en Railway el 18 de septiembre de 2026.
+> Collector/Grafana, dashboards/alertas, benchmark
+> con clave real y rotación real siguen pendientes. **BL-23 permanece abierto.**
 > **Diseño aprobado:** 2026-09-13 · **Hardening local T13:** 2026-09-14
 
 ---
@@ -44,8 +45,8 @@
 
 | ID | Escenario | Resultado | Evidencia |
 |---|---|---|---|
-| A | Mismo update concurrente varias veces → una interaction y un Agent run | 🔶 E2E parcial | Un update real recorrió admission → claim → Agent → outbox → Telegram una vez; la concurrencia/duplicados reales siguen pendientes |
-| B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ T3 | Dos IDs Railway → dos deliveries, segunda `duplicate=true`, mismo `correlation_id` |
+| A | Mismo update varias veces → una interaction y un Agent run | ✅ Railway 2026-09-18 | `8dc1bbe3-05b7-43c8-b947-9d0ac20d0142` (update sintetico 978199899 reenviado 2 veces): 1 interaccion `completed`, `model_call_count=1`, `gateway_request_count=1`, `llm_usage_events=1`, `logical_responses=1` |
+| B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ Railway 2026-09-18 | Misma interaccion: 2 deliveries (`accepted` + `duplicate`), mismo `correlation_id`, `agno_run_id=ae28cfa1-9b6c-4ef6-a40f-8347015a553f` |
 | C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ T6 local | Manager cachea snapshot y CAS actualiza futuros runs; E2E Railway pendiente |
 | D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
 | E | Primary falla → no se supera attempt budget | ✅ T12 local | Retries Gateway/LiteLLM a 0 verificados con el Gateway real; num_retries=0 sin fallbacks; el budget ya valida 2 attempts/call como techo para su evolución |
@@ -57,15 +58,15 @@
 | K | Crash después de `agent_started` → `failed_ambiguous`, sin replay | ✅ T5 | Recovery marca `restart_after_agent_started`; runner no vuelve a llamarse |
 | L | Crash tras `response_ready` → delivery recuperable | ✅ T5 | Recovery conserva `response_ready` y entrega outbox existente |
 | M | Crash durante delivery → no reenvío automático ambiguo | ✅ T5 | Recovery marca `restart_during_delivery`, sin `sendMessage` adicional |
-| N | Grupo/canal Telegram → no alcanza el Agent | ✅ T4 | `non_private_chat`, `200`, sin payload ni llamada Agno |
-| O | Usuario no allowlisted → no alcanza el Agent | ✅ T4 | `user_not_allowlisted`, `200`, sin payload ni llamada Agno |
+| N | Grupo/canal Telegram → no alcanza el Agent | ✅ Railway 2026-09-18 | `e5771e0b-58b8-4a7f-a4ac-7abce13f5221` (update 978199900 grupo): `rejected`/`non_private_chat`, `200`, `model=0`, `gw=0`, `llm_events=0` |
+| O | Usuario no allowlisted → no alcanza el Agent | ✅ Railway 2026-09-18 | `835553e7-58f9-4d1d-bf3b-eb14036410cf` (update 978199901 intruso): `rejected`/`user_not_allowlisted`, `200`, `model=0`, `gw=0`, `llm_events=0` |
 | P | Extracción documental comparte config, budget y trace | ✅ T9 local | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
 | Q | Gateway caído → fail closed sin OpenRouter directo | ✅ local + Railway wiring | `LITELLM_PROXY_ENABLED=true` con URL privada y virtual key; la app arranca sólo con ambos secrets y el update real atravesó LiteLLM privado. La caída real del Gateway sigue pendiente como prueba controlada |
 | R | Collector caído → aplicación continúa | ✅ T10 local | Setup/export/shutdown OTel fail-open; test simula fallo de exporter y el Collector config valida con endpoint dummy |
 | S | Logs/traces no contienen contenido personal | ✅ T10 local | Allowlist, JSON sin mensaje/args, redacción Collector y privacy tests bloquean prompts/mensajes/respuestas/args/results |
 | T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
 | U | Run activo durante cambio → conserva revisión anterior | ✅ T6 | Snapshots futuros por run y publish no muta snapshot hasta CAS correcto |
-| V | Duplicate delivery → no consume rate limit | ✅ T4 | Duplicate se detecta antes del contador durable y conserva correlation ID |
+| V | Duplicate delivery → no consume rate limit | ✅ Railway 2026-09-18 | Duplicado `duplicate=true` conserva correlation ID con `llm_events=1`/`responses=1` (un solo run) |
 | W | Rate limit superado → `2xx` y cero inferencias | ✅ T4 | burst/min/hora/cola ⇒ `rejected`, `200`, sin Agent |
 | X | Tool call 12 → permitida si queda budget | ✅ T7 base | Factory per-run recibe hard ceiling 12 desde snapshot |
 | Y | Tool call 13 → rechazada por hard ceiling | ✅ T7 base | Agent `tool_call_limit=12`; tool hooks/budget detallado llega en T8 |
@@ -74,7 +75,16 @@
 
 - [x] Webhook estable conserva `/telegram/webhook`: admission propia respondió
   `200` el 16 de septiembre de 2026 sin cambiar la URL pública.
-- [ ] Duplicate delivery real de Telegram no repite Agent/LLM.
+- [x] Duplicate delivery real de Telegram no repite Agent/LLM: update
+  sintetico `978199899` reenviado 2 veces el 2026-09-18
+  (`8dc1bbe3-05b7-43c8-b947-9d0ac20d0142`): primera `accepted`, segunda
+  `duplicate=true` con mismo `correlation_id`; `model=1`, `gw=1`,
+  `llm_usage_events=1`, `logical_responses=1` (cero IA extra).
+- [x] Negativas reales el 2026-09-18: grupo `978199900`
+  (`e5771e0b-58b8-4a7f-a4ac-7abce13f5221`, `non_private_chat`) e intruso
+  `978199901` (`835553e7-58f9-4d1d-bf3b-eb14036410cf`,
+  `user_not_allowlisted`): ambos `200` + `rejected` con `model=0`, `gw=0`,
+  `llm_events=0`.
 - [ ] Cambio de ruta/modelo real sin deployment mediante la API admin/CAS.
 - [x] LiteLLM privado y sin superficie de administración pública: servicio
   `LiteLLM` en `europe-west4-drams3a`, sin dominio ni TCP proxy; aliases

@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-13
+Última actualización: 2026-09-17
 
 ---
 
@@ -113,8 +113,13 @@ activos y un update E2E real quedó trazado por `correlation_id`, con outbox
 cifrada, delivery Telegram completada y un uso LiteLLM persistido. El commit
 `086f1fa` corrigió además la sincronización transaccional del resumen de uso
 (`config_revision`, model/Gateway counts y costes) y pasó CI completo.
-Pendientes: duplicate delivery/concurrencia real, pruebas negativas de
-allowlist/grupo, cambio de runtime config sin redeploy, caída/circuit del
+**Actualización paso 1 Railway (2026-09-18):** duplicados y negativas
+validados con updates sintéticos: `978199899` reenviado 2 veces →
+1 interacción `completed` (`8dc1bbe3-05b7-43c8-b947-9d0ac20d0142`,
+model=1/gw=1, segunda delivery `duplicate=true`, cero IA extra);
+grupo `978199900` → `rejected`/`non_private_chat` e intruso `978199901` →
+`rejected`/`user_not_allowlisted`, ambos `200` con cero IA (A/B/V/N/O ✅).
+Pendientes: cambio de runtime config sin redeploy, caída/circuit del
 Gateway en Railway, Collector/Grafana + dashboards/alertas, benchmark con clave
 real, reconciliación de costes y rotación real. **BL-23 permanece abierto**
 hasta verificar la matriz A–Y completa.
@@ -124,6 +129,29 @@ Ver `specs/013-llm-access-governance/`.
 ejecuta el Agent como máximo una vez, el modelo cambia sin redeploy, ningún run
 supera su budget, LiteLLM falla cerrado, la interacción es trazable por
 `correlation_id` y no se exporta contenido personal.
+
+### BL-24 · Onboarding de usuarios Telegram mediante invitaciones gobernadas
+`ALLOWED_TELEGRAM_USER_IDS` permite una allowlist técnica, pero no es un proceso
+práctico de alta para un grupo de evaluadores aún no definido: no se debe abrir
+el bot a cualquier usuario ni pedir a cada persona que averigüe su Telegram ID.
+
+Diseñar e implementar un flujo de invitación administrable: un operador crea una
+invitación/código de alta de duración y uso limitados; la persona lo canjea en un
+chat privado con el bot; el backend vincula el `telegram_user_id` observado en el
+update autenticado a una identidad/autorización durable. El código es una
+credencial de onboarding, no un sustituto de los controles existentes de secret
+de webhook, private-chat, rate limiting, idempotencia ni auditoría de BL-23.
+
+Decidir en el spec el canal de emisión/solicitud (web mínima, herramienta/admin
+CLI u otro mecanismo), el modelo de roles/grupos, revocación, expiración,
+rotación y recuperación ante canje duplicado. Secretos/códigos deben almacenarse
+con hash; las operaciones administrativas y toda mutación de autorización deben
+ser auditables. Mantener fail-closed: un usuario sin autorización vigente no
+llega al Agent.
+
+**Prioridad P0:** desbloquea pruebas controladas con múltiples personas y debe
+integrarse con la admission durable de `specs/013`, no mediante un bypass de la
+allowlist actual.
 
 ---
 
@@ -156,6 +184,23 @@ primer deployment saludable, sin esperar al registro del webhook. Ver
 `docs/deployment-railway.md` §8.
 **Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
 Telegram ejecutado sin alertas ni túneles desde el equipo local.
+
+### BL-25 · Script E2E nativo para PowerShell
+Crear `scripts/run-e2e.ps1` con paridad funcional respecto a
+`scripts/run-e2e.sh`, para entornos Windows sin Bash. Debe admitir los modos
+equivalentes `-Check` y `-Reset`, cargar `.env` sin ejecutar contenido como
+código, validar provider/almacenamiento/base de datos, detectar Supabase frente
+a PostgreSQL local, arrancar y esperar PostgreSQL local, aplicar el bootstrap
+cuando proceda, iniciar/detectar ngrok, registrar el webhook de Telegram y
+lanzar `python -m src.main`.
+
+Documentar el uso desde PowerShell y cubrir al menos los caminos de validación
+sin efectos externos. No duplicar ni desalinear la política de configuración:
+si se extrae lógica común, mantener los dos wrappers como consumidores de la
+misma fuente de verdad.
+
+**Prioridad P1:** elimina una dependencia innecesaria de Bash para validación
+E2E local en Windows.
 
 ### BL-22 · Migrar reminder worker a FastAPI lifespan ✅ implementado — specs/012
 `src/main.py::_register_reminder_worker` usa `app.add_event_handler(...)`,
