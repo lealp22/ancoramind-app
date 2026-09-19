@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-17
+Última actualización: 2026-09-19
 
 ---
 
@@ -21,9 +21,11 @@
 | M3 Document Memory (storage+extraction) | ✅ (specs/003 documentada retroactivamente) |
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ |
+| BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
+| BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 369 unit + 52 integration passing — Ruff limpio en
+Tests: 369 unit + 60 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---

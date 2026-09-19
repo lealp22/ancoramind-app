@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-13
+> Última actualización: 2026-09-19
 
 ---
 
@@ -16,8 +16,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
 - **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 369 unit
-  tests passing; 51 integration tests requieren PostgreSQL/Docker (se omiten sin
-  esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
+  tests + 60 integration tests passing; los integration requieren PostgreSQL/Docker
+  (se omiten sin esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
 ---
 
@@ -204,10 +204,10 @@ alias existente (rompe la trazabilidad de `effective_gateway_route`). Ver
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests unitarios (217 passing)
+# Tests unitarios (369 passing)
 python -m pytest tests/unit/ -v
 
-# Integration tests (43 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (60 — PostgreSQL dockerizado; se saltan sin Docker)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
