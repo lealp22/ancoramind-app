@@ -77,6 +77,7 @@ docker compose up -d
 | [Quick Start](docs/quick-start.md) | Guía de arranque rápido diario |
 | [E2E Deployment](docs/deployment-e2e.md) | Step-by-step Telegram + PostgreSQL deployment |
 | [Railway Deployment](docs/deployment-railway.md) | Railway + GitHub CI/CD + stable Telegram webhook |
+| [Operational Runbooks](docs/runbooks-013.md) | Triage, LiteLLM Gateway, circuit breaker, budgets and incident recovery |
 
 ---
 
@@ -123,10 +124,11 @@ docs/               ← Architecture, governance, ADRs
 - [x] M3: Document Memory (attachment → storage → extraction)
 - [x] M4: Vehicle Vertical Slice (invoice → maintenance → query)
 - [x] M5: Calendar & Reminders
-- [x] BL-23 T2–T13: governed LLM access, durable admission, execution budget,
+- [x] BL-23 T2–T14: governed LLM access, durable admission, execution budget,
       document extraction port, metadata-only OpenTelemetry, the LiteLLM
       Gateway pilot, cost/reliability governance (circuit breaker, rate
-      limits, spend budgets with run-start hard stop) and local hardening
+      limits, spend budgets with run-start hard stop), hot model change via
+      additive versioned Gateway aliases, and local hardening
       (load/crash/retention suite + operational runbooks) (Railway rollout of
       Collector/Grafana/LiteLLM, benchmark with a real key and E2E remain pending;
       BL-23 stays open)

@@ -6,6 +6,15 @@
 # model_info rpm/tpm entries are per-route capacity ceilings. The per-key
 # RPM/TPM/max-parallel limits are applied on the AncoraMind virtual key by
 # scripts/litellm_create_virtual_key.py.
+#
+# Model definitions follow a single additive policy (ADR-005 amendment):
+# the aliases declared below are the immutable *base* (r1). A physical model
+# change never edits an existing alias; it publishes a new versioned one
+# (r2, r3, ...) through scripts/litellm_gateway_alias.py, which needs
+# store_model_in_db. The database may only ADD aliases, never edit or delete
+# a base alias. Settings (general_settings/router_settings/litellm_settings)
+# must never be written through the management API: LiteLLM stores them in
+# LiteLLM_Config and they would silently overlay this file at startup.
 
 model_list:
   - model_name: ancoramind-default-r1
@@ -43,6 +52,10 @@ router_settings:
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
+  # Additive model publication (ADR-005 amendment): aliases r2+ are published
+  # at runtime through POST /model/new, so a physical model change no longer
+  # requires a Gateway redeploy. Existing aliases are never mutated in place.
+  store_model_in_db: true
 
 litellm_settings:
   drop_params: false

@@ -291,7 +291,7 @@ del rollout Railway.
       actualizados en T13; ver resumen final.)
 - [x] Dejar E2E Telegram en Railway, rotación real, acceso Grafana y benchmark
       con clave real como pendientes explícitos del rollout (no cierran BL-23).
-      Checklist en `docs/runbooks-013.md` §8 y `verification.md`.
+       Checklist en `docs/runbooks-013.md` §9 y `verification.md`.
 - [ ] Cerrar BL-23 solo cuando la matriz A–Y esté verificada (pendiente:
       E2E Railway + evidencia real).
 
@@ -300,5 +300,176 @@ del rollout Railway.
 | Entregable | Fichero |
 |---|---|
 | Runbooks operativos (Gateway down, circuit open, budget, ambiguous, Collector, rollback) | `docs/runbooks-013.md` |
-| Checklist de rollout Railway/Grafana/Telegram pendiente | `docs/runbooks-013.md` §8 + `specs/013/verification.md` |
+| Checklist de rollout Railway/Grafana/Telegram pendiente | `docs/runbooks-013.md` §9 + `specs/013/verification.md` |
 | Tests de carga/crash/retención verificables localmente | `tests/integration/test_hardening_013.py` (extendido en T13) |
+
+## T14: Cambio de modelo en caliente — publicación aditiva de aliases
+
+> Cierra el hueco detectado el 2026-09-18: la decisión 9 de ADR-005
+> ("publicación del alias Gateway") y `design.md` §11 describían una publicación
+> en dos fases que nunca se implementó, por lo que un cambio de modelo físico
+> seguía exigiendo editar `gateway/litellm-config.yaml` y redesplegar LiteLLM.
+> Enmienda de gobernanza: `docs/adr/ADR-005-…md` §Enmienda (decisiones 15–18).
+
+Las fases se registran con su estado para poder auditar el avance:
+
+| Fase | Alcance | Estado |
+|---|---|---|
+| 1 | Gobernanza: enmienda ADR-005 (fuente de verdad aditiva, publicación por operador, `/model/*` only) | ✅ |
+| 2 | Gateway: `store_model_in_db: true` + validación local del arranque y aliases | ✅ |
+| 3 | Script `scripts/litellm_gateway_alias.py` (publish/grant/verify/retire) + allowlist extensible de la virtual key | ✅ |
+| 4 | Tests unitarios y Ruff en el gate global | ✅ |
+| 5 | Documentación: runbooks §2.1/§2.2, deployment-railway, development, `.env.example`, AGENTS, BACKLOG | ✅ |
+| 6 | Rollout Railway: publicar `r2`, activar revisión y demostrar el cambio sin reinicio | ✅ (2026-09-19) |
+
+- [x] **Fase 1 — Enmienda de gobernanza.** `ADR-005` registra el motivo (decisión
+  9 no implementada + mutación en sitio de `r1` el 2026-09-18), y fija: aliases
+  base inmutables en Git, DB sólo aditiva, publicación por script de operador
+  (AncoraMind nunca tiene la master key) y prohibición de escribir settings por
+  API/UI por el overlay de `LiteLLM_Config`.
+- [x] **Fase 2 — Habilitar la vía runtime.** `store_model_in_db: true` en
+  `general_settings`; validado levantando `gateway/docker-compose.litellm.yml`
+  (readiness 200 y tres aliases base publicados).
+- [x] **Fase 3 — Script de operador.** `scripts/litellm_gateway_alias.py` con
+  `publish` (idempotente, `--dry-run`, guard de alias base), `grant` (aditivo),
+  `verify` (distingue aliases de Git y de runtime) y `retire` (guard de alias
+  base). `scripts/litellm_create_virtual_key.py` acepta
+  `LITELLM_VIRTUAL_KEY_ALIASES` para autorizar generaciones nuevas.
+- [x] **Fase 4 — Tests y lint.** `tests/unit/test_gateway_alias_script.py` y
+  nuevas aserciones en `tests/unit/test_gateway_config.py` (publicación aditiva
+  habilitada, inmutabilidad de los aliases base, allowlist de la key). Se
+  endurecen además los dos tests de LiteLLM en `tests/unit/test_config.py`
+  (`monkeypatch.delenv` + `_env_file=None`) para que un entorno con
+  `LITELLM_PROXY_*` exportadas no provoque un fallo espurio del gate.
+- [x] **Fase 5 — Documentación.** `docs/runbooks-013.md` §2.1 (configuración
+  efectiva) y §2.2 (procedimiento de dos fases con rollback),
+  `docs/deployment-railway.md` §3.2 (caminos GitHub vs imagen + variable,
+  corrección del `COPY`/root directory, paso de cambio de modelo),
+  `docs/development.md`, `.env.example`, `AGENTS.md` y `BACKLOG.md`.
+- [x] **Fase 6 — Rollout Railway.** Publicar `ancoramind-default-r2`, otorgarlo a
+  la virtual key, activar la revisión runtime y confirmar el cambio de modelo sin
+  reiniciar ningún servicio, incluyendo el ensayo de rollback. Ejecutado el
+  2026-09-19 — evidencia completa en "Fase 6 — evidencia de rollout Railway"
+  (infraoperación: `STORE_MODEL_IN_DB` estaba a `False` en Railway y se corrigió
+  a `true` antes de publicar).
+
+### Fase 6 — estado de preparación (2026-09-18)
+
+**Modelo alternativo elegido:** `z-ai/glm-5.3-flash` ("Z.ai: GLM 5.3 Flash").
+En el Gateway el valor es `openrouter/z-ai/glm-5.3-flash`. Verificado contra la
+API de OpenRouter el 2026-09-18: modelo activo, multimodal
+(text+image+video→text), contexto 1 048 576 tokens, y `tools`/`tool_choice` +
+`structured_outputs`/`response_format` en los endpoints declarados (cubre las
+capabilities `text`/`tool_calling`/`structured_output` de la ruta). Precio de
+referencia del endpoint oficial Z.AI: 0.15 USD/M entrada y 0.50 USD/M salida
+(los proveedores alternativos de OpenRouter van de 0.075 a 0.45 USD/M de
+entrada); OpenRouter enruta dinámicamente entre ellos.
+
+**Revisión candidata preparada:** `configs/ancoramind-default-r2.json`, derivada
+de la revisión activa 1 cambiando sólo
+`routing.routes.ancoramind-default.effective_gateway_route` a
+`ancoramind-default-r2`. Checksum `ff9dbfb7bb7bfd1169f40f6191fe927041767c824180c
+8bb042493faabd7ad33`, validada `valid` contra el esquema real.
+
+Como `z-ai/glm-5.3-flash` es una **ruta de pago**, el invariante de T12 obliga a
+incluir `pricing` + `cost_governance` + `max_estimated_cost_usd`. Techos
+propuestos (ajustables antes de activar): límite externo 20 USD (igual que el
+backstop OpenRouter), presupuesto diario 1 USD, mensual 20 USD, techo mensual de
+la ruta `ancoramind-default` 10 USD, coste máximo por interacción 0.10 USD y
+umbrales 60/80/90%. La estimación usa el precio oficial Z.AI; la comparación con
+el coste real queda para la reconciliación de costes del rollout.
+
+Justificación del techo por interacción: la estimación (T7/T12) reserva siempre
+`max_output_tokens` completos por llamada (1024 × 0.50 USD/M = 0.000512 USD) más
+la entrada aproximada por recuento de caracteres, de modo que una interacción al
+peor caso dentro del budget vigente (6 model calls) ronda 0.005–0.006 USD.
+0.10 USD deja ~18x de margen y no es el verdadero tope de gasto: los techos de
+día/mes/ruta (que se evalúan con coste real, no estimado) y el límite externo de
+OpenRouter son los que cortan el gasto; el techo por interacción es la segunda
+línea contra bucles desbocados y picos de precio por llamada.
+
+**Estado de la infraestructura Railway verificado el 2026-09-18:**
+
+| Comprobación | Resultado |
+|---|---|
+| `STORE_MODEL_IN_DB` en el servicio LiteLLM | Existía como variable pero con valor **`False`** — la env var tiene precedencia sobre `general_settings.store_model_in_db` del yaml (el repo lo tenía a `true`). Corregido a `true` el 2026-09-19 antes de publicar (redeploy del Gateway) |
+| Dominio público del Gateway | Ninguno — privado por diseño (ADR-005) |
+| `RUNTIME_CONFIG_ADMIN_ENABLED`/`_TOKEN` en `ancoramind-app` | Ausentes ⇒ la API admin runtime config está **desactivada** en producción |
+| CLI de Railway en la máquina local | No instalada |
+
+Consecuencia operativa: los pasos que mutan el Gateway (`publish`, `grant`) y el
+paso que activa la revisión exigen secretos que sólo están en Railway
+(`LITELLM_MASTER_KEY`, `LITELLM_PROXY_VIRTUAL_KEY`) y no son recuperables por
+esta sesión; y la activación requiere habilitar antes la API admin (lo que
+impone generar `RUNTIME_CONFIG_ADMIN_TOKEN` y redeplegar la app: el arranque
+falla cerrado si se activa `ENABLED` sin token). La secuencia exacta queda
+preparada en `docs/runbooks-013.md` §2.2.
+
+### Hueco conocido que permanece abierto
+
+La decisión 9 de ADR-005 menciona también el **healthcheck del alias antes de la
+activación**. T14 no lo impone en servidor: `RuntimeConfigManager.activate()`
+sigue pudiendo activar una revisión que apunte a un alias inexistente, y el fallo
+aparecería en la primera inferencia. La mitigación actual es procedimental —el
+operador ejecuta `scripts/litellm_gateway_alias.py verify --alias <nuevo>` antes
+de activar— pero no está garantizada por el código. Cerrarlo requiere que la
+activación consulte el Gateway (o que el control plane reciba la lista de
+aliases publicados) y debe evaluarse junto con la superficie de privilegio, ya
+que hoy AncoraMind sólo posee la virtual key y no la master key.
+
+### Evidencia local (2026-09-18)
+
+Gateway LiteLLM `v1.100.1` vía `gateway/docker-compose.litellm.yml`, con
+`store_model_in_db: true`:
+
+| Comprobación | Resultado |
+|---|---|
+| `/health/readiness` tras el arranque | `200` |
+| Aliases base tras el arranque | `ancoramind-default-r1`, `ancoramind-fast-r1`, `ancoramind-vision-r1` |
+| Publicar `ancoramind-default-r2` con el Gateway en marcha | `Published … -> openrouter/gpt-5.6-luna` |
+| `r2` en `/model/info` **sin reiniciar** | `runtime_published_aliases: ["ancoramind-default-r2"]` |
+| Inferencia al alias recién publicado sin reinicio | `HTTP 401` con `Received Model Group=ancoramind-default-r2` (error de upstream por clave dummy, **no** `model not found`) |
+| Segunda publicación de `r2` | `already published; nothing to do` (idempotente) |
+| `grant` | `…-r1, …-fast-r1, …-vision-r1, …-default-r2` (aditivo, conserva la base) |
+| `retire ancoramind-default-r2` | `1 deployment(s) removed`; la base `r1` intacta |
+| Guard de alias base (`publish`/`retire` sobre `*-r1`) | Rechazado con exit code 1 |
+
+Gates: `pytest tests/unit/` → **369 passed**; `ruff check src/ tests/ scripts/
+migrations/` → **All checks passed**. Los tests de configuración se repiten con
+`LITELLM_PROXY_ENABLED`/`_BASE_URL`/`_VIRTUAL_KEY`/`_DEFAULT_ROUTE` exportadas
+para confirmar que el gate no depende del entorno local.
+
+### Fase 6 — evidencia de rollout Railway (2026-09-19)
+
+**Corrección previa obligatoria:** en Railway la variable `STORE_MODEL_IN_DB`
+estaba a `False` (la env var tiene precedencia sobre el yaml del repo, que sí
+decía `true`). Se corrigió a `true` + redeploy del Gateway antes de publicar.
+
+**Infraoperación (sin secretos fuera de Railway):** acceso vía `railway ssh`
+autenticado con un token de API de workspace revocable y una clave SSH
+desechable (registrada y eliminada al terminar); los comandos se ejecutaron
+dentro de los contenedores con scripts Python canalizados por stdin; la master
+key, la virtual key y el admin token se leyeron y usaron únicamente desde las
+variables de entorno de sus contenedores. El `grant` se hizo sin que la virtual
+key transitara: se leyó vía prisma desde la propia BD del Gateway y se pasó a
+`/key/update` con la master key, todo dentro del contenedor LiteLLM.
+
+| Comprobación | Resultado |
+|---|---|
+| `/model/info` antes | 3 aliases r1 cargados de config, `db_model: False` |
+| `POST /model/new` → `ancoramind-default-r2` | `200`; `model_id ad121da2…`; `db_model: True`; `openrouter/z-ai/glm-5.3-flash`; rpm 60 / tpm 250 000 (clonados de r1); parámetros cifrados con salt; **sin reiniciar el Gateway** |
+| `grant` (`/key/update` aditivo) | `200`; allowlist = 3×r1 + `ancoramind-default-r2` |
+| Smoke del alias (contenedor de la app, vía VK) | `200`; `model=ancoramind-default-r2`; coste 0.000008 USD. Nota: GLM es de razonamiento — con `max_tokens=10` el content sale vacío (todo el presupuesto se fue en reasoning) |
+| Admin API (`_TOKEN` + `_ENABLED=true`) | Un deploy `CRASHED` (fail-closed correcto: el token se añadió después del snapshot de variables del deploy) → redeploy automático `SUCCESS` |
+| `validate` de la candidata | `valid`; checksum canónico **`0e40ba0c24ae…668a6e21`** (difiere de los checksums locales de preparación por canonicalización; el canónico es el del servicio) |
+| `create-revision` | `201`; revisión **2**; actor `jesus-r2-rollout`; razón "fase 6 T14: switch default route to glm-5.3-flash (r2)" |
+| `activate` (CAS `expected_current_revision: 1`) | `200`; `active_revision: 2` |
+| Mensaje real de Telegram | Bot responde; logs de OpenRouter confirman `z-ai/glm-5.3-flash` |
+| `llm_usage_events` | `config_revision=2`, `effective_gateway_route='ancoramind-default-r2'`, `estimated_cost=0.00094790`, `cost_source='pricing_snapshot'`, `completed`, sin retries ni fallback |
+| Ensayo de rollback | `POST /rollback` → revisión 1 (checksum `73617adb…`); mensaje real → Luna confirmado en OpenRouter y BD (`config_revision=1`, `route=…-r1`); reactivación → revisión 2 (**estado final**) |
+
+Estado final: revisión 2 activa; Gateway con 3 aliases r1 (config) + `r2`
+(BD, `db_model`); ningún servicio reiniciado por el cambio de modelo (el único
+redeploy de la app fue el de habilitar la API admin, y el del Gateway el de
+corregir `STORE_MODEL_IN_DB`, ambos ajenos a la publicación del alias).
+

@@ -1,7 +1,8 @@
 # ADR-005 — Acceso LLM gobernado, configuración runtime y LiteLLM
 
 > **Status:** Accepted (diseño aprobado 2026-09-13; implementación pendiente —
-> specs/013, BL-23)
+> specs/013, BL-23). **Enmendado 2026-09-18** (ver §Enmienda): fuente de verdad
+> de las definiciones de modelo y publicación aditiva de aliases.
 > **Contexto:** provider/model físicos están acoplados hoy al Agent y a variables
 > de startup; un cambio de modelo en Railway requiere deployment.
 
@@ -51,6 +52,63 @@ model turn y sin almacenar secrets en configuración editable.
 14. **Budget inicial** — 120 s, 6 model calls, 12 tools hard ceiling, 8 requests
     Gateway y 2 attempts por model call.
 
+## Enmienda (2026-09-18) — definiciones de modelo y publicación aditiva
+
+### Motivo
+
+El punto 9 de la decisión ("publicación del alias Gateway") y §11 de
+`design.md` describen una publicación en dos fases que **no se llegó a
+implementar**: `RuntimeConfigManager.activate()` sólo realiza el CAS en
+PostgreSQL y nunca publica nada en el Gateway. Como consecuencia, el cambio de
+modelo físico seguía exigiendo editar `gateway/litellm-config.yaml` y redesplegar
+LiteLLM, lo que contradice el criterio de cierre de BL-23 ("el modelo cambia sin
+redeploy").
+
+Además, el 2026-09-18 el pilot cambió `gpt-5.4-mini` → `gpt-5.6-luna` editando
+en sitio el alias `ancoramind-default-r1`. Eso viola el punto 3 (`design.md`
+§11: "los aliases versionados no se mutan mientras puedan estar en uso") y rompe
+la trazabilidad: filas de `llm_usage_events` con
+`effective_gateway_route = ancoramind-default-r1` pueden corresponder a dos
+modelos físicos distintos según la fecha. Queda registrado como desviación del
+pilot, tolerada sólo por su carácter no productivo.
+
+### Decisiones
+
+15. **Fuente de verdad aditiva de definiciones de modelo.**
+    `gateway/litellm-config.yaml` declara los aliases **base** (`*-r1`) y es la
+    referencia revisable en Git. Con `store_model_in_db: true` la base de datos
+    del Gateway puede **únicamente añadir** aliases versionados nuevos (`r2`,
+    `r3`, …). Nunca se edita ni se borra un alias base o en uso: un cambio de
+    modelo físico se expresa publicando un alias nuevo y activando una revisión
+    de runtime config que apunte a él.
+16. **Publicación por script de operador.**
+    La publicación la ejecuta `scripts/litellm_gateway_alias.py` con
+    `LITELLM_MASTER_KEY`. AncoraMind **nunca** posee la master key del Gateway:
+    sólo la virtual key restringida a los aliases vigentes. La publicación no se
+    expone como tool, endpoint público ni capability del LLM.
+17. **Uso restringido a `/model/*`.**
+    Queda prohibido escribir settings (`general_settings`, `router_settings`,
+    `litellm_settings`) por API o Admin UI: LiteLLM los persiste en
+    `LiteLLM_Config` y **sobrescriben** el `config.yaml` en el siguiente
+    arranque, anulando en silencio la política aprobada de circuit breaker,
+    retries y fallbacks.
+18. **Precedencia del yaml para settings, de la DB sólo para modelos.**
+    Los settings de infraestructura y política siguen viviendo exclusivamente en
+    `gateway/litellm-config.yaml`. La DB del Gateway no es fuente de verdad del
+    producto (ver §Portabilidad): se puede reconstruir publicando de nuevo los
+    aliases desde cero.
+
+### Consecuencias
+
+- Un cambio de modelo deja de requerir redeploy: publicar alias → `grant` a la
+  virtual key → activar revisión CAS → verificar inferencia.
+- El `grant` es **aditivo** (mantiene los aliases previos) para que el rollback a
+  un alias anterior no dependa de volver a tocar la key.
+- Sigue existiendo una única fuente de verdad por ámbito: yaml para settings y
+  aliases base; DB sólo para aliases incrementales.
+- Coste: un flag más en el Gateway, un script de operador y la política de
+  limpieza de aliases antiguos.
+
 ## Portabilidad de la DB LiteLLM
 
 La DB dedicada puede almacenar virtual keys, spend logs, deployments y estado
@@ -86,7 +144,7 @@ sustituye:
 | Alternativa | Por qué no |
 |---|---|
 | Modelo físico dentro del Agent | Acoplamiento y redeploy por cambio |
-| YAML/TOML como source of truth de producción | Hot reload y coordinación pobres en Railway |
+| YAML/TOML como única source of truth de producción | Sin vía runtime el cambio de modelo exige redeploy; el pilot lo demostró (BL-23 pendiente) |
 | PostgreSQL consultado por request/model turn | Latencia e I/O innecesarios |
 | LiteLLM SDK in-process | No crea una frontera central ni aislamiento operativo |
 | Config solo en la DB de LiteLLM | Lock-in y mezcla de policies de producto/infraestructura |

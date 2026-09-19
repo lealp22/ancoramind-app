@@ -1,12 +1,14 @@
 # Verification: 013 — Governed LLM Access and Telegram Admission
 
-> **Estado:** 🔶 T2–T13 implementados y validados localmente; el rollout
+> **Estado:** 🔶 T2–T14 implementados y validados localmente; el rollout
 > Railway de LiteLLM privado y admission/processor Telegram está validado el
 > 16 de septiembre de 2026. Las pruebas de duplicados y negativas reales
 > (A/B/V/N/O) se validaron en Railway el 18 de septiembre de 2026.
 > Collector/Grafana, dashboards/alertas, benchmark
-> con clave real y rotación real siguen pendientes. **BL-23 permanece abierto.**
-> **Diseño aprobado:** 2026-09-13 · **Hardening local T13:** 2026-09-14
+> con clave real, rotación real y validación Railway del cambio de modelo en
+> caliente siguen pendientes. **BL-23 permanece abierto.**
+> **Diseño aprobado:** 2026-09-13 · **Hardening local T13:** 2026-09-14 ·
+> **Cambio de modelo en caliente T14:** 2026-09-18 (ADR-005 enmendado)
 
 ---
 
@@ -26,7 +28,7 @@
 
 | Check | Resultado | Evidencia |
 |---|---|---|
-| Unit tests | ✅ T12 | 352 passed; admission, config, LLMAccess, budget, extraction port, privacidad OTel, modo Gateway y gobernanza de coste cubiertos |
+| Unit tests | ✅ T14 | 369 passed; admission, config, LLMAccess, budget, extraction port, privacidad OTel, modo Gateway, gobernanza de coste y publicación de aliases Gateway (T14) cubiertos |
 | Integration tests | ✅ T12 | 52 passed; ledger, admission, processor, runtime config, usage/coste y agregación de spend por día/mes/ruta |
 | Ruff | ✅ T4 | `ruff check src/ tests/ scripts/ migrations/` |
 | mypy del alcance T2 | ✅ | 4 ficheros nuevos sin issues |
@@ -37,6 +39,7 @@
 | Migration downgrade | ✅ | `downgrade -1` conserva baseline/datos y retira specs/013 |
 | Privacy tests | ✅ T10 | Allowlist, logs JSON sin mensaje/args, no IDs en metric labels y Collector redactado |
 | Hardening T13 (load/crash/retención) | ✅ T13 local | `tests/integration/test_hardening_013.py`: 7 passed (duplicados, burst ordenado, crash agent/delivery, recovery response_ready, purga, orden estable) |
+| Gateway alias publication (T14) | ✅ T14 local | `store_model_in_db` + `scripts/litellm_gateway_alias.py` sobre LiteLLM real local: `publish`/`grant`/`verify`/`retire`, idempotencia, guards de alias base y alias inédito enrutado **sin reiniciar** el Gateway |
 | LiteLLM latency benchmark | ⏳ | Gateway real desplegado; pendiente comparar p50/p95/p99 y TTFT con OpenRouter directo usando una clave real |
 | Load/concurrency tests | ✅ T13 local | Ver fila anterior; E2E Railway pendiente |
 | Crash-injection tests | ✅ T13 local | Ver fila anterior; reinicios/deploys reales pendientes |
@@ -47,7 +50,7 @@
 |---|---|---|---|
 | A | Mismo update varias veces → una interaction y un Agent run | ✅ Railway 2026-09-18 | `8dc1bbe3-05b7-43c8-b947-9d0ac20d0142` (update sintetico 978199899 reenviado 2 veces): 1 interaccion `completed`, `model_call_count=1`, `gateway_request_count=1`, `llm_usage_events=1`, `logical_responses=1` |
 | B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ Railway 2026-09-18 | Misma interaccion: 2 deliveries (`accepted` + `duplicate`), mismo `correlation_id`, `agno_run_id=ae28cfa1-9b6c-4ef6-a40f-8347015a553f` |
-| C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ T6 local | Manager cachea snapshot y CAS actualiza futuros runs; E2E Railway pendiente |
+| C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ Railway 2026-09-19 | Manager cachea snapshot y CAS actualiza futuros runs; T14 añade la publicación del alias en caliente (ADR-005 decisión 9) verificada sobre el Gateway real local **y en Railway**: revisión 2 (`ancoramind-default-r2` → `z-ai/glm-5.3-flash`) activada con CAS, mensaje real de Telegram con `effective_gateway_route='ancoramind-default-r2'` y rollback bidireccional a la revisión 1 |
 | D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
 | E | Primary falla → no se supera attempt budget | ✅ T12 local | Retries Gateway/LiteLLM a 0 verificados con el Gateway real; num_retries=0 sin fallbacks; el budget ya valida 2 attempts/call como techo para su evolución |
 | F | Circuit open → cero llamadas al upstream afectado | ✅ T12 local | Con `allowed_fails:2`/`cooldown_time:10` y upstream muerto: 3 fallos abrieron el circuit; 429 `No deployments available` fast-fail sin llamadas al upstream; tras cooldown el probe volvió al upstream (HALF_OPEN→CLOSED) |
@@ -383,12 +386,12 @@
   garantizan orden por `update_id` (el `ORDER BY` usa `received_at` primero);
   el contrato exigible es estabilidad + exactamente-once por chat, no
   ordenación causal por `update_id`.
-- **Runbooks**: `docs/runbooks-013.md` (§0 mapa síntoma→runbook, §1 Gateway
-  down, §2 circuit open, §3 budget, §4 ambiguous, §5 matriz crash local,
-  §6 Collector, §7 rollback CAS, §8 checklist rollout + rotación).
+- **Runbooks**: `docs/runbooks-013.md` (§0 mapa síntoma→runbook, §1 triage,
+  §2 Gateway down, §3 circuit open, §4 budget, §5 ambiguous, §6 matriz crash
+  local, §7 Collector, §8 rollback CAS, §9 checklist rollout + rotación).
 - **No cierra BL-23**: pendientes E2E Railway, rotación real de secretos,
   Grafana/dashboards, benchmark con clave real y `verification.md` con
-  evidencia real (ver `docs/runbooks-013.md` §8).
+  evidencia real (ver `docs/runbooks-013.md` §9).
 ## T12 — Reliability and cost governance verification (2026-09-14)
 
 - **Circuit breaker (CLOSED/OPEN/HALF_OPEN)**: `gateway/litellm-config.yaml`
@@ -445,3 +448,60 @@
   El attempt budget ya reserva 2 attempts por llamada lógica para esa
   evolución sin amplificar el volumen; requiere benchmark T11 con clave real
   y datos de fallos reales antes de habilitar.
+
+## T14 — Cambio de modelo en caliente (2026-09-18)
+
+Motivo: la decisión 9 de ADR-005 y `design.md` §11 exigían publicar el alias
+versionado en el Gateway durante la activación, pero
+`RuntimeConfigManager.activate()` sólo ejecutaba el CAS en PostgreSQL. Por eso
+un cambio de modelo físico seguía requiriendo editar `litellm-config.yaml` y
+redesplegar LiteLLM, y el 2026-09-18 `ancoramind-default-r1` se mutó en sitio
+(`gpt-5.4-mini` → `gpt-5.6-luna`), rompiendo la trazabilidad de
+`effective_gateway_route`. Enmienda de gobernanza registrada en ADR-005
+§Enmienda (decisiones 15–18); fases y estado en `tasks.md` T14.
+
+- **Fuente de verdad aditiva**: `gateway/litellm-config.yaml` declara los
+  aliases base `*-r1` (inmutables) y pasa a `general_settings.
+  store_model_in_db: true`; la BD del Gateway sólo **añade** generaciones
+  nuevas (`r2+`). Un cambio de modelo publica un alias nuevo y activa una
+  revisión runtime que apunte a él.
+
+- **Publicación por operador**: `scripts/litellm_gateway_alias.py` con
+  `publish` (idempotente, `--dry-run`, rechaza alias base), `grant` (aditivo
+  para no romper el rollback), `verify` (distingue aliases de Git y de runtime
+  vía `model_info.db_model`) y `retire` (protegido para `*-r1`). Usa sólo las
+  rutas `/model/*`; escribe settings del Gateway queda prohibido porque
+  `LiteLLM_Config` sobrescribiría el `config.yaml` en el siguiente arranque y
+  anularía la política de circuit breaker, retries y fallbacks.
+
+- **Evidencia local** (LiteLLM `v1.100.1` con `store_model_in_db: true`, sin
+  ninguna clave real; el upstream falla por clave dummy, que es lo esperado):
+  - readiness `200` y los tres aliases base publicados tras el arranque;
+  - `publish --alias ancoramind-default-r2` con el Gateway en marcha ⇒
+    `runtime_published_aliases: ["ancoramind-default-r2"]` en `/model/info`;
+  - una inferencia al alias recién publicado, **sin reiniciar**, devolvió
+    `HTTP 401` con `Received Model Group=ancoramind-default-r2` — el Gateway
+    enrutó al alias nuevo y el error vino del upstream (clave dummy), no un
+    `model not found`;
+  - segunda publicación del mismo alias ⇒ `already published; nothing to do`;
+  - `grant` ⇒ `…-r1, …-fast-r1, …-vision-r1, …-default-r2` (base conservada);
+  - `retire ancoramind-default-r2` ⇒ `1 deployment(s) removed` con la base
+    `r1` intacta;
+  - guard de alias base en `publish`/`retire` ⇒ rechazo con exit code 1.
+
+- **Integración con el control plane**: la revisión runtime que apunta al alias
+  nuevo se activa con la misma secuencia CAS de T6 (§8 del runbook), de modo que
+  los runs siguientes usan la generación nueva sin reiniciar AncoraMind.
+
+- **Validación en Railway (fase 6, 2026-09-19)**: ejecutada — ver
+  "Fase 6 — evidencia de rollout Railway" en `tasks.md` T14 (publicación en
+  caliente con `store_model_in_db` corregido a `true`, `grant` aditivo, smoke
+  `200` del alias, activación CAS de la revisión 2, verificación con mensaje
+  real de Telegram en `llm_usage_events.effective_gateway_route =
+  'ancoramind-default-r2'` con `config_revision = 2`, y ensayo de rollback
+  bidireccional a la revisión 1 verificado en OpenRouter y en BD). El gap de
+  gobernanza que quedaba abierto queda cerrado; el hueco de la decisión 9
+  (healthcheck del alias en servidor) sigue abierto y registrado más abajo.
+
+- **Gates**: `pytest tests/unit/` → 369 passed;
+  `ruff check src/ tests/ scripts/ migrations/` → All checks passed.

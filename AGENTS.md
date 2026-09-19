@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 352 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 369 unit
   tests passing; 51 integration tests requieren PostgreSQL/Docker (se omiten sin
   esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
@@ -113,12 +113,14 @@ migrations/              ← Alembic canónico (baseline + revisiones); init.sql
 │                           refleja head para bootstrap fresh — BL-12/specs/013
 scripts/                 ← run-e2e.sh + telegram_webhook.py + runtime_config.py (admin T6)
                             + litellm_create_virtual_key.py (T11 Gateway)
+                            + litellm_gateway_alias.py (ADR-005: publicar/otorgar/
+                              retirar aliases versionados en caliente)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (T2–T11 implementados localmente)
-tests/unit/              ← 328 tests
+                            013-llm-access-governance (T2–T14 implementados localmente)
+tests/unit/              ← 369 tests
 tests/integration/        ← 51 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Carpetas por categoría (vacías — pendiente)
 docs/                    ← architecture, governance, development, quick-start,
@@ -132,7 +134,9 @@ docs/                    ← architecture, governance, development, quick-start,
                            adr/ADR-005-governed-llm-access-runtime-config.md,
                            adr/ADR-006-opentelemetry-observability.md
 gateway/                 ← LiteLLM Proxy pilot (T11/T12): config sin secretos, circuit breaker + RPM/TPM
-                           con imagen fijada por digest y compose local de validación
+                           con imagen fijada por digest y compose local de validación;
+                           store_model_in_db permite publicar aliases r2+ en caliente
+                           (ADR-005 enmendado — nunca editar un alias en uso)
 observability/           ← Manifiesto del OTel Collector privado (T10)
 ```
 
@@ -177,6 +181,14 @@ secretos). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
 
 Modelo default: `gpt-5.6-luna`. Los modelos free de OpenRouter caducan —
 si hay error 404, cambiar `LLM_MODEL` en `.env`.
+
+**Cambiar el modelo físico (ADR-005, enmendado 2026-09-18):** con el Gateway
+activo `LLM_PROVIDER`/`LLM_MODEL` se ignoran. El cambio se hace publicando un
+alias versionado **nuevo** (`r2`, `r3`, …) con
+`scripts/litellm_gateway_alias.py` y activando una revisión de runtime config
+que apunte a él: sin redeploy y sin mutar el alias en uso. Prohibido editar un
+alias existente (rompe la trazabilidad de `effective_gateway_route`). Ver
+`docs/runbooks-013.md` §2.2.
 
 ---
 
@@ -269,7 +281,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T13 implementados localmente; rollout Railway (Collector/Grafana/LiteLLM) y E2E pendientes (specs/013) |
+| BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T14 implementados; T14 fase 6 (cambio de modelo en caliente) validado en Railway (2026-09-19); pendientes: rollout Collector/Grafana, E2E completo y rotaciones (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`
@@ -321,3 +333,7 @@ multi-agent, WhatsApp, web frontend, microservices, event sourcing.
 7. **Cambios de inferencia/config/telemetry:** seguir specs/013. No añadir retries,
    fallbacks, providers directos, captura de contenido o bypass del Gateway sin
    actualizar la policy y sus acceptance tests.
+8. **Cambiar el modelo físico:** publicar un alias versionado nuevo con
+   `scripts/litellm_gateway_alias.py` (`publish` → `grant` → `verify`) y activar
+   una revisión runtime que apunte a él. Nunca editar ni retirar un alias en uso;
+   nunca escribir settings del Gateway por API/UI (ADR-005 enmendado).

@@ -23,14 +23,14 @@
 | M5 Calendar & Reminders | ✅ |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 352 unit + 52 integration passing — Ruff limpio en
+Tests: 369 unit + 52 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T13 implementados localmente — specs/013 + ADR-004/005/006
+### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:
 
@@ -119,9 +119,24 @@ validados con updates sintéticos: `978199899` reenviado 2 veces →
 model=1/gw=1, segunda delivery `duplicate=true`, cero IA extra);
 grupo `978199900` → `rejected`/`non_private_chat` e intruso `978199901` →
 `rejected`/`user_not_allowlisted`, ambos `200` con cero IA (A/B/V/N/O ✅).
-Pendientes: cambio de runtime config sin redeploy, caída/circuit del
-Gateway en Railway, Collector/Grafana + dashboards/alertas, benchmark con clave
-real, reconciliación de costes y rotación real. **BL-23 permanece abierto**
+**Actualización cambio de modelo en caliente (2026-09-18, ADR-005 enmendado):**
+la enmienda documenta que la publicación del alias Gateway (decisión 9 /
+`design.md` §11) nunca se había implementado —`RuntimeConfigManager.activate()`
+sólo hacía el CAS en PostgreSQL— y fija una política aditiva: los aliases base
+`*-r1` viven en `gateway/litellm-config.yaml` y nunca se mutan; un cambio de
+modelo publica una generación nueva (`r2+`) en la BD del Gateway
+(`store_model_in_db: true`) mediante `scripts/litellm_gateway_alias.py`
+(`publish`/`grant`/`verify`/`retire`, con guards de alias base e idempotencia).
+La vía de cambio sin redeploy queda implementada y verificada localmente
+(T14 fases 1–5) y **validada en Railway el 2026-09-19 (fase 6)**: publicación
+de `ancoramind-default-r2` en caliente (tras corregir `STORE_MODEL_IN_DB` de
+`False` a `true`), `grant` aditivo, revisión runtime 2 activada con CAS,
+mensaje real de Telegram con `effective_gateway_route='ancoramind-default-r2'`
+(`config_revision=2`, `cost_source='pricing_snapshot'`) y ensayo de rollback
+bidireccional a la revisión 1. Evidencia en `tasks.md` T14 fase 6.
+Pendientes: caída/circuit del Gateway en Railway, Collector/Grafana +
+dashboards/alertas, benchmark con clave real, reconciliación de costes y
+rotación real. **BL-23 permanece abierto**
 hasta verificar la matriz A–Y completa.
 Ver `specs/013-llm-access-governance/`.
 

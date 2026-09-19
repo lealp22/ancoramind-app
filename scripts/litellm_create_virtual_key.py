@@ -12,6 +12,13 @@ Optional T12 limits (defaults shown):
   $env:LITELLM_VIRTUAL_KEY_MAX_BUDGET_USD='20'      # Gateway-side backstop (USD)
   $env:LITELLM_VIRTUAL_KEY_BUDGET_DURATION='30d'    # reset window
 
+Optional alias extension (ADR-005 amendment). The base aliases are always
+included; add newly published versioned aliases so the key can call them:
+  $env:LITELLM_VIRTUAL_KEY_ALIASES='ancoramind-default-r2'
+
+Over time prefer ``scripts/litellm_gateway_alias.py grant``, which extends the
+allowlist of an existing key without recreating it.
+
 The generated key is printed once. Store it as the Railway secret
 ``LITELLM_PROXY_VIRTUAL_KEY`` on the AncoraMind application, never in Git or a
 runtime-config revision.
@@ -22,8 +29,14 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 import httpx
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.domain.runtime_config.models import GATEWAY_ROUTE_PATTERN  # noqa: E402
 
 ALIASES = ["ancoramind-default-r1", "ancoramind-fast-r1", "ancoramind-vision-r1"]
 
@@ -32,10 +45,27 @@ DEFAULT_KEY_TPM = 250_000
 DEFAULT_KEY_MAX_PARALLEL_REQUESTS = 4
 
 
+def resolve_aliases(env: Mapping[str, str]) -> list[str]:
+    """Return the base aliases plus any explicitly requested versioned extension."""
+    base = list(ALIASES)
+    raw = env.get("LITELLM_VIRTUAL_KEY_ALIASES", "").strip()
+    if not raw:
+        return base
+    extras: list[str] = []
+    for candidate in raw.split(","):
+        alias = candidate.strip()
+        if not alias or alias in base or alias in extras:
+            continue
+        if not GATEWAY_ROUTE_PATTERN.fullmatch(alias):
+            raise SystemExit(f"LITELLM_VIRTUAL_KEY_ALIASES entry is not a versioned alias: {alias}")
+        extras.append(alias)
+    return base + extras
+
+
 def build_key_request_payload(env: Mapping[str, str]) -> dict[str, object]:
     """Render the /key/generate payload with per-key T12 limits (no secrets)."""
     payload: dict[str, object] = {
-        "models": list(ALIASES),
+        "models": resolve_aliases(env),
         "metadata": {"service": "ancoramind-core"},
         "rpm_limit": _positive_int(
             env.get("LITELLM_VIRTUAL_KEY_RPM"), DEFAULT_KEY_RPM, "LITELLM_VIRTUAL_KEY_RPM"

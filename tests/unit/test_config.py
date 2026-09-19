@@ -78,21 +78,31 @@ class TestSettings:
         assert settings.otel_exporter_otlp_endpoint == "http://collector.internal:4317"
         assert settings.otel_exporter_otlp_insecure is False
 
-    def test_litellm_proxy_requires_private_url_and_virtual_key(self) -> None:
+    def test_litellm_proxy_requires_private_url_and_virtual_key(self, monkeypatch) -> None:
+        # A local Gateway validation can export these; clear them so the
+        # fail-closed invariant is asserted instead of the ambient environment.
+        monkeypatch.delenv("LITELLM_PROXY_ENABLED", raising=False)
+        monkeypatch.delenv("LITELLM_PROXY_BASE_URL", raising=False)
+        monkeypatch.delenv("LITELLM_PROXY_VIRTUAL_KEY", raising=False)
+
         with pytest.raises(ValidationError, match="LITELLM_PROXY_BASE_URL"):
-            Settings(litellm_proxy_enabled=True)
+            Settings(litellm_proxy_enabled=True, _env_file=None)
 
         with pytest.raises(ValidationError, match="LITELLM_PROXY_VIRTUAL_KEY"):
             Settings(
                 litellm_proxy_enabled=True,
                 litellm_proxy_base_url="http://litellm.railway.internal:4000",
+                _env_file=None,
             )
 
-    def test_litellm_proxy_settings_are_loaded_when_complete(self) -> None:
+    def test_litellm_proxy_settings_are_loaded_when_complete(self, monkeypatch) -> None:
+        monkeypatch.delenv("LITELLM_PROXY_DEFAULT_ROUTE", raising=False)
+
         settings = Settings(
             litellm_proxy_enabled=True,
             litellm_proxy_base_url="http://litellm.railway.internal:4000",
             litellm_proxy_virtual_key="sk-ancoramind-only",
+            _env_file=None,
         )
 
         assert settings.litellm_proxy_enabled is True

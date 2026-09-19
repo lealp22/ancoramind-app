@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts.litellm_create_virtual_key import ALIASES, build_key_request_payload
+from scripts.litellm_create_virtual_key import (
+    ALIASES,
+    build_key_request_payload,
+    resolve_aliases,
+)
 
 GATEWAY_DIR = Path(__file__).resolve().parents[2] / "gateway"
 
@@ -100,3 +104,38 @@ def test_virtual_key_payload_rejects_invalid_limits() -> None:
 
     with pytest.raises(SystemExit, match="positive integer"):
         build_key_request_payload({"LITELLM_VIRTUAL_KEY_TPM": "fast"})
+
+
+def test_gateway_enables_additive_model_publication() -> None:
+    general = _gateway_config()["general_settings"]
+
+    # ADR-005 amendment: aliases r2+ are published at runtime, so a physical
+    # model change no longer requires a Gateway redeploy.
+    assert general["store_model_in_db"] is True
+
+
+def test_gateway_base_aliases_stay_versioned_and_immutable() -> None:
+    from src.domain.runtime_config.models import GATEWAY_ROUTE_PATTERN
+
+    for entry in _gateway_config()["model_list"]:
+        alias = entry["model_name"]
+        # Base aliases are the r1 generation declared in Git; they are never
+        # edited in place, and every new generation is a separate alias.
+        assert GATEWAY_ROUTE_PATTERN.fullmatch(alias)
+        assert alias.endswith("-r1")
+
+
+def test_virtual_key_allowlist_defaults_to_the_base_aliases() -> None:
+    assert resolve_aliases({}) == list(ALIASES)
+    assert build_key_request_payload({})["models"] == list(ALIASES)
+
+
+def test_virtual_key_allowlist_accepts_a_published_alias() -> None:
+    aliases = resolve_aliases({"LITELLM_VIRTUAL_KEY_ALIASES": "ancoramind-default-r2"})
+
+    assert aliases == [*ALIASES, "ancoramind-default-r2"]
+
+
+def test_virtual_key_allowlist_rejects_unversioned_entries() -> None:
+    with pytest.raises(SystemExit, match="versioned alias"):
+        resolve_aliases({"LITELLM_VIRTUAL_KEY_ALIASES": "ancoramind-default"})

@@ -186,17 +186,29 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    **Add PostgreSQL**. Nómbralo p. ej. `litellm-db`. No compartas la BD canónica
    `ancora` ni la de `agno_runtime`: la DB de LiteLLM es infraestructura
    sustituible (virtual keys, spend logs, config).
-2. **Servicio LiteLLM** — Railway → **New Service** → **GitHub Repo** apuntando
-   a este repositorio con **root directory** `gateway/` (usa `gateway/Dockerfile`,
-   imagen fijada por digest `ghcr.io/berriai/litellm@sha256:a3715fa7…c62bf`).
-   No generes dominio público ni TCP proxy: el `4000` se consume por private
-   networking (`http://<servicio>.railway.internal:4000`).
+2. **Servicio LiteLLM** — dos caminos válidos, elige uno y sé consistente:
+
+   - **Desde GitHub (recomendado si quieres que un push despliegue el Gateway):**
+     Railway → **New Service** → **GitHub Repo** apuntando a este repositorio.
+     Con `gateway/Dockerfile`, el **root directory** debe quedar en la **raíz del
+     repositorio** (no en `gateway/`), porque el `COPY gateway/litellm-config.yaml`
+     del Dockerfile se resuelve relativo a la raíz. Fija el
+     **Dockerfile path** en `gateway/Dockerfile`.
+   - **Desde imagen + variable (despliegue actual del pilot):** servicio con la
+     imagen fijada por digest
+     `ghcr.io/berriai/litellm@sha256:a3715fa7…c62bf` y la configuración completa
+     en la variable `LITELLM_CONFIG_YAML`. En este camino un push **no**
+     actualiza el Gateway: hay que copiar el YAML a la variable y redesplegar
+     (ver `docs/runbooks-013.md` §2.1).
+
+   En ambos casos: no generes dominio público ni TCP proxy; el `4000` se consume
+   por private networking (`http://<servicio>.railway.internal:4000`).
 3. Variables del servicio LiteLLM (todas secretos):
 
    ```env
    DATABASE_URL=${{litellm-db.DATABASE_URL}}
    LITELLM_MASTER_KEY=<sk-master-aleatorio>
-   LITELLM_SALT_KEY=<sk-salt-aleatorio-no-rotable>
+   LITELLM_SALT_KEY=<sk-salt-aleatorio-no-rotables>
    OPENROUTER_API_KEY=<clave-real-openrouter>
    NO_DOCS=True
    NO_REDOC=True
@@ -204,7 +216,9 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    ```
 
    `LITELLM_SALT_KEY` cifra credenciales en la BD y no puede rotarse después de
-   añadir modelos: genérala una vez y guárdala solo en Railway.
+   añadir modelos: genérala una vez y guárdala solo en Railway. En el camino de
+   imagen + variable, añade además `LITELLM_CONFIG_YAML` con el contenido de
+   `gateway/litellm-config.yaml` (sin secretos).
 4. Espera deployment **SUCCESS** y valida desde tu terminal:
 
    ```powershell
@@ -224,6 +238,8 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    # Opcional: backstop USD en el propio Gateway (rotación 30d)
    # $env:LITELLM_VIRTUAL_KEY_MAX_BUDGET_USD='<external_hard_limit>'
    # $env:LITELLM_VIRTUAL_KEY_BUDGET_DURATION='30d'
+   # Opcional: autorizar también un alias publicado en runtime (ADR-005)
+   # $env:LITELLM_VIRTUAL_KEY_ALIASES='ancoramind-default-r2'
    python scripts/litellm_create_virtual_key.py
    ```
 
@@ -254,7 +270,15 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    ejecuta el benchmark p50/p95/p99+TTFT frente a OpenRouter directo (T11,
    con clave real) antes de declarar el pilot cerrado.
 
-8. **Cost governance (T12):** activa en una revisión runtime `cost_governance`
+8. **Cambio de modelo sin redeploy (ADR-005, enmienda 2026-09-18):** el Gateway
+   arranca con `store_model_in_db: true`, así que un cambio de modelo físico se
+   publica en caliente como **alias nuevo** (`r2`, `r3`, …) sin editar ni borrar
+   los aliases base. Secuencia completa en `docs/runbooks-013.md` §2.2:
+   `publish` → `grant` → `verify` → revisión de runtime config. El alias previo
+   permanece publicado y autorizado, de modo que el rollback sólo requiere
+   volver a activar la revisión anterior.
+
+9. **Cost governance (T12):** activa en una revisión runtime `cost_governance`
    (`external_hard_limit_usd` = hard limit OpenRouter al 100%,
    `daily_budget_usd`, `monthly_budget_usd`, `route_monthly_budgets_usd`
    opcional, umbrales 60/80/90%) junto con `pricing` y

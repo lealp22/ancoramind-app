@@ -326,12 +326,15 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LITELLM_VIRTUAL_KEY_MAX_PARALLEL_REQUESTS` | T12: max parallel por virtual key | `4` |
 | `LITELLM_VIRTUAL_KEY_MAX_BUDGET_USD` | T12: backstop USD opcional en el Gateway | — |
 | `LITELLM_VIRTUAL_KEY_BUDGET_DURATION` | T12: ventana de rotación del backstop | `30d` |
+| `LITELLM_VIRTUAL_KEY_ALIASES` | ADR-005: aliases runtime extra a autorizar en la key (preferir `grant`) | — |
 | `APP_DEBUG` | Debug (echo de SQL) | `false` |
 
 ### Runbooks operativos specs/013 (T13)
 
-Ver [`docs/runbooks-013.md`](runbooks-013.md): Gateway down (fail closed),
-circuit open, budget exhausted (`failed_controlled` sin replay),
+Ver [`docs/runbooks-013.md`](runbooks-013.md): triage de AncoraMind sin
+respuesta, Gateway down (fail closed), circuit breaker automático
+(`3` fallos / `60 s` de cooldown), cambio de modelo en caliente por publicación
+de alias en dos fases, budget exhausted (`failed_controlled` sin replay),
 `failed_ambiguous` (sin replay/reenvío), Collector down (fail open),
 rollback CAS de config y checklist pendiente del rollout (E2E Railway,
 benchmark con clave real, Grafana, rotación real).
