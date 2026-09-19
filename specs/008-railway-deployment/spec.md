@@ -1,7 +1,7 @@
 # Spec: 008 — Railway Deployment Automation
 
 > **Backlog:** BL-18
-> **Status:** implemented (repository preparation); infrastructure deployment pending
+> **Status:** deployed; operational closure pending (2026-09-19)
 > **Target:** Desplegar AncoraMind fuera del equipo local mediante Railway, con
 > CI/CD desde GitHub y webhook HTTPS estable para Telegram.
 

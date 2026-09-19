@@ -22,10 +22,13 @@
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
+| BL-8 Evals agentic | 🔶 Base determinista implementada: 15 casos sintéticos + runner; pendiente evaluación contra Agent/modelo gobernado — specs/014 |
+| BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
+| BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 374 unit + 60 integration passing — Ruff limpio en
+Tests: 378 unit + 60 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -191,9 +194,16 @@ La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue
 gestionado conectado a GitHub; Supabase permanece como PostgreSQL y Storage.
 Hecho: runtime compatible con `PORT`, Dockerfile, healthcheck, `railway.json`,
-CI GitHub Actions, helper de webhook seguro y documentación. Pendiente: crear
-servicio Railway, cargar variables, activar Auto Deploy + Wait for CI, generar
-dominio, registrar webhook y repetir E2E Telegram.
+CI GitHub Actions, helper de webhook seguro y documentación. **Evidencia Railway
+(2026-09-19):** servicio `ancoramind-app` en `production`, rama `main`, deployment
+`SUCCESS` del commit `9d7999b`, dominio HTTPS estable
+`https://ancoramind-app-production.up.railway.app`, `/health` → `200`, 34 variables
+de producción y webhook Telegram registrado sin updates pendientes. LiteLLM sigue
+privado sin dominio/TCP proxy.
+
+**Pendiente:** el servicio tiene `checkSuites: false`, por lo que falta activar
+**Wait for CI** (y decidir protección de `main`); también falta repetir y documentar
+el E2E Telegram de M3–M5. Por esos criterios BL-18 **no está cerrado todavía**.
 **Nota (2026-09-09):** al desplegar se activará también el worker de
 recordatorios (BL-5 / ADR-003 / specs/010): variables `REMINDER_WORKER_*`
 opcionales (defaults válidos); su entrega es **outbound** y funciona desde el
@@ -202,22 +212,13 @@ primer deployment saludable, sin esperar al registro del webhook. Ver
 **Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
 Telegram ejecutado sin alertas ni túneles desde el equipo local.
 
-### BL-25 · Script E2E nativo para PowerShell
-Crear `scripts/run-e2e.ps1` con paridad funcional respecto a
-`scripts/run-e2e.sh`, para entornos Windows sin Bash. Debe admitir los modos
-equivalentes `-Check` y `-Reset`, cargar `.env` sin ejecutar contenido como
-código, validar provider/almacenamiento/base de datos, detectar Supabase frente
-a PostgreSQL local, arrancar y esperar PostgreSQL local, aplicar el bootstrap
-cuando proceda, iniciar/detectar ngrok, registrar el webhook de Telegram y
-lanzar `python -m src.main`.
-
-Documentar el uso desde PowerShell y cubrir al menos los caminos de validación
-sin efectos externos. No duplicar ni desalinear la política de configuración:
-si se extrae lógica común, mantener los dos wrappers como consumidores de la
-misma fuente de verdad.
-
-**Prioridad P1:** elimina una dependencia innecesaria de Bash para validación
-E2E local en Windows.
+### ~~BL-25 · Script E2E nativo para PowerShell~~ ✅ implementado — specs/015 (2026-09-19)
+`scripts/run-e2e.ps1` ofrece `-Check`, `-Reset`, carga literal y segura de `.env`,
+validación de provider/Storage/DB/Gateway, PostgreSQL local + bootstrap, ngrok y
+webhook para flujo local. `-PublicBaseUrl` registra el webhook contra un dominio
+HTTPS desplegado (Railway) sin iniciar ngrok, Docker ni la app local. Tests cubren
+configuración válida, provider inválido, `.env` no ejecutable y URL pública con
+path rechazada. Ver `specs/015-powershell-e2e/verification.md`.
 
 ### BL-22 · Migrar reminder worker a FastAPI lifespan ✅ implementado — specs/012
 `src/main.py::_register_reminder_worker` usa `app.add_event_handler(...)`,
@@ -252,6 +253,62 @@ pymupdf). Riesgo: contenido no confiable → DATA, no INSTRUCTIONS (§2 AGENTS.m
 ### BL-7 · Proveedor de calendario real
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
+
+### BL-26 · Notas de voz entrantes y transcripción gobernada (STT)
+Permitir que una nota de voz de Telegram se procese como un mensaje conversacional:
+descargar el audio autorizado por Telegram, transcribirlo y pasar **solo el texto
+resultante** al mismo flujo de admission/processor/Agent que usa un mensaje escrito.
+El audio y su transcripción son datos personales no confiables. La transcripción
+es el mensaje conversacional del usuario y puede expresar solicitudes funcionales;
+se trata como input no confiable y nunca puede elevar permisos, modificar políticas
+ni sustituir la identidad y confirmación resueltas por el Core. No se exporta a
+logs/OTel y se somete a retención/cifrado equivalentes o más estrictos que el
+payload Telegram de specs/013.
+
+**Diseño requerido:** no crear clientes físicos de STT desde domain/services/tools.
+Definir un `SpeechToTextPort` y una capability gobernada con ruta lógica versionada,
+`RuntimeConfigSnapshot`, `ExecutionContext`, presupuesto por duración/tamaño, uso y
+coste auditables, correlación y fail-closed. La descarga de `file_id` y conversión
+del audio vive en la capa Telegram/agent; el dominio recibe un puerto y texto
+transcrito etiquetado como DATA. Preservar `same bot_id + update_id => at most one
+Agent execution`, incluidos fallos tras descargar/transcribir; no reintentar ni
+reproducir automáticamente una transcripción ambigua. Definir límites explícitos
+de duración, tamaño, MIME/codec y política para audio sin habla o ilegible.
+
+**Modelo inicial recomendado para benchmark:** `openai/whisper-large-v3-turbo`.
+En OpenRouter figura con formatos habituales de Telegram (incluido `ogg`) y coste
+de $0.000003/s (~$0.00018/min), muy inferior a `mistralai/voxtral-mini-transcribe`
+($0.003/min), `microsoft/mai-transcribe-2` ($0.10/h ≈ $0.00167/min) y
+`fish-audio/transcribe-1` ($0.0001/s = $0.006/min). Antes de fijarlo, comparar
+exactitud y latencia con un corpus sintético/consentido de notas cortas en español,
+ruido, nombres/matrículas y code-switching. MAI-Transcribe 2 es el candidato de
+calidad/funcionalidad si hicieran falta diarización, timestamps por palabra o
+keyword biasing; Voxtral Mini es alternativa intermedia. No usar modelos de chat
+para STT ni bypass del Gateway/política de inferencia.
+
+**Criterio de cierre:** E2E de nota de voz privada allowlisted → una sola
+transcripción auditada → un solo Agent run → respuesta textual; rechazos de tipo,
+tamaño/duración, usuario/grupo no autorizado y error STT no consumen Agent ni
+dejan contenido en telemetría. Añadir unit, integration, evals y evidencia de
+coste/latencia real antes de activar en producción.
+
+**Prioridad propuesta: P2.** Puede subir a P1 tras cerrar BL-23, pues mejora de
+forma directa el uso cotidiano del asistente.
+
+### BL-27 · Respuestas de voz opcionales en Telegram (TTS) — análisis previo
+**La respuesta textual ya está implementada:** el processor de specs/013 persiste
+una `logical_response` cifrada y la entrega por `TelegramNotifier.send_text()` →
+Bot API `sendMessage`. Por tanto, recibir voz y responder con texto no requiere
+otra capability de salida.
+
+Evaluar por separado la respuesta **hablada**: síntesis TTS del texto final,
+entrega como `sendVoice`/`sendAudio`, preferencia explícita por usuario y fallback
+a texto. Requiere decidir proveedor/modelo, idiomas/voces, coste/latencia, formato
+Telegram, moderación de contenido, retención de audio, límites de longitud,
+idempotencia de delivery y cómo persistir/auditar `response_kind='voice'` sin
+guardar contenido en telemetría. Debe pasar por una capability gobernada y no
+introducir un provider directo ni reenvíos ambiguos. Crear mini-ADR/spec antes de
+implementar; no asumir que TTS es necesario para entregar el valor de BL-26.
 
 ### BL-21 · Listas TODO (múltiples listas por usuario) ✅ implementado — 2026-09-10
 Permitir al usuario crear y gestionar **listas de tareas (TODO)** con nombre
@@ -383,6 +440,7 @@ NO instalado — diseño solo hasta BL-6.
 | BL-23 · Interaction ledger durable (cipher/Fernet, deliveries, claim y retención) | specs/013 T3 | 2026-09-13 |
 | BL-23 · Telegram admission feature-flagged (secret, private chat, allowlist, rate/queue durable) | specs/013 T4 | 2026-09-13 |
 | BL-23 · Processor/outbox Telegram (claim, recovery, chunks, delivery states y typing) | specs/013 T5 | 2026-09-13 |
+| BL-25 · Script E2E nativo para PowerShell | specs/015 | 2026-09-19 |
 
 ---
 

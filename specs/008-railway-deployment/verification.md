@@ -1,7 +1,6 @@
 # Verification: 008 — Railway Deployment Automation
 
-> Estado: **PASS de preparación de repositorio** — no se ha creado proyecto ni
-> deployment Railway todavía.
+> Estado: **🔶 Railway desplegado; cierre operativo pendiente** (2026-09-19).
 
 ## Verificación local
 
@@ -23,12 +22,19 @@
 - Sin proyecto Railway, variables remotas, webhook ni despliegue creados en
   esta fase.
 
-## Verificación Railway pendiente
+## Evidencia Railway (2026-09-19)
 
-- [ ] Proyecto Railway y servicio GitHub creados por el usuario.
-- [ ] Rama de despliegue: `main`; Auto Deploy + Wait for CI habilitados.
-- [ ] Variables de producción cargadas exclusivamente en Railway.
-- [ ] Railway domain generado y `GET /health` devuelve 200.
-- [ ] Webhook registrado mediante `scripts/telegram_webhook.py set`.
-- [ ] Telegram E2E de documento y búsqueda de matrícula repetido.
-- [ ] Rollback a deployment anterior probado o procedimiento confirmado.
+- [x] Proyecto `ancoramind-app`, entorno `production`, servicio GitHub
+      `lealp22/ancoramind-app@main` y deployment `8e30c6d7…` en `SUCCESS`
+      (commit `9d7999b`).
+- [x] Variables de producción configuradas en Railway; secretos no se exponen en
+      esta verificación.
+- [x] Dominio `https://ancoramind-app-production.up.railway.app` generado;
+      `GET /health` devolvió `200` con `{"status":"ok"}`.
+- [x] Webhook Telegram registrado contra
+      `https://ancoramind-app-production.up.railway.app/telegram/webhook`;
+      `pending_update_count=0`.
+- [ ] Activar **Wait for CI**: Railway informa `checkSuites: false`.
+- [ ] Confirmar/probar rollback a deployment anterior.
+- [ ] Repetir E2E Telegram M3–M5: documento, vehículo/mantenimiento,
+      recordatorio y calendario. Este punto cierra BL-18 y desbloquea BL-1.

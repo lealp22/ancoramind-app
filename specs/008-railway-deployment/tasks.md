@@ -18,8 +18,8 @@
 - [x] Añadir workflow GitHub Actions para `pull_request` y `push` a `main`.
 - [x] Ejecutar lint de los módulos productivos de despliegue y
       `pytest tests/unit/ -q`.
-- [ ] En Railway: conectar GitHub, seleccionar `main`, activar Auto Deploy y
-      **Wait for CI** (requiere cuenta/proyecto del usuario).
+- [x] En Railway: conectar GitHub y seleccionar `main`.
+- [ ] Activar **Wait for CI** (`checkSuites: false` el 2026-09-19).
 - [ ] En GitHub: proteger `main` requiriendo el check `CI / quality`
       (decisión del propietario).
 
@@ -28,7 +28,7 @@
 - [x] Script Python para registrar, inspeccionar y borrar webhook.
 - [x] Usa `TELEGRAM_WEBHOOK_SECRET_TOKEN`; no imprime secretos.
 - [x] Tests unitarios del cliente y sanitización.
-- [ ] Registrar webhook contra dominio Railway tras primer deployment.
+- [x] Registrar webhook contra dominio Railway tras primer deployment.
 
 ## T5: Documentation and verification
 
@@ -36,5 +36,6 @@
 - [x] Actualizar `.env.example`, README, development, AGENTS y BACKLOG.
 - [x] Build Docker local limpio: Agno 2.9.0 resuelto y `/health` validado con
       `APP_ENV=production`, `PORT=8080`, `0.0.0.0`, sin autoreload.
-- [ ] Primer deployment Railway (requiere acción del usuario/cuenta Railway).
-- [ ] Verificar `/health`, webhook y E2E Telegram; desbloquea BL-1/T7.
+- [x] Primer deployment Railway (`ancoramind-app`, `production`, commit `9d7999b`).
+- [x] Verificar `/health` y webhook contra el dominio Railway.
+- [ ] Ejecutar E2E Telegram M3–M5; desbloquea BL-1/T7 y el cierre de BL-18.

@@ -131,3 +131,14 @@ bash scripts/run-e2e.sh --check   # solo verificar prerrequisitos
 bash scripts/run-e2e.sh           # secuencia completa
 bash scripts/run-e2e.sh --reset   # resetear webhook antes de registrar
 ```
+
+En PowerShell, usa el equivalente nativo:
+
+```powershell
+.\scripts\run-e2e.ps1 -Check
+.\scripts\run-e2e.ps1
+.\scripts\run-e2e.ps1 -Reset
+
+# Si la app ya está en Railway, no inicia ngrok ni una app local:
+.\scripts\run-e2e.ps1 -PublicBaseUrl https://<service>.up.railway.app
+```

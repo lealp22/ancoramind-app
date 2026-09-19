@@ -232,24 +232,30 @@ LLM_BASE_URL=https://api.groq.com/openai/v1
 En lugar de ejecutar los pasos 5–7 manualmente, puedes usar el script:
 
 ```bash
-# Verificar prerrequisitos sin lanzar nada
+# Git Bash / WSL: verificar prerrequisitos sin lanzar nada
 bash scripts/run-e2e.sh --check
 
-# Secuencia completa: detectar DB → ngrok → webhook → lanzar
+# Git Bash / WSL: secuencia local completa (DB → ngrok → webhook → app)
 bash scripts/run-e2e.sh
-
-# Si el webhook quedó en estado inconsistente, resetear antes de registrar
 bash scripts/run-e2e.sh --reset
 ```
 
-> **Nota Windows:** El script `.sh` requiere Git Bash, WSL, o cualquier shell
-> compatible con bash. Si no tienes ninguno, sigue los pasos 5–7 manualmente.
+```powershell
+# PowerShell nativo: mismos modos para la secuencia local
+.\scripts\run-e2e.ps1 -Check
+.\scripts\run-e2e.ps1
+.\scripts\run-e2e.ps1 -Reset
+
+# Railway: registra el webhook contra el dominio HTTPS existente; no usa ngrok
+.\scripts\run-e2e.ps1 -Check -PublicBaseUrl https://<service>.up.railway.app
+.\scripts\run-e2e.ps1 -PublicBaseUrl https://<service>.up.railway.app
+```
 
 El script automatiza:
-1. Verificación de prerrequisitos (python, ngrok, curl, `.env`)
+1. Verificación de prerrequisitos (python, ngrok cuando el endpoint es local, `.env`)
 2. Detección de Supabase frente a PostgreSQL local
 3. Inicio de Docker + migraciones solo si la DB es local
-4. Detección/inicio de ngrok
+4. Detección/inicio de ngrok solo para el flujo local
 5. Registro del webhook en Telegram
 6. Lanzamiento de AncoraMind
 

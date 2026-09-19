@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 374 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 378 unit
   tests + 60 integration tests passing; los integration requieren PostgreSQL/Docker
   (se omiten sin esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
@@ -111,16 +111,19 @@ prompts/                 ← Assets de IA versionados (identity, soul, tool_cont
 │                           channels/telegram.md, skills/)
 migrations/              ← Alembic canónico (baseline + revisiones); init.sql
 │                           refleja head para bootstrap fresh — BL-12/specs/013
-scripts/                 ← run-e2e.sh + telegram_webhook.py + runtime_config.py (admin T6)
+scripts/                 ← run-e2e.sh + run-e2e.ps1 + telegram_webhook.py + runtime_config.py (admin T6)
                             + litellm_create_virtual_key.py (T11 Gateway)
                             + litellm_gateway_alias.py (ADR-005: publicar/otorgar/
                               retirar aliases versionados en caliente)
+                            + run_evals.py (BL-8: validación determinista de catálogos)
 specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-vehicle,
                             005-calendar, 006-vehicle-creation, 007-supabase,
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
-                            013-llm-access-governance (T2–T14 implementados localmente)
-tests/unit/              ← 374 tests
+                            013-llm-access-governance (T2–T14 implementados localmente),
+                            014-agentic-evals (base determinista implementada),
+                            015-powershell-e2e (implementada)
+tests/unit/              ← 378 tests
 tests/integration/        ← 60 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos versionados de evals agentic (BL-8/specs/014)
 docs/                    ← architecture, governance, development, quick-start,
@@ -281,6 +284,9 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
+| BL-8 Evals agentic | 🔶 Base determinista implementada: 15 casos sintéticos + runner; pendiente evaluación contra Agent/modelo gobernado (specs/014) |
+| BL-18 Railway como sustituto de ngrok | 🔶 Servicio/dominio/webhook/healthcheck reales validados; pendiente Wait for CI + E2E M3–M5 (specs/008) |
+| BL-25 Script E2E nativo PowerShell | ✅ `run-e2e.ps1` local/remoto con `.env` seguro (specs/015) |
 | BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T14 implementados; T14 fase 6 (cambio de modelo en caliente) validado en Railway (2026-09-19); pendientes: rollout Collector/Grafana, E2E completo y rotaciones (specs/013) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
