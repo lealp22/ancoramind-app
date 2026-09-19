@@ -236,6 +236,13 @@ evals/
 └── security/
 ```
 
+Los casos se versionan como catálogos JSON sintéticos en `evals/<category>/cases.json`.
+`python scripts/run_evals.py` valida su contrato de forma determinista; no llama
+a modelos ni ejecuta tools. Tras cada cambio de prompts, modelo o descripción de
+tools se revisan los casos afectados y se ejecuta este gate. La futura evaluación
+contra modelos debe reutilizar los mismos casos y registrar únicamente metadata
+permitida por specs/013.
+
 | Entrada | Expectativa |
 |---|---|
 | "¿Qué vehículos tengo?" | → vehicle Tool |

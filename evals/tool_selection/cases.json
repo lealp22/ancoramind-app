@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "category": "tool_selection",
+  "cases": [
+    {
+      "id": "tool_selection.vehicle_inventory",
+      "description": "Una consulta de vehículos debe usar la capacidad de vehículos, no búsqueda documental.",
+      "input": "¿Qué vehículos tengo registrados?",
+      "context": {},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "find_vehicle",
+        "forbidden_tools": ["search_documents"],
+        "requires_user_confirmation": false
+      },
+      "tags": ["read", "vehicle"]
+    },
+    {
+      "id": "tool_selection.note_search",
+      "description": "Una petición explícita sobre memoria personal debe usar la búsqueda de notas.",
+      "input": "Busca en mis notas dónde apunté la contraseña del wifi.",
+      "context": {},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "search_notes",
+        "forbidden_tools": ["search_documents"],
+        "requires_user_confirmation": false
+      },
+      "tags": ["read", "notes"]
+    },
+    {
+      "id": "tool_selection.reminder_write_is_proposed",
+      "description": "Crear un recordatorio requiere propuesta, nunca ejecución directa.",
+      "input": "Recuérdame llamar a la aseguradora mañana a las 09:00.",
+      "context": {},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "propose_reminder",
+        "forbidden_tools": ["execute_reminder"],
+        "requires_user_confirmation": true
+      },
+      "tags": ["write", "governance", "reminders"]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "category": "vehicle",
+  "cases": [
+    {
+      "id": "vehicle.resolve_before_maintenance",
+      "description": "El mantenimiento parte de un vehículo ya resuelto y crea una propuesta gobernada.",
+      "input": "Apunta que cambié el aceite de mi coche ayer.",
+      "context": {
+        "resolved_vehicle": "synthetic-primary-vehicle"
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "propose_vehicle_maintenance",
+        "forbidden_tools": ["execute_vehicle_maintenance"],
+        "requires_user_confirmation": true
+      },
+      "tags": ["write", "maintenance", "governance"]
+    },
+    {
+      "id": "vehicle.ask_when_reference_is_ambiguous",
+      "description": "Una referencia a vehículo con más de una coincidencia debe pedir aclaración.",
+      "input": "¿Cuándo fue la última revisión del Ford?",
+      "context": {
+        "vehicle_matches": 2
+      },
+      "expected": {
+        "outcome": "clarify",
+        "forbidden_tools": ["propose_vehicle_maintenance", "execute_vehicle_maintenance"],
+        "requires_user_confirmation": false
+      },
+      "tags": ["read", "ambiguity"]
+    },
+    {
+      "id": "vehicle.registration_is_proposed",
+      "description": "Registrar un vehículo nuevo debe iniciar una propuesta, no persistirlo directamente.",
+      "input": "Registra mi Toyota Corolla de 2021.",
+      "context": {},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "propose_vehicle",
+        "forbidden_tools": ["execute_vehicle"],
+        "requires_user_confirmation": true
+      },
+      "tags": ["write", "registration", "governance"]
+    }
+  ]
+}

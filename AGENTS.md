@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 369 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 374 unit
   tests + 60 integration tests passing; los integration requieren PostgreSQL/Docker
   (se omiten sin esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
@@ -120,9 +120,9 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
                             013-llm-access-governance (T2–T14 implementados localmente)
-tests/unit/              ← 369 tests
-tests/integration/        ← 51 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
-evals/                   ← Carpetas por categoría (vacías — pendiente)
+tests/unit/              ← 374 tests
+tests/integration/        ← 60 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+evals/                   ← Catálogos versionados de evals agentic (BL-8/specs/014)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, deployment-railway, runbooks-013
                            (operación specs/013), adding-tools (guía para nuevas
@@ -204,7 +204,7 @@ alias existente (rompe la trazabilidad de `effective_gateway_route`). Ver
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests unitarios (369 passing)
+# Tests unitarios (374 passing)
 python -m pytest tests/unit/ -v
 
 # Integration tests (60 — PostgreSQL dockerizado; se saltan sin Docker)
@@ -337,3 +337,16 @@ multi-agent, WhatsApp, web frontend, microservices, event sourcing.
    `scripts/litellm_gateway_alias.py` (`publish` → `grant` → `verify`) y activar
    una revisión runtime que apunte a él. Nunca editar ni retirar un alias en uso;
    nunca escribir settings del Gateway por API/UI (ADR-005 enmendado).
+
+---
+
+## 11. Estilo de comunicación
+
+Preferencia del propietario sobre cómo se comunican los agentes en este repositorio:
+
+- **Respuestas moderadas de longitud.** Explicar qué se hizo y el resultado de la
+  verificación, pero sin narrar cada paso ni pegar código ya editado en la respuesta.
+- Ni exhaustivas ni telegráficas: un resumen claro de cambios + cualquier
+  decisión/limitación relevante. El propietario pedirá más detalle si lo necesita.
+- Estructura preferida: qué cambió → cómo se validó → puntos que requieren
+  atención. Sin relleno ni secciones ceremoniales.

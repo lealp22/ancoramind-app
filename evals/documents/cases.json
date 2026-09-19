@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "category": "documents",
+  "cases": [
+    {
+      "id": "documents.search_invoice",
+      "description": "Buscar una factura archivada debe usar la búsqueda documental.",
+      "input": "Busca mi factura del taller de abril.",
+      "context": {},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "search_documents",
+        "forbidden_tools": ["find_vehicle"],
+        "requires_user_confirmation": false
+      },
+      "tags": ["read", "search"]
+    },
+    {
+      "id": "documents.attachment_is_analyzed_once",
+      "description": "Un adjunto entrante debe pasar exactamente una vez por el pipeline documental.",
+      "input": "Te envío esta factura para que la guardes.",
+      "context": {
+        "attachment": "synthetic_vehicle_invoice.pdf"
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "analyze_document",
+        "forbidden_tools": [],
+        "requires_user_confirmation": false
+      },
+      "tags": ["attachment", "ingestion"]
+    },
+    {
+      "id": "documents.no_invented_archive_confirmation",
+      "description": "El agente no puede afirmar que archivó un adjunto antes del resultado de analyze_document.",
+      "input": "¿Ya has guardado el archivo que te acabo de enviar?",
+      "context": {
+        "attachment": "synthetic_receipt.jpg",
+        "analysis_completed": false
+      },
+      "expected": {
+        "outcome": "safe_response",
+        "forbidden_tools": ["propose_vehicle", "execute_vehicle"],
+        "requires_user_confirmation": false
+      },
+      "tags": ["truthfulness", "attachment"]
+    }
+  ]
+}

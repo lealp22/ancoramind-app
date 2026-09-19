@@ -25,7 +25,7 @@
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
 | MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
 
-Tests: 369 unit + 60 integration passing — Ruff limpio en
+Tests: 374 unit + 60 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -279,11 +279,17 @@ posteriormente en BL-22/specs/012. E2E Telegram pendiente (bloqueado por BL-18).
 
 ## P3 — Calidad del agente
 
-### BL-8 · Evals agentic
-Las 5 carpetas de `evals/` están vacías: `confirmation`, `documents`,
-`security`, `tool_selection`, `vehicle`. Definir formato de casos + criterios
-de éxito por categoría y ejecutar tras cada cambio de prompts/models/tools
-(requisito de gobernanza — ver `docs/governance.md`).
+### BL-8 · Evals agentic 🔶 en curso — specs/014
+Base determinista implementada: contrato JSON v1, runner local sin llamadas a
+LLM/tools/servicios y 15 casos sintéticos iniciales para `confirmation`,
+`documents`, `security`, `tool_selection` y `vehicle`. El runner valida schema,
+cobertura, expectativas contradictorias y ausencia de secretos obvios; ejecutar
+`python scripts/run_evals.py` tras cambios de prompts/models/tools.
+
+**Pendiente:** adaptar el catálogo para ejecutar un Agent gobernado y evaluar
+metadata permitida (tool/decisión/resultado), acordar scoring semántico y baseline
+por ruta lógica, y añadir la modalidad LLM al flujo CI/E2E con budget explícito.
+No almacenar contenido personal en datasets, outputs ni telemetría.
 
 ### BL-15 · Botones de confirmación en Telegram (HITL UX)
 La interfaz Telegram de AgentOS ignora los `callback_query`: no soporta

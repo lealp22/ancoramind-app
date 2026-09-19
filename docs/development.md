@@ -240,13 +240,16 @@ con `REMINDER_WORKER_ENABLED=false` y su cadencia se ajusta con
 ## Testing
 
 ```bash
-# Unit tests (126 passing — repos y Supabase client mockeados)
+# Unit tests (374 passing — repos y clientes externos mockeados)
 pytest tests/unit/
 
 # Integration tests (PostgreSQL real via docker compose — specs/009)
 # La fixture arranca el contenedor sola; sin Docker se saltan (no fallan).
 # La BD dedicada es ancoramind_test: la BD de dev (ancoramind) nunca se toca.
 pytest tests/integration/
+
+# Agentic eval catalogs (validación determinista; sin llamadas LLM)
+python scripts/run_evals.py
 
 # Todo (unit + integration)
 pytest
