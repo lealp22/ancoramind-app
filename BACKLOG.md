@@ -189,6 +189,15 @@ los flujos service/tool con LLM real siguen requiriendo este E2E.
 **Criterio de cierre:** los 5 flujos probados y documentados en el
 `verification.md` del spec correspondiente.
 
+**Actualización 2026-09-20:** diagnosticado el fallo de M3 en el processor
+gobernado: normalizaba únicamente texto y descartaba adjuntos, por lo que una
+imagen recibía `200` pero no respuesta. Corrección local implementada y cubierta:
+referencias Telegram cifradas, descarga posterior al claim, tamaño/MIME acotados,
+ingesta automática y renderizado PDF transitorio. La extracción visual selecciona
+la ruta lógica `ancoramind-vision`; falta publicar `ancoramind-vision-r2` con
+`openrouter/qwen/qwen3.6-35b-a3b`, activar una revisión runtime por CAS y repetir
+el E2E real antes de marcar M3 como validado.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue
@@ -245,10 +254,12 @@ sin PostgreSQL/Docker. Ver `specs/012-fastapi-lifespan/`.
 
 ## P2 — Funcionalidad para "usable de verdad"
 
-### BL-6 · OCR/vision real para extracción de documentos
-La extracción IA usa filename + metadata, no el contenido real de PDFs/imágenes.
-Evaluar: visión del LLM (si el modelo la soporta) vs. OCR dedicado (Tesseract,
-pymupdf). Riesgo: contenido no confiable → DATA, no INSTRUCTIONS (§2 AGENTS.md).
+### BL-6 · OCR/vision real para extracción de documentos 🔶 en curso
+La extracción visual está implementada localmente: imagen directa o PDF renderizado
+con PyMuPDF (máximo 3 páginas) → ruta lógica `ancoramind-vision` → salida
+estructurada. Los contenidos siguen siendo DATA, no INSTRUCTIONS. Pendiente:
+publicar/autorizar `ancoramind-vision-r2` con Qwen en Railway, activar la revisión
+runtime, benchmark de precisión/coste/latencia y E2E Telegram con PDF e imagen.
 
 ### BL-7 · Proveedor de calendario real
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)

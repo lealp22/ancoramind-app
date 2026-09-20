@@ -127,6 +127,12 @@ DOCUMENT_STORAGE_BACKEND=supabase
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<server-side-only>
 SUPABASE_STORAGE_BUCKET=ancora-documents
+# Inbound Telegram document gate: the processor verifies declared/observed MIME
+# and the Bot API file size before downloading. PDFs render up to this number of
+# pages into transient PNG images for the governed vision route.
+MAX_FILE_SIZE_MB=20
+ALLOWED_MIME_TYPES=application/pdf,image/jpeg,image/png
+DOCUMENT_VISION_MAX_PDF_PAGES=3
 
 # Reminder worker (BL-5 / ADR-003) — optional; defaults shown work as-is.
 # Auto-gated: needs ANCORA_DATABASE_URL + TELEGRAM_TOKEN (already above).
@@ -137,6 +143,13 @@ REMINDER_POLL_INTERVAL_SECONDS=60
 
 No configures `NGROK_URL`. Railway proporciona `PORT` automáticamente; la app
 lo consume en producción y escucha en `0.0.0.0` sin autoreload.
+
+Los adjuntos Telegram se persisten en el ledger únicamente como referencias
+cifradas (`file_id` y metadata acotada); los bytes se descargan **después** del
+claim atómico. Una foto se pasa como imagen a extracción visual. Un PDF se
+almacena como original y sus primeras páginas se renderizan en memoria a PNG;
+ni bytes, nombres, páginas, prompts ni resultados completos se exportan a logs
+u OpenTelemetry.
 
 No añadas variables de LiteLLM a producción hasta completar el rollout de la
 sección 3.2. Las variables OTLP se añaden únicamente al servicio AncoraMind

@@ -84,6 +84,12 @@ class Settings(BaseSettings):
 
     # ── Security ─────────────────────────────────────
     allowed_telegram_user_ids: str = ""
+    max_file_size_mb: int = Field(default=20, ge=1, le=20)
+    """Maximum Telegram attachment size accepted for document ingestion."""
+    allowed_mime_types: str = "application/pdf,image/jpeg,image/png"
+    """Comma-separated MIME allowlist for Telegram document ingestion."""
+    document_vision_max_pdf_pages: int = Field(default=3, ge=1, le=10)
+    """Maximum PDF pages rendered to images for the vision extraction route."""
 
     # ── Reminder worker (BL-5 / ADR-003) ─────────────
     reminder_worker_enabled: bool = True
@@ -99,6 +105,13 @@ class Settings(BaseSettings):
         if not raw:
             return []
         return [int(uid.strip()) for uid in raw.split(",") if uid.strip()]
+
+    @property
+    def allowed_document_mime_types(self) -> frozenset[str]:
+        """Return normalized MIME types accepted from Telegram attachments."""
+        return frozenset(
+            mime.strip().lower() for mime in self.allowed_mime_types.split(",") if mime.strip()
+        )
 
     @property
     def budget_fingerprint_key(self) -> str | None:

@@ -12,6 +12,7 @@ import pytest
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
+from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.interactions.processor import InteractionAgentRunner
 from src.domain.llm_access.context import current_execution_context
 from src.domain.llm_access.cost_governance import CostGovernanceError, SpendSummary
@@ -147,6 +148,43 @@ async def test_runner_scope_is_released_after_run() -> None:
 
     with pytest.raises(GovernanceViolationError):
         current_execution_context()
+
+
+async def test_runner_uses_automatic_document_tool_for_media(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, factory = _runner()
+    captured: dict[str, Any] = {}
+
+    async def fake_analyze_document(run_context: Any, *, images: Any, files: Any) -> str:
+        captured["run_context"] = run_context
+        captured["images"] = images
+        captured["files"] = files
+        return "📄 **factura.png** recibido y archivado."
+
+    monkeypatch.setattr("src.agent.tools.documents.analyze_document", fake_analyze_document)
+    output = await runner.run(
+        "He adjuntado un documento.",
+        user_id="88",
+        session_id="tg:ancoramind:77",
+        run_id="run-media",
+        correlation_id=uuid4(),
+        telegram_update_id=9001,
+        media=(
+            ResolvedTelegramMedia(
+                content=b"\x89PNG\r\n\x1a\nbody",
+                filename="factura.png",
+                mime_type="image/png",
+                is_image=True,
+            ),
+        ),
+    )
+
+    assert output.startswith("📄")
+    assert factory.created_contexts == []
+    assert captured["run_context"].user_id == "88"
+    assert captured["images"][0].mime_type == "image/png"
+    assert captured["files"] is None
 
 
 async def test_runner_rejects_non_text_content() -> None:

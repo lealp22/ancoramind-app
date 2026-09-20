@@ -16,9 +16,11 @@ import time
 from datetime import UTC, datetime
 from uuid import UUID
 
+from agno.media import File, Image
 from agno.run import RunContext
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
+from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.cost_governance import (
     LlmSpendReader,
@@ -64,6 +66,7 @@ class GovernedInteractionRunner:
         correlation_id: UUID,
         telegram_update_id: int,
         telegram_message_id: int | None = None,
+        media: tuple[ResolvedTelegramMedia, ...] = (),
     ) -> str:
         """Execute one governed non-streaming run with trusted identity."""
         snapshot = self._config_manager.snapshot()
@@ -101,7 +104,6 @@ class GovernedInteractionRunner:
                     enabled=observability.traces_enabled,
                 ) as span,
             ):
-                agent = self._factory.create_for_run(context)
                 run_context = RunContext(
                     run_id=run_id,
                     session_id=session_id,
@@ -110,15 +112,43 @@ class GovernedInteractionRunner:
                 )
                 started = time.perf_counter()
                 try:
-                    output = await asyncio.wait_for(
-                        agent.arun(
+                    images = [
+                        Image(content=item.content, mime_type=item.mime_type)
+                        for item in media
+                        if item.is_image
+                    ]
+                    files = [
+                        File(
+                            content=item.content,
+                            filename=item.filename,
+                            mime_type=item.mime_type,
+                        )
+                        for item in media
+                        if not item.is_image
+                    ]
+                    if media:
+                        # Attachment ingestion is automatic M3 channel behavior.
+                        # It uses the existing tool under this execution context;
+                        # the nested extraction resolves ancoramind-vision.
+                        from src.agent.tools.documents import analyze_document
+
+                        operation = analyze_document(
+                            run_context,
+                            images=images or None,
+                            files=files or None,
+                        )
+                    else:
+                        agent = self._factory.create_for_run(context)
+                        operation = agent.arun(
                             input_text,
                             stream=False,
                             user_id=user_id,
                             session_id=session_id,
                             run_id=run_id,
                             run_context=run_context,
-                        ),
+                        )
+                    output = await asyncio.wait_for(
+                        operation,
                         timeout=context.budget.seconds_remaining(),
                     )
                 except TimeoutError as exc:
@@ -139,6 +169,10 @@ class GovernedInteractionRunner:
                         attributes={"ancora.status": "completed"},
                         enabled=observability.metrics_enabled,
                     )
+        if media:
+            if not isinstance(output, str):
+                raise ValueError("Governed document ingestion returned non-text content")
+            return output
         if not isinstance(output.content, str):
             raise ValueError("Governed interaction run returned non-text content")
         return output.content

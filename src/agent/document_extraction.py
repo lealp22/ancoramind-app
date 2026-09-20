@@ -20,9 +20,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from agno.agent import Agent
+from agno.media import Image
 from pydantic import BaseModel
 
-from src.domain.documents.extraction import DocumentExtractionOutcome
+from src.domain.documents.extraction import DocumentExtractionOutcome, DocumentVisualPage
 from src.domain.llm_access.context import current_execution_context, execution_context_scope
 from src.domain.llm_access.models import (
     ExecutionBudget,
@@ -57,26 +58,36 @@ class AgnoDocumentExtractionAdapter:
         llm_access: LLMAccess,
         standalone_llm_access: LLMAccess | None = None,
         route_name: str = "ancoramind-default",
+        vision_route_name: str = "ancoramind-vision",
     ) -> None:
         self._llm_access = llm_access
         self._standalone_llm_access = standalone_llm_access
         self._route_name = route_name
+        self._vision_route_name = vision_route_name
 
     async def extract[TSchema: BaseModel](
-        self, prompt: str, schema: type[TSchema]
+        self,
+        prompt: str,
+        schema: type[TSchema],
+        visual_pages: tuple[DocumentVisualPage, ...] = (),
     ) -> DocumentExtractionOutcome[TSchema]:
         """Run one governed structured extraction call."""
         try:
             context = current_execution_context()
         except GovernanceViolationError:
             context = None
+        route_name = self._vision_route_name if visual_pages else self._route_name
         if context is not None:
-            model = self._llm_access.model_for(self._route_name, context)
-            return await self._run_extraction_agent(model, prompt, schema)
-        return await self._extract_standalone(prompt, schema)
+            model = self._llm_access.model_for(route_name, context)
+            return await self._run_extraction_agent(model, prompt, schema, visual_pages, route_name)
+        return await self._extract_standalone(prompt, schema, visual_pages, route_name)
 
     async def _extract_standalone[TSchema: BaseModel](
-        self, prompt: str, schema: type[TSchema]
+        self,
+        prompt: str,
+        schema: type[TSchema],
+        visual_pages: tuple[DocumentVisualPage, ...],
+        route_name: str,
     ) -> DocumentExtractionOutcome[TSchema]:
         """Governed fallback for the transitional path without a run context."""
         if self._standalone_llm_access is None:
@@ -107,14 +118,16 @@ class AgnoDocumentExtractionAdapter:
             "context (no interaction row; usage events are not recorded)"
         )
         with execution_context_scope(context):
-            model = self._standalone_llm_access.model_for(self._route_name, context)
-            return await self._run_extraction_agent(model, prompt, schema)
+            model = self._standalone_llm_access.model_for(route_name, context)
+            return await self._run_extraction_agent(model, prompt, schema, visual_pages, route_name)
 
     async def _run_extraction_agent[TSchema: BaseModel](
         self,
         model: Any,
         prompt: str,
         schema: type[TSchema],
+        visual_pages: tuple[DocumentVisualPage, ...],
+        route_name: str,
     ) -> DocumentExtractionOutcome[TSchema]:
         """Run one structured-output Agno Agent turn over the governed model."""
         provider = str(getattr(model, "provider", None) or "")
@@ -123,7 +136,7 @@ class AgnoDocumentExtractionAdapter:
         observability = context.config.config.observability
         attributes = {
             **telemetry_attributes_from_execution_context(context),
-            "ancora.route": self._route_name,
+            "ancora.route": route_name,
             "gen_ai.provider.name": provider,
             "gen_ai.request.model": model_id,
         }
@@ -141,7 +154,14 @@ class AgnoDocumentExtractionAdapter:
             enabled=observability.traces_enabled,
         ) as span:
             try:
-                response = await agent.arun(prompt)
+                response = await agent.arun(
+                    prompt,
+                    images=[
+                        Image(content=page.content, mime_type=page.mime_type)
+                        for page in visual_pages
+                    ]
+                    or None,
+                )
             except Exception as exc:
                 get_telemetry().mark_error(span, type(exc).__name__)
                 # Bounded, content-free failure metadata (specs/013 T9): the

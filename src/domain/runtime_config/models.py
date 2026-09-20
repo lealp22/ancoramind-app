@@ -310,7 +310,7 @@ def bootstrap_runtime_configuration(
         },
         "ancoramind-vision": {
             "effective_gateway_route": "ancoramind-vision-r1",
-            "capabilities": ["text", "vision", "structured_output"],
+            "capabilities": ["text", "vision", "tool_calling", "structured_output"],
         },
     }
     return RuntimeConfiguration.model_validate(

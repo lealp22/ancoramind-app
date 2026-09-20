@@ -36,7 +36,7 @@ def _ingest_result(filename: str, mime_type: str, size: int):
 
 async def test_analyze_document_receives_telegram_photo(monkeypatch):
     service = AsyncMock()
-    service.ingest.side_effect = lambda user, content, filename, mime: _ingest_result(
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
         filename, mime, len(content)
     )
 
@@ -64,7 +64,7 @@ async def test_analyze_document_receives_telegram_file_and_sanitizes_name(
     monkeypatch,
 ):
     service = AsyncMock()
-    service.ingest.side_effect = lambda user, content, filename, mime: _ingest_result(
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
         filename, mime, len(content)
     )
 

@@ -2,6 +2,9 @@
 
 > Especificación retroactiva (BL-9). Verificación reconstruida a partir del
 > código y los tests existentes. Los E2E manuales quedan pendientes (BL-1).
+> Actualización 2026-09-20: el flujo gobernado conserva referencias de media
+> cifradas y procesa imágenes/PDF tras el claim; la validación Railway con
+> credenciales reales sigue pendiente.
 
 ## Automated Tests
 
@@ -32,9 +35,9 @@ test confidence bounds:
 ### E2E-003-001: Ingesta y consulta (por hacer — BL-1)
 ```
 User: [envía factura_taller.pdf por Telegram]
-Agent calls: analyze_document(run_context, files=[...])
+Processor: claim atómico → descarga validada → analyze_document(run_context, files=[...])
 Agent: 📄 factura_taller.pdf recibido y archivado. ID: `...`
-       + resumen de la extracción IA
+       + resumen de extracción visual Qwen (máximo 3 páginas PNG renderizadas)
 
 User: Busca la factura del taller
 Agent calls: search_documents(run_context, query="taller")
@@ -62,5 +65,8 @@ User B: Busca la factura
       canónico con `source_document_id` ocurre en M4/M5)
 - [x] Extracción versionada (prompt_version + schema_version + provider + model)
 - [x] Extracción fallida → degradación graceful
+- [x] Referencias de media Telegram cifradas; descarga tras claim atómico
+- [x] Límite de tamaño/MIME aplicado antes de persistir/inferir
+- [x] Imágenes y páginas PDF transitorias pasan por ruta lógica gobernada `ancoramind-vision`
 - [ ] E2E Telegram con documento real (BL-1)
 - [ ] Integration tests con PostgreSQL real (BL-2)

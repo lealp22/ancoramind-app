@@ -13,6 +13,11 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.interactions.media import (
+    AttachmentResolutionError,
+    ResolvedTelegramMedia,
+    TelegramAttachment,
+)
 from src.domain.interactions.models import (
     InteractionStatus,
     LogicalResponse,
@@ -42,7 +47,14 @@ class InteractionAgentRunner(Protocol):
         correlation_id: UUID,
         telegram_update_id: int,
         telegram_message_id: int | None = None,
+        media: tuple[ResolvedTelegramMedia, ...] = (),
     ) -> str: ...
+
+
+class TelegramMediaResolverPort(Protocol):
+    """Infrastructure port for resolving encrypted Telegram file references."""
+
+    async def resolve(self, attachment: TelegramAttachment) -> ResolvedTelegramMedia: ...
 
 
 class TelegramResponseSender(Protocol):
@@ -74,6 +86,7 @@ class InteractionProcessor:
         payload_cipher: TelegramPayloadCipher,
         agent_runner: InteractionAgentRunner,
         sender: TelegramResponseSender,
+        media_resolver: TelegramMediaResolverPort | None = None,
         global_concurrency: int = 2,
         batch_size: int = 20,
         typing_refresh_seconds: float = 4.0,
@@ -82,6 +95,7 @@ class InteractionProcessor:
         self._payload_cipher = payload_cipher
         self._agent_runner = agent_runner
         self._sender = sender
+        self._media_resolver = media_resolver
         self._global_semaphore = asyncio.Semaphore(global_concurrency)
         self._batch_size = batch_size
         self._typing_refresh_seconds = typing_refresh_seconds
@@ -182,6 +196,14 @@ class InteractionProcessor:
         try:
             payload = self._payload_cipher.decrypt(interaction.payload_ciphertext)
             input_text = payload.get("text")
+            attachments = tuple(
+                TelegramAttachment.model_validate(item)
+                for item in payload.get("attachments", [])
+            )
+            if (not isinstance(input_text, str) or not input_text.strip()) and attachments:
+                input_text = (
+                    "He adjuntado un documento. Archívalo y analízalo usando analyze_document."
+                )
             if not isinstance(input_text, str) or not input_text.strip():
                 raise ValueError("normalized Telegram update has no processable text")
         except ValueError:
@@ -218,6 +240,14 @@ class InteractionProcessor:
             get_telemetry().span("interaction.process", attributes) as span,
         ):
             try:
+                media: tuple[ResolvedTelegramMedia, ...] = ()
+                if attachments:
+                    if self._media_resolver is None:
+                        raise AttachmentResolutionError("attachment_resolver_unavailable")
+                    resolved_media = [
+                        await self._media_resolver.resolve(attachment) for attachment in attachments
+                    ]
+                    media = tuple(resolved_media)
                 content = await self._agent_runner.run(
                     input_text,
                     user_id=str(interaction.telegram_user_id),
@@ -226,6 +256,7 @@ class InteractionProcessor:
                     correlation_id=interaction.correlation_id,
                     telegram_update_id=interaction.telegram_update_id,
                     telegram_message_id=interaction.telegram_message_id,
+                    media=media,
                 )
                 if not content.strip():
                     await self._mark_terminal(
@@ -255,6 +286,15 @@ class InteractionProcessor:
                     return True
             except asyncio.CancelledError:
                 raise
+            except AttachmentResolutionError as exc:
+                get_telemetry().mark_error(span, type(exc).__name__)
+                await self._mark_terminal(
+                    interaction.id,
+                    InteractionStatus.FAILED_CONTROLLED,
+                    error_class="AttachmentResolutionError",
+                    error_detail_code=exc.code,
+                )
+                return True
             except CostGovernanceError as exc:
                 # The spend ceiling was evaluated before any inference: the
                 # failure is deterministic, so it is controlled — never replayed.

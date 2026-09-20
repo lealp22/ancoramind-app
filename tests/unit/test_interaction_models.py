@@ -18,7 +18,7 @@ from src.domain.interactions.payloads import (
 )
 
 
-def test_normalize_message_discards_untrusted_extra_content() -> None:
+def test_normalize_message_keeps_only_bounded_attachment_reference() -> None:
     normalized = normalize_telegram_update(
         {
             "update_id": 45,
@@ -33,15 +33,16 @@ def test_normalize_message_discards_untrusted_extra_content() -> None:
         }
     )
 
-    assert normalized.model_dump() == {
-        "update_id": 45,
-        "update_type": "message",
-        "message_id": 9,
-        "chat_id": 88,
-        "telegram_user_id": 77,
-        "chat_type": "private",
-        "text": "Hola, contenido personal",
-    }
+    assert normalized.update_id == 45
+    assert normalized.update_type == "message"
+    assert normalized.message_id == 9
+    assert normalized.chat_id == 88
+    assert normalized.telegram_user_id == 77
+    assert normalized.chat_type == "private"
+    assert normalized.text == "Hola, contenido personal"
+    assert normalized.attachments[0].kind == "photo"
+    assert normalized.attachments[0].file_id == "must-not-persist"
+    assert normalized.attachments[0].filename is None
 
 
 def test_normalize_update_requires_integer_update_id() -> None:

@@ -11,6 +11,7 @@ from uuid import UUID
 from agno.media import File, Image
 from agno.run import RunContext
 
+from src.agent.document_vision import DocumentVisionPreparationError, prepare_visual_pages
 from src.domain.documents.service import DocumentService
 from src.repositories.database import get_session
 from src.repositories.documents import DocumentsRepository
@@ -177,7 +178,10 @@ async def analyze_document(
     if not media_items:
         return "No se recibió ningún archivo para analizar."
 
+    from src.config import Settings
+
     user_ctx = UserContext.from_run_context(run_context)
+    settings = Settings()
     service = await _get_document_service()
     results = []
 
@@ -201,7 +205,21 @@ async def analyze_document(
             or "application/octet-stream"
         )
         filename = _media_filename(media, mime_type, index)
-        result = await service.ingest(user_ctx, content, filename, mime_type)
+        try:
+            visual_pages = prepare_visual_pages(
+                content,
+                mime_type,
+                max_pdf_pages=settings.document_vision_max_pdf_pages,
+            )
+        except DocumentVisionPreparationError:
+            visual_pages = ()
+        result = await service.ingest(
+            user_ctx,
+            content,
+            filename,
+            mime_type,
+            visual_pages=visual_pages,
+        )
         doc = result.document
         ext = result.extraction
 

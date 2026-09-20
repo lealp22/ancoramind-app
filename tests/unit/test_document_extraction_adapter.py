@@ -11,6 +11,7 @@ from agno.models.base import Model
 from agno.models.response import ModelResponse
 
 from src.agent.document_extraction import AgnoDocumentExtractionAdapter
+from src.domain.documents.extraction import DocumentVisualPage
 from src.domain.documents.schemas import GenericDocumentExtraction
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import (
@@ -148,6 +149,27 @@ async def test_extract_outside_governed_run_uses_standalone_frontier() -> None:
     assert outcome.status == "completed"
     assert outcome.extraction is not None
     assert outcome.provider == "OpenRouter"
+
+
+async def test_extract_with_visual_page_uses_the_vision_route() -> None:
+    _ScriptedExtractionModel.ainvoke_calls = 0
+    _ScriptedExtractionModel.response_content = '{"document_type": "invoice"}'
+    _ScriptedExtractionModel.raise_on_ainvoke = None
+    model = _ScriptedExtractionModel(id="test/vision", provider="OpenRouter")
+    adapter = _adapter(model)
+    context = _context()
+
+    with execution_context_scope(context):
+        outcome = await adapter.extract(
+            "prompt",
+            GenericDocumentExtraction,
+            visual_pages=(
+                DocumentVisualPage(content=b"\x89PNG\r\n\x1a\nbody", mime_type="image/png"),
+            ),
+        )
+
+    assert _access_of(adapter).calls[0][0] == "ancoramind-vision"
+    assert outcome.status == "completed"
 
 
 async def test_extract_without_context_or_standalone_frontier_fails_closed() -> None:

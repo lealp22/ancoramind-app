@@ -157,6 +157,46 @@ python scripts/runtime_config.py activate --base-url <app-url> `
 **Rollback:** activar de nuevo la revisión anterior. El alias previo sigue
 publicado y autorizado porque `grant` es aditivo; no hay que recrear la key.
 
+### 2.3 Ruta de visión para documentos (Qwen)
+
+La ingesta de imágenes/PDF Telegram no reutiliza el modelo conversacional: la
+tool documental selecciona la ruta lógica `ancoramind-vision` cuando existen
+páginas visuales. Publicar una generación nueva sin modificar
+`ancoramind-vision-r1`:
+
+```powershell
+python scripts/litellm_gateway_alias.py --dry-run publish `
+  --alias ancoramind-vision-r2 --model openrouter/qwen/qwen3.6-35b-a3b
+python scripts/litellm_gateway_alias.py publish `
+  --alias ancoramind-vision-r2 --model openrouter/qwen/qwen3.6-35b-a3b
+python scripts/litellm_gateway_alias.py grant --alias ancoramind-vision-r2
+python scripts/litellm_gateway_alias.py verify --alias ancoramind-vision-r2 --smoke
+```
+
+Después crea una revisión runtime que conserve las rutas/budgets aprobados y
+cambie exclusivamente:
+
+```json
+{
+  "routing": {
+    "routes": {
+      "ancoramind-vision": {
+        "effective_gateway_route": "ancoramind-vision-r2",
+        "capabilities": ["text", "vision", "tool_calling", "structured_output"]
+      }
+    }
+  }
+}
+```
+
+El JSON mostrado es un fragmento: el control plane exige el documento completo
+de configuración. Usa `status` para tomar la revisión activa como base, valida
+el candidato, publica una revisión y actívala por CAS siguiendo §2.2. El smoke
+consume tokens. Qwen recibe imágenes; los PDF se convierten localmente en un
+máximo de `DOCUMENT_VISION_MAX_PDF_PAGES` PNG y el original se conserva en
+Storage. Rollback: reactivar la revisión anterior; no retirar `r2` durante la
+ventana de validación.
+
 **Retirada del alias antiguo (sólo tras cerrar la ventana de rollback):**
 
 ```powershell

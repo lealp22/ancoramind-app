@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.domain.interactions.processor as processor_module
+from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.interactions.models import InteractionStatus, TelegramInteraction
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
@@ -262,6 +263,7 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
             correlation_id: UUID,
             telegram_update_id: int,
             telegram_message_id: int | None = None,
+            media=(),
         ) -> str:
             assert input_text == "hola"
             assert user_id == "5"
@@ -270,6 +272,7 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
             assert correlation_id == accepted.id
             assert telegram_update_id == 2
             assert telegram_message_id == 3
+            assert media == ()
             await release_runner.wait()
             return "respuesta final"
 
@@ -297,6 +300,59 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
     await task
 
     assert sender.send_typing.await_count >= 1
+
+
+async def test_processor_resolves_attachment_after_claim_and_passes_media(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    encrypted = cipher.encrypt(
+        {
+            "text": None,
+            "attachments": [{"kind": "photo", "file_id": "opaque-file-id"}],
+        }
+    )
+    accepted = interaction.model_copy(update={"payload_ciphertext": encrypted.ciphertext})
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    resolver = AsyncMock()
+    resolved = ResolvedTelegramMedia(
+        content=b"\xff\xd8\xffJPEG",
+        filename="telegram-document.jpg",
+        mime_type="image/jpeg",
+        is_image=True,
+    )
+    resolver.resolve.return_value = resolved
+    runner = AsyncMock()
+    runner.run.return_value = "📄 archivado"
+    sender = AsyncMock()
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+        media_resolver=resolver,
+    )
+
+    assert await processor._run_agent(accepted) is False
+    repo.claim_agent_start_with_run_id.assert_awaited_once()
+    resolver.resolve.assert_awaited_once()
+    assert runner.run.await_args.kwargs["media"] == (resolved,)
+    assert "analyze_document" in runner.run.await_args.args[0]
 
 
 async def test_same_chat_is_processed_in_order(monkeypatch: pytest.MonkeyPatch) -> None:

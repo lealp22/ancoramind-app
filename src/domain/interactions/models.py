@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.domain.interactions.media import TelegramAttachment
+
 
 class InteractionStatus(StrEnum):
     """States allowed by the specs/013 interaction state machine."""
@@ -181,13 +183,15 @@ class NormalizedTelegramUpdate(BaseModel):
     telegram_user_id: int | None = None
     chat_type: str | None = None
     text: str | None = None
+    attachments: tuple[TelegramAttachment, ...] = ()
 
 
 def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdate:
-    """Extract the minimum message metadata/input needed for a later processor.
+    """Extract minimal data needed for a later processor from an untrusted update.
 
-    The complete update is untrusted input. Unknown fields, attachments and
-    nested structures are deliberately excluded from durable recoverable data.
+    Attachment references are deliberately narrow and encrypted in the ledger:
+    only the Bot API file identifier and bounded display metadata survive. Raw
+    document bytes and unknown nested structures are never persisted here.
     """
     update_id = update.get("update_id")
     if not isinstance(update_id, int):
@@ -204,7 +208,7 @@ def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdat
             else:
                 message_data = candidate
                 sender = candidate.get("from")
-                text = candidate.get("text")
+                text = candidate.get("text") or candidate.get("caption")
 
             chat = message_data.get("chat")
             return NormalizedTelegramUpdate(
@@ -219,6 +223,7 @@ def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdat
                 if isinstance(chat, dict) and isinstance(chat.get("type"), str)
                 else None,
                 text=text if isinstance(text, str) else None,
+                attachments=_normalize_attachments(message_data),
             )
 
     return NormalizedTelegramUpdate(update_id=update_id, update_type="unsupported")
@@ -226,3 +231,34 @@ def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdat
 
 def _integer_or_none(value: object) -> int | None:
     return value if isinstance(value, int) else None
+
+
+def _normalize_attachments(message: dict[str, Any]) -> tuple[TelegramAttachment, ...]:
+    """Keep one bounded attachment reference; Telegram photos have many sizes."""
+    photos = message.get("photo")
+    if isinstance(photos, list):
+        for photo in reversed(photos):
+            if isinstance(photo, dict) and isinstance(photo.get("file_id"), str):
+                return (
+                    TelegramAttachment(
+                        kind="photo",
+                        file_id=photo["file_id"],
+                        size_bytes=_integer_or_none(photo.get("file_size")),
+                    ),
+                )
+
+    document = message.get("document")
+    if isinstance(document, dict) and isinstance(document.get("file_id"), str):
+        filename = document.get("file_name")
+        mime_type = document.get("mime_type")
+        return (
+            TelegramAttachment(
+                kind="document",
+                file_id=document["file_id"],
+                filename=filename if isinstance(filename, str) else None,
+                mime_type=mime_type if isinstance(mime_type, str) else None,
+                size_bytes=_integer_or_none(document.get("file_size")),
+            ),
+        )
+
+    return ()

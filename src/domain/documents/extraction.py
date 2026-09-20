@@ -16,6 +16,14 @@ from pydantic import BaseModel
 
 
 @dataclass(frozen=True)
+class DocumentVisualPage:
+    """One transient rendered page supplied to a vision-capable extraction port."""
+
+    content: bytes
+    mime_type: str
+
+
+@dataclass(frozen=True)
 class DocumentExtractionOutcome[TSchema: BaseModel]:
     """Controlled, observable outcome of one extraction inference call.
 
@@ -40,5 +48,8 @@ class DocumentExtractionPort(Protocol):
     """
 
     async def extract[TSchema: BaseModel](
-        self, prompt: str, schema: type[TSchema]
+        self,
+        prompt: str,
+        schema: type[TSchema],
+        visual_pages: tuple[DocumentVisualPage, ...] = (),
     ) -> DocumentExtractionOutcome[TSchema]: ...

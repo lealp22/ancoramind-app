@@ -21,6 +21,7 @@ from src.agent.governed_interaction_runner import GovernedInteractionRunner
 from src.agent.llm_access import AgnoLLMAccess, LlmUsageRecorder
 from src.agent.spend_reader import SessionSpendReader
 from src.agent.telegram_admission import validate_telegram_admission_settings
+from src.agent.telegram_media import TelegramMediaResolver
 from src.config import Settings
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
@@ -157,11 +158,13 @@ def install_interaction_processor_lifespan(
     async def interaction_processor_lifespan(application: FastAPI) -> AsyncIterator[Any]:
         async with previous_lifespan(application) as state:
             notifier = TelegramNotifier(settings.telegram_token)
+            media_resolver = TelegramMediaResolver(settings)
             processor = InteractionProcessor(
                 session_factory=get_session,
                 payload_cipher=payload_cipher,
                 agent_runner=agent_runner,
                 sender=notifier,
+                media_resolver=media_resolver,
                 global_concurrency=settings.telegram_processor_global_concurrency,
             )
             ambiguous = await processor.recover_once()
@@ -188,6 +191,7 @@ def install_interaction_processor_lifespan(
                     await task
                 del application.state.telegram_interaction_processor_task
                 await notifier.close()
+                await media_resolver.close()
                 logger.info("Telegram interaction processor stopped")
 
     app.router.lifespan_context = interaction_processor_lifespan
