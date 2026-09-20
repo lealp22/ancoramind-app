@@ -125,7 +125,10 @@ class DocumentService:
                 model=outcome.model,
                 prompt_version=self.EXTRACTION_PROMPT_VERSION,
                 schema_version=self.EXTRACTION_SCHEMA_VERSION,
-                extraction=outcome.extraction.model_dump(),
+                # mode="json": JSONB persistence needs JSON-serializable values
+                # (date/decimal become ISO strings); mode="python" raised
+                # TypeError on document_date, killing the run after inference.
+                extraction=outcome.extraction.model_dump(mode="json"),
             )
         )
 

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -73,6 +74,45 @@ def _document() -> Document:
         size_bytes=9,
         created_at=datetime.now(tz=UTC),
     )
+
+
+async def test_ingest_persists_extraction_as_json_serializable() -> None:
+    """Regression: extraction payload must survive json.dumps for the JSONB INSERT.
+
+    The prod incident (2026-09-20, failed_ambiguous after a completed LLM call)
+    came from model_dump(mode='python') leaking a datetime.date into the
+    extraction dict, which the repository serializes with json.dumps.
+    """
+    document = Document(
+        id=uuid4(),
+        user_id="test-user",
+        storage_key="2026/09/factura.txt",
+        original_filename="factura.txt",
+        mime_type="text/plain",
+        size_bytes=45,
+        created_at=datetime.now(tz=UTC),
+    )
+    repo = _repo_returning(document)
+    port = _FakeExtractionPort(
+        DocumentExtractionOutcome(
+            extraction=GenericDocumentExtraction(
+                document_type="invoice",
+                summary="Factura de taller",
+                document_date=date(2026, 9, 15),
+                confidence=0.9,
+            ),
+            provider="OpenRouter",
+            model="test/model",
+            status="completed",
+        )
+    )
+    service = _service(port, repo)
+
+    await service.ingest(_user(), b"Factura", "factura.txt", "text/plain")
+
+    payload = repo.create_extraction.await_args.args[0].extraction
+    json.dumps(payload)  # must not raise TypeError
+    assert payload["document_date"] == "2026-09-15"
 
 
 def test_document_service_module_has_no_runtime_framework_imports() -> None:
