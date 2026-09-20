@@ -36,7 +36,7 @@ test confidence bounds:
 ```
 User: [envía factura_taller.pdf por Telegram]
 Processor: claim atómico → descarga validada → analyze_document(run_context, files=[...])
-Agent: 📄 factura_taller.pdf recibido y archivado. ID: `...`
+Agent: ✅ Documento recibido y archivado correctamente.
        + resumen de extracción visual Qwen (máximo 3 páginas PNG renderizadas)
 
 User: Busca la factura del taller

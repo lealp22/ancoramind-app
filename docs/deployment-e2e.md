@@ -385,8 +385,7 @@ Esperado: `search_notes` sin query → lista las 2 notas recientes.
 Tú: [envía una imagen cualquiera o un PDF]
 ```
 Esperado: AncoraMind responde con:
-- "📄 [filename] recibido y archivado"
-- ID del documento
+- "✅ Documento recibido y archivado correctamente."
 - Tipo detectado
 - Resumen (si aplica)
 - Acciones sugeridas

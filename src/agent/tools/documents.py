@@ -220,10 +220,9 @@ async def analyze_document(
             mime_type,
             visual_pages=visual_pages,
         )
-        doc = result.document
         ext = result.extraction
 
-        lines = [f"📄 **{doc.original_filename}** recibido y archivado.", f"   ID: `{doc.id}`"]
+        lines = ["✅ Documento recibido y archivado correctamente."]
         if ext and ext.extraction:
             e = ext.extraction
             if e.get("document_type"):

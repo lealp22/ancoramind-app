@@ -57,7 +57,7 @@ async def test_analyze_document_receives_telegram_photo(monkeypatch):
     assert args[2].startswith("telegram-media-telegram-photo")
     assert args[2].endswith((".jpg", ".jpeg", ".jpe"))
     assert args[3] == "image/jpeg"
-    assert "recibido y archivado" in response
+    assert response == "✅ Documento recibido y archivado correctamente."
 
 
 async def test_analyze_document_receives_telegram_file_and_sanitizes_name(
