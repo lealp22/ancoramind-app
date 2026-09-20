@@ -26,7 +26,7 @@ class _FakeExtractionPort:
         self._outcome = outcome
         self.calls: list[tuple[str, type]] = []
 
-    async def extract(self, prompt, schema):
+    async def extract(self, prompt, schema, visual_pages=()):
         self.calls.append((prompt, schema))
         return self._outcome
 
@@ -106,6 +106,11 @@ async def test_ingest_persists_extraction_with_real_provider_and_model() -> None
     prompt, schema = port.calls[0]
     assert schema is GenericDocumentExtraction
     assert "factura.pdf" in prompt
+    # v1.1: binary documents carry a placeholder instead of decoded content,
+    # and the target JSON schema travels inside the prompt itself.
+    assert "<document_data>" not in prompt
+    assert "visual content" in prompt
+    assert '"document_type"' in prompt
     create_data = repo.create_extraction.await_args.args[0]
     assert create_data.provider == "OpenRouter"
     assert create_data.model == "test/model"
@@ -169,3 +174,66 @@ def test_outcome_is_immutable_and_content_free_by_contract() -> None:
         outcome.status = "completed"
 
     assert outcome.error_detail is None
+
+
+async def test_extraction_prompt_includes_text_content_and_schema() -> None:
+    """Prompt v1.1: textual documents carry their content and the JSON schema."""
+    document = Document(
+        id=uuid4(),
+        user_id="test-user",
+        storage_key="2026/09/factura.txt",
+        original_filename="factura.txt",
+        mime_type="text/plain",
+        size_bytes=45,
+        created_at=datetime.now(tz=UTC),
+    )
+    repo = _repo_returning(document)
+    port = _FakeExtractionPort(
+        DocumentExtractionOutcome(
+            extraction=GenericDocumentExtraction(summary="ok"),
+            provider="OpenRouter",
+            model="test/model",
+            status="completed",
+        )
+    )
+    service = _service(port, repo)
+
+    invoice_text = b"Factura 2026/001 Taller Central: 120,00 EUR"
+    await service.ingest(_user(), invoice_text, "factura.txt", "text/plain")
+
+    prompt, _ = port.calls[0]
+    assert "<document_data>" in prompt
+    assert "Taller Central" in prompt
+    assert "</document_data>" in prompt
+    assert '"document_type"' in prompt
+    assert "return only the JSON object" in prompt
+
+
+async def test_extraction_prompt_truncates_large_text_content() -> None:
+    """Text content is previewed up to MAX_TEXT_PREVIEW_BYTES."""
+    document = Document(
+        id=uuid4(),
+        user_id="test-user",
+        storage_key="2026/09/grande.txt",
+        original_filename="grande.txt",
+        mime_type="text/plain",
+        size_bytes=DocumentService.MAX_TEXT_PREVIEW_BYTES + 500,
+        created_at=datetime.now(tz=UTC),
+    )
+    repo = _repo_returning(document)
+    port = _FakeExtractionPort(
+        DocumentExtractionOutcome(
+            extraction=GenericDocumentExtraction(summary="ok"),
+            provider="OpenRouter",
+            model="test/model",
+            status="completed",
+        )
+    )
+    service = _service(port, repo)
+
+    big_text = b"x" * (DocumentService.MAX_TEXT_PREVIEW_BYTES + 500)
+    await service.ingest(_user(), big_text, "grande.txt", "text/plain")
+
+    prompt, _ = port.calls[0]
+    assert "xxxxx" in prompt
+    assert prompt.count("x") < DocumentService.MAX_TEXT_PREVIEW_BYTES + 100
