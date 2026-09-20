@@ -384,6 +384,26 @@ class TelegramInteractionsRepository:
             raise
         return self._interaction_from_row(row) if row is not None else None
 
+    async def current_session_id(self, chat_id: int) -> str | None:
+        """Return the conversation session the chat is currently using, if any.
+
+        The ledger is the source of truth for conversation generations: every
+        Agent run stores the session it used and ``/new`` stores the generation
+        it opened, so a restart can never resurrect an abandoned history (BL-28).
+        """
+        result = await self._session.execute(
+            text("""
+                SELECT agno_session_id
+                FROM ancora.telegram_interactions
+                WHERE chat_id = :chat_id AND agno_session_id IS NOT NULL
+                ORDER BY received_at DESC, telegram_update_id DESC
+                LIMIT 1
+            """),
+            {"chat_id": chat_id},
+        )
+        row = result.fetchone()
+        return row.agno_session_id if row is not None else None
+
     async def list_recoverable_work(self, limit: int = 20) -> list[TelegramInteraction]:
         """List accepted/response-ready work in deterministic chat/update order."""
         result = await self._session.execute(
@@ -449,6 +469,86 @@ class TelegramInteractionsRepository:
                     RETURNING id
                 """),
                 {"id": interaction_id, "now": now},
+            )
+            if transitioned.fetchone() is None:
+                await self._session.rollback()
+                return None
+
+            created = await self._session.execute(
+                text("""
+                    INSERT INTO ancora.logical_responses (
+                        interaction_id, response_kind, content_ciphertext,
+                        content_key_version, content_length, chunk_count, status, created_at
+                    ) VALUES (
+                        :interaction_id, 'agent_final', :content_ciphertext,
+                        :content_key_version, :content_length, :chunk_count,
+                        'pending_delivery', :now
+                    )
+                    RETURNING id, interaction_id, response_kind, content_ciphertext,
+                        content_key_version, content_length, chunk_count, status, created_at
+                """),
+                {
+                    "interaction_id": interaction_id,
+                    "content_ciphertext": content_ciphertext,
+                    "content_key_version": content_key_version,
+                    "content_length": content_length,
+                    "chunk_count": chunk_count,
+                    "now": now,
+                },
+            )
+            row = created.fetchone()
+            if row is None:  # pragma: no cover - INSERT RETURNING always returns one row
+                raise RuntimeError("Logical response insert did not return a row")
+            response = self._response_from_row(row)
+            await self._session.execute(
+                text("""
+                    INSERT INTO ancora.telegram_response_deliveries (
+                        logical_response_id, chunk_index, status
+                    )
+                    SELECT :logical_response_id, generate_series(0, :chunk_count - 1), 'pending'
+                """),
+                {"logical_response_id": response.id, "chunk_count": chunk_count},
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return response
+
+    async def claim_command_reply(
+        self,
+        interaction_id: UUID,
+        *,
+        agno_session_id: str | None,
+        content_ciphertext: bytes,
+        content_key_version: int,
+        content_length: int,
+        chunk_count: int,
+    ) -> LogicalResponse | None:
+        """Persist a deterministic command reply before any Telegram side effect.
+
+        The transition is gated on ``accepted``, so a replayed update can never
+        be answered twice. Nothing external happens before the commit: unlike an
+        Agent run, a crash here leaves plain accepted work that the next cycle
+        re-derives deterministically, never an ambiguous effect.
+        """
+        now = datetime.now(tz=UTC)
+        try:
+            transitioned = await self._session.execute(
+                text("""
+                    UPDATE ancora.telegram_interactions
+                    SET status = 'response_ready',
+                        agno_session_id = COALESCE(:agno_session_id, agno_session_id),
+                        response_ready_at = :now,
+                        updated_at = :now
+                    WHERE id = :id AND status = 'accepted'
+                    RETURNING id
+                """),
+                {
+                    "id": interaction_id,
+                    "agno_session_id": agno_session_id,
+                    "now": now,
+                },
             )
             if transitioned.fetchone() is None:
                 await self._session.rollback()

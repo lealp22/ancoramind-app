@@ -12,6 +12,7 @@ import httpx
 
 from src.domain.interactions.processor import TelegramSendError
 from src.domain.reminders.models import Reminder
+from src.notifications.markup import MAX_MESSAGE_CHARS, markdown_to_telegram_html
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,22 @@ LATE_THRESHOLD_SECONDS = 300
 """Retries/downtime longer than this add a "fired late" note to the message."""
 
 API_BASE_URL = "https://api.telegram.org"
+
+_MARKUP_REJECTION_MARKERS = (
+    "can't parse entities",
+    "unsupported start tag",
+    "can't find end tag",
+    "unsupported utf-8",
+)
+"""Telegram descriptions that mean our markup (not the message) was rejected."""
+
+
+def _is_markup_rejection(error: TelegramSendError) -> bool:
+    """True when Telegram answered 4xx because of the declared parse mode."""
+    if error.description is None:
+        return False
+    description = error.description.lower()
+    return any(marker in description for marker in _MARKUP_REJECTION_MARKERS)
 
 
 def format_reminder_message(reminder: Reminder, now: datetime | None = None) -> str:
@@ -103,14 +120,44 @@ class TelegramNotifier:
     async def send_text(self, chat_id: int, text: str) -> int:
         """Send one persisted response chunk and return Telegram's message ID.
 
+        Model Markdown is rendered as Telegram HTML (BL-29). Formatting never
+        risks the message itself: rendering falls back to plain text when it
+        would exceed Telegram's limit, and a markup rejection by the API is
+        retried once as plain text before the chunk is reported as failed.
+
         The T5 processor records ``sending`` before this non-idempotent request.
         Transport uncertainty is marked ambiguous so the caller never resends a
         message that Telegram may already have accepted.
         """
+        rendered = markdown_to_telegram_html(text)
+        if len(rendered) <= MAX_MESSAGE_CHARS:
+            try:
+                return await self._send_message(chat_id, rendered, parse_mode="HTML")
+            except TelegramSendError as exc:
+                if not exc.definitive or not _is_markup_rejection(exc):
+                    raise
+                logger.warning(
+                    "Telegram rejected rendered markup (telegram.description=%s); "
+                    "resending the chunk as plain text",
+                    exc.description,
+                )
+        return await self._send_message(chat_id, text, parse_mode=None)
+
+    async def _send_message(
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        parse_mode: str | None,
+    ) -> int:
+        """Issue one sendMessage call, classifying failures by retry safety."""
+        payload: dict[str, object] = {"chat_id": chat_id, "text": text}
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
         try:
             response = await self._client.post(
                 f"{API_BASE_URL}/bot{self._token}/sendMessage",
-                json={"chat_id": chat_id, "text": text},
+                json=payload,
             )
         except httpx.HTTPError as exc:
             raise TelegramSendError(
@@ -123,9 +170,11 @@ class TelegramNotifier:
         except ValueError:
             body = {}
         if response.status_code != 200 or not body.get("ok"):
+            description = body.get("description")
             raise TelegramSendError(
                 f"Telegram sendMessage rejected with HTTP {response.status_code}",
                 definitive=400 <= response.status_code < 500,
+                description=description if isinstance(description, str) else None,
             )
         result = body.get("result")
         message_id = result.get("message_id") if isinstance(result, dict) else None

@@ -57,6 +57,7 @@ SPAN_ATTRIBUTE_ALLOWLIST = frozenset(
         "ancora.budget.limit",
         "ancora.delivery.status",
         "ancora.admission.status",
+        "ancora.command",
         "ancora.duplicate",
         "ancora.queue.status",
         "ancora.tool.name",

@@ -13,6 +13,14 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.interactions.commands import (
+    TelegramCommand,
+    default_session_id,
+    handle_telegram_command,
+    next_session_id,
+    parse_telegram_command,
+    telemetry_label,
+)
 from src.domain.interactions.media import (
     AttachmentResolutionError,
     ResolvedTelegramMedia,
@@ -68,9 +76,11 @@ class TelegramResponseSender(Protocol):
 class TelegramSendError(RuntimeError):
     """A Telegram send failure classified by whether no external message was sent."""
 
-    def __init__(self, message: str, *, definitive: bool):
+    def __init__(self, message: str, *, definitive: bool, description: str | None = None):
         super().__init__(message)
         self.definitive = definitive
+        self.description = description
+        """Telegram's ``description`` field, when the API answered with one."""
 
 
 SessionFactory = Callable[[], Awaitable[AsyncSession]]
@@ -90,6 +100,7 @@ class InteractionProcessor:
         global_concurrency: int = 2,
         batch_size: int = 20,
         typing_refresh_seconds: float = 4.0,
+        bot_username: str | None = None,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -99,6 +110,7 @@ class InteractionProcessor:
         self._global_semaphore = asyncio.Semaphore(global_concurrency)
         self._batch_size = batch_size
         self._typing_refresh_seconds = typing_refresh_seconds
+        self._bot_username = bot_username
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
 
@@ -216,7 +228,16 @@ class InteractionProcessor:
             return True
 
         run_id = str(uuid4())
-        session_id = f"tg:ancoramind:{interaction.chat_id}"
+        command = (
+            parse_telegram_command(input_text, bot_username=self._bot_username)
+            if not attachments
+            else None
+        )
+        if command is not None:
+            # BL-28: commands are control input, never model input.
+            return await self._handle_command(interaction, command)
+
+        session_id = await self._conversation_session_id(interaction.chat_id)
         claimed = await self._claim_agent(interaction.id, run_id, session_id)
         if claimed is None:
             return False
@@ -353,6 +374,75 @@ class InteractionProcessor:
             except Exception:
                 logger.debug("Telegram typing refresh failed", exc_info=True)
             await asyncio.sleep(self._typing_refresh_seconds)
+
+    async def _handle_command(
+        self,
+        interaction: TelegramInteraction,
+        command: TelegramCommand,
+    ) -> bool:
+        """Answer a bot command deterministically, without any Agent execution.
+
+        The reply travels through the same durable outbox as an Agent response
+        (chunking, delivery state, ambiguity rules), so delivery semantics stay
+        identical while the model never sees the command nor the chat history.
+        """
+        handling = handle_telegram_command(command)
+        chat_id = interaction.chat_id
+        if chat_id is None:  # pragma: no cover - _run_agent validates identity first
+            await self._mark_terminal(
+                interaction.id,
+                InteractionStatus.FAILED_CONTROLLED,
+                error_class="InteractionValidationError",
+                error_detail_code="missing_chat_identity_for_command",
+            )
+            return True
+        new_session_id: str | None = None
+        if handling.resets_session:
+            new_session_id = next_session_id(
+                chat_id,
+                await self._stored_session_id(chat_id),
+            )
+        encrypted = self._payload_cipher.encrypt({"content": handling.reply_text})
+        chunks = split_telegram_message(handling.reply_text)
+        response = await self._persist_command_reply(
+            interaction.id,
+            agno_session_id=new_session_id,
+            content_ciphertext=encrypted.ciphertext,
+            content_key_version=encrypted.key_version,
+            content_length=len(handling.reply_text),
+            chunk_count=len(chunks),
+        )
+        get_telemetry().counter(
+            "ancora.telegram.commands",
+            attributes={
+                "ancora.command": telemetry_label(command),
+                "ancora.status": "completed" if response is not None else "duplicate",
+            },
+        )
+        if response is None:
+            # A concurrent claim already answered this update: never reply twice.
+            return False
+        return await self._deliver_response(
+            interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
+        )
+
+    async def _stored_session_id(self, chat_id: int) -> str | None:
+        """Return the session the ledger last recorded for this chat, if any."""
+        session = await self._session_factory()
+        try:
+            stored = await TelegramInteractionsRepository(session).current_session_id(chat_id)
+        finally:
+            await session.close()
+        return stored if isinstance(stored, str) and stored.strip() else None
+
+    async def _conversation_session_id(self, chat_id: int) -> str:
+        """Resolve the chat's current conversation session from the ledger.
+
+        ``/new`` stores the generation it opened on its own interaction row, so
+        the ledger is the single source of truth: a restart cannot resurrect an
+        abandoned conversation (BL-28).
+        """
+        return await self._stored_session_id(chat_id) or default_session_id(chat_id)
 
     async def _deliver_response(self, interaction: TelegramInteraction) -> bool:
         if interaction.chat_id is None:
@@ -495,6 +585,29 @@ class InteractionProcessor:
         try:
             return await TelegramInteractionsRepository(session).persist_response_ready(
                 interaction_id,
+                content_ciphertext=content_ciphertext,
+                content_key_version=content_key_version,
+                content_length=content_length,
+                chunk_count=chunk_count,
+            )
+        finally:
+            await session.close()
+
+    async def _persist_command_reply(
+        self,
+        interaction_id: UUID,
+        *,
+        agno_session_id: str | None,
+        content_ciphertext: bytes,
+        content_key_version: int,
+        content_length: int,
+        chunk_count: int,
+    ) -> LogicalResponse | None:
+        session = await self._session_factory()
+        try:
+            return await TelegramInteractionsRepository(session).claim_command_reply(
+                interaction_id,
+                agno_session_id=agno_session_id,
                 content_ciphertext=content_ciphertext,
                 content_key_version=content_key_version,
                 content_length=content_length,
