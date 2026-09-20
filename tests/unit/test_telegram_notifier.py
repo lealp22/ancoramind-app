@@ -122,6 +122,82 @@ class TestTelegramNotifier:
 
         assert await notifier.send_text(452022640, "respuesta final") == 77
 
+    async def test_send_text_renders_markdown_as_html(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 78}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        assert await notifier.send_text(452022640, "**hola** y `x < y`") == 78
+
+        body = requests[0].read().decode()
+        assert '"parse_mode":"HTML"' in body
+        assert "<b>hola</b>" in body
+        assert "<code>x &lt; y</code>" in body
+
+    async def test_send_text_falls_back_to_plain_text_when_rendering_exceeds_limit(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 79}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+        chunk = "**a**" * 780  # 3900 raw characters; HTML rendering would exceed 4096
+
+        assert await notifier.send_text(452022640, chunk) == 79
+
+        body = requests[0].read().decode()
+        assert "parse_mode" not in body
+        assert chunk in body
+
+    async def test_send_text_retries_once_as_plain_text_on_markup_rejection(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if b"parse_mode" in request.read():
+                return httpx.Response(
+                    400,
+                    json={
+                        "ok": False,
+                        "description": (
+                            "Bad Request: can't parse entities: "
+                            'Unsupported start tag "foo" at byte offset 0'
+                        ),
+                    },
+                )
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 80}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        assert await notifier.send_text(452022640, "**hola**") == 80
+
+        assert len(requests) == 2
+        assert "parse_mode" not in requests[1].read().decode()
+
+    async def test_send_text_does_not_retry_unrelated_rejections(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                400,
+                json={"ok": False, "description": "Bad Request: chat not found"},
+            )
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        with pytest.raises(TelegramSendError) as exc_info:
+            await notifier.send_text(452022640, "respuesta final")
+
+        assert exc_info.value.definitive is True
+        assert exc_info.value.description == "Bad Request: chat not found"
+        assert len(requests) == 1
+
     async def test_send_text_classifies_4xx_as_definitive(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(400, json={"ok": False, "description": "Bad Request"})

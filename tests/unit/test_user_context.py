@@ -32,6 +32,16 @@ class TestUserContext:
         ctx = UserContext.from_run_context(rc)
         assert ctx.user_id == "67890"
 
+    def test_from_run_context_parses_generation_session_id(self):
+        """BL-28: `/new` appends a generation; the chat id keeps its position."""
+        rc = RunContext(
+            run_id="run-4",
+            session_id="tg:ancoramind:67890:2",
+            user_id=None,
+        )
+        ctx = UserContext.from_run_context(rc)
+        assert ctx.user_id == "67890"
+
     def test_from_run_context_fallback(self):
         rc = RunContext(
             run_id="run-3",

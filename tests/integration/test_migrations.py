@@ -12,6 +12,7 @@ import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from psycopg import sql
 from sqlalchemy.engine.url import URL, make_url
 
@@ -21,7 +22,33 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 INIT_SQL = (REPO_ROOT / "migrations" / "init.sql").read_text(encoding="utf-8")
 
-HEAD_REVISION = "0003_telegram_admission_indexes"
+def _canonical_head() -> str:
+    """Read the migrations head from the Alembic scripts.
+
+    A literal here silently drifts every time a revision is added — that is how
+    this suite broke when ``0004_ai_extractions_schema`` landed — so the head is
+    always read from the migration sources.
+    """
+    head = ScriptDirectory.from_config(Config(str(ALEMBIC_INI))).get_current_head()
+    if head is None:  # pragma: no cover - the migrations directory is never empty
+        raise RuntimeError("Alembic reports no head revision")
+    return head
+
+
+def _down_revision(revision: str) -> str:
+    """Return the parent revision recorded in the Alembic scripts."""
+    script = ScriptDirectory.from_config(Config(str(ALEMBIC_INI))).get_revision(revision)
+    if script is None or script.down_revision is None:  # pragma: no cover - defensive
+        raise RuntimeError(f"Revision {revision} has no parent")
+    down_revision = script.down_revision
+    if isinstance(down_revision, tuple):  # pragma: no cover - no merge revisions today
+        raise RuntimeError(f"Revision {revision} is a merge point")
+    return down_revision
+
+
+HEAD_REVISION = _canonical_head()
+"""Head read from the Alembic scripts; never a hand-maintained literal that
+silently drifts when a revision is added (it went stale with 0004)."""
 BASELINE_REVISION = "0001_ancora_baseline"
 GOVERNANCE_REVISION = "0002_llm_governance"
 
@@ -172,7 +199,7 @@ def _note_count(database: MigrationDatabase, content: str) -> int:
 def test_alembic_fresh_install_and_latest_downgrade(
     migration_database: MigrationDatabase,
 ) -> None:
-    """Head creates T4 indexes; downgrades preserve the legacy schema and data."""
+    """Head builds the canonical schema; downgrading head preserves data."""
     config = _alembic_config(migration_database)
 
     command.upgrade(config, "head")
@@ -198,11 +225,15 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     command.downgrade(config, "-1")
 
-    assert _current_revision(migration_database) == GOVERNANCE_REVISION
-    assert not {
-        "idx_telegram_interactions_user_accepted_at",
-        "idx_telegram_interactions_accepted_queue",
-    } & _indexes(migration_database, "telegram_interactions")
+    # Revision-relative on purpose: a new head must not need editing here.
+    assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
+    assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _note_count(migration_database, "preserved through downgrade") == 1
+
+    command.upgrade(config, "head")
+
+    assert _current_revision(migration_database) == HEAD_REVISION
+    assert _note_count(migration_database, "preserved through downgrade") == 1
 
     command.downgrade(config, BASELINE_REVISION)
 
@@ -210,6 +241,10 @@ def test_alembic_fresh_install_and_latest_downgrade(
     assert _tables(migration_database) >= BASELINE_TABLES
     assert not (GOVERNANCE_TABLES & _tables(migration_database))
     assert "source_interaction_id" not in _columns(migration_database, "action_proposals")
+    assert {
+        "idx_telegram_interactions_user_accepted_at",
+        "idx_telegram_interactions_accepted_queue",
+    } & _indexes(migration_database, "telegram_interactions") == set()
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
 

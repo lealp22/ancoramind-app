@@ -12,6 +12,10 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.domain.interactions.processor as processor_module
+from src.domain.interactions.commands import (
+    HELP_REPLY,
+    NEW_SESSION_REPLY,
+)
 from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.interactions.models import InteractionStatus, TelegramInteraction
 from src.domain.interactions.outbox import split_telegram_message
@@ -353,6 +357,189 @@ async def test_processor_resolves_attachment_after_claim_and_passes_media(
     resolver.resolve.assert_awaited_once()
     assert runner.run.await_args.kwargs["media"] == (resolved,)
     assert "analyze_document" in runner.run.await_args.args[0]
+
+
+async def test_command_is_answered_deterministically_without_an_agent_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "/help"}).ciphertext}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.claim_command_reply.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    runner = AsyncMock()
+    sender = AsyncMock()
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+    )
+
+    assert await processor._run_agent(accepted) is False
+
+    runner.run.assert_not_awaited()
+    sender.send_typing.assert_not_awaited()
+    kwargs = repo.claim_command_reply.await_args.kwargs
+    assert kwargs["agno_session_id"] is None
+    assert kwargs["content_length"] == len(HELP_REPLY)
+    assert kwargs["chunk_count"] == 1
+    assert cipher.decrypt(kwargs["content_ciphertext"]) == {"content": HELP_REPLY}
+
+
+async def test_new_command_opens_the_next_conversation_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "/new"}).ciphertext}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.current_session_id.return_value = "tg:ancoramind:4"
+    repo.claim_command_reply.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=AsyncMock(),
+        sender=AsyncMock(),
+    )
+
+    assert await processor._run_agent(accepted) is False
+
+    kwargs = repo.claim_command_reply.await_args.kwargs
+    assert kwargs["agno_session_id"] == "tg:ancoramind:4:1"
+    assert cipher.decrypt(kwargs["content_ciphertext"]) == {"content": NEW_SESSION_REPLY}
+
+
+async def test_a_replayed_command_never_answers_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "/new"}).ciphertext}
+    )
+    repo.claim_command_reply.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    sender = AsyncMock()
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=AsyncMock(),
+        sender=sender,
+    )
+
+    assert await processor._run_agent(accepted) is False
+
+    repo.claim_delivery_start.assert_not_awaited()
+    sender.send_text.assert_not_awaited()
+
+
+async def test_leading_slash_text_that_is_not_a_command_reaches_the_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "/home/user/notas.txt"}).ciphertext}
+    )
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    runner = AsyncMock()
+    runner.run.return_value = "ok"
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=AsyncMock(),
+    )
+
+    assert await processor._run_agent(accepted) is False
+
+    runner.run.assert_awaited_once()
+    assert runner.run.await_args.args[0] == "/home/user/notas.txt"
+    repo.claim_command_reply.assert_not_awaited()
+
+
+async def test_agent_run_reuses_the_stored_conversation_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "hola"}).ciphertext}
+    )
+    repo.current_session_id.return_value = "tg:ancoramind:4:3"
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    runner = AsyncMock()
+    runner.run.return_value = "ok"
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=AsyncMock(),
+    )
+
+    assert await processor._run_agent(accepted) is False
+
+    assert runner.run.await_args.kwargs["session_id"] == "tg:ancoramind:4:3"
+    assert repo.claim_agent_start_with_run_id.await_args.args[2] == "tg:ancoramind:4:3"
 
 
 async def test_same_chat_is_processed_in_order(monkeypatch: pytest.MonkeyPatch) -> None:

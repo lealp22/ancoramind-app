@@ -79,6 +79,14 @@ def test_allowlist_removes_all_content_bearing_attributes_and_metric_ids() -> No
     assert private_content not in json.dumps(metric_attributes)
 
 
+def test_command_metadata_is_a_bounded_allowlisted_enum() -> None:
+    """BL-28 telemetry: the command name is technical metadata, not user text."""
+    attributes = {"ancora.command": "new", "ancora.status": "completed"}
+
+    assert filter_telemetry_attributes(attributes) == attributes
+    assert filter_telemetry_attributes(attributes, metric=True) == attributes
+
+
 def test_json_logging_never_interpolates_positional_private_arguments() -> None:
     private_content = "texto personal que nunca debe exportarse"
     stream = io.StringIO()
