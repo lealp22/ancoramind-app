@@ -4,10 +4,28 @@ from __future__ import annotations
 
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class GenericDocumentExtraction(BaseModel):
+class StrictExtractionSchema(BaseModel):
+    """Base for extraction outputs sent through strict JSON-schema providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DocumentAmount(StrictExtractionSchema):
+    """One typed monetary value extracted from a document.
+
+    A closed object is required here: ``dict[str, str]`` generates arbitrary
+    ``additionalProperties`` JSON Schema, which is incompatible with the
+    strict ``response_format`` contract used by the governed Gateway.
+    """
+
+    description: str | None = None
+    amount: str | None = None
+
+
+class GenericDocumentExtraction(StrictExtractionSchema):
     """Generic extraction for any document type."""
 
     document_type: str = "generic"
@@ -15,12 +33,12 @@ class GenericDocumentExtraction(BaseModel):
     summary: str = ""
     document_date: date | None = None
     entities: list[str] = Field(default_factory=list)
-    amounts: list[dict[str, str]] = Field(default_factory=list)
+    amounts: list[DocumentAmount] = Field(default_factory=list)
     suggested_actions: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
-class VehicleInvoiceExtraction(BaseModel):
+class VehicleInvoiceExtraction(StrictExtractionSchema):
     """Extraction schema for vehicle workshop/repair invoices."""
 
     document_type: str = "vehicle_invoice"

@@ -155,6 +155,7 @@ async def test_ingest_persists_extraction_with_real_provider_and_model() -> None
     assert create_data.provider == "OpenRouter"
     assert create_data.model == "test/model"
     assert create_data.prompt_version == DocumentService.EXTRACTION_PROMPT_VERSION
+    assert create_data.schema_version == DocumentService.EXTRACTION_SCHEMA_VERSION
     assert create_data.extraction["document_type"] == "invoice"
 
 

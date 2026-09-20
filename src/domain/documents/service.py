@@ -29,7 +29,7 @@ class DocumentService:
     """Service for managing the document lifecycle."""
 
     EXTRACTION_PROMPT_VERSION = "1.1"
-    EXTRACTION_SCHEMA_VERSION = "1.0"
+    EXTRACTION_SCHEMA_VERSION = "1.1"
     MAX_TEXT_PREVIEW_BYTES = 5000
 
     def __init__(
