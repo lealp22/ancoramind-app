@@ -28,7 +28,7 @@
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 388 unit + 60 integration passing — Ruff limpio en
+Tests: 455 unit + 64 integration — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -364,40 +364,48 @@ posteriormente en BL-22/specs/012. E2E Telegram pendiente (bloqueado por BL-18).
 
 ---
 
-### BL-28 · Comandos de Telegram: manejo nativo de `/new` y namespace `/` reservado
-Al escribir `/new` (o presumiblemente cualquier `/comando`), el bot no ejecuta
-nada: el comando viaja al modelo como texto y responde como si fuera un mensaje
-más, con el historial completo. Verificado en código: AgentOS legado no registra
-comandos y el processor gobernado de specs/013 no tiene fase de interpretación
-de comandos. Propuesta: interceptar en la capa Telegram/admission (antes del
-Agent) un namespace `/` mínimo viable — `/new` = reinicio de conversación — y
-responder nativamente los comandos no soportados ("comando no disponible") para
-que nunca lleguen al LLM. Preservar admission/idempotencia: el `/new` escribe
-una marca durable (nuevo `session_id` del chat, p. ej.
-`tg:ancoramind:{chat}:{epoch}`) para que el propio run no consulte historial
-previo, y anotar en el ledger `command_handled` sin consumir IA (como
-duplicados/rejected).
+### ~~BL-28 · Comandos de Telegram: manejo nativo de `/new` y namespace `/` reservado~~ ✅ implementado
+`5625bbb` + `ed864fb` (2026-09-20). `domain/interactions/commands.py` resuelve
+`/new` (nueva generación de conversación) y `/help`/`/start`; cualquier otro
+comando válido recibe un reply constante ("no disponible") y **nunca llega al
+LLM**, ni arrastra historial al proveedor. La respuesta viaja por el mismo
+outbox durable que una respuesta del Agent (chunks, delivery state, ambigüedad)
+mediante `claim_command_reply` (gated en `accepted` ⇒ un replay no responde dos
+veces; nada externo ocurre antes del commit). La generación se guarda en la
+fila del propio `/new` (`agno_session_id`) y los runs siguientes la resuelven
+con `current_session_id(chat_id)`; texto que empieza por `/` pero no es comando
+Telegram válido (`/home/user/x`) sigue siendo conversación. Telemetría nueva
+bounded (`ancora.command` ∈ {new, help, start, unsupported}) añadida a la
+allowlist con test de privacidad. Cobertura: 6 unit (parse/replies/generaciones)
++ 5 unit de processor + 4 de integración PostgreSQL (`/new` sin run, sesión
+heredada por el mensaje siguiente, claim único, `current_session_id`).
 
-**Relación:** `UserContext.from_run_context` parsea `session_id`
-`tg:entity:chat_id` (ampliar formato con compatibilidad), `num_history_runs`,
-y BL-15 (los comandos son la alternativa a los botones). Decidir si `/new` es
-READ (borra contexto conversacional del runtime, no datos canónicos → propuesto
-READ directo sin propose/execute). **Prioridad P2.**
+**Decisión:** sin `propose/execute` — los comandos no escriben datos canónicos
+ni llaman a proveedores; `/new` sólo abre una generación conversacional.
 
-### BL-29 · Renderizado real de Markdown en las respuestas de Telegram
-El Agent corre con `markdown=True` (factory gobernado y AgentOS legado), pero
-la entrega por `TelegramNotifier.send_text()` no manda `parse_mode`, por lo que
-el usuario ve los `**negrita**` del modelo literalmente. Decidir diseño: (a)
-entregar como MarkdownV2 con escaping estricto de todo contenido (el texto del
-modelo y cualquier DATA interpolado puede romper el parser — hay que escapar
-caracteres reservados antes de enviar); (b) HTML (`<b>`…) con escaping de
-`<`, `>`, `&`; o (c) mantener texto plano y pedir al modelo (prompt) que no use
-Markdown. Riesgo principal: el contenido es DATA no confiable (§2.8) — un
-escaping defectuoso produce mensajes rotos o, con MarkdownV2, enlaces/inyección
-de formato; nunca debe alterar el significado. Mantener chunks/outbox
-(`telegram_response_deliveries`) intactos: el parse_mode es decisión de
-delivery, no del contenido persistido. Tests con httpx MockTransport sobre el
-body enviado. **Prioridad P2** (cosmética pero muy visible).
+**Paso de operador (BLOQUEADO — requiere tu aprobación):** publicar el menú de
+autocompletado en Telegram con
+`python scripts/telegram_webhook.py commands` (usa `setMyCommands` con el mismo
+mapa del dominio; sin esto `/new` funciona igual pero no aparece al escribir
+`/`). No lo he ejecutado: cambia estado del bot de producción.
+
+### ~~BL-29 · Renderizado real de Markdown en las respuestas de Telegram~~ ✅ implementado
+`5625bbb` + `ed864fb` (2026-09-20). Se eligió **HTML** (no MarkdownV2) por ser
+mucho más tolerante: `notifications/markup.py` escapa `&`, `<`, `>` de todo el
+texto literal y emite etiquetas sólo desde una whitelist propia (`b`, `i`, `s`,
+`code`, `pre`, `a` con URL `http(s)` sin comillas, headings y bullets `•`). Un
+span sin cierre queda como texto literal (nunca tag roto) y un bloque de código
+sin cerrar no deja `<pre>` colgando, así que un corte de chunk puede perder
+formato pero jamás significado. Si el render excede 4096 chars, la entrega manda
+el chunk en texto plano; y si Telegram rechaza el markup (`TelegramSendError`
+ahora lleva `description`), el notifier reintenta una vez en texto plano en
+lugar de perder el mensaje. El contenido persistido sigue siendo el Markdown
+original del modelo (presentación ≠ auditoría). `format_reminder_message` sigue
+en texto plano a propósito (ADR-003/§2.8). Cobertura: 19 unit de render + 4 unit
+de notifier.
+
+**Límite conocido:** el path AgentOS legado (admission deshabilitada) entrega con
+el cliente Telegram interno de Agno y no pasa por este notifier.
 
 ### BL-30 · Tool de búsqueda web gobernada (respuestas "¿qué es X?")
 Añadir una capability de consulta a Internet para términos desconocidos
@@ -568,6 +576,8 @@ NO instalado — diseño solo hasta BL-6.
 | BL-23 · Telegram admission feature-flagged (secret, private chat, allowlist, rate/queue durable) | specs/013 T4 | 2026-09-13 |
 | BL-23 · Processor/outbox Telegram (claim, recovery, chunks, delivery states y typing) | specs/013 T5 | 2026-09-13 |
 | BL-25 · Script E2E nativo para PowerShell | specs/015 | 2026-09-19 |
+| BL-28 · Comandos de bot deterministas (`/new`, `/help`; sin IA, outbox durable, generaciones de sesión en el ledger, `ancora.command` en la allowlist) | — (BL-28) | 2026-09-20 |
+| BL-29 · Renderizado Markdown → HTML de Telegram (whitelist de tags, escaping total, fallback texto plano, retry ante rechazo de markup) | — (BL-29) | 2026-09-20 |
 
 ---
 

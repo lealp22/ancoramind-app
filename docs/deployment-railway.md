@@ -359,6 +359,9 @@ python scripts/telegram_webhook.py set `
   --base-url https://<service>.up.railway.app
 
 python scripts/telegram_webhook.py status
+
+# Menú de comandos (autocompletado en Telegram; fuente única: dominio)
+python scripts/telegram_webhook.py commands
 ```
 
 El script no muestra tokens ni el secret. Para desactivar el canal:

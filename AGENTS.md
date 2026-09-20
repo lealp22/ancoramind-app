@@ -15,9 +15,11 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 378 unit
-  tests + 60 integration tests passing; los integration requieren PostgreSQL/Docker
-  (se omiten sin esa infraestructura). Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 455 unit
+  tests + 64 integration tests; los integration requieren PostgreSQL/Docker
+  (se omiten sin esa infraestructura). Un test unitario
+  (`test_run_e2e_powershell`) falla en Windows por codepage/ruta con acentos:
+  es ambiental y ajeno al producto. Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
 
 ---
 
@@ -94,7 +96,9 @@ src/
 │   ├── notes/ documents/ vehicles/ reminders/ calendar/ todos/ actions/ interactions/ llm_access/
 │   └── (cada uno: models.py + service.py; calendar tiene provider.py Protocol;
 │       reminders tiene worker.py sin dependencia de FastAPI; documents expone
-│       DocumentExtractionPort — T9 abstrajo la extracción del runtime)
+│       DocumentExtractionPort — T9 abstrajo la extracción del runtime;
+│       interactions/commands.py resuelve los comandos de bot `/new` y `/help`
+│       antes de cualquier ejecución del Agent — BL-28)
 ├── repositories/        ← Acceso PostgreSQL (sqlalchemy async, text() parametrizado)
 │   ├── database.py      ← init_database(), get_session() — llamar init al arrancar
 │   └── notes, documents, vehicles, maintenance, reminders, calendar, todos, actions,
@@ -103,6 +107,7 @@ src/
 │                           factory.py (DOCUMENT_STORAGE_BACKEND: local|supabase — ADR-002)
 ├── security/            ← user_context.py (UserContext.from_run_context)
 ├── notifications/       ← telegram.py (TelegramNotifier — entrega outbound BL-5/ADR-003)
+│                           + markup.py (Markdown del modelo → HTML de Telegram, BL-29)
 └── governance/          ← (metadata, riesgo — en desarrollo)
 
 AGENTS.md                 ← Esta guía (jerarquía: manda junto con docs/architecture.md)
@@ -165,6 +170,16 @@ y pasa por `LLMAccess`.
 - **Servicios de domain** reciben repositorios por constructor (inyección manual).
 - **Config:** todo por env vars vía `Settings` en `config.py`. Nunca hardcodear
   credenciales ni URLs.
+- **Comandos de bot:** se resuelven en `domain/interactions/commands.py` antes de
+  cualquier ejecución del Agent (BL-28). Nunca llegan al LLM ni arrastran el
+  historial al proveedor; sus replies son constantes en código (así el texto del
+  usuario no puede convertirse en instrucción por esta vía). Añadir un comando =
+  entrada en el mapa + reply constante + tests.
+- **Formato de entrega:** las respuestas del modelo se renderizan a HTML de
+  Telegram en `notifications/markup.py` (BL-29): todo el texto literal se escapa y
+  las etiquetas salen sólo de una whitelist del módulo. Nunca declarar
+  `parse_mode` en otro sitio ni interpolar contenido sin escapar; si Telegram
+  rechaza el markup, la entrega reintenta en texto plano en vez de perderse.
 
 ### Proveedores LLM (factory en `ancora_agent.py`)
 
@@ -207,10 +222,10 @@ alias existente (rompe la trazabilidad de `effective_gateway_route`). Ver
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests unitarios (374 passing)
+# Tests unitarios (455 — 454 passing; el de PowerShell E2E es ambiental en Windows)
 python -m pytest tests/unit/ -v
 
-# Integration tests (60 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (64 — PostgreSQL dockerizado; se saltan sin Docker)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
@@ -270,6 +285,9 @@ mypy src/
   usan `propose_*` → confirmación → `execute_*`.
 - Auditoría: action_proposals registra confirm/execute timestamps + provenance
   (`source_document_id`)
+- Comandos de bot (`/new`, `/help`): control determinista, sin propuesta — no
+  escriben datos canónicos ni llaman a proveedores. `/new` sólo abre una nueva
+  generación de conversación, registrada en el ledger de interacciones.
 - Detalle completo: `docs/governance.md`
 
 ---
