@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-19
+Última actualización: 2026-09-20
 
 ---
 
@@ -26,9 +26,9 @@
 | BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
-| MVP usable | 🔶 E2E parcial (M1–M2 probado; M3–M5 pendiente — ver BL-1) |
+| MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 378 unit + 60 integration passing — Ruff limpio en
+Tests: 388 unit + 60 integration passing — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -273,6 +273,12 @@ con PyMuPDF (máximo 3 páginas) → ruta lógica `ancoramind-vision` → salida
 estructurada. Los contenidos siguen siendo DATA, no INSTRUCTIONS. Pendiente:
 publicar/autorizar `ancoramind-vision-r2` con Qwen en Railway, activar la revisión
 runtime, benchmark de precisión/coste/latencia y E2E Telegram con PDF e imagen.
+**Nota triage TODO (2026-09-20):** los PDFs escaneados ya fluyen por la ruta
+visual (PyMuPDF rasteriza páginas con o sin capa de texto — el "fallback OCR"
+propuesto ya está cubierto por diseño). Refinamientos a evaluar en el benchmark:
+detectar capa de texto para preferir extracción textual (más barata) en PDFs
+digitales y reservar visión para escaneados; política explícita para PDFs de
+más de 3 páginas; OCR dedicado solo si la ruta visual no alcanza precisión.
 
 ### BL-7 · Proveedor de calendario real
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
@@ -358,7 +364,104 @@ posteriormente en BL-22/specs/012. E2E Telegram pendiente (bloqueado por BL-18).
 
 ---
 
+### BL-28 · Comandos de Telegram: manejo nativo de `/new` y namespace `/` reservado
+Al escribir `/new` (o presumiblemente cualquier `/comando`), el bot no ejecuta
+nada: el comando viaja al modelo como texto y responde como si fuera un mensaje
+más, con el historial completo. Verificado en código: AgentOS legado no registra
+comandos y el processor gobernado de specs/013 no tiene fase de interpretación
+de comandos. Propuesta: interceptar en la capa Telegram/admission (antes del
+Agent) un namespace `/` mínimo viable — `/new` = reinicio de conversación — y
+responder nativamente los comandos no soportados ("comando no disponible") para
+que nunca lleguen al LLM. Preservar admission/idempotencia: el `/new` escribe
+una marca durable (nuevo `session_id` del chat, p. ej.
+`tg:ancoramind:{chat}:{epoch}`) para que el propio run no consulte historial
+previo, y anotar en el ledger `command_handled` sin consumir IA (como
+duplicados/rejected).
+
+**Relación:** `UserContext.from_run_context` parsea `session_id`
+`tg:entity:chat_id` (ampliar formato con compatibilidad), `num_history_runs`,
+y BL-15 (los comandos son la alternativa a los botones). Decidir si `/new` es
+READ (borra contexto conversacional del runtime, no datos canónicos → propuesto
+READ directo sin propose/execute). **Prioridad P2.**
+
+### BL-29 · Renderizado real de Markdown en las respuestas de Telegram
+El Agent corre con `markdown=True` (factory gobernado y AgentOS legado), pero
+la entrega por `TelegramNotifier.send_text()` no manda `parse_mode`, por lo que
+el usuario ve los `**negrita**` del modelo literalmente. Decidir diseño: (a)
+entregar como MarkdownV2 con escaping estricto de todo contenido (el texto del
+modelo y cualquier DATA interpolado puede romper el parser — hay que escapar
+caracteres reservados antes de enviar); (b) HTML (`<b>`…) con escaping de
+`<`, `>`, `&`; o (c) mantener texto plano y pedir al modelo (prompt) que no use
+Markdown. Riesgo principal: el contenido es DATA no confiable (§2.8) — un
+escaping defectuoso produce mensajes rotos o, con MarkdownV2, enlaces/inyección
+de formato; nunca debe alterar el significado. Mantener chunks/outbox
+(`telegram_response_deliveries`) intactos: el parse_mode es decisión de
+delivery, no del contenido persistido. Tests con httpx MockTransport sobre el
+body enviado. **Prioridad P2** (cosmética pero muy visible).
+
+### BL-30 · Tool de búsqueda web gobernada (respuestas "¿qué es X?")
+Añadir una capability de consulta a Internet para términos desconocidos
+("que me digas qué es X"), sin investigación profunda ni browsing largo.
+Debe seguir la disciplina de capabilities: nueva tool en `src/agent/tools/`
+con servicio de dominio detrás, `EXTERNAL_ACTION` por riesgo (salida del
+perímetro hacia terceros → gobernanza; decidir en spec si requiere
+propose/execute o se trata como READ sujeto a rate/budget), ruta de red en la
+capa de infraestructura, datos devueltos = DATA no confiable, sin contenido
+personal en logs/OTel, coste/uso auditables y presupuesto del run aplicado
+(hooks de budget ya existentes la cortan igual que cualquier tool).
+
+**Opciones a evaluar en el spec:** API de búsqueda (Brave/Serper/Tavily…) con
+clave por secretos + síntesis por el propio modelo, o un modelo con búsqueda
+nativa vía OpenRouter si existe y permite el Gateway. Decidir límites: nº de
+llamadas/run, tamaño de resultado, cache. **Prioridad P2** (valor alto de UX,
+no bloquea MVP). Al añadir capability: seguir `docs/adding-tools.md` + skill
+prompt + tests.
+
+### BL-31 · Deduplicación de documentos por hash de contenido
+Comprobado que no existe: `storage_key` es UUID aleatorio (local y Supabase) y
+`ancora.documents` no guarda hash — el mismo fichero enviado dos veces se
+almacena, procesa y cobra dos veces. Propuesta: columnas `content_sha256
+CHAR(64)` + índice `(user_id, content_sha256)` en `documents` (migración
+Alembic aditiva + `init.sql`); calcular SHA-256 en `DocumentService.ingest`
+antes de almacenar; si existe fila vigente del mismo usuario, reutilizar el
+registro existente (no re-almacenar bytes) y decidir política de extracción:
+re-usar la extracción previa y devolver su resumen (recomendado — evita coste
+duplicado) con opción de re-extraer explícita. Mantener el original_filename
+de la última subida si se desea, sin borrar documentos previos (provenance).
+El hash es derivado del contenido, no dato sensible; auditar en
+`ai_extractions` el `document_id` real usado. **Prioridad P2** (ahorro directo
+de coste y ruido canónico; encaja antes del E2E de visión/PDF).
+
+### BL-32 · Acuse de recibo temprano para procesos pesados (fast-ack UX)
+Cuando la respuesta previsible tarde (documento/imagen/PDF), enviar en el
+mismo run un mensaje inmediato tipo "📄 Documento recibido, analizando…" antes
+de la inferencia, sin romper las garantías de specs/013. Restricciones: no
+reenvíos ambiguos (el acuse es un mensaje más de la outbox con su delivery
+state; si falla se marca y no se reintenta a ciegas), no duplicar acuses si el
+update se reprocesa (idempotente por `interaction_id`), y el mensaje final
+sigue siendo único. Alternativas a evaluar: (a) acuse como chunk previo de la
+misma `logical_response`; (b) mensaje efímero borrado al responder (ensucia y
+necesita `deleteMessage`); (c) solo `typing` continuo (ya existe como BL-17,
+no basta para 15–30 s de visión). Propongo (a) con heuristic gate: media/flags
+por tipo de interacción (media ⇒ acuse; texto ⇒ no). **Prioridad P3** (pulir
+después del E2E de visión, donde la latencia real será medible).
+
 ## P3 — Calidad del agente
+
+### Pregunta abierta (triage TODO 2026-09-20) · Política de ventana de contexto
+**Pregunta del propietario:** cuando la conversación en Telegram se hace muy
+larga, ¿existe política/mecanismo para limitar/adaptar el historial a la
+ventana de contexto del modelo? **Respuesta técnica actual:** mitigación
+parcial ya activa — `num_history_runs=10` fijo (factory gobernado y AgentOS
+legado) acota los turnos enviados; `add_history_to_context=True`. No hay
+recorte por tokens ni por ventana del modelo activo: 10 turnos con respuestas
+largas podrían aproximarse al límite en modelos pequeños, y se desperdicia
+ventana en modelos grandes. Abierto a decisión: mantener fijo, hacerlo
+configurable por ruta en runtime config (BL-23 ya provee el mecanismo de
+revisión), o recorte por presupuesto de tokens. Sin datos de incidencia aún;
+decidir tras medir uso real (relacionado con BL-13, memoria soft, y con la
+purga de sesiones de Agno — retención no definida para `agno_runtime`).
+
 
 ### BL-8 · Evals agentic 🔶 en curso — specs/014
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a
