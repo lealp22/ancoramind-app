@@ -198,6 +198,19 @@ la ruta lógica `ancoramind-vision`; falta publicar `ancoramind-vision-r2` con
 `openrouter/qwen/qwen3.6-35b-a3b`, activar una revisión runtime por CAS y repetir
 el E2E real antes de marcar M3 como validado.
 
+**Actualización 2026-09-20 (validación E2E txt ✅):** primer flujo E2E completo
+validado en Telegram/Railway (BL-18 activo): documento .txt → archivado +
+extracción IA persistida + respuesta con resumen en el chat. Tres capas de bug
+corregidas y desplegadas: (1) prompt v1.1 sin contenido ni schema (commit
+`25e8743`), (2) migración `0004_ai_extractions_schema` aplicada a prod — la tabla
+pre-baseline carecía de `schema_version` (42703 en INSERT, commit `f77402d`),
+(3) `model_dump()` en modo Python filtraba `datetime.date` no serializable a
+JSONB — `TypeError` que mataba el run tras la inferencia pagada (commit
+`86673c7`, `mode="json"`). Evidencia en prod: `telegram_interactions.status`
+`completed`, fila en `ai_extractions` (prompt_version 1.1, confidence 0.96) y
+usage event bajo la interacción. Pendiente en M3: ruta visión (imagen/PDF)
+tras el rollout de Qwen r2; M4–M5 siguen pendientes de E2E.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue
