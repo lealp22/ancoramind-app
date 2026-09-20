@@ -7,9 +7,15 @@ from urllib.error import URLError
 import pytest
 
 from src.agent.telegram_webhook import (
+    build_command_menu_payload,
     build_webhook_url,
     summarize_webhook_info,
     telegram_api_request,
+)
+from src.domain.interactions.commands import (
+    BOT_COMMAND_MENU,
+    handle_telegram_command,
+    parse_telegram_command,
 )
 
 
@@ -111,3 +117,33 @@ def test_summarize_webhook_info_excludes_secret_like_fields():
         "url": "https://example.test/telegram/webhook",
         "pending_update_count": 2,
     }
+
+
+class TestCommandMenuPayload:
+    def test_serializes_the_domain_command_menu(self) -> None:
+        payload = build_command_menu_payload(BOT_COMMAND_MENU)
+
+        assert json.loads(payload) == [
+            {"command": "new", "description": "Empezar una conversación nueva"},
+            {"command": "help", "description": "Ver los comandos disponibles"},
+        ]
+
+    def test_every_advertised_command_is_actually_handled(self) -> None:
+        for name, _ in BOT_COMMAND_MENU:
+            command = parse_telegram_command(f"/{name}")
+            assert command is not None
+            assert handle_telegram_command(command).reply_text
+
+    @pytest.mark.parametrize(
+        "commands",
+        [
+            (),
+            (("con-guion", "descripción"),),
+            (("ñ", "descripción"),),
+            (("valido", "   "),),
+            (("valido", "d" * 257),),
+        ],
+    )
+    def test_rejects_entries_the_bot_api_would_refuse(self, commands) -> None:
+        with pytest.raises(ValueError, match="command"):
+            build_command_menu_payload(commands)

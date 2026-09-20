@@ -5,7 +5,7 @@ webhook secret tokens.
 """
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from urllib.error import URLError
 from urllib.parse import urlencode, urlparse
@@ -65,3 +65,23 @@ def summarize_webhook_info(info: Mapping[str, Any]) -> dict[str, Any]:
         "max_connections",
     )
     return {field: info[field] for field in fields if field in info}
+
+
+def build_command_menu_payload(commands: Sequence[tuple[str, str]]) -> str:
+    """Serialize the Bot API ``setMyCommands`` menu from name/description pairs.
+
+    ``commands`` comes from the domain map of handled commands, so the Telegram
+    autocomplete menu can never advertise something the processor refuses. The
+    Bot API limits are validated here to fail loudly at registration time.
+    """
+    if not commands:
+        raise ValueError("Telegram command menu must not be empty")
+    for name, description in commands:
+        if not name.isascii() or not name.replace("_", "").isalnum():
+            raise ValueError(f"Invalid Telegram command name: {name!r}")
+        if not description.strip() or len(description) > 256:
+            raise ValueError(f"Invalid Telegram command description for {name!r}")
+    return json.dumps(
+        [{"command": name, "description": description} for name, description in commands],
+        ensure_ascii=False,
+    )

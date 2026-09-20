@@ -22,6 +22,16 @@ _SESSION_RESET_COMMANDS = frozenset({"new"})
 _HELP_COMMANDS = frozenset({"help", "start"})
 _SUPPORTED_COMMANDS = _SESSION_RESET_COMMANDS | _HELP_COMMANDS
 
+BOT_COMMAND_MENU: tuple[tuple[str, str], ...] = (
+    ("new", "Empezar una conversación nueva"),
+    ("help", "Ver los comandos disponibles"),
+)
+"""Telegram autocomplete menu, registered with ``setMyCommands`` (BL-28).
+
+Single source of truth with :func:`handle_telegram_command`: a test asserts that
+every advertised command is actually handled.
+"""
+
 HELP_REPLY = (
     "ℹ️ Comandos disponibles\n"
     "\n"

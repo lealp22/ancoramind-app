@@ -5,6 +5,10 @@ environment or the repository .env through Settings. It never prints either
 secret. Run it from the repository root, for example:
 
     python scripts/telegram_webhook.py set --base-url https://example.up.railway.app
+    python scripts/telegram_webhook.py commands
+
+``commands`` publishes the bot autocomplete menu from the domain map in
+``src/domain/interactions/commands.py`` (the same map the processor executes).
 """
 
 from __future__ import annotations
@@ -18,11 +22,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.agent.telegram_webhook import (  # noqa: E402
+    build_command_menu_payload,
     build_webhook_url,
     summarize_webhook_info,
     telegram_api_request,
 )
 from src.config import Settings  # noqa: E402
+from src.domain.interactions.commands import BOT_COMMAND_MENU  # noqa: E402
 
 
 def _settings() -> Settings:
@@ -40,6 +46,11 @@ def _parse_args() -> argparse.Namespace:
     set_parser.add_argument("--base-url", required=True, help="Public HTTPS Railway service URL")
 
     subcommands.add_parser("status", help="Show sanitized Telegram webhook status")
+
+    subcommands.add_parser(
+        "commands",
+        help="Register the bot command menu (autocomplete) from the domain map",
+    )
 
     delete_parser = subcommands.add_parser("delete", help="Delete the active Telegram webhook")
     delete_parser.add_argument(
@@ -73,6 +84,13 @@ def main() -> int:
         if args.command == "status":
             info = telegram_api_request(settings.telegram_token, "getWebhookInfo")
             print(json.dumps(summarize_webhook_info(info), indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "commands":
+            payload = build_command_menu_payload(BOT_COMMAND_MENU)
+            telegram_api_request(settings.telegram_token, "setMyCommands", {"commands": payload})
+            registered = ", ".join(f"/{name}" for name, _ in BOT_COMMAND_MENU)
+            print(f"Command menu registered: {registered}")
             return 0
 
         telegram_api_request(
