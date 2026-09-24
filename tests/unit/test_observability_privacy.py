@@ -54,6 +54,10 @@ class _FakeMeter:
         del name, unit
         return object()
 
+    def create_up_down_counter(self, name: str) -> object:
+        del name
+        return object()
+
 
 def test_allowlist_removes_all_content_bearing_attributes_and_metric_ids() -> None:
     private_content = "mensaje privado / prompt / respuesta / argumento"
@@ -85,6 +89,24 @@ def test_command_metadata_is_a_bounded_allowlisted_enum() -> None:
 
     assert filter_telemetry_attributes(attributes) == attributes
     assert filter_telemetry_attributes(attributes, metric=True) == attributes
+
+
+def test_health_metric_attributes_are_bounded_and_content_is_removed() -> None:
+    attributes = {
+        "ancora.health.component": "reminder_worker",
+        "ancora.health.status": "healthy",
+        "ancora.queue.scope": "global",
+        "ancora.circuit.state": "unknown",
+        "message.content": "private health payload",
+        "telegram.update_id": 123,
+    }
+
+    assert filter_telemetry_attributes(attributes, metric=True) == {
+        "ancora.health.component": "reminder_worker",
+        "ancora.health.status": "healthy",
+        "ancora.queue.scope": "global",
+        "ancora.circuit.state": "unknown",
+    }
 
 
 def test_json_logging_never_interpolates_positional_private_arguments() -> None:

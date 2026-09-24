@@ -60,8 +60,12 @@ SPAN_ATTRIBUTE_ALLOWLIST = frozenset(
         "ancora.command",
         "ancora.duplicate",
         "ancora.queue.status",
+        "ancora.queue.scope",
         "ancora.tool.name",
         "ancora.tool.outcome",
+        "ancora.health.component",
+        "ancora.health.status",
+        "ancora.circuit.state",
         "http.response.status_code",
         "gen_ai.usage.input_tokens",
         "gen_ai.usage.output_tokens",
@@ -157,6 +161,8 @@ class MetadataTelemetry:
         self._meter = meter
         self._counters: dict[str, Any] = {}
         self._histograms: dict[str, Any] = {}
+        self._gauges: dict[str, Any] = {}
+        self._gauge_values: dict[tuple[str, tuple[tuple[str, str | bool | int | float], ...]], float] = {}
 
     @contextmanager
     def span(
@@ -224,6 +230,30 @@ class MetadataTelemetry:
             )
         except Exception:  # pragma: no cover - exporter/provider failures are environment-specific
             logger.debug("Observability histogram failed", exc_info=False)
+
+    def gauge(
+        self,
+        name: str,
+        value: int | float,
+        attributes: Mapping[str, object] | None = None,
+        *,
+        enabled: bool = True,
+    ) -> None:
+        """Record an absolute bounded value through an UpDownCounter delta safely."""
+        if not enabled:
+            return
+        try:
+            filtered = filter_telemetry_attributes(attributes, metric=True)
+            series = (name, tuple(sorted(filtered.items())))
+            previous = self._gauge_values.get(series, 0.0)
+            target = float(value)
+            delta = target - previous
+            if delta:
+                gauge = self._gauges.setdefault(name, self._meter.create_up_down_counter(name))
+                gauge.add(delta, attributes=filtered)
+            self._gauge_values[series] = target
+        except Exception:  # pragma: no cover - exporter/provider failures are environment-specific
+            logger.debug("Observability gauge failed", exc_info=False)
 
     @staticmethod
     def mark_error(span: Any, error_type: str) -> None:

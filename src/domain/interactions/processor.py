@@ -101,6 +101,7 @@ class InteractionProcessor:
         batch_size: int = 20,
         typing_refresh_seconds: float = 4.0,
         bot_username: str | None = None,
+        on_cycle: Callable[[int], None] | None = None,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -111,6 +112,7 @@ class InteractionProcessor:
         self._batch_size = batch_size
         self._typing_refresh_seconds = typing_refresh_seconds
         self._bot_username = bot_username
+        self._on_cycle = on_cycle
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
 
@@ -156,7 +158,9 @@ class InteractionProcessor:
         """Poll recoverable work; errors do not terminate the lifecycle task."""
         while True:
             try:
-                await self.run_once()
+                processed = await self.run_once()
+                if self._on_cycle is not None:
+                    self._on_cycle(processed)
             except Exception:
                 logger.exception("Interaction processor cycle failed")
             await asyncio.sleep(interval_seconds)

@@ -137,6 +137,8 @@ class Settings(BaseSettings):
     otel_exporter_otlp_insecure: bool = True
     otel_exporter_otlp_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     otel_export_interval_millis: int = Field(default=30000, ge=1000, le=300000)
+    health_probe_interval_seconds: float = Field(default=30.0, ge=5, le=300)
+    """Cadence of the internal metadata-only health monitor; it never gates traffic."""
 
     # ── Application ──────────────────────────────────
     app_debug: bool = False

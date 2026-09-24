@@ -39,9 +39,11 @@ class RemindersWorker:
         self,
         session_factory: Callable[[], Awaitable[AsyncSession]],
         notifier: ReminderNotifier,
+        on_cycle: Callable[[int], None] | None = None,
     ):
         self._session_factory = session_factory
         self._notifier = notifier
+        self._on_cycle = on_cycle
 
     async def run_once(self) -> int:
         """Fire all currently due reminders; returns how many were fired."""
@@ -82,6 +84,8 @@ class RemindersWorker:
         while True:
             try:
                 fired = await self.run_once()
+                if self._on_cycle is not None:
+                    self._on_cycle(fired)
                 if fired:
                     logger.info("Reminder worker cycle fired %d reminder(s)", fired)
             except asyncio.CancelledError:

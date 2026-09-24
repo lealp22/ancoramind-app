@@ -18,6 +18,7 @@ from fastapi import FastAPI
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
+from src.agent.health import HealthRegistry, install_health_monitor_lifespan
 from src.agent.llm_access import AgnoLLMAccess, LlmUsageRecorder
 from src.agent.spend_reader import SessionSpendReader
 from src.agent.telegram_admission import validate_telegram_admission_settings
@@ -56,7 +57,12 @@ def install_observability_lifespan(app: FastAPI) -> None:
     app.router.lifespan_context = observability_lifespan
 
 
-def install_reminder_worker_lifespan(app: FastAPI, settings: Settings) -> bool:
+def install_reminder_worker_lifespan(
+    app: FastAPI,
+    settings: Settings,
+    *,
+    health_registry: HealthRegistry | None = None,
+) -> bool:
     """Install the reminder worker lifecycle wrapper when prerequisites exist.
 
     The wrapper enters the app's pre-existing lifespan first, starts the
@@ -85,6 +91,9 @@ def install_reminder_worker_lifespan(app: FastAPI, settings: Settings) -> bool:
             worker = RemindersWorker(
                 session_factory=get_session,
                 notifier=TelegramNotifier(settings.telegram_token),
+                on_cycle=health_registry.record_reminders_delivered
+                if health_registry is not None
+                else None,
             )
             task = asyncio.create_task(
                 worker.run_forever(settings.reminder_poll_interval_seconds),
@@ -116,6 +125,7 @@ def install_interaction_processor_lifespan(
     tools: list[Any],
     instructions: list[str],
     runtime_config_manager: RuntimeConfigManager,
+    health_registry: HealthRegistry | None = None,
 ) -> bool:
     """Install the T5+T7 processor lifecycle only for an explicitly enabled rollout.
 
@@ -166,6 +176,9 @@ def install_interaction_processor_lifespan(
                 sender=notifier,
                 media_resolver=media_resolver,
                 global_concurrency=settings.telegram_processor_global_concurrency,
+                on_cycle=(lambda _: health_registry.heartbeat("interaction_processor"))
+                if health_registry is not None
+                else None,
             )
             ambiguous = await processor.recover_once()
             if ambiguous:
@@ -202,6 +215,7 @@ def install_runtime_config_manager_lifespan(
     app: FastAPI,
     settings: Settings,
     manager: RuntimeConfigManager,
+    health_registry: HealthRegistry | None = None,
 ) -> bool:
     """Initialize the T6 in-memory snapshot before accepting application traffic."""
     previous_lifespan = app.router.lifespan_context
@@ -211,6 +225,11 @@ def install_runtime_config_manager_lifespan(
         async with previous_lifespan(application) as state:
             await manager.initialize()
             application.state.runtime_config_manager = manager
+            if health_registry is not None:
+                health_registry.set_runtime_config_revision(
+                    manager.snapshot().revision,
+                    database_available=manager.database_available,
+                )
             logger.info(
                 "Runtime config initialized (source=%s, revision=%s, database_available=%s)",
                 manager.snapshot().source,
@@ -224,3 +243,12 @@ def install_runtime_config_manager_lifespan(
 
     app.router.lifespan_context = runtime_config_lifespan
     return True
+
+
+def install_health_signals_lifespan(
+    app: FastAPI,
+    settings: Settings,
+    registry: HealthRegistry,
+) -> None:
+    """Install the final, fail-open health monitor around all runtime lifespans."""
+    install_health_monitor_lifespan(app, settings, session_factory=get_session, registry=registry)

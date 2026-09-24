@@ -22,8 +22,10 @@ from src.agent.ancora_agent import (
     create_db,
     create_model_from_settings,
 )
+from src.agent.health import HealthRegistry, install_health_readiness_endpoint
 from src.agent.instructions import assemble_instructions
 from src.agent.lifecycle import (
+    install_health_signals_lifespan,
     install_interaction_processor_lifespan,
     install_observability_lifespan,
     install_reminder_worker_lifespan,
@@ -190,9 +192,11 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
     return tools
 
 
-def _register_reminder_worker(app: FastAPI, settings: Settings) -> None:
+def _register_reminder_worker(
+    app: FastAPI, settings: Settings, health_registry: HealthRegistry
+) -> None:
     """Install the auto-gated reminder-worker FastAPI lifespan (BL-22)."""
-    install_reminder_worker_lifespan(app, settings)
+    install_reminder_worker_lifespan(app, settings, health_registry=health_registry)
 
 
 def _register_interaction_processor(
@@ -203,6 +207,7 @@ def _register_interaction_processor(
     tools: list[Any],
     instructions: list[str],
     runtime_config_manager: RuntimeConfigManager,
+    health_registry: HealthRegistry,
 ) -> None:
     """Install the auto-gated T5+T7 governed processor after the app lifespan."""
     install_interaction_processor_lifespan(
@@ -212,6 +217,7 @@ def _register_interaction_processor(
         tools=tools,
         instructions=instructions,
         runtime_config_manager=runtime_config_manager,
+        health_registry=health_registry,
     )
 
 
@@ -233,6 +239,8 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     validate_telegram_admission_settings(settings)
     validate_runtime_config_admin_settings(settings)
     runtime_config_manager = create_runtime_config_manager(settings, get_session)
+    health_registry = HealthRegistry()
+    health_registry.set_component("app", "healthy")
 
     # ── Database (Agno runtime) ───────────────────────
     db = create_db(db_url=settings.db_url)
@@ -296,6 +304,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     )
 
     app = agent_os.get_app()
+    install_health_readiness_endpoint(app, health_registry)
     logger.info(
         "AgentOS app created — webhook: /telegram/webhook (%s)",
         "AncoraMind admission" if settings.telegram_admission_enabled else "AgentOS",
@@ -303,10 +312,15 @@ def create_app() -> tuple[FastAPI, AgentOS]:
 
     # ── Runtime config (T6) ────────────────────────────
     # Install it before workers: outer worker wrappers enter this lifecycle first.
-    install_runtime_config_manager_lifespan(app, settings, runtime_config_manager)
+    install_runtime_config_manager_lifespan(
+        app,
+        settings,
+        runtime_config_manager,
+        health_registry=health_registry,
+    )
 
     # ── Reminder worker (BL-5) ─────────────────────────
-    _register_reminder_worker(app, settings)
+    _register_reminder_worker(app, settings, health_registry)
     _register_interaction_processor(
         app,
         settings,
@@ -314,8 +328,10 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         tools=tools,
         instructions=instructions,
         runtime_config_manager=runtime_config_manager,
+        health_registry=health_registry,
     )
     install_observability_lifespan(app)
+    install_health_signals_lifespan(app, settings, health_registry)
 
     return app, agent_os
 

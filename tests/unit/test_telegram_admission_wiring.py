@@ -51,6 +51,7 @@ def test_create_app_preserves_ancoramind_webhook_route_when_admission_enabled(
     routes = [route for route in app.routes if isinstance(route, APIRoute)]
     assert [(route.path, route.methods) for route in routes] == [
         ("/telegram/webhook", {"POST"}),
+        ("/health/readiness", {"GET"}),
     ]
     assert captured["on_route_conflict"] == "preserve_base_app"
     assert captured["telemetry"] is False
