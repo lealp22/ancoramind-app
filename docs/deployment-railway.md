@@ -158,14 +158,16 @@ apuntan directamente a Grafana Cloud.
 
 ### 3.1 Collector OpenTelemetry privado (T10)
 
-1. Railway → **New Service** → **Docker Image**:
-   `otel/opentelemetry-collector-contrib:0.138.0`.
-2. Sube el fichero versionado `observability/otel-collector.yaml` como config del
-   servicio y usa como comando:
-
-   ```text
-   --config=/etc/otelcol/config.yaml
-   ```
+1. Railway → **New Service** → **GitHub Repo** → este repositorio (igual que el
+   Gateway): root directory en la raíz del repo y **Dockerfile path**
+   `observability/Dockerfile`. El Dockerfile fija
+   `otel/opentelemetry-collector-contrib:0.138.0` y copia el manifiesto
+   versionado `observability/otel-collector.yaml` a
+   `/etc/otelcol/config.yaml` (CMD `--config=/etc/otelcol/config.yaml`), de
+   modo que un push actualiza Collector y manifiesto juntos.
+2. Nómbralo `ancoramind-otel-collector` para conservar el hostname privado
+   `http://ancoramind-otel-collector.railway.internal:4317` que usan las
+   variables OTLP de la app.
 
 3. No generes dominio público ni TCP proxy. El receptor gRPC `4317` se consume
    exclusivamente por private networking de Railway.

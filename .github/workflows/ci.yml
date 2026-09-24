@@ -61,3 +61,24 @@ jobs:
         run: pytest tests/integration/ -q
         env:
           ANCORA_TEST_REQUIRE_DB: "1"
+
+  collector-config:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # ADR-006 / specs/013 T10: the versioned manifest must build and parse
+      # with the pinned contrib image before rollout. Dummy Grafana values
+      # only — this job never contacts Grafana Cloud.
+      - name: Build Collector image (observability/Dockerfile)
+        run: docker build -f observability/Dockerfile -t ancoramind-otel-collector:ci .
+
+      - name: Validate Collector config
+        run: >
+          docker run --rm
+          -e GRAFANA_OTLP_ENDPOINT=https://otlp-gateway-example.grafana.net/otlp
+          -e GRAFANA_OTLP_AUTHORIZATION="Basic Y2k6ZHVtbXk="
+          ancoramind-otel-collector:ci
+          validate --config=/etc/otelcol/config.yaml

@@ -127,7 +127,8 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
                             013-llm-access-governance (T2–T14 implementados localmente),
                             014-agentic-evals (base determinista implementada),
-                            015-powershell-e2e (implementada)
+                            015-powershell-e2e (implementada),
+                            016-health-dashboard (en curso — BL-33)
 tests/unit/              ← 378 tests
 tests/integration/        ← 60 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos versionados de evals agentic (BL-8/specs/014)

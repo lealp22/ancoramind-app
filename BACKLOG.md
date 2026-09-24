@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-20
+Última actualización: 2026-09-23
 
 ---
 
@@ -26,6 +26,7 @@
 | BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
+| BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 455 unit + 64 integration — Ruff limpio en
@@ -263,6 +264,21 @@ en `app.state` y la cancela limpiamente; `main.py` ya no usa
 Ruff y mypy del alcance limpios; integración ejecutada sin fallos pero omitida
 sin PostgreSQL/Docker. Ver `specs/012-fastapi-lifespan/`.
 
+### BL-33 · Health signals + Dashboard de salud 🔶 en curso — specs/016
+
+Materializa la **fase 2** del análisis de observabilidad (2026-09-23): el
+`/health` actual (AgentOS) sólo prueba que el proceso escucha. Se añade
+`GET /health/readiness` (DB, reminder worker, interaction processor,
+Gateway/circuit breaker, cola de admission, revisión de runtime config, edad
+de la última interacción) y health metrics metadata-only por el pipeline OTel
+existente, más el dashboard Grafana **versionado en
+`observability/dashboards/`** con vista de salud a simple vista y alertas
+(circuit open, spend, errores de delivery, heartbeat, silencio de tráfico).
+Grafana Cloud permanece como backend (ADR-006). Fuera de este incremento: stack
+OSS local (fase 3, diferida) y Langfuse (registrado como candidato BL-8).
+El dashboard complementa —no sustituye— el rollout pendiente del
+Collector/Grafana de BL-23.
+
 ---
 
 ## P2 — Funcionalidad para "usable de verdad"
@@ -482,6 +498,29 @@ cobertura, expectativas contradictorias y ausencia de secretos obvios; ejecutar
 metadata permitida (tool/decisión/resultado), acordar scoring semántico y baseline
 por ruta lógica, y añadir la modalidad LLM al flujo CI/E2E con budget explícito.
 No almacenar contenido personal en datasets, outputs ni telemetría.
+
+**Candidatos para la fase LLM (registrados 2026-09-23, análisis de
+observabilidad; aún sin decisión):**
+
+- **Agno evals nativo** (`agno.eval`: accuracy, agent-as-judge, reliability
+  de tool calls/arguments, scorer, performance; suites con exit code para CI).
+  Requisito de gobernanza: el evaluator model debe pasar por
+  `LLMAccess`/Gateway, nunca por un provider directo. Encaja naturalmente con
+  las categorías actuales (`tool_selection` ≈ reliability, `security`).
+- **Langfuse self-hosted local** (6 contenedores: web + worker + Postgres +
+  Redis + ClickHouse + MinIO; ~4–8 GB RAM): datasets, anotación manual y evals
+  sobre trazas. En modo metadata-only aporta poco sobre Grafana; con contenido
+  exigiría enmendar ADR-006 (decisión explícita del propietario). En Railway
+  inviable por coste. **Registrado como candidato a evals en local.**
+- **promptfoo** (CLI, YAML, asserts deterministas + LLM-as-judge,
+  red-teaming orientado a la categoría `security`): sin vendor lock, apto
+  para CI.
+- **DeepEval** (pytest-native): encaja con la suite existente; opción si se
+  quiere scoring semántico dentro de pytest.
+
+Descartados de partida: LangSmith/Braintrust/OpenAI Evals (envían contenido a
+terceros — incompatible con la policy de specs/013) y Ragas (RAG/vector search
+fuera de alcance).
 
 ### BL-15 · Botones de confirmación en Telegram (HITL UX)
 La interfaz Telegram de AgentOS ignora los `callback_query`: no soporta
