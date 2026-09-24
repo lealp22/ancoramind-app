@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -20,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import Settings
 from src.observability import get_telemetry
+
+logger = logging.getLogger(__name__)
 
 HealthStatus = Literal["healthy", "degraded", "disabled", "unknown"]
 SessionFactory = Callable[[], Awaitable[AsyncSession]]
@@ -242,35 +245,40 @@ def install_health_monitor_lifespan(
 
     async def monitor() -> None:
         while True:
-            if settings.ancora_database_url:
-                await registry.refresh_database_and_queue(session_factory)
-            else:
-                registry.set_component("database", "disabled")
-            _refresh_task_component(
-                registry,
-                "reminder_worker",
-                getattr(app.state, "reminder_worker_task", None),
-            )
-            _refresh_task_component(
-                registry,
-                "interaction_processor",
-                getattr(app.state, "telegram_interaction_processor_task", None),
-            )
-            registry.refresh_interaction_freshness()
-            if settings.litellm_proxy_enabled:
-                await registry.refresh_gateway(
-                    settings.litellm_proxy_base_url,
-                    timeout_seconds=settings.health_gateway_probe_timeout_seconds,
+            try:
+                if settings.ancora_database_url:
+                    await registry.refresh_database_and_queue(session_factory)
+                else:
+                    registry.set_component("database", "disabled")
+                _refresh_task_component(
+                    registry,
+                    "reminder_worker",
+                    getattr(app.state, "reminder_worker_task", None),
                 )
-            else:
-                registry.set_component("gateway", "disabled")
-            registry.set_circuit_state("unknown")
-            manager = getattr(app.state, "runtime_config_manager", None)
-            if manager is not None:
-                registry.set_runtime_config_revision(
-                    manager.snapshot().revision,
-                    database_available=manager.database_available,
+                _refresh_task_component(
+                    registry,
+                    "interaction_processor",
+                    getattr(app.state, "telegram_interaction_processor_task", None),
                 )
+                registry.refresh_interaction_freshness()
+                if settings.litellm_proxy_enabled:
+                    await registry.refresh_gateway(
+                        settings.litellm_proxy_base_url,
+                        timeout_seconds=settings.health_gateway_probe_timeout_seconds,
+                    )
+                else:
+                    registry.set_component("gateway", "disabled")
+                registry.set_circuit_state("unknown")
+                manager = getattr(app.state, "runtime_config_manager", None)
+                if manager is not None:
+                    registry.set_runtime_config_revision(
+                        manager.snapshot().revision,
+                        database_available=manager.database_available,
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("Health monitor cycle failed; continuing", exc_info=False)
             await asyncio.sleep(settings.health_probe_interval_seconds)
 
     @asynccontextmanager
