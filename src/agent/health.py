@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+import httpx
 from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,7 @@ class HealthRegistry:
         self._queue_max_per_chat = 0
         self._config_revision = 0
         self._reminders_overdue = 0
+        self._last_interaction_processed_at: datetime | None = None
 
     def set_component(self, component: str, status: HealthStatus) -> None:
         """Record a bounded component state without personal or exception content."""
@@ -114,6 +116,31 @@ class HealthRegistry:
         get_telemetry().gauge("ancora.runtime_config.revision", self._config_revision)
         self.set_component("runtime_config", "healthy" if database_available else "degraded")
 
+    def record_interaction_processed(self) -> None:
+        """Record a successfully finalized interaction without retaining its identity."""
+        self._last_interaction_processed_at = datetime.now(tz=UTC)
+        self.refresh_interaction_freshness()
+
+    def refresh_interaction_freshness(self) -> None:
+        """Export the aggregate age of the latest successful interaction, when known."""
+        if self._last_interaction_processed_at is None:
+            return
+        get_telemetry().gauge(
+            "ancora.interactions.last_processed.age_seconds",
+            self._interaction_processed_age_seconds(),
+        )
+
+    async def refresh_gateway(self, base_url: str, *, timeout_seconds: float) -> None:
+        """Probe private LiteLLM readiness without credentials, bodies, or app gating."""
+        readiness_url = _gateway_readiness_url(base_url)
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client:
+                response = await client.get(readiness_url)
+            self.set_component("gateway", "healthy" if response.status_code == 200 else "degraded")
+        except Exception:
+            # Do not retain or export a URL, request error, response body, or credentials.
+            self.set_component("gateway", "degraded")
+
     async def refresh_database_and_queue(self, session_factory: SessionFactory) -> None:
         """Best-effort bounded DB and aggregate queue probe for the monitor task."""
         session: AsyncSession | None = None
@@ -177,7 +204,21 @@ class HealthRegistry:
             },
             "runtime_config": {"active_revision": self._config_revision},
             "reminders": {"overdue": self._reminders_overdue},
+            "interactions": {
+                "last_processed_at": _iso(self._last_interaction_processed_at),
+                "last_processed_age_seconds": (
+                    self._interaction_processed_age_seconds()
+                    if self._last_interaction_processed_at is not None
+                    else None
+                ),
+            },
         }
+
+    def _interaction_processed_age_seconds(self) -> float:
+        """Return a non-negative local freshness value without performing I/O."""
+        if self._last_interaction_processed_at is None:
+            return 0.0
+        return max(0.0, (datetime.now(tz=UTC) - self._last_interaction_processed_at).total_seconds())
 
 
 def install_health_readiness_endpoint(app: FastAPI, registry: HealthRegistry) -> None:
@@ -215,10 +256,14 @@ def install_health_monitor_lifespan(
                 "interaction_processor",
                 getattr(app.state, "telegram_interaction_processor_task", None),
             )
-            registry.set_component(
-                "gateway",
-                "unknown" if settings.litellm_proxy_enabled else "disabled",
-            )
+            registry.refresh_interaction_freshness()
+            if settings.litellm_proxy_enabled:
+                await registry.refresh_gateway(
+                    settings.litellm_proxy_base_url,
+                    timeout_seconds=settings.health_gateway_probe_timeout_seconds,
+                )
+            else:
+                registry.set_component("gateway", "disabled")
             registry.set_circuit_state("unknown")
             manager = getattr(app.state, "runtime_config_manager", None)
             if manager is not None:
@@ -261,3 +306,11 @@ def _refresh_task_component(
 
 def _iso(value: object) -> str:
     return value.isoformat() if isinstance(value, datetime) else ""
+
+
+def _gateway_readiness_url(base_url: str) -> str:
+    """Convert the private OpenAI-compatible base URL into LiteLLM readiness."""
+    normalized = base_url.rstrip("/")
+    if normalized.endswith("/v1"):
+        normalized = normalized[:-3]
+    return f"{normalized}/health/readiness"

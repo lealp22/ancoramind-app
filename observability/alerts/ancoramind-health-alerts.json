@@ -1,0 +1,47 @@
+{
+  "apiVersion": 1,
+  "description": "Versioned alert definitions for AncoraMind metadata-only health. Normalize metric names against Grafana Cloud OTLP ingestion before provisioning.",
+  "groups": [
+    {
+      "name": "ancoramind-health",
+      "interval": "1m",
+      "rules": [
+        {
+          "alert": "AncoraMindGatewayCircuitOpen",
+          "expr": "max(ancora_gateway_circuit_state{ancora_circuit_state=\"open\"}) > 0",
+          "for": "2m",
+          "labels": {"severity": "critical", "component": "gateway"},
+          "annotations": {"summary": "El circuit breaker del Gateway está abierto.", "runbook": "docs/runbooks-013.md#3-circuit-open"}
+        },
+        {
+          "alert": "AncoraMindCostHardStop",
+          "expr": "sum(increase(ancora_cost_governance_hard_stop_total[15m])) > 0",
+          "for": "0m",
+          "labels": {"severity": "warning", "component": "cost_governance"},
+          "annotations": {"summary": "Una interacción alcanzó un hard stop de coste.", "runbook": "docs/runbooks-013.md#4-budget-exhausted"}
+        },
+        {
+          "alert": "AncoraMindTelegramDeliveryErrors",
+          "expr": "sum(increase(ancora_telegram_deliveries_total{ancora_delivery_status=\"error\"}[15m])) >= 5",
+          "for": "5m",
+          "labels": {"severity": "warning", "component": "telegram_delivery"},
+          "annotations": {"summary": "Hay un spike de errores de entrega Telegram.", "runbook": "docs/runbooks-013.md#10-alertas-de-salud-specs016"}
+        },
+        {
+          "alert": "AncoraMindReminderWorkerHeartbeatMissing",
+          "expr": "max(ancora_health_component{ancora_health_component=\"reminder_worker\"}) == 1 and (sum(increase(ancora_health_heartbeat_total{ancora_health_component=\"reminder_worker\"}[10m])) or vector(0)) == 0",
+          "for": "5m",
+          "labels": {"severity": "warning", "component": "reminder_worker"},
+          "annotations": {"summary": "El worker de recordatorios no completó un ciclo reciente.", "runbook": "docs/runbooks-013.md#10-alertas-de-salud-specs016"}
+        },
+        {
+          "alert": "AncoraMindNoAcceptedInteractions",
+          "expr": "(sum(increase(ancora_telegram_admissions_total{ancora_admission_status=\"accepted\"}[6h])) or vector(0)) == 0",
+          "for": "15m",
+          "labels": {"severity": "warning", "component": "telegram_admission"},
+          "annotations": {"summary": "No se admitieron interacciones Telegram durante seis horas.", "runbook": "docs/runbooks-013.md#10-alertas-de-salud-specs016"}
+        }
+      ]
+    }
+  ]
+}

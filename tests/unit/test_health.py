@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from src.agent.health import HealthRegistry, install_health_readiness_endpoint
+from src.agent.health import HealthRegistry, _gateway_readiness_url, install_health_readiness_endpoint
 
 
 class _Telemetry:
@@ -32,6 +32,29 @@ class _Telemetry:
         attributes: dict[str, object] | None = None,
     ) -> None:
         self.gauges.append((name, value, attributes))
+
+
+class _Response:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class _HttpClient:
+    def __init__(self, response: _Response | Exception) -> None:
+        self._response = response
+        self.urls: list[str] = []
+
+    async def __aenter__(self) -> _HttpClient:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+    async def get(self, url: str) -> _Response:
+        self.urls.append(url)
+        if isinstance(self._response, Exception):
+            raise self._response
+        return self._response
 
 
 async def _get(app: FastAPI) -> httpx.Response:
@@ -73,6 +96,59 @@ def test_registry_rejects_unbounded_component_names(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(ValueError, match="Unsupported health component"):
         HealthRegistry().set_component("telegram-chat-123", "healthy")
+
+
+def test_last_processed_interaction_is_aggregate_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    telemetry = _Telemetry()
+    monkeypatch.setattr("src.agent.health.get_telemetry", lambda: telemetry)
+    registry = HealthRegistry()
+
+    registry.record_interaction_processed()
+    snapshot = registry.snapshot()
+
+    assert snapshot["interactions"]["last_processed_at"]
+    assert isinstance(snapshot["interactions"]["last_processed_age_seconds"], float)
+    assert snapshot["interactions"]["last_processed_age_seconds"] >= 0
+    assert any(name == "ancora.interactions.last_processed.age_seconds" for name, *_ in telemetry.gauges)
+    assert "correlation" not in str(snapshot).lower()
+    assert "telegram_user" not in str(snapshot).lower()
+
+
+async def test_gateway_probe_uses_private_readiness_without_credentials_or_response_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _HttpClient(_Response(200))
+    monkeypatch.setattr("src.agent.health.httpx.AsyncClient", lambda **_: client)
+    monkeypatch.setattr("src.agent.health.get_telemetry", lambda: _Telemetry())
+    registry = HealthRegistry()
+
+    await registry.refresh_gateway("http://litellm.railway.internal:4000/v1", timeout_seconds=0.1)
+
+    assert client.urls == ["http://litellm.railway.internal:4000/health/readiness"]
+    assert registry.snapshot()["components"]["gateway"]["status"] == "healthy"
+
+
+async def test_gateway_probe_degrades_without_retaining_private_failure_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_error = "gateway key=private-not-for-export"
+    monkeypatch.setattr(
+        "src.agent.health.httpx.AsyncClient",
+        lambda **_: _HttpClient(RuntimeError(private_error)),
+    )
+    monkeypatch.setattr("src.agent.health.get_telemetry", lambda: _Telemetry())
+    registry = HealthRegistry()
+
+    await registry.refresh_gateway("http://litellm.railway.internal:4000", timeout_seconds=0.1)
+
+    assert registry.snapshot()["components"]["gateway"]["status"] == "degraded"
+    assert private_error not in str(registry.snapshot())
+
+
+def test_gateway_readiness_url_removes_only_the_openai_compatible_v1_suffix() -> None:
+    assert _gateway_readiness_url("http://gateway.internal:4000/v1/") == (
+        "http://gateway.internal:4000/health/readiness"
+    )
 
 
 async def test_readiness_endpoint_is_informational_and_has_no_auth_or_secret_leakage(

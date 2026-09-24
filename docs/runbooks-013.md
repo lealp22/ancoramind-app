@@ -19,6 +19,7 @@
 | App sana pero sin trazas en Grafana | §7 Collector down |
 | Revisión runtime mala activa | §8 Rollback de config |
 | Cambio de cualquier secreto/token/key | §9.4 Rotación |
+| Alerta de salud Spec 016 | §10 Alertas de salud |
 
 Estados: `accepted` (recuperable) → `agent_started` →
 `response_ready` (recuperable) → `delivery_started` → `completed`.
@@ -411,3 +412,30 @@ fallback, circuit, latencia), alertas 60/80/90%, retención y acceso.
 | `TELEGRAM_WEBHOOK_SECRET_TOKEN` | generar → Railway + `setWebhook` con `secret_token` → validar |
 
 Ningún secreto vive en revisiones runtime, Git, logs o telemetría.
+
+## 10. Alertas de salud (Spec 016)
+
+Las definiciones versionadas viven en
+`observability/alerts/ancoramind-health-alerts.json`. Son reglas PromQL para el
+datasource de métricas OTLP de Grafana Cloud: antes de provisionarlas, confirmar
+los nombres finales exportados por el Collector con datos reales. Las alertas no
+contienen IDs, texto de Telegram, prompts, rutas privadas ni secretos.
+
+`GET /health/readiness` es una instantánea local **informativa**: responde sin
+I/O y no sustituye `/health` de AgentOS/Railway. El monitor interno realiza los
+probes periódicos; un timeout de Gateway o una caída de DB actualiza el estado
+a `degraded` pero nunca bloquea tráfico ni arranque.
+
+| Alerta | Primera respuesta |
+|---|---|
+| `AncoraMindGatewayCircuitOpen` | Seguir §3. No reiniciar para forzar tráfico ni habilitar un provider directo. |
+| `AncoraMindCostHardStop` | Seguir §4. Es una señal del límite determinista aplicado; no elevar budgets sin reconciliar gasto y configuración activa. |
+| `AncoraMindTelegramDeliveryErrors` | Revisar deployment/logs de app y Telegram; inspeccionar sólo metadata de interacciones. No reenviar chunks que hayan quedado ambiguos. |
+| `AncoraMindReminderWorkerHeartbeatMissing` | Confirmar que el worker está habilitado y que DB/token existen; revisar el task/deployment y el estado `reminder_worker` en readiness. |
+| `AncoraMindNoAcceptedInteractions` | Confirmar que no sea una ventana esperada de inactividad. Si no lo es, revisar webhook, admission flag, bot y allowlist; silenciar la alerta durante mantenimiento planificado. |
+
+La alerta de coste usa `ancora_cost_governance_hard_stop_total`, la señal
+disponible y ejecutable hoy. Los umbrales porcentuales 60/80% quedan en la
+configuración de gobernanza y se incorporarán como métrica/alerta sólo cuando
+exista una serie agregada y validada, sin derivar porcentajes ficticios en
+Grafana.

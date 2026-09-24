@@ -102,6 +102,7 @@ class InteractionProcessor:
         typing_refresh_seconds: float = 4.0,
         bot_username: str | None = None,
         on_cycle: Callable[[int], None] | None = None,
+        on_interaction_completed: Callable[[], None] | None = None,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -113,6 +114,7 @@ class InteractionProcessor:
         self._typing_refresh_seconds = typing_refresh_seconds
         self._bot_username = bot_username
         self._on_cycle = on_cycle
+        self._on_interaction_completed = on_interaction_completed
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
 
@@ -563,7 +565,10 @@ class InteractionProcessor:
                 )
                 return True
 
-        return await self._finalize_delivery(interaction.id, response.id)
+        finalized = await self._finalize_delivery(interaction.id, response.id)
+        if finalized and self._on_interaction_completed is not None:
+            self._on_interaction_completed()
+        return finalized
 
     async def _claim_agent(
         self, interaction_id: UUID, run_id: str, session_id: str

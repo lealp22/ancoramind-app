@@ -139,6 +139,8 @@ class Settings(BaseSettings):
     otel_export_interval_millis: int = Field(default=30000, ge=1000, le=300000)
     health_probe_interval_seconds: float = Field(default=30.0, ge=5, le=300)
     """Cadence of the internal metadata-only health monitor; it never gates traffic."""
+    health_gateway_probe_timeout_seconds: float = Field(default=2.0, gt=0, le=10)
+    """Short private LiteLLM readiness timeout; monitoring remains fail-open."""
 
     # ── Application ──────────────────────────────────
     app_debug: bool = False

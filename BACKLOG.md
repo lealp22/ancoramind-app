@@ -53,7 +53,7 @@ La telemetría de producto de Agno está desactivada con la observabilidad propi
 Defaults aprobados: 120 s, 6 model calls, 12 tool calls como hard safety
 ceiling, 8 requests Gateway y concurrencia global 2.
 
-**Estado (2026-09-13):** T2 aporta Alembic y el schema reproducible. T3 aporta el
+**Estado (2026-09-24):** T2 aporta Alembic y el schema reproducible. T3 aporta el
 ledger reusable: identidad durable `UNIQUE(bot_id, telegram_update_id)`, auditoría
 de cada delivery Railway, `correlation_id` estable, claim atómico
 `accepted → agent_started`, payload Telegram normalizado/cifrado con Fernet y

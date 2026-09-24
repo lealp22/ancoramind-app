@@ -36,7 +36,7 @@ salud. Conclusiones registradas en BACKLOG (BL-33 y BL-8):
    PostgreSQL/Supabase, heartbeat del reminder worker, estado del interaction
    processor, profundidad de cola de admission (global pendiente y por chat),
    alcanzabilidad del Gateway LiteLLM y estado del circuit breaker, revisión
-   activa de runtime config y edad de la última interacción procesada.
+   activa de runtime config y edad de la última interacción procesada con éxito.
    Opcionalmente bearer-gated reutilizando `RUNTIME_CONFIG_ADMIN_TOKEN`.
 2. **Health metrics por OTel** — vía la facade `MetadataTelemetry` existente
    (fail-open, sin scraping Prometheus nuevo): heartbeat del worker, queue
@@ -77,8 +77,9 @@ LLMAccess / circuit breaker                      ─┘         │
 ```
 
 - `src/agent/health.py` (o similar): registro in-process donde cada lifespan/
-  worker/circuito publica su última señal; el GET no hace I/O nueva salvo un
-  probe opcional y acotado de DB/Gateway.
+  worker/circuito publica su última señal; el GET no hace I/O. Un monitor
+  periódico separado ejecuta probes acotados de DB/Gateway y actualiza el
+  registro local.
 - **Semántica de fallo:** `/health` de AgentOS/Railway queda intacto como gate
   de deploy; `/health/readiness` es informativo y nunca bloquea tráfico. Las
   health metrics heredan el fail-open del exporter OTLP (un Collector caído
@@ -103,6 +104,6 @@ LLMAccess / circuit breaker                      ─┘         │
    privacy tests lo demuestran y fallan ante un atributo de contenido.
 4. El dashboard JSON existe versionado y, importado en Grafana Cloud con el
    pipeline T10 activo, muestra la vista de salud con datos reales.
-5. Las alertas están definidas en el propio dashboard y documentadas en el
-   runbook (`docs/runbooks-013.md`).
+5. Las alertas están versionadas bajo `observability/alerts/` y documentadas en
+   el runbook (`docs/runbooks-013.md`).
 6. `pytest tests/unit/` y Ruff verdes.

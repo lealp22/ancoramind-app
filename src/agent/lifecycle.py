@@ -179,6 +179,9 @@ def install_interaction_processor_lifespan(
                 on_cycle=(lambda _: health_registry.heartbeat("interaction_processor"))
                 if health_registry is not None
                 else None,
+                on_interaction_completed=health_registry.record_interaction_processed
+                if health_registry is not None
+                else None,
             )
             ambiguous = await processor.recover_once()
             if ambiguous:

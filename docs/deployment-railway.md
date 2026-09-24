@@ -280,6 +280,12 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    Con el modo activo, la app deja de usar `OPENROUTER_API_KEY`/
    `OPENAI_API_KEY`; puedes retirarlas del servicio AncoraMind (quedan sólo en
    LiteLLM). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
+
+   La app consulta periódicamente, sólo por private networking,
+   `<LITELLM_PROXY_BASE_URL>/health/readiness` (si la URL termina en `/v1`, lo
+   normaliza). El probe no usa virtual key ni lee/exporta cuerpos de respuesta;
+   un timeout breve (`HEALTH_GATEWAY_PROBE_TIMEOUT_SECONDS`, default `2`) sólo
+   actualiza `/health/readiness` a `gateway=degraded` y nunca bloquea tráfico.
 7. Valida con un update de prueba que la respuesta llega y que
    `ancora.llm_usage_events` registra `provider=litellm`-vía-Gateway; después
    ejecuta el benchmark p50/p95/p99+TTFT frente a OpenRouter directo (T11,
@@ -303,6 +309,14 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    Reconcilia con `GET https://openrouter.ai/api/v1/key`
    (`limit`/`limit_remaining`, usage diario/semanal/mensual) antes de subir
    los techos.
+
+10. **Health dashboard (Spec 016):** tras desplegar Collector y confirmar
+    ingesta OTLP, importar `observability/dashboards/ancoramind-health.json` y
+    provisionar `observability/alerts/ancoramind-health-alerts.json` contra el
+    datasource correspondiente. Antes de activar alertas, verificar los nombres
+    reales de series OTLP en Grafana y hacer un único ejercicio de Gateway,
+    delivery y worker. `GET /health/readiness` es diagnóstico metadata-only; el
+    healthcheck de Railway continúa siendo `/health` de AgentOS.
 
 Validación local sin Railway (sin coste, claves dummy):
 

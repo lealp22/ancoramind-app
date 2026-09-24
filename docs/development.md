@@ -320,6 +320,8 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `OTEL_EXPORTER_OTLP_INSECURE` | Transporte sin TLS hacia private networking Railway | `true` |
 | `OTEL_EXPORTER_OTLP_TIMEOUT_SECONDS` | Timeout acotado de exportación OTLP | `3` |
 | `OTEL_EXPORT_INTERVAL_MILLIS` | Intervalo de exportación de métricas | `30000` |
+| `HEALTH_PROBE_INTERVAL_SECONDS` | Cadencia de actualización de señales de health in-process | `30` |
+| `HEALTH_GATEWAY_PROBE_TIMEOUT_SECONDS` | Timeout del probe privado LiteLLM; no afecta tráfico | `2` |
 | `LITELLM_PROXY_ENABLED` | T11: enruta toda la inferencia por el Gateway privado (fail-closed) | `false` |
 | `LITELLM_PROXY_BASE_URL` | URL privada del LiteLLM Proxy (requerida si el modo está activo) | — |
 | `LITELLM_PROXY_VIRTUAL_KEY` | Key exclusiva AncoraMind creada con el script T11 | — |
@@ -340,7 +342,9 @@ respuesta, Gateway down (fail closed), circuit breaker automático
 de alias en dos fases, budget exhausted (`failed_controlled` sin replay),
 `failed_ambiguous` (sin replay/reenvío), Collector down (fail open),
 rollback CAS de config y checklist pendiente del rollout (E2E Railway,
-benchmark con clave real, Grafana, rotación real).
+benchmark con clave real, Grafana, rotación real). El endpoint adicional
+`GET /health/readiness` entrega sólo metadata in-memory (sin I/O durante el
+request); sus probes se ejecutan en background y no sustituyen `/health`.
 
 ### Runtime dinámico y LLMAccess (BL-23/specs/013)
 

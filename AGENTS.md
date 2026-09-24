@@ -307,6 +307,7 @@ mypy src/
 | BL-18 Railway como sustituto de ngrok | 🔶 Servicio/dominio/webhook/healthcheck reales validados; pendiente Wait for CI + E2E M3–M5 (specs/008) |
 | BL-25 Script E2E nativo PowerShell | ✅ `run-e2e.ps1` local/remoto con `.env` seguro (specs/015) |
 | BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T14 implementados; T14 fase 6 (cambio de modelo en caliente) validado en Railway (2026-09-19); pendientes: rollout Collector/Grafana, E2E completo y rotaciones (specs/013) |
+| BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness metadata-only, probes acotados, dashboard y alertas versionadas); pendiente validación real Collector/Grafana/Railway (T7, specs/016) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

@@ -18,11 +18,12 @@
       (status lights, tráfico/idempotencia/admission, latencias p50/p95,
       tokens/coste USD y % budget, errores por `error.type`, delivery
       retries, recordatorios, config revision) importable a Grafana Cloud.
-- [ ] T5 · Alertas (circuit open, spend > umbral, spike de errores de
-      delivery, worker sin heartbeat, 0 interacciones en N horas) definidas
-      en el dashboard y documentadas en `docs/runbooks-013.md`.
-- [ ] T6 · Docs: `docs/deployment-railway.md` (variables y validación del
-      readiness), `docs/development.md`, AGENTS/BACKLOG actualizados.
+- [x] T5 · Alertas versionadas en `observability/alerts/` (circuit open, hard
+      stop de coste, spike de delivery, worker sin heartbeat y 0 admissions en
+      seis horas), con tests estructurales y runbook. Queda normalizar PromQL
+      frente a los nombres finales de Grafana Cloud durante T7.
+- [x] T6 · Docs: `docs/deployment-railway.md` (variables y validación del
+      readiness), `docs/development.md`, Spec/runbook y BACKLOG actualizados.
 - [ ] T7 · `verification.md`: matriz fail-open (Collector caído / DB caída /
       worker parado), verificación en Railway con Collector activo y captura
       del dashboard renderizado con datos reales.
