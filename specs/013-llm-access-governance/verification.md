@@ -22,7 +22,11 @@
 | LiteLLM | `v1.100.1` fijado por digest `a3715fa7…c62bf` |
 | PostgreSQL | Supabase canónico `ancoramind_project` + PostgreSQL privado del Gateway Railway |
 | Railway environment | `ancoramind-app` / `production` / `europe-west4-drams3a` |
-| Grafana Cloud region | Pendiente |
+| Grafana Cloud region | Pendiente (stack sin provisionar) |
+| Railway collector | `ancoramind-otel-collector` **staged-create** (source `main` + `observability/Dockerfile`); no desplegado — pendiente de `accept-deploy` |
+| Railway collector region | `us-west2` (staged) — **desalineada** con `europe-west4-drams3a`; alinear en el dashboard antes del deploy |
+| Collector secrets | `GRAFANA_OTLP_ENDPOINT` / `GRAFANA_OTLP_AUTHORIZATION` **sin crear** |
+| Repo push | Bloqueado: `403 Write access to repository not granted` — sin Dockerfile en `origin/main` no hay build en Railway |
 
 ## Automated checks
 

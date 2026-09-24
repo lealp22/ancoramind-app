@@ -146,6 +146,31 @@ rotación real. **BL-23 permanece abierto**
 hasta verificar la matriz A–Y completa.
 Ver `specs/013-llm-access-governance/`.
 
+**Actualización rollout Collector/Grafana (2026-09-24):** el servicio
+`ancoramind-otel-collector` existe en Railway como **staged-create** con source
+`lealp22/ancoramind-app@main` y `dockerfilePath=observability/Dockerfile`
+(Dockerfile nuevo que fija `otel/opentelemetry-collector-contrib:0.138.0` y
+copia el manifiesto versionado; CI valida la config con valores dummy). Nada
+desplegado: la patch está staged y **pendiente de `accept-deploy` con
+confirmación explícita**. Bloqueos abiertos en este punto:
+1. **Push a `origin/main` fallido (403 `Write access to repository not
+   granted`)** — las credenciales HTTPS locales no tienen escritura; sin el
+   push del Dockerfile en `main`, Railway no puede buildar.
+2. **Secretos `GRAFANA_OTLP_ENDPOINT` / `GRAFANA_OTLP_AUTHORIZATION` sin
+   crear** en el servicio Collector (stack Grafana Cloud pendiente de
+   provisionar; la región del stack consta como "Pendiente" en
+   `verification.md`).
+3. **Región del servicio Collector en `us-west2`** mientras el resto del
+   proyecto está en `europe-west4-drams3a`; el private networking funciona
+   cross-region, pero debe alinearse en el dashboard antes del deploy (las
+   herramientas de automatización disponibles no permiten cambiar región).
+4. Tras deploy del Collector: añadir `OTEL_EXPORTER_OTLP_*` a la app
+   (solo tras validar el Collector), verificar fail-open con `/health` y
+   comprobar en Grafana que llegan únicamente atributos allowlisted.
+Los pasos 1–4 bloquean el cierre de la matriz A–Y (entradas Collector/Grafana)
+y, con ella, de BL-23; dashboards/alertas (BL-33/specs/016) consumen este
+resultado.
+
 **Criterio de cierre:** matriz A–Y de specs/013 verificada: un mismo update
 ejecuta el Agent como máximo una vez, el modelo cambia sin redeploy, ningún run
 supera su budget, LiteLLM falla cerrado, la interacción es trazable por
