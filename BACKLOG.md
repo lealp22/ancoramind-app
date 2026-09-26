@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-23
+Última actualización: 2026-09-26
 
 ---
 
@@ -181,19 +181,23 @@ supera su budget, LiteLLM falla cerrado, la interacción es trazable por
 práctico de alta para un grupo de evaluadores aún no definido: no se debe abrir
 el bot a cualquier usuario ni pedir a cada persona que averigüe su Telegram ID.
 
-Diseñar e implementar un flujo de invitación administrable: un operador crea una
-invitación/código de alta de duración y uso limitados; la persona lo canjea en un
-chat privado con el bot; el backend vincula el `telegram_user_id` observado en el
-update autenticado a una identidad/autorización durable. El código es una
-credencial de onboarding, no un sustituto de los controles existentes de secret
-de webhook, private-chat, rate limiting, idempotencia ni auditoría de BL-23.
+Diseñar e implementar un flujo de **pairing gobernado**: un operador crea una
+invitación/código temporal, de un solo uso o con cupo explícito; la persona lo
+canjea en un chat privado con el bot; el backend muestra la solicitud al operador
+y exige aprobación antes de vincular el `telegram_user_id` observado en el update
+autenticado a una identidad/autorización durable. El código es una credencial de
+onboarding, no un sustituto de los controles existentes de secret de webhook,
+private-chat, rate limiting, idempotencia ni auditoría de BL-23.
 
 Decidir en el spec el canal de emisión/solicitud (web mínima, herramienta/admin
-CLI u otro mecanismo), el modelo de roles/grupos, revocación, expiración,
-rotación y recuperación ante canje duplicado. Secretos/códigos deben almacenarse
-con hash; las operaciones administrativas y toda mutación de autorización deben
-ser auditables. Mantener fail-closed: un usuario sin autorización vigente no
-llega al Agent.
+CLI u otro mecanismo), el modelo de roles/grupos, aprobación/rechazo, expiración,
+rotación, revocación inmediata y recuperación ante canje duplicado o concurrente.
+Secretos/códigos deben almacenarse con hash, TTL y estado explícito; nunca se
+registran en claro. Las operaciones administrativas y toda mutación de
+autorización deben ser auditables con actor, timestamps y motivo. Mantener
+fail-closed: una solicitud pendiente, rechazada, expirada o revocada no llega al
+Agent. Añadir pruebas de replay, carrera de doble canje y revocación de una sesión
+ya autorizada.
 
 **Prioridad P0:** desbloquea pruebas controladas con múltiples personas y debe
 integrarse con la admission durable de `specs/013`, no mediante un bypass de la
@@ -345,6 +349,12 @@ transcrito etiquetado como DATA. Preservar `same bot_id + update_id => at most o
 Agent execution`, incluidos fallos tras descargar/transcribir; no reintentar ni
 reproducir automáticamente una transcripción ambigua. Definir límites explícitos
 de duración, tamaño, MIME/codec y política para audio sin habla o ilegible.
+El pipeline debe ser desacoplado y comprobable por etapas
+(`accepted → downloaded → transcoding/transcribing → transcribed → agent_started`),
+con estados durables suficientes para distinguir fallo seguro de resultado
+ambiguo. Sus señales de progreso serán eventos internos tipados y metadata-only,
+proyectados a la outbox por BL-32; ningún hook recibe o exporta audio/transcripción
+salvo el componente autorizado que la necesita.
 
 **Modelo inicial recomendado para benchmark:** `openai/whisper-large-v3-turbo`.
 En OpenRouter figura con formatos habituales de Telegram (incluido `ogg`) y coste
@@ -461,10 +471,16 @@ personal en logs/OTel, coste/uso auditables y presupuesto del run aplicado
 
 **Opciones a evaluar en el spec:** API de búsqueda (Brave/Serper/Tavily…) con
 clave por secretos + síntesis por el propio modelo, o un modelo con búsqueda
-nativa vía OpenRouter si existe y permite el Gateway. Decidir límites: nº de
-llamadas/run, tamaño de resultado, cache. **Prioridad P2** (valor alto de UX,
-no bloquea MVP). Al añadir capability: seguir `docs/adding-tools.md` + skill
-prompt + tests.
+nativa vía OpenRouter si existe y permite el Gateway. El resultado debe incluir
+fuentes/URLs y fecha de consulta suficientes para distinguir conocimiento del
+modelo de información recuperada; no presentar snippets como hechos verificados.
+Aplicar allow/deny de destinos, protección SSRF si se recuperan páginas, timeout,
+máximo de resultados/páginas/bytes, cache con TTL, rate limit y budget por run.
+No enviar memoria personal ni contexto conversacional completo al buscador: sólo
+la consulta mínima necesaria, advertir/confirmar antes de incluir datos sensibles
+y registrar metadata de proveedor/coste sin query ni contenido. **Prioridad P2**
+(valor alto de UX, no bloquea MVP). Al añadir capability: seguir
+`docs/adding-tools.md` + skill prompt + tests/evals de prompt injection web.
 
 ### BL-31 · Deduplicación de documentos por hash de contenido
 Comprobado que no existe: `storage_key` es UUID aleatorio (local y Supabase) y
@@ -492,25 +508,156 @@ sigue siendo único. Alternativas a evaluar: (a) acuse como chunk previo de la
 misma `logical_response`; (b) mensaje efímero borrado al responder (ensucia y
 necesita `deleteMessage`); (c) solo `typing` continuo (ya existe como BL-17,
 no basta para 15–30 s de visión). Propongo (a) con heuristic gate: media/flags
-por tipo de interacción (media ⇒ acuse; texto ⇒ no). **Prioridad P3** (pulir
-después del E2E de visión, donde la latencia real será medible).
+por tipo de interacción (media ⇒ acuse; texto ⇒ no).
+
+Generalizar el mecanismo como **eventos internos tipados de progreso**
+metadata-only (`operation_started`, `stage_changed`, `operation_succeeded`,
+`operation_failed`), vinculados a `interaction_id`/`correlation_id`. Productores
+como documentos, STT, búsqueda web o consolidación de memoria publican estados
+semánticos, no texto de canal; un proyector Telegram decide qué eventos merecen
+mensaje y los persiste primero en la outbox. Los hooks son puntos de extensión
+internos, explícitos y acotados del lifecycle —no plugins dinámicos—, con timeout,
+aislamiento de errores y allowlist de payload. No pueden alterar identidad,
+autorización, argumentos/resultados de tools ni convertir un fallo de delivery en
+repetición del Agent. **Prioridad P3** (pulir después del E2E de visión, donde la
+latencia real será medible).
+
+### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX)
+Ampliar Document Memory para recibir formatos ofimáticos habituales sin ejecutar
+macros, relaciones externas, objetos embebidos ni contenido activo. Implementar
+extractores deterministas detrás de un puerto de infraestructura: texto y tablas
+de DOCX, hojas/celdas relevantes de XLSX y texto/notas de PPTX; después reutilizar
+el pipeline de almacenamiento, extracción gobernada, provenance y propuestas
+existente. El contenido extraído sigue siendo DATA, nunca instrucciones.
+
+**Dependencia obligatoria:** BL-31 debe estar cerrado antes de activar esta
+capability para evitar almacenamiento y coste duplicados. Aplicar allowlist real
+por firma/MIME además de extensión, límites de bytes, entradas ZIP, ratio de
+compresión, profundidad, nº de hojas/diapositivas/filas/celdas, texto total y
+tiempo; rechazar cifrado/contraseña, macros y formatos legacy binarios inicialmente.
+No renderizar fórmulas ni seguir hyperlinks/conexiones externas. Conservar original
+y provenance, y declarar extracción parcial/truncada al usuario. **Prioridad P2.**
+**Criterio de cierre:** fixtures benignas y maliciosas (ZIP bomb, path traversal,
+macro, archivo renombrado y workbook desmesurado), deduplicación, aislamiento por
+usuario y E2E Telegram por cada formato soportado.
+
+### BL-13 · Memoria personal y consolidación gobernada «Dream»
+Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad
+propia de AncoraMind para aprender preferencias estables, hábitos útiles y estilo
+de interacción (idioma, longitud/tono, formatos, nombres/apodos frecuentes), sin
+confundirlos con datos canónicos ni con el resumen de contexto de BL-34.
+
+Un proceso incremental «Dream» revisa únicamente interacciones ya finalizadas
+desde un cursor durable, en lotes acotados, y produce **candidatos estructurados**
+con categoría, valor, confianza, evidencia/provenance, vigencia y posible conflicto.
+La inferencia pasa por `LLMAccess`, ruta lógica versionada, snapshot, budget, ledger
+de uso y telemetría metadata-only. El prompt vive en `prompts/`; historial,
+documentos y resultados de tools son DATA no confiable. Dream no puede editar
+prompts, `SOUL`, skills, archivos, permisos ni memoria canónica, ni crear nuevas
+capabilities. Un hook tipado post-interacción puede marcar trabajo pendiente, pero
+la consolidación se ejecuta fuera del request y nunca retrasa ni reejecuta la
+respuesta Telegram.
+
+**Política de promoción:** preferencias explícitas del usuario pueden activarse
+con alta confianza y auditoría; inferencias implícitas requieren repetición/evidencia
+suficiente o confirmación humana según sensibilidad. Correcciones explícitas
+reemplazan la versión anterior sin borrar provenance. Hechos sensibles, secretos,
+credenciales, instrucciones operativas, datos de terceros y estados pasajeros no
+se aprenden automáticamente. La memoria canónica siempre prevalece ante conflicto.
+El usuario debe poder consultar «qué sabes/prefieres sobre mí», corregir, olvidar,
+desactivar el aprendizaje y solicitar purga; estas mutaciones siguen gobernanza y
+quedan auditadas.
+
+Decidir en spec/ADR el almacenamiento: se recomienda modelo de dominio/repository
+propio en schema `ancora` para no atar el producto a Agno, con cifrado/retención y
+aislamiento por usuario, enmendando `docs/architecture.md` §7 si se aprueba. Evitar
+un blob opaco único: usar registros versionados y estados
+`candidate/active/rejected/superseded/deleted`. **Prioridad P2**, después del cierre
+operativo de BL-23; puede desarrollarse en paralelo a BL-34 una vez fijados sus
+contratos. **Criterio de cierre:** evals de preferencia explícita, repetición,
+contradicción/corrección, prompt injection, dato sensible, borrado y precedencia de
+memoria canónica; E2E que demuestre personalización posterior sin filtrar contenido.
+
+### BL-36 · API de aplicación multicanal para clientes web/backend
+Exponer las capacidades conversacionales y operativas de AncoraMind mediante una
+API HTTP versionada, para que una página web, aplicación móvil o pequeño backend
+(BFF) pueda ofrecer los mismos casos de uso disponibles desde Telegram sin
+duplicar lógica de negocio. No es un endpoint directo al modelo, a las tools o a
+los repositorios, ni una API compatible con OpenAI: es la API del producto y debe
+atravesar la misma admisión, identidad confiable, `GovernedInteractionRunner`,
+`LLMAccess`, budgets, propuestas/confirmaciones, auditoría y aislamiento por
+usuario que cualquier otro canal.
+
+**Contrato inicial recomendado:**
+
+- `POST /api/v1/interactions` acepta texto, `session_id` opcional y referencias a
+  adjuntos ya subidos; requiere `Idempotency-Key` y devuelve `202` con
+  `interaction_id`, `correlation_id` y estado, sin mantener una petición HTTP
+  abierta durante toda la inferencia.
+- `GET /api/v1/interactions/{id}` devuelve estado, progreso metadata-safe y la
+  respuesta final sólo al propietario; polling es suficiente para v1. WebSocket o
+  SSE queda como optimización posterior basada en eventos/outbox de BL-32, nunca
+  como streaming directo de tokens sin persistencia.
+- Endpoints autenticados para subir/consultar documentos y para consultar,
+  confirmar o rechazar `ActionProposal` reutilizan servicios existentes; no crean
+  rutas mutantes paralelas que eviten `propose_* → execute_*`.
+- Las sesiones son identificadores opacos scoped por usuario/canal. Una cuenta web
+  puede vincularse a la misma identidad AncoraMind que Telegram sólo mediante un
+  proceso explícito y auditable; nunca por nombre, email o heurística del LLM.
+
+Crear una admisión **agnóstica de canal** y un modelo de interacción común en el
+Core (`channel`, `external_interaction_id`, principal/user, payload cifrado,
+idempotency key, estado y deliveries), conservando un adaptador Telegram y un
+adaptador HTTP. La migración debe preservar la semántica actual
+`same source + external interaction/idempotency key => at most one Agent execution`
+y los estados `accepted → agent_started → terminal`; después de `agent_started`
+no hay replay automático. El runner debe recibir metadata neutral de canal en vez
+de exigir IDs Telegram, sin perder trazabilidad de los flujos existentes.
+
+**Seguridad/API:** autenticación real (OIDC/session para BFF o tokens API
+revocables y hasheados para integraciones), scopes/roles, rate/concurrency limits,
+límites de body/adjuntos, CORS deny-by-default, CSRF cuando haya cookies, rotación
+de credenciales y errores sin contenido personal. El `user_id` se deriva siempre
+del principal autenticado. Definir OpenAPI, schemas cerrados, versionado y
+compatibilidad; no exponer prompts, rutas físicas/modelos, secrets, argumentos
+internos de tools ni trazas. Aplicar la misma retención/cifrado y política
+metadata-only de specs/013.
+
+**Despliegue recomendado:** el navegador habla con un BFF pequeño, y el BFF con
+AncoraMind mediante la API; así las credenciales de servicio no llegan al cliente.
+Para un frontend first-party puede usarse cookie segura/OIDC contra el mismo host,
+pero la UI no forma parte de esta historia. **Prioridad P2**, después del cierre
+operativo de BL-23 y coordinada con BL-24 para identidades. **Criterio de cierre:**
+un cliente de referencia sin Telegram completa conversación, documento,
+consulta READ y propuesta/confirmación WRITE; duplicados ejecutan el Agent como
+máximo una vez; otro usuario no puede leer estado, respuesta, adjuntos ni
+propuestas; tests contract/unit/integration y E2E sobre Railway.
 
 ## P3 — Calidad del agente
 
-### Pregunta abierta (triage TODO 2026-09-20) · Política de ventana de contexto
-**Pregunta del propietario:** cuando la conversación en Telegram se hace muy
-larga, ¿existe política/mecanismo para limitar/adaptar el historial a la
-ventana de contexto del modelo? **Respuesta técnica actual:** mitigación
-parcial ya activa — `num_history_runs=10` fijo (factory gobernado y AgentOS
-legado) acota los turnos enviados; `add_history_to_context=True`. No hay
-recorte por tokens ni por ventana del modelo activo: 10 turnos con respuestas
-largas podrían aproximarse al límite en modelos pequeños, y se desperdicia
-ventana en modelos grandes. Abierto a decisión: mantener fijo, hacerlo
-configurable por ruta en runtime config (BL-23 ya provee el mecanismo de
-revisión), o recorte por presupuesto de tokens. Sin datos de incidencia aún;
-decidir tras medir uso real (relacionado con BL-13, memoria soft, y con la
-purga de sesiones de Agno — retención no definida para `agno_runtime`).
+### BL-34 · Política de contexto por tokens y compactación gobernada
+La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota
+turnos, pero no el tamaño real: diez respuestas largas pueden agotar modelos
+pequeños y desperdiciar ventana en modelos grandes. Sustituir el número fijo como
+protección principal por una política calculada desde la ventana efectiva de la
+ruta/modelo y el budget del run, reservando espacio explícito para instrucciones,
+mensaje actual, schemas/tools, respuesta y margen de seguridad.
 
+Cuando el historial no quepa, conservar mensajes recientes y generar un checkpoint
+compactado de lo anterior mediante una ruta lógica gobernada. El checkpoint debe
+ser reemplazable, versionado, acotado y enlazado al rango de mensajes que resume;
+no es memoria personal ni canónica y no puede introducir permisos, hechos no
+presentes o instrucciones provenientes de contenido no confiable. Si la
+compactación falla o excede budget, degradar de forma determinista a truncado
+seguro sin reintentos genéricos. Separar esta **memoria de trabajo** de BL-13:
+BL-34 mantiene continuidad de la conversación; BL-13 aprende preferencias
+duraderas con provenance y reglas distintas.
+
+Configurar umbrales por revisión de runtime, medir tokens estimados/reales y emitir
+eventos tipados metadata-only compatibles con BL-32. Definir además retención y
+purga de sesiones en `agno_runtime`. **Criterio de cierre:** tests con historiales
+largos, mensajes/tool calls grandes, cambio de modelo/ruta, compactación fallida y
+ausencia de contenido personal en logs/OTel.
 
 ### BL-8 · Evals agentic 🔶 en curso — specs/014
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a
@@ -590,15 +737,6 @@ versionar conservando datos, ejecución doble de `init.sql`, upgrade a head y
 downgrade `-1` que retira solo specs/013. Tres integration tests nuevos; Alembic
 y las revisiones se incluyen en la imagen Docker y Ruff/CI cubren `migrations/`.
 
-### BL-13 · Diseño Soft Personal memory (mini-ADR)
-La "memoria soft personal" (preferencias, personalización) está definida en
-`docs/architecture.md` §7 como "Agno (futuro) — Memory de Agno" pero no tiene
-ni diseño, ni spec, ni implementación. Mini-ADR que decida: qué persiste
-(idioma, formatos, apodos frecuentes...), dónde (Memory de Agno en
-`agno_database_url` — respetando separación de DBs §2.7) y cómo la consumen
-las tools.
-**Previsto para:** post-MVP (primero cerrar BL-1). No bloquea nada actual.
-
 ### BL-14 · Migrar infraestructura a Supabase 🔶 en curso — specs/007 + ADR-002
 **Decisión del propietario (2026-09-05):** trabajar con Supabase desde ya en
 vez de PostgreSQL en contenedor. **Hecho (2026-09-06):** migración baseline
@@ -645,7 +783,37 @@ NO instalado — diseño solo hasta BL-6.
 
 ---
 
-## Fuera de alcance ("not yet" — no abrir sin decisión explícita)
+## Opciones diferidas (no comprometidas; reevaluar sólo con caso de uso y spec)
 
-GraphRAG, vector search, multi-agent, WhatsApp, web frontend, microservices,
-event sourcing.
+- **Control visible del run:** `/stop` con cancelación cooperativa y gobernada, y
+  `/status` limitado a metadata no sensible. Requieren semántica durable ante
+  `agent_started`, tools/efectos externos y deliveries ambiguas; no son un simple
+  `task.cancel()` ni deben prometer rollback.
+- **Interfaces/canales adicionales:** una WebUI/TUI first-party completa y
+  Discord/Slack/Email/WhatsApp continúan diferidos. BL-36 sí compromete la API que
+  permite construir una página web o BFF pequeño; cada UI/canal adicional deberá
+  consumir esa frontera o implementar un adaptador con garantías equivalentes de
+  admisión, identidad y delivery. No compartir una identidad por heurística.
+- **Integraciones extensibles:** MCP, plugins dinámicos y skills instalables. Antes
+  exigen catálogo firmado/allowlisted, permisos por capability, sandboxing,
+  provenance y supply-chain policy. Los hooks internos tipados de BL-32/BL-13 no
+  implican abrir esta superficie.
+- **Automatizaciones agentic generales/cron, generación de imágenes y API
+  compatible con OpenAI:** valorar como capabilities separadas sólo cuando exista
+  una necesidad concreta, modelo de autorización, budget y auditoría. La API de
+  producto de BL-36 no implica compatibilidad con `/v1/chat/completions` ni expone
+  selección libre de modelo/tools.
+- GraphRAG, vector search, microservices y event sourcing continúan «not yet».
+
+## Decisiones explícitamente no adoptadas
+
+- Shell o filesystem generalistas accesibles al Agent/Dream; la infraestructura
+  usa puertos y operaciones específicas con allowlist.
+- Streaming directo de tokens a Telegram: la entrega continúa pasando por
+  respuesta lógica durable, render seguro y outbox.
+- Selección/cambio de modelo por usuario: las rutas son configuración operativa
+  versionada y gobernada (ADR-005), no una preferencia conversacional.
+- Reintentos genéricos de Agent/tools/acciones externas: sólo políticas específicas
+  que preserven idempotencia y distingan fallos seguros de efectos ambiguos.
+- Subagentes o delegación general mientras una capability/tool del agente principal
+  resuelva el caso; cualquier excepción requiere necesidad demostrada y ADR.
