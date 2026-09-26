@@ -54,3 +54,10 @@ metadata permitida por specs/013.
 4. `pytest tests/unit/test_eval_catalog.py` y Ruff pasan.
 5. Cambios de prompts/modelos/tools tienen una guía concreta para revisar los
    casos afectados; las evals LLM reales se dejan como siguiente incremento.
+
+## Siguiente incremento propuesto (no incluido en esta entrega)
+
+El piloto opcional de Jev como evaluador semántico se define en
+[`jev-pilot-proposal.md`](jev-pilot-proposal.md). No cambia los criterios de éxito
+anteriores ni implica integración del modelo, ejecución de evals contra el Agent
+o activación de un gate CI en el runner actual.

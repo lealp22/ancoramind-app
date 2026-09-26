@@ -68,6 +68,22 @@ confirmación). El runner comprueba que la lista existe y está bien formada,
 Agent gobernado queda pendiente; no confundir validación del catálogo con
 validación de respuestas reales.
 
+## Piloto propuesto: Jev como evaluador auxiliar (no implementado)
+
+La propuesta para el siguiente incremento de BL-8 está en
+[`specs/014-agentic-evals/jev-pilot-proposal.md`](../specs/014-agentic-evals/jev-pilot-proposal.md).
+El flujo previsto usa **solo casos y contextos sintéticos**: ejecutar el Agent
+gobernado en un entorno aislado, comprobar por código tools y confirmaciones,
+puntuar criterios semánticos de `response_style` con Jev de forma opcional y
+comparar sus juicios con etiquetas humanas y un baseline versionado.
+
+Jev no reemplazaría las aserciones sobre tools prohibidas, autorización o
+confirmaciones; una puntuación alta no convierte un caso fallido en aprobado.
+Antes de implementarlo hay que validar su API de decisiones a través de la
+frontera gobernada `LLMAccess`/Gateway, sin bypass directo a OpenRouter. El
+comando `python scripts/run_evals.py` **sigue validando solo el catálogo**: no
+ejecuta este flujo, no llama a Jev y no evalúa respuestas del Agent.
+
 ## Añadir o cambiar casos
 
 1. Añade el caso a la categoría más específica. El `id` debe comenzar por el

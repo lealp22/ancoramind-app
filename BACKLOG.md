@@ -22,7 +22,7 @@
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
-| BL-8 Evals agentic | 🔶 Base determinista implementada: 15 casos sintéticos + runner; pendiente evaluación contra Agent/modelo gobernado — specs/014 |
+| BL-8 Evals agentic | 🔶 Base determinista implementada: 19 casos sintéticos en seis categorías + runner; pendiente evaluación contra Agent/modelo gobernado — specs/014 |
 | BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
@@ -661,15 +661,25 @@ ausencia de contenido personal en logs/OTel.
 
 ### BL-8 · Evals agentic 🔶 en curso — specs/014
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a
-LLM/tools/servicios y 15 casos sintéticos iniciales para `confirmation`,
-`documents`, `security`, `tool_selection` y `vehicle`. El runner valida schema,
-cobertura, expectativas contradictorias y ausencia de secretos obvios; ejecutar
+LLM/tools/servicios y 19 casos sintéticos actuales para `confirmation`,
+`documents`, `response_style`, `security`, `tool_selection` y `vehicle` (15 en la
+entrega inicial). El runner valida schema, cobertura, expectativas
+contradictorias y ausencia de secretos obvios; ejecutar
 `python scripts/run_evals.py` tras cambios de prompts/models/tools.
 
 **Pendiente:** adaptar el catálogo para ejecutar un Agent gobernado y evaluar
 metadata permitida (tool/decisión/resultado), acordar scoring semántico y baseline
 por ruta lógica, y añadir la modalidad LLM al flujo CI/E2E con budget explícito.
 No almacenar contenido personal en datasets, outputs ni telemetría.
+
+**Propuesta para el siguiente incremento (2026-09-26; no implementada):** probar
+Jev como juez semántico *opcional* de los casos sintéticos de `response_style`,
+después de ejecutar el Agent gobernado y comprobar por código tools, resultados
+observables y confirmaciones. Comparar puntuaciones con etiquetas humanas y un
+baseline versionado antes de adoptar umbrales o CI; Jev no autoriza acciones ni
+sustituye los gates deterministas de seguridad. Ver
+`specs/014-agentic-evals/jev-pilot-proposal.md` para alcance, compatibilidad
+pendiente con `LLMAccess`/Gateway, presupuestos y criterios de decisión.
 
 **Candidatos para la fase LLM (registrados 2026-09-23, análisis de
 observabilidad; aún sin decisión):**
