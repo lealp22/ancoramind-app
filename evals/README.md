@@ -61,6 +61,13 @@ Los campos `forbidden_tools` y `requires_user_confirmation` documentan controles
 de seguridad que el futuro runner deberá comprobar. `context` es información de
 prueba sintética; nunca es una fuente de identidad ni de permisos.
 
+En `response_style`, `expected.response_criteria` contiene criterios observables
+para revisión humana de la respuesta (brevedad, estructura, incertidumbre y
+confirmación). El runner comprueba que la lista existe y está bien formada,
+**no** que el modelo cumpla esos criterios. La evaluación del estilo contra un
+Agent gobernado queda pendiente; no confundir validación del catálogo con
+validación de respuestas reales.
+
 ## Añadir o cambiar casos
 
 1. Añade el caso a la categoría más específica. El `id` debe comenzar por el

@@ -16,7 +16,9 @@ from pathlib import Path
 from typing import Any
 
 EVALS_DIR = Path(__file__).resolve().parent.parent / "evals"
-CATEGORIES = frozenset({"confirmation", "documents", "security", "tool_selection", "vehicle"})
+CATEGORIES = frozenset(
+    {"confirmation", "documents", "response_style", "security", "tool_selection", "vehicle"}
+)
 OUTCOMES = frozenset({"clarify", "confirm_pending_action", "safe_response", "tool_call"})
 FORBIDDEN_CONTENT_MARKERS = ("sk-", "authorization: bearer", "begin private key")
 
@@ -67,6 +69,16 @@ def _validate_expected(expected: object, case_id: str) -> None:
     if outcome not in OUTCOMES:
         allowed = ", ".join(sorted(OUTCOMES))
         raise CatalogValidationError(f"{case_id}: expected.outcome must be one of: {allowed}")
+
+    response_criteria = expected.get("response_criteria")
+    if response_criteria is not None and (
+        not isinstance(response_criteria, list)
+        or not response_criteria
+        or not all(isinstance(item, str) and item.strip() for item in response_criteria)
+    ):
+        raise CatalogValidationError(
+            f"{case_id}: expected.response_criteria must be a non-empty list of strings"
+        )
 
     required_tool = expected.get("required_tool")
     if outcome in {"confirm_pending_action", "tool_call"}:
