@@ -150,19 +150,10 @@ async def test_runner_scope_is_released_after_run() -> None:
         current_execution_context()
 
 
-async def test_runner_uses_automatic_document_tool_for_media(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_runner_passes_media_through_agent_arun() -> None:
+    """Attachments must flow through agent.arun() so the turn is persisted (BL-1)."""
     runner, factory = _runner()
-    captured: dict[str, Any] = {}
 
-    async def fake_analyze_document(run_context: Any, *, images: Any, files: Any) -> str:
-        captured["run_context"] = run_context
-        captured["images"] = images
-        captured["files"] = files
-        return "📄 **factura.png** recibido y archivado."
-
-    monkeypatch.setattr("src.agent.tools.documents.analyze_document", fake_analyze_document)
     output = await runner.run(
         "He adjuntado un documento.",
         user_id="88",
@@ -180,24 +171,30 @@ async def test_runner_uses_automatic_document_tool_for_media(
         ),
     )
 
-    assert output.startswith("📄")
-    assert factory.created_contexts == []
-    assert captured["run_context"].user_id == "88"
-    assert captured["images"][0].mime_type == "image/png"
-    assert captured["files"] is None
+    assert output == "respuesta gobernada"
+    assert len(factory.agent.calls) == 1
+    call = factory.agent.calls[0]
+    assert call["input_text"] == "He adjuntado un documento."
+    assert call["session_id"] == "tg:ancoramind:77"
+    assert call["images"][0].mime_type == "image/png"
+    assert call["files"] is None
+    # The Agent (not analyze_document directly) is created for media runs too.
+    assert len(factory.created_contexts) == 1
 
 
-async def test_runner_rejects_non_text_document_ingestion(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner, _ = _runner()
+async def test_runner_rejects_non_text_content_with_media() -> None:
+    runner, factory = _runner()
 
-    async def fake_analyze_document(run_context: Any, *, images: Any, files: Any) -> object:
-        return {"structured": True}
+    class _NonTextAgent:
+        async def arun(self, input_text: str, **kwargs: Any) -> Any:
+            class _Output:
+                content = {"structured": True}
 
-    monkeypatch.setattr("src.agent.tools.documents.analyze_document", fake_analyze_document)
+            return _Output()
 
-    with pytest.raises(ValueError, match="document ingestion returned non-text"):
+    factory.agent = _NonTextAgent()  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="non-text"):
         await runner.run(
             "He adjuntado un documento.",
             user_id="88",
@@ -214,6 +211,7 @@ async def test_runner_rejects_non_text_document_ingestion(
                 ),
             ),
         )
+
 
 
 async def test_runner_rejects_non_text_content() -> None:

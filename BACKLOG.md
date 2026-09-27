@@ -264,6 +264,20 @@ JSONB — `TypeError` que mataba el run tras la inferencia pagada (commit
 usage event bajo la interacción. Pendiente en M3: ruta visión (imagen/PDF)
 tras el rollout de Qwen r2; M4–M5 siguen pendientes de E2E.
 
+**Actualización 2026-09-27 (bug de continuidad conversacional tras adjunto ✅):**
+diagnosticado en producción vía Telegram: tras `analyze_document` procesar un
+`.txt`, una pregunta de seguimiento en el mismo hilo ("¿qué vas a hacer con esta
+información?") ignoraba por completo el documento — el LLM respondía sobre un
+tema anterior no relacionado. Causa: `GovernedInteractionRunner.run()` invocaba
+`analyze_document` directamente cuando había adjuntos, evitando `agent.arun()`;
+solo `arun()` persiste el turno en la `AgentSession` que alimenta
+`add_history_to_context`, así que el turno del documento nunca quedaba en el
+historial. Corregido eliminando esa rama: ahora todo run (con o sin adjuntos)
+pasa por `agent.arun(..., images=..., files=...)`, dejando que Agno invoque
+`analyze_document` como tool call normal y registre el turno. Tests actualizados
+en `test_governed_interaction_runner.py`; 506 unit tests, ruff y mypy en verde.
+Pendiente de re-validar en Telegram/Railway como parte del E2E de M3.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue

@@ -127,41 +127,27 @@ class GovernedInteractionRunner:
                         for item in media
                         if not item.is_image
                     ]
-                    if media:
-                        # Attachment ingestion is automatic M3 channel behavior.
-                        # It uses the existing tool under this execution context;
-                        # the nested extraction resolves ancoramind-vision.
-                        from src.agent.tools.documents import analyze_document
-
-                        document_output = await asyncio.wait_for(
-                            analyze_document(
-                                run_context,
-                                images=images or None,
-                                files=files or None,
-                            ),
-                            timeout=context.budget.seconds_remaining(),
-                        )
-                        if not isinstance(document_output, str):
-                            raise ValueError(
-                                "Governed document ingestion returned non-text content"
-                            )
-                        return document_output
-                    else:
-                        agent = self._factory.create_for_run(context)
-                        agent_output: RunOutput = await asyncio.wait_for(
-                            agent.arun(
-                                input_text,
-                                stream=False,
-                                user_id=user_id,
-                                session_id=session_id,
-                                run_id=run_id,
-                                run_context=run_context,
-                            ),
-                            timeout=context.budget.seconds_remaining(),
-                        )
-                        if not isinstance(agent_output.content, str):
-                            raise ValueError("Governed interaction run returned non-text content")
-                        return agent_output.content
+                    # Attachments are handled through the same agent.arun() call,
+                    # never by invoking analyze_document directly: only arun()
+                    # persists the turn into the session history, which the next
+                    # turn needs to follow up on a just-ingested document (BL-1).
+                    agent = self._factory.create_for_run(context)
+                    agent_output: RunOutput = await asyncio.wait_for(
+                        agent.arun(
+                            input_text,
+                            stream=False,
+                            user_id=user_id,
+                            session_id=session_id,
+                            run_id=run_id,
+                            run_context=run_context,
+                            images=images or None,
+                            files=files or None,
+                        ),
+                        timeout=context.budget.seconds_remaining(),
+                    )
+                    if not isinstance(agent_output.content, str):
+                        raise ValueError("Governed interaction run returned non-text content")
+                    return agent_output.content
                 except TimeoutError as exc:
                     get_telemetry().mark_error(span, "ExecutionBudgetExceededError")
                     get_telemetry().counter(
