@@ -29,7 +29,7 @@ git diff --check
 
 - `mypy src/` → éxito, 105 módulos comprobados (baseline: 93 errores en 14
   archivos).
-- `pytest tests/unit/ -q` → 498 passed.
+- `pytest tests/unit/ -q` → 506 passed.
 - `pytest tests/integration/ -q` → 71 passed.
 - `ruff check src/ tests/ scripts/ migrations/` → éxito.
 - `git diff --check` → éxito.

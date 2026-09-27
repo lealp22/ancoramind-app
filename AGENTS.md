@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-19
+> Última actualización: 2026-09-27
 
 ---
 
@@ -15,10 +15,10 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 493 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 506 unit
   tests + 71 integration tests; los integration requieren PostgreSQL/Docker
-  (se omiten sin esa infraestructura). Ruff limpio en
-  `src/ tests/ scripts/ migrations/` (gate global en CI).
+  (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios;
+  Ruff es gate global en CI y mypy sigue siendo informativo.
 
 ---
 
@@ -252,7 +252,7 @@ pip install -e ".[dev]"
 # Lint (gate global — también en CI)
 ruff check src/ tests/ scripts/ migrations/
 
-# Type checking (informativo; no es gate CI y actualmente tiene deuda previa)
+# Type checking (informativo; no es gate CI, limpio localmente desde specs/019)
 mypy src/
 ```
 

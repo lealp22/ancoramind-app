@@ -40,10 +40,9 @@ ruff check src/ tests/ scripts/ migrations/
   antes de comprobar mensajes de error: Windows PowerShell puede insertar saltos
   de línea al mostrar rutas con espacios (`The Bridge`), sin alterar el contrato
   de salida ni ocultar el código de salida no exitoso.
-- `python -m pytest tests/unit/ -q` → 493 passed.
+- `python -m pytest tests/unit/ -q` → 506 passed.
 - `python -m pytest tests/integration/ -q` → 71 passed.
 - `ruff check src/ tests/ scripts/ migrations/` and `git diff --check` → passed.
-- `mypy scripts/telegram_pairing.py` → passed. `mypy src/` still reports 93
-  pre-existing errors across 14 unrelated source files; it is informative only
-  and not a CI gate.
+- `mypy scripts/telegram_pairing.py` → passed. Desde specs/019, `mypy src/`
+  también está limpio (105 módulos); sigue siendo informativo y no es un gate CI.
 - No public webhook was registered and no Telegram account was contacted during this validation.

@@ -29,7 +29,7 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 498 unit + 71 integration — Ruff limpio en
+Tests: 506 unit + 71 integration — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -665,6 +665,13 @@ actual. El trabajo se hace por grupos cohesivos sin relajar configuración ni
 silenciar errores. Resultado: `mypy src/` limpio en 105 módulos; se corrigieron
 `GovernedInteractionRunner`, repositorios SQLAlchemy y helpers de tools. Ver
 `specs/019-mypy-hardening/`.
+
+### Propuesta · Convertir `mypy src/` en gate CI — specs/020
+
+`mypy src/` ya está limpio en 105 módulos bajo configuración estricta, pero sigue
+siendo un check local informativo. La propuesta 020 define la adopción explícita
+como gate, el orden del job, el criterio de rollback y la evidencia requerida; no
+modifica `.github/workflows/ci.yml` sin decisión de adopción.
 
 ### BL-34 · Política de contexto por tokens y compactación gobernada
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota

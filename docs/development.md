@@ -240,7 +240,7 @@ con `REMINDER_WORKER_ENABLED=false` y su cadencia se ajusta con
 ## Testing
 
 ```bash
-# Unit tests (378 passing — repos y clientes externos mockeados)
+# Unit tests (506 passing — repos y clientes externos mockeados)
 pytest tests/unit/
 
 # Integration tests (PostgreSQL real via docker compose — specs/009)
@@ -262,6 +262,7 @@ pytest tests/e2e/
 
 ```bash
 ruff check src/
+# Informativo local por ahora; `mypy src/` está limpio desde specs/019.
 mypy src/
 ```
 

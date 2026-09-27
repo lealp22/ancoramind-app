@@ -24,7 +24,7 @@ git diff --check
 - `python scripts/run_evals.py` → 19 casos válidos en seis categorías.
 - `pytest tests/unit/test_eval_catalog.py tests/unit/test_governed_evals.py -q`
   → 11 passed.
-- `pytest tests/unit/ -q` → 497 passed.
+- `pytest tests/unit/ -q` → 506 passed.
 - `pytest tests/integration/ -q` → 71 passed.
 - `mypy src/agent/evals.py` → sin issues.
 - `ruff check src/ tests/ scripts/ migrations/` y `git diff --check` → passed.

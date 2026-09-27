@@ -8,7 +8,7 @@
 | Parser Windows PowerShell | ✅ sintaxis válida |
 | `run-e2e.ps1 -Check -PublicBaseUrl … -EnvFile .env` | ✅ provider OpenRouter, Supabase y endpoint HTTPS validados sin efectos |
 | `pytest tests/unit/test_run_e2e_powershell.py -q` | ✅ 4 passed |
-| `pytest tests/unit/ -q` | ✅ 493 passed |
+| `pytest tests/unit/ -q` | ✅ 506 passed |
 | `pytest tests/integration/ -q` | ✅ 71 passed |
 | `ruff check src/ tests/ scripts/ migrations/` | ✅ limpio |
 
