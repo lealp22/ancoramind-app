@@ -173,5 +173,7 @@ async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> s
             f"   Inicio: {event.start_at.strftime('%Y-%m-%d %H:%M')}\n"
             f"   ID: `{event.id}`"
         )
+    except (KeyError, TypeError, ValueError) as e:
+        return f"❌ Datos de propuesta no válidos: {str(e)[:200]}"
     except Exception as e:
         return f"❌ Error al crear evento: {str(e)[:200]}"

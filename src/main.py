@@ -11,6 +11,11 @@ from typing import Any
 
 # Must be set before importing Agno so local execution has the same privacy
 # posture as the Docker image (specs/013 T10).
+# IMPORTANT: this must stay above the Agno imports below (import-time
+# side effect). Ruff's isort (rule I) will not reorder across this
+# assignment, but any manual edit or unrelated tool that reformats this
+# import block must preserve the ordering, or Agno telemetry will be
+# initialized before this override takes effect.
 os.environ["AGNO_TELEMETRY"] = "false"
 
 from agno.os.app import AgentOS

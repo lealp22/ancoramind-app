@@ -156,5 +156,7 @@ async def execute_vehicle_maintenance(run_context: RunContext, proposal_id: str)
         if payload.get("source_document_id"):
             lines.append(f"   Documento origen: `{payload['source_document_id']}`")
         return "\n".join(lines)
+    except (KeyError, TypeError, ValueError) as e:
+        return f"❌ Datos de propuesta no válidos: {str(e)[:200]}"
     except Exception as e:
         return f"❌ Error al registrar: {str(e)[:200]}"

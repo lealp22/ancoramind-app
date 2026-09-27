@@ -711,6 +711,36 @@ purga de sesiones en `agno_runtime`. **Criterio de cierre:** tests con historial
 largos, mensajes/tool calls grandes, cambio de modelo/ruta, compactación fallida y
 ausencia de contenido personal en logs/OTel.
 
+### BL-37 · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27)
+Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,
+`governed_model.py`, `governed_agent_factory.py`,
+`governed_interaction_runner.py`, tools de `todos`/`notes`/`maintenance`/
+`calendar`/`reminders`/`vehicles`, `repositories/actions.py`,
+`domain/llm_access/`, `storage/`, `domain/interactions/commands.py` y
+`notifications/markup.py`: no se detectó drift arquitectónico respecto a
+AGENTS.md §2 ni a los ADRs vigentes. Dos gaps de configuración de gates quedan
+pendientes de decisión de prioridad (no aplicados directamente por ser cambios
+de policy transversal, no fixes puntuales de código):
+
+- **Ruff sin reglas de docstrings** (`D`) ni de seguridad (`S`) en
+  `pyproject.toml` `[tool.ruff.lint]`, pese a que el docstring de cada tool en
+  `src/agent/tools/` es el contrato/schema que ve el LLM (AGENTS.md §4).
+  Evaluar activar `D` al menos sobre `src/agent/tools/` vía `per-file-ignores`
+  inverso, y `S` sobre todo `src/` si el ruido de falsos positivos es
+  manejable.
+- **`pytest-cov` instalado sin `--cov-fail-under`** en
+  `[tool.pytest.ini_options]`: la cobertura se mide pero no es un gate real de
+  CI. Fijar un umbral y añadirlo al pipeline una vez medida la cobertura base
+  actual.
+
+Los hallazgos de menor severidad (mensajes de error genéricos sin distinguir
+payload inválido de fallo de infraestructura en `calendar.py`, `reminders.py`
+y `maintenance.py`) se corrigieron directamente en la misma fecha: se añadió
+`except (KeyError, TypeError, ValueError)` antes del `except Exception`
+genérico, siguiendo el patrón ya existente en `vehicles.py`/`todos.py`.
+**Criterio de cierre:** decidir y, si se aprueba, aplicar `D`/`S` con
+`ruff check` limpio, y `--cov-fail-under` con `pytest tests/unit/` en verde.
+
 ### BL-8 · Evals agentic 🔶 en curso — specs/014 + 018
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a
 LLM/tools/servicios y 19 casos sintéticos actuales para `confirmation`,

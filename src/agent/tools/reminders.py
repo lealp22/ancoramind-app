@@ -136,5 +136,7 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
             f"   Cuándo: {reminder.trigger_at.strftime('%Y-%m-%d %H:%M')}\n"
             f"   ID: `{reminder.id}`"
         )
+    except (KeyError, TypeError, ValueError) as e:
+        return f"❌ Datos de propuesta no válidos: {str(e)[:200]}"
     except Exception as e:
         return f"❌ Error al crear recordatorio: {str(e)[:200]}"
