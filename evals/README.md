@@ -7,12 +7,20 @@ sintéticos.
 
 ## Alcance de esta primera entrega
 
-El runner actual es **determinista**: comprueba que todos los catálogos cumplen
-el contrato y permite revisar los casos de forma reproducible. No llama a un LLM,
-no ejecuta tools y no evalúa todavía respuestas en lenguaje natural. La siguiente
-iteración podrá consumir el mismo formato contra un Agent gobernado, capturando
-solamente metadatos permitidos (tool elegida, resultado, decisión y versión de
-prompt/modelo).
+El comando `scripts/run_evals.py` es **determinista**: comprueba que todos los
+catálogos cumplen el contrato y permite revisar los casos de forma reproducible.
+No llama a un LLM, no ejecuta tools y no evalúa respuestas en lenguaje natural.
+
+La spec 018 añade `src.agent.evals`, un harness asíncrono aislado para
+materializar esos mismos casos, inyectar un executor sintético y comprobar por
+código outcome, tool requerida/vetada y confirmación. El harness no crea Agent,
+provider, `LLMAccess`, sesión de DB ni tools de producción; inputs, contextos y
+respuestas quedan en memoria, y sus reportes excluyen esos contenidos.
+
+El adaptador posterior contra un Agent gobernado sigue pendiente: deberá pasar
+por `LLMAccess`/Gateway, usar `RuntimeConfigSnapshot` y budget propios de
+evaluación, e inyectar únicamente tools simuladas sin I/O. No se habilitará en
+CI ni con credenciales reales sin aprobación explícita.
 
 ```powershell
 # Validar todos los catálogos
@@ -72,10 +80,10 @@ validación de respuestas reales.
 
 La propuesta para el siguiente incremento de BL-8 está en
 [`specs/014-agentic-evals/jev-pilot-proposal.md`](../specs/014-agentic-evals/jev-pilot-proposal.md).
-El flujo previsto usa **solo casos y contextos sintéticos**: ejecutar el Agent
-gobernado en un entorno aislado, comprobar por código tools y confirmaciones,
-puntuar criterios semánticos de `response_style` con Jev de forma opcional y
-comparar sus juicios con etiquetas humanas y un baseline versionado.
+El flujo previsto usa **solo casos y contextos sintéticos**: tras el adaptador
+gobernado aislado, comprobar por código tools y confirmaciones, puntuar criterios
+semánticos de `response_style` con Jev de forma opcional y comparar sus juicios
+con etiquetas humanas y un baseline versionado.
 
 Jev no reemplazaría las aserciones sobre tools prohibidas, autorización o
 confirmaciones; una puntuación alta no convierte un caso fallido en aprobado.

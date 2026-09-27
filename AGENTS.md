@@ -125,12 +125,13 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             008-railway-deployment, 009-integration-tests,
                             010-reminder-worker, 011-todo-lists, 012-fastapi-lifespan,
                             013-llm-access-governance (T2–T14 implementados localmente),
-                            014-agentic-evals (base determinista implementada),
+                            014-agentic-evals (base determinista) +
+                            018-agentic-evals-execution-harness (harness aislado),
                             015-powershell-e2e (implementada),
                             016-health-dashboard (en curso — BL-33)
-tests/unit/              ← 378 tests
-tests/integration/        ← 60 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
-evals/                   ← Catálogos versionados de evals agentic (BL-8/specs/014)
+tests/unit/              ← 493 tests
+tests/integration/        ← 71 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, deployment-railway, runbooks-013
                            (operación specs/013), adding-tools (guía para nuevas
@@ -302,7 +303,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-8 Evals agentic | 🔶 Base determinista implementada: 15 casos sintéticos + runner; pendiente evaluación contra Agent/modelo gobernado (specs/014) |
+| BL-8 Evals agentic | 🔶 19 casos sintéticos, runner estático y harness aislado; pendiente adaptador contra Agent/LLM gobernado (specs/014 + 018) |
 | BL-18 Railway como sustituto de ngrok | 🔶 Servicio/dominio/webhook/healthcheck reales validados; pendiente Wait for CI + E2E M3–M5 (specs/008) |
 | BL-25 Script E2E nativo PowerShell | ✅ `run-e2e.ps1` local/remoto con `.env` seguro (specs/015) |
 | BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T14 implementados; T14 fase 6 (cambio de modelo en caliente) validado en Railway (2026-09-19); pendientes: rollout Collector/Grafana, E2E completo y rotaciones (specs/013) |
