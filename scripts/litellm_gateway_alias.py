@@ -10,7 +10,7 @@ Usage (PowerShell), against the private Railway service:
   python scripts/litellm_gateway_alias.py verify
 
   python scripts/litellm_gateway_alias.py publish `
-    --alias ancoramind-default-r2 --model openrouter/gpt-5.6-luna
+    --alias ancoramind-default-r3 --model openrouter/gpt-6-luna
 
   $env:LITELLM_PROXY_VIRTUAL_KEY='sk-ancoramind'
   python scripts/litellm_gateway_alias.py grant --alias ancoramind-default-r2
@@ -373,7 +373,7 @@ def _parse_args() -> argparse.Namespace:
 
     publish = subcommands.add_parser("publish", help="Publish a new versioned alias")
     publish.add_argument("--alias", required=True, help="e.g. ancoramind-default-r2")
-    publish.add_argument("--model", required=True, help="e.g. openrouter/gpt-5.6-luna")
+    publish.add_argument("--model", required=True, help="e.g. openrouter/gpt-6-luna")
     publish.add_argument("--rpm", type=int, default=DEFAULT_RPM)
     publish.add_argument("--tpm", type=int, default=DEFAULT_TPM)
     publish.add_argument("--force", action="store_true", help="Publish even if it already exists")

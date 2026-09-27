@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-27
+Última actualización: 2026-09-28
 
 ---
 
@@ -24,12 +24,12 @@
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 19 casos sintéticos, runner estático y harness aislado; pendiente adaptador contra Agent/LLM gobernado — specs/014 + 018 |
 | BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
-| BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 (cambio de modelo en caliente) validada en Railway (2026-09-19); pendiente verificar matriz A–Y completa (caída Gateway/circuit, Collector/Grafana, benchmark con clave real, reconciliación de costes, rotación) — specs/013 |
+| BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 506 unit + 71 integration — Ruff limpio en
+Tests: 509 unit + 71 integration — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -879,6 +879,7 @@ NO instalado — diseño solo hasta BL-6.
 | BL-25 · Script E2E nativo para PowerShell | specs/015 | 2026-09-19 |
 | BL-28 · Comandos de bot deterministas (`/new`, `/help`; sin IA, outbox durable, generaciones de sesión en el ledger, `ancora.command` en la allowlist) | — (BL-28) | 2026-09-20 |
 | BL-29 · Renderizado Markdown → HTML de Telegram (whitelist de tags, escaping total, fallback texto plano, retry ante rechazo de markup) | — (BL-29) | 2026-09-20 |
+| Preparación del cambio de modelo por defecto GPT-5.6 Luna → GPT-6 Luna (fallback directo + candidato gobernado `ancoramind-default-r3` + pricing y runbook; rollout remoto registrado en BL-23) | specs/013 + ADR-005 | 2026-09-28 |
 
 ---
 

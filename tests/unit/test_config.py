@@ -36,7 +36,7 @@ class TestSettings:
         monkeypatch.delenv("APP_DEBUG", raising=False)
 
         settings = Settings(_env_file=None)
-        assert settings.llm_model == "gpt-5.6-luna"
+        assert settings.llm_model == "gpt-6-luna"
         assert settings.agent_tool_call_limit == 12
         assert settings.litellm_proxy_enabled is False
         assert settings.app_env == "development"
@@ -56,13 +56,13 @@ class TestSettings:
 
     def test_env_override(self, monkeypatch):
         """Environment variables should override defaults."""
-        monkeypatch.setenv("LLM_MODEL", "gpt-5.6-luna")
+        monkeypatch.setenv("LLM_MODEL", "custom-model")
         monkeypatch.setenv("AGENT_TOOL_CALL_LIMIT", "5")
         monkeypatch.setenv("APP_ENV", "production")
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
 
         settings = Settings(_env_file=None)
-        assert settings.llm_model == "gpt-5.6-luna"
+        assert settings.llm_model == "custom-model"
         assert settings.agent_tool_call_limit == 5
         assert settings.app_env == "production"
         assert settings.log_level == "DEBUG"

@@ -138,7 +138,7 @@ Editar `.env` con tus valores reales:
 # Opción 1: OpenAI
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-tu-api-key-real-aqui
-LLM_MODEL=gpt-5.6-luna
+LLM_MODEL=gpt-6-luna
 
 # Opción 2: OpenRouter (ver sección 4.5)
 # LLM_PROVIDER=openrouter
@@ -180,7 +180,7 @@ AncoraMind soporta **tres tipos de proveedor** mediante `LLM_PROVIDER`:
 ```env
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-LLM_MODEL=gpt-5.6-luna
+LLM_MODEL=gpt-6-luna
 ```
 
 ### OpenRouter
@@ -200,7 +200,7 @@ El `base_url` (`https://openrouter.ai/api/v1`) es automático.
 | Modelo | `LLM_MODEL` |
 |---|---|
 | Claude 3.5 Sonnet | `anthropic/claude-3.5-sonnet` |
-| GPT-5.6 Luna | `openai/gpt-5.6-luna` |
+| GPT-6 Luna | `openai/gpt-6-luna` |
 | Gemini 2.0 Flash | `google/gemini-2.0-flash` |
 | Llama 3.3 70B | `meta-llama/llama-3.3-70b-instruct` |
 | DeepSeek R1 | `deepseek/deepseek-r1` |
@@ -327,7 +327,7 @@ Salida esperada:
 ```
 [INFO] src.main: Starting AncoraMind — env: development
 [INFO] src.main: Domain database initialized
-[INFO] src.main: LLM provider: openai | model: gpt-5.6-luna
+[INFO] src.main: LLM provider: openai | model: gpt-6-luna
 [INFO] src.main: Loaded 6 instruction blocks
 [INFO] src.main: Note tools registered: remember_note, search_notes
 [INFO] src.main: Document tools registered: search_documents, get_document, analyze_document

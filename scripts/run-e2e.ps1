@@ -384,7 +384,7 @@ try {
     Write-Host "  Provider:  $($configuration.Provider)"
     $model = Get-EnvironmentValue "LLM_MODEL"
     if ([string]::IsNullOrWhiteSpace($model)) {
-        $model = "gpt-5.6-luna"
+        $model = "gpt-6-luna"
     }
     Write-Host "  Model:     $model"
     Write-Host "  Webhook:   $webhookUrl"

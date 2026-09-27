@@ -276,7 +276,7 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LLM_PROVIDER` | `openai` \| `openrouter` \| `openai-like` | `openai` |
 | `OPENAI_API_KEY` | API key (openai y openai-like) | — |
 | `OPENROUTER_API_KEY` | API key (openrouter) | — |
-| `LLM_MODEL` | Modelo | `gpt-5.6-luna` |
+| `LLM_MODEL` | Modelo | `gpt-6-luna` |
 | `LLM_BASE_URL` | Endpoint custom (obligatorio en `openai-like`) | — |
 | `AGENT_TOOL_CALL_LIMIT` | Límite duro de tools por ejecución; evita bucles de tool-calling | `8` |
 | `TELEGRAM_TOKEN` | Token del bot (de @BotFather) | — |
@@ -326,7 +326,7 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LITELLM_PROXY_ENABLED` | T11: enruta toda la inferencia por el Gateway privado (fail-closed) | `false` |
 | `LITELLM_PROXY_BASE_URL` | URL privada del LiteLLM Proxy (requerida si el modo está activo) | — |
 | `LITELLM_PROXY_VIRTUAL_KEY` | Key exclusiva AncoraMind creada con el script T11 | — |
-| `LITELLM_PROXY_DEFAULT_ROUTE` | Alias del Gateway usado por el AgentOS legado | `ancoramind-default-r1` |
+| `LITELLM_PROXY_DEFAULT_ROUTE` | Alias base garantizado usado por el AgentOS legado; el runtime gobernado usa su revisión activa | `ancoramind-default-r1` |
 | `LITELLM_VIRTUAL_KEY_RPM` | T12: RPM por virtual key en la creación de la key | `60` |
 | `LITELLM_VIRTUAL_KEY_TPM` | T12: TPM por virtual key en la creación de la key | `250000` |
 | `LITELLM_VIRTUAL_KEY_MAX_PARALLEL_REQUESTS` | T12: max parallel por virtual key | `4` |

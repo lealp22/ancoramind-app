@@ -123,19 +123,31 @@ $env:LITELLM_PROXY_VIRTUAL_KEY='<sk-virtual-ancoramind>'
 # 1. Estado actual: qué hay y de dónde viene
 python scripts/litellm_gateway_alias.py verify
 
-# 2. Publicar la nueva generación (sin reiniciar el Gateway)
+# 2. Publicar GPT-6 Luna como nueva generación (sin reiniciar el Gateway)
 python scripts/litellm_gateway_alias.py --dry-run publish `
-  --alias ancoramind-default-r2 --model openrouter/gpt-5.6-luna
+  --alias ancoramind-default-r3 --model openrouter/gpt-6-luna
 python scripts/litellm_gateway_alias.py publish `
-  --alias ancoramind-default-r2 --model openrouter/gpt-5.6-luna
+  --alias ancoramind-default-r3 --model openrouter/gpt-6-luna
 
-# 3. Autorizar el alias en la virtual key (aditivo: conserva r1 para el rollback)
-python scripts/litellm_gateway_alias.py grant --alias ancoramind-default-r2
+# 3. Autorizar el alias en la virtual key (aditivo: conserva r2 para el rollback)
+python scripts/litellm_gateway_alias.py grant --alias ancoramind-default-r3
 
 # 4. Verificar publicación y, opcionalmente, una inferencia real
-python scripts/litellm_gateway_alias.py verify --alias ancoramind-default-r2
-python scripts/litellm_gateway_alias.py verify --alias ancoramind-default-r2 --smoke
+python scripts/litellm_gateway_alias.py verify --alias ancoramind-default-r3
+python scripts/litellm_gateway_alias.py verify --alias ancoramind-default-r3 --smoke
 ```
+
+El candidato versionado para este cambio está en
+`specs/013-llm-access-governance/configs/ancoramind-default-r3.json`. Apunta sólo
+la ruta lógica `ancoramind-default` a `ancoramind-default-r3` y registra el
+pricing aprobado de GPT-6 Luna: 0,10 USD por millón de tokens de entrada y 0,50
+USD por millón de tokens de salida. `ancoramind-fast` y `ancoramind-vision` no
+cambian.
+
+**Estado (2026-09-28):** candidato, defaults directos, pruebas y documentación
+preparados localmente. La publicación de `r3`, su `grant`, el smoke y la
+activación CAS en Railway quedan pendientes y deben ejecutarse desde un entorno
+de operador autorizado. Hasta entonces, la revisión activa remota no cambia.
 
 5. Crear y activar la revisión de runtime config que apunte al alias nuevo
    (misma secuencia CAS de §8; el cambio alcanza a los runs nuevos sin reiniciar
@@ -155,7 +167,7 @@ python scripts/runtime_config.py activate --base-url <app-url> `
 6. Confirmar una inferencia real de Telegram y el `effective_gateway_route`
    esperado en `ancora.llm_usage_events`.
 
-**Rollback:** activar de nuevo la revisión anterior. El alias previo sigue
+**Rollback:** activar de nuevo la revisión anterior que apunta a `r2`. El alias previo sigue
 publicado y autorizado porque `grant` es aditivo; no hay que recrear la key.
 
 ### 2.3 Ruta de visión para documentos (Qwen)

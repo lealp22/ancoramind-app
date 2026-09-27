@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-27
+> Última actualización: 2026-09-28
 
 ---
 
@@ -15,7 +15,7 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 506 unit
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 509 unit
   tests + 71 integration tests; los integration requieren PostgreSQL/Docker
   (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios; ambos son
   gates globales en CI.
@@ -129,7 +129,7 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             018-agentic-evals-execution-harness (harness aislado),
                             015-powershell-e2e (implementada),
                             016-health-dashboard (en curso — BL-33)
-tests/unit/              ← 493 tests
+tests/unit/              ← 509 tests
 tests/integration/        ← 71 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
 docs/                    ← architecture, governance, development, quick-start,
@@ -198,8 +198,10 @@ La virtual key se crea con `scripts/litellm_create_virtual_key.py`; los secretos
 del provider viven sólo en el Gateway (`gateway/litellm-config.yaml` no contiene
 secretos). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
 
-Modelo default: `gpt-5.6-luna`. Los modelos free de OpenRouter caducan —
-si hay error 404, cambiar `LLM_MODEL` en `.env`.
+Modelo default para acceso directo/desarrollo: `gpt-6-luna`. Con el Gateway,
+GPT-6 Luna usa el alias gobernado `ancoramind-default-r3` tras publicarlo y
+activar su revisión runtime. Los modelos free de OpenRouter caducan — si hay
+error 404, cambiar `LLM_MODEL` en `.env`.
 
 **Cambiar el modelo físico (ADR-005, enmendado 2026-09-18):** con el Gateway
 activo `LLM_PROVIDER`/`LLM_MODEL` se ignoran. El cambio se hace publicando un

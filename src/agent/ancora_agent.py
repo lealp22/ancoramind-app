@@ -112,7 +112,7 @@ def create_db(db_url: str | None = None) -> PostgresDb | SqliteDb:
 
 def resolve_model_parts(
     provider: str = "openai",
-    model_id: str = "gpt-5.6-luna",
+    model_id: str = "gpt-6-luna",
     base_url: str | None = None,
     api_key: str | None = None,
 ) -> tuple[type[Model], dict[str, Any]]:
@@ -165,7 +165,7 @@ def resolve_model_parts(
 
 def create_model(
     provider: str = "openai",
-    model_id: str = "gpt-5.6-luna",
+    model_id: str = "gpt-6-luna",
     base_url: str | None = None,
     api_key: str | None = None,
     retries: int = 0,
@@ -180,7 +180,7 @@ def create_model(
 
     Args:
         provider: One of "openai", "openrouter", "openai-like".
-        model_id: Model ID (e.g. "gpt-5.6-luna", "anthropic/claude-3.5-sonnet").
+        model_id: Model ID (e.g. "gpt-6-luna", "anthropic/claude-3.5-sonnet").
         base_url: Custom base URL (required for openai-like).
         api_key: Optional API key override (otherwise from env vars).
         retries: Model-level retries; the approved policy is explicitly 0.

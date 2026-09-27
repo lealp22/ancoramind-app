@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
@@ -33,6 +35,36 @@ def test_bootstrap_is_valid_and_checksum_is_deterministic() -> None:
     assert config_checksum(config) == config_checksum(
         RuntimeConfiguration.model_validate(reordered)
     )
+
+
+def test_bootstrap_keeps_the_guaranteed_base_alias_until_runtime_activation() -> None:
+    config = bootstrap_runtime_configuration()
+
+    assert config.routing.routes["ancoramind-default"].effective_gateway_route == (
+        "ancoramind-default-r1"
+    )
+
+
+def test_gpt_6_luna_runtime_candidate_is_valid() -> None:
+    candidate_path = (
+        Path(__file__).parents[2]
+        / "specs"
+        / "013-llm-access-governance"
+        / "configs"
+        / "ancoramind-default-r3.json"
+    )
+    payload = json.loads(candidate_path.read_text(encoding="utf-8"))
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is True
+    assert payload["routing"]["routes"]["ancoramind-default"]["effective_gateway_route"] == (
+        "ancoramind-default-r3"
+    )
+    assert payload["pricing"]["routes"]["ancoramind-default-r3"] == {
+        "input_cost_per_1m_usd": 0.1,
+        "output_cost_per_1m_usd": 0.5,
+    }
 
 
 def test_schema_rejects_unknown_fields_at_any_depth() -> None:

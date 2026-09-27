@@ -48,6 +48,14 @@ def test_create_model_uses_safe_openrouter_adapter():
     assert model.retries == 0
 
 
+def test_create_model_defaults_to_gpt_6_luna():
+    model = create_model(api_key="test-key")
+
+    assert isinstance(model, OpenAIChat)
+    assert model.id == "gpt-6-luna"
+    assert model.retries == 0
+
+
 def test_create_model_from_settings_resolves_openrouter_api_key():
     settings = Settings(
         llm_provider="openrouter",
@@ -65,14 +73,14 @@ def test_create_model_from_settings_resolves_openrouter_api_key():
 def test_create_model_from_settings_resolves_openai_api_key():
     settings = Settings(
         llm_provider="openai",
-        llm_model="gpt-5.6-luna",
+        llm_model="gpt-6-luna",
         openai_api_key="test-key",
     )
 
     model = create_model_from_settings(settings)
 
     assert isinstance(model, OpenAIChat)
-    assert model.id == "gpt-5.6-luna"
+    assert model.id == "gpt-6-luna"
     assert model.retries == 0
 
 
