@@ -226,6 +226,9 @@ CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_requests (
 CREATE INDEX IF NOT EXISTS idx_pairing_requests_pending
     ON ancora.telegram_pairing_requests(requested_at)
     WHERE status = 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pairing_requests_one_pending_per_user
+    ON ancora.telegram_pairing_requests(telegram_user_id)
+    WHERE status = 'pending';
 
 CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_authorizations (
     telegram_user_id BIGINT PRIMARY KEY,

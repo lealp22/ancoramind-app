@@ -45,10 +45,15 @@ metadata only.
   invitation revoke and authorization revoke.
 - Disabled-by-default protected admin endpoints for issue, approval and revoke.
 
+## Atomic redemption increment (2026-09-27)
+
+- `redeem_invitation()` locks by Telegram user and invitation row, creates a
+  pending request once, consumes capacity atomically and returns typed outcomes
+  without retaining the raw code.
+- Operator API lists bounded pending work and rejects requests with actor/reason.
+
 ## Next increment
 
-- Atomic redeem endpoint/domain path, including expiration/use-capacity,
-  duplicate/concurrent redemption and pending-request handling.
 - `/pair <code>` deterministic command/outbox response and admission integration
   that checks active authorizations without bypassing existing controls.
-- Request listing/rejection, integration tests, Railway E2E and runbook.
+- Railway E2E and runbook.

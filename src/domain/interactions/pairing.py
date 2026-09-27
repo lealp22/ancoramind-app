@@ -26,6 +26,18 @@ class PairingRequestStatus(StrEnum):
     REVOKED = "revoked"
 
 
+class PairingRedemptionStatus(StrEnum):
+    """Deterministic outcomes consumed later by the pre-Agent `/pair` command."""
+
+    PENDING = "pending"
+    ALREADY_PENDING = "already_pending"
+    ALREADY_DECIDED = "already_decided"
+    INVALID = "invalid"
+    EXPIRED = "expired"
+    EXHAUSTED = "exhausted"
+    REVOKED = "revoked"
+
+
 class PairingInvitation(BaseModel):
     """Auditable invitation metadata; the redeemable code is never persisted."""
 
@@ -58,6 +70,14 @@ class PairingRequest(BaseModel):
     decision_reason: str | None = None
     decided_at: datetime | None = None
 
+
+class PairingRedemption(BaseModel):
+    """Metadata-only result of a code redemption attempt; it never contains the code."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: PairingRedemptionStatus
+    request: PairingRequest | None = None
 
 class PairingInvitationCreate(BaseModel):
     """Validated operator input for one bounded, temporary invitation."""

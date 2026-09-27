@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.interactions.pairing import (
     PairingInvitation,
+    PairingRedemption,
+    PairingRedemptionStatus,
     PairingRequest,
 )
 
@@ -19,6 +21,191 @@ class TelegramPairingRepository:
 
     def __init__(self, session: AsyncSession):
         self._session = session
+
+    async def redeem_invitation(
+        self,
+        *,
+        code_hash: str,
+        telegram_user_id: int,
+    ) -> PairingRedemption:
+        """Atomically create one pending request without persisting the raw code.
+
+        The user advisory lock serializes redemption across distinct invitations,
+        while ``FOR UPDATE`` serializes consumption of one invitation's capacity.
+        This deliberately returns typed metadata only; the channel adapter decides
+        later which fixed user-facing reply is safe to disclose.
+        """
+        now = datetime.now(tz=UTC)
+        try:
+            await self._session.execute(
+                text("SELECT pg_advisory_xact_lock(:telegram_user_id)"),
+                {"telegram_user_id": telegram_user_id},
+            )
+            pending = await self._session.execute(
+                text("""
+                    SELECT id, invitation_id, telegram_user_id, status, requested_at,
+                        decided_by, decision_reason, decided_at
+                    FROM ancora.telegram_pairing_requests
+                    WHERE telegram_user_id = :telegram_user_id AND status = 'pending'
+                    FOR UPDATE
+                """),
+                {"telegram_user_id": telegram_user_id},
+            )
+            pending_row = pending.fetchone()
+            if pending_row is not None:
+                await self._session.commit()
+                return PairingRedemption(
+                    status=PairingRedemptionStatus.ALREADY_PENDING,
+                    request=self._request_from_row(pending_row),
+                )
+
+            invitation_result = await self._session.execute(
+                text("""
+                    SELECT id, status, max_uses, use_count, expires_at
+                    FROM ancora.telegram_pairing_invitations
+                    WHERE code_hash = :code_hash
+                    FOR UPDATE
+                """),
+                {"code_hash": code_hash},
+            )
+            invitation = invitation_result.fetchone()
+            if invitation is None:
+                await self._session.commit()
+                return PairingRedemption(status=PairingRedemptionStatus.INVALID)
+
+            existing = await self._session.execute(
+                text("""
+                    SELECT id, invitation_id, telegram_user_id, status, requested_at,
+                        decided_by, decision_reason, decided_at
+                    FROM ancora.telegram_pairing_requests
+                    WHERE invitation_id = :invitation_id AND telegram_user_id = :telegram_user_id
+                    FOR UPDATE
+                """),
+                {"invitation_id": invitation.id, "telegram_user_id": telegram_user_id},
+            )
+            existing_row = existing.fetchone()
+            if existing_row is not None:
+                await self._session.commit()
+                return PairingRedemption(
+                    status=(
+                        PairingRedemptionStatus.ALREADY_PENDING
+                        if existing_row.status == "pending"
+                        else PairingRedemptionStatus.ALREADY_DECIDED
+                    ),
+                    request=self._request_from_row(existing_row),
+                )
+
+            if invitation.expires_at <= now:
+                if invitation.status == "active":
+                    await self._session.execute(
+                        text("""
+                            UPDATE ancora.telegram_pairing_invitations
+                            SET status = 'expired'
+                            WHERE id = :id AND status = 'active'
+                        """),
+                        {"id": invitation.id},
+                    )
+                await self._session.commit()
+                return PairingRedemption(status=PairingRedemptionStatus.EXPIRED)
+            if invitation.status == "revoked":
+                await self._session.commit()
+                return PairingRedemption(status=PairingRedemptionStatus.REVOKED)
+            if invitation.status == "exhausted" or invitation.use_count >= invitation.max_uses:
+                if invitation.status == "active":
+                    await self._session.execute(
+                        text("""
+                            UPDATE ancora.telegram_pairing_invitations
+                            SET status = 'exhausted'
+                            WHERE id = :id AND status = 'active'
+                        """),
+                        {"id": invitation.id},
+                    )
+                await self._session.commit()
+                return PairingRedemption(status=PairingRedemptionStatus.EXHAUSTED)
+            if invitation.status != "active":  # defensive for unexpected persisted statuses
+                await self._session.commit()
+                return PairingRedemption(status=PairingRedemptionStatus.INVALID)
+
+            created = await self._session.execute(
+                text("""
+                    INSERT INTO ancora.telegram_pairing_requests (
+                        invitation_id, telegram_user_id, status, requested_at
+                    ) VALUES (:invitation_id, :telegram_user_id, 'pending', :now)
+                    RETURNING id, invitation_id, telegram_user_id, status, requested_at,
+                        decided_by, decision_reason, decided_at
+                """),
+                {
+                    "invitation_id": invitation.id,
+                    "telegram_user_id": telegram_user_id,
+                    "now": now,
+                },
+            )
+            row = created.fetchone()
+            if row is None:  # pragma: no cover - INSERT RETURNING always yields a row
+                raise RuntimeError("Pairing redemption insert did not return a row")
+            await self._session.execute(
+                text("""
+                    UPDATE ancora.telegram_pairing_invitations
+                    SET use_count = use_count + 1,
+                        status = CASE
+                            WHEN use_count + 1 >= max_uses THEN 'exhausted'
+                            ELSE status
+                        END
+                    WHERE id = :id AND status = 'active'
+                """),
+                {"id": invitation.id},
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return PairingRedemption(
+            status=PairingRedemptionStatus.PENDING,
+            request=self._request_from_row(row),
+        )
+
+    async def list_pending_requests(self, limit: int = 100) -> list[PairingRequest]:
+        """Return the bounded operator work queue without invitation codes or content."""
+        result = await self._session.execute(
+            text("""
+                SELECT id, invitation_id, telegram_user_id, status, requested_at,
+                    decided_by, decision_reason, decided_at
+                FROM ancora.telegram_pairing_requests
+                WHERE status = 'pending'
+                ORDER BY requested_at ASC, id ASC
+                LIMIT :limit
+            """),
+            {"limit": limit},
+        )
+        return [self._request_from_row(row) for row in result.fetchall()]
+
+    async def reject_request(
+        self,
+        request_id: UUID,
+        *,
+        actor: str,
+        reason: str,
+    ) -> PairingRequest | None:
+        """Reject exactly one pending request; no authorization is ever created."""
+        now = datetime.now(tz=UTC)
+        try:
+            result = await self._session.execute(
+                text("""
+                    UPDATE ancora.telegram_pairing_requests
+                    SET status = 'rejected', decided_by = :actor, decision_reason = :reason,
+                        decided_at = :now
+                    WHERE id = :id AND status = 'pending'
+                    RETURNING id, invitation_id, telegram_user_id, status, requested_at,
+                        decided_by, decision_reason, decided_at
+                """),
+                {"id": request_id, "actor": actor, "reason": reason, "now": now},
+            )
+            row = result.fetchone()
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return self._request_from_row(row) if row else None
 
     async def create_invitation(
         self,
@@ -169,3 +356,7 @@ class TelegramPairingRepository:
             await self._session.rollback()
             raise
         return changed
+
+    @staticmethod
+    def _request_from_row(row: object) -> PairingRequest:
+        return PairingRequest.model_validate(row, from_attributes=True)

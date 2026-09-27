@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import FastAPI, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -101,6 +101,42 @@ def install_telegram_pairing_admin_api(
         if approved is None:
             raise HTTPException(status_code=409, detail="Pairing request is not pending")
         return approved.model_dump(mode="json")
+
+    @app.get("/admin/telegram-pairing/requests")
+    async def list_pending_requests(
+        request: Request,
+        limit: int = Query(default=100, ge=1, le=100),
+    ) -> dict[str, Any]:
+        _authenticate(request, settings.runtime_config_admin_token)
+        session = await session_factory()
+        try:
+            pending = await create_service(session).list_pending_requests(limit)
+        finally:
+            await session.close()
+        return {"requests": [item.model_dump(mode="json") for item in pending]}
+
+    @app.post("/admin/telegram-pairing/requests/{request_id}/reject")
+    async def reject_request(
+        request: Request,
+        request_id: str,
+        payload: DecisionRequest,
+        x_ancora_admin_actor: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        _authenticate(request, settings.runtime_config_admin_token)
+        actor = _actor(x_ancora_admin_actor)
+        try:
+            session = await session_factory()
+            try:
+                rejected = await create_service(session).reject_request(
+                    request_id, actor=actor, reason=_reason(payload.reason)
+                )
+            finally:
+                await session.close()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid pairing request ID") from None
+        if rejected is None:
+            raise HTTPException(status_code=409, detail="Pairing request is not pending")
+        return rejected.model_dump(mode="json")
 
     @app.post("/admin/telegram-pairing/invitations/{invitation_id}/revoke")
     async def revoke_invitation(

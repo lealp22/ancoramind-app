@@ -21,6 +21,8 @@ from src.domain.interactions.pairing import (
     PairingInvitation,
     PairingInvitationCreate,
     PairingInvitationStatus,
+    PairingRedemption,
+    PairingRedemptionStatus,
     PairingRequest,
     PairingRequestStatus,
     hash_pairing_code,
@@ -71,6 +73,18 @@ async def _post(
         return await client.post(path, json=body, headers=headers)
 
 
+async def _get(
+    app: FastAPI,
+    path: str,
+    *,
+    token: str | None = "admin-secret",
+) -> httpx.Response:
+    headers = {"authorization": f"Bearer {token}"} if token is not None else {}
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        return await client.get(path, headers=headers)
+
+
 @pytest.mark.parametrize(
     ("override", "expected_name"),
     [
@@ -107,6 +121,22 @@ async def test_issue_invitation_persists_only_the_keyed_hash() -> None:
         issued.code, "pairing-pepper"
     )
     assert issued.code not in repository.create_invitation.await_args.kwargs["code_hash"]
+
+
+async def test_redeem_hashes_the_code_and_does_not_authorize_the_user() -> None:
+    repository = AsyncMock(spec=TelegramPairingRepository)
+    repository.redeem_invitation.return_value = PairingRedemption(
+        status=PairingRedemptionStatus.PENDING
+    )
+    service = TelegramPairingService(repository, code_pepper="pairing-pepper")
+
+    redemption = await service.redeem_code("private-code", telegram_user_id=42)
+
+    assert redemption.status is PairingRedemptionStatus.PENDING
+    repository.redeem_invitation.assert_awaited_once_with(
+        code_hash=hash_pairing_code("private-code", "pairing-pepper"),
+        telegram_user_id=42,
+    )
 
 
 async def test_admin_issue_returns_code_once_and_requires_bearer_and_actor() -> None:
@@ -182,3 +212,47 @@ async def test_admin_approval_and_revocation_use_protected_operator_api() -> Non
     assert revoked.json()["status"] == "revoked"
     assert authorization_revoked.status_code == 200
     assert authorization_revoked.json() == {"revoked": True}
+
+
+async def test_admin_lists_and_rejects_pending_requests() -> None:
+    app = FastAPI()
+    session = AsyncMock(spec=AsyncSession)
+    session_factory = AsyncMock(return_value=session)
+    service = AsyncMock()
+    pending = PairingRequest(
+        id=uuid4(),
+        invitation_id=uuid4(),
+        telegram_user_id=42,
+        status=PairingRequestStatus.PENDING,
+        requested_at=datetime(2026, 9, 27, 11, tzinfo=UTC),
+    )
+    rejected = pending.model_copy(
+        update={
+            "status": PairingRequestStatus.REJECTED,
+            "decided_by": "operator",
+            "decision_reason": "not participating",
+            "decided_at": datetime(2026, 9, 27, 12, tzinfo=UTC),
+        }
+    )
+    service.list_pending_requests.return_value = [pending]
+    service.reject_request.return_value = rejected
+    install_telegram_pairing_admin_api(
+        app, _settings(), session_factory, service_factory=lambda _: service
+    )
+
+    assert (await _get(app, "/admin/telegram-pairing/requests", token=None)).status_code == 401
+    listed = await _get(app, "/admin/telegram-pairing/requests?limit=10")
+    rejected_response = await _post(
+        app,
+        f"/admin/telegram-pairing/requests/{pending.id}/reject",
+        {"reason": "not participating"},
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["requests"][0]["status"] == "pending"
+    service.list_pending_requests.assert_awaited_once_with(10)
+    assert rejected_response.status_code == 200
+    assert rejected_response.json()["status"] == "rejected"
+    service.reject_request.assert_awaited_once_with(
+        str(pending.id), actor="operator", reason="not participating"
+    )

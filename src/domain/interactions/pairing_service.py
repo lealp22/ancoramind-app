@@ -8,6 +8,7 @@ from src.domain.interactions.pairing import (
     IssuedPairingInvitation,
     PairingInvitation,
     PairingInvitationCreate,
+    PairingRedemption,
     PairingRequest,
     generate_pairing_code,
     hash_pairing_code,
@@ -50,6 +51,28 @@ class TelegramPairingService:
         self, request_id: str, *, actor: str, reason: str
     ) -> PairingRequest | None:
         return await self._repository.approve_request(
+            UUID(request_id), actor=actor, reason=reason.strip()
+        )
+
+    async def redeem_code(self, code: str, *, telegram_user_id: int) -> PairingRedemption:
+        """Request pairing through a code; this does not authorize Agent access."""
+        return await self._repository.redeem_invitation(
+            code_hash=hash_pairing_code(code, self._code_pepper),
+            telegram_user_id=telegram_user_id,
+        )
+
+    async def list_pending_requests(self, limit: int = 100) -> list[PairingRequest]:
+        """Return the bounded pending queue for an authenticated operator."""
+        return await self._repository.list_pending_requests(limit)
+
+    async def reject_request(
+        self,
+        request_id: str,
+        *,
+        actor: str,
+        reason: str,
+    ) -> PairingRequest | None:
+        return await self._repository.reject_request(
             UUID(request_id), actor=actor, reason=reason.strip()
         )
 

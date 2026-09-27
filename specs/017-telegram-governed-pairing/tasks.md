@@ -10,10 +10,10 @@
 
 ## T2: Atomic redemption
 
-- [ ] Implement repository/service redeem with `FOR UPDATE` or equivalent atomic claim.
-- [ ] Enforce expiry, status, capacity, duplicate redemption and one pending request per user.
-- [ ] Add operator request list/reject endpoints with audited decisions.
-- [ ] Add unit + PostgreSQL integration tests for concurrent/replayed redemption.
+- [x] Implement repository/service redeem with `FOR UPDATE` plus per-user advisory lock.
+- [x] Enforce expiry, status, capacity, duplicate redemption and one pending request per user.
+- [x] Add operator request list/reject endpoints with audited decisions.
+- [x] Add unit + PostgreSQL integration tests for concurrent/replayed redemption.
 
 ## T3: Telegram and admission integration
 

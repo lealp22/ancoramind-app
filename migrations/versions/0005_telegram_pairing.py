@@ -56,6 +56,10 @@ def upgrade() -> None:
         ON ancora.telegram_pairing_requests(requested_at) WHERE status = 'pending'
     """)
     op.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_pairing_requests_one_pending_per_user
+        ON ancora.telegram_pairing_requests(telegram_user_id) WHERE status = 'pending'
+    """)
+    op.execute("""
         CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_authorizations (
             telegram_user_id BIGINT PRIMARY KEY,
             request_id UUID NOT NULL

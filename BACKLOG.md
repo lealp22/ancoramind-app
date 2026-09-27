@@ -208,9 +208,12 @@ y la base auditable: migración Alembic `0005_telegram_pairing`, bootstrap
 idempotente y API administrativa apagada por defecto (`TELEGRAM_PAIRING_ADMIN_ENABLED`)
 que reutiliza bearer + actor obligatorio. Las invitaciones se generan con alta
 entropía y se persisten sólo como HMAC con `TELEGRAM_PAIRING_CODE_PEPPER`; la
-emisión devuelve el código una única vez. Aún no hay canje `/pair` ni consulta de
-autorización desde admission: ningún usuario adicional puede llegar al Agent por
-este incremento.
+emisión devuelve el código una única vez. **Actualización T2:** el canje atómico
+ya existe en Core (`FOR UPDATE` de invitación + advisory lock por usuario), aplica
+TTL/cupo/estado/replay y crea como máximo una solicitud `pending` por usuario; la
+cola administrativa permite listar/rechazar con actor/motivo. Aún no hay comando
+Telegram `/pair` ni consulta de autorización desde admission: ningún usuario
+adicional puede llegar al Agent por este incremento.
 
 ---
 
