@@ -21,6 +21,7 @@ _COMMAND_PATTERN = re.compile(r"^/([A-Za-z0-9_]{1,32})(?:@([A-Za-z0-9_]{1,32}))?
 _SESSION_RESET_COMMANDS = frozenset({"new"})
 _HELP_COMMANDS = frozenset({"help", "start"})
 _SUPPORTED_COMMANDS = _SESSION_RESET_COMMANDS | _HELP_COMMANDS
+_PAIRING_COMMAND = "pair"
 
 BOT_COMMAND_MENU: tuple[tuple[str, str], ...] = (
     ("new", "Empezar una conversación nueva"),
@@ -75,6 +76,13 @@ class CommandHandling:
     """Whether the chat's conversation history must start over."""
 
 
+@dataclass(frozen=True)
+class TelegramPairingCommand:
+    """A `/pair` control command whose credential stays in process memory only."""
+
+    code: str
+
+
 def parse_telegram_command(
     text: str | None,
     *,
@@ -106,6 +114,29 @@ def parse_telegram_command(
     ):
         return None
     return TelegramCommand(name=name, raw=token)
+
+
+def parse_telegram_pairing_command(
+    text: str | None,
+    *,
+    bot_username: str | None = None,
+) -> TelegramPairingCommand | None:
+    """Return a valid `/pair <code>` command without retaining its credential.
+
+    The caller must consume ``code`` immediately and must never log or persist
+    this result. Exact one-token arguments prevent `/pair` from becoming a
+    conversational command or a permissive parser for arbitrary text.
+    """
+    command = parse_telegram_command(text, bot_username=bot_username)
+    if command is None or command.name != _PAIRING_COMMAND or not text:
+        return None
+    parts = text.strip().split()
+    if len(parts) != 2:
+        return None
+    code = parts[1]
+    if not 20 <= len(code) <= 128:
+        return None
+    return TelegramPairingCommand(code=code)
 
 
 def handle_telegram_command(command: TelegramCommand) -> CommandHandling:

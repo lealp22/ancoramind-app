@@ -118,6 +118,11 @@ class TelegramInteractionsRepository:
         interaction: TelegramInteractionCreate,
         delivery: TelegramDeliveryCreate,
         limits: TelegramAdmissionLimits,
+        *,
+        deterministic_reply_ciphertext: bytes | None = None,
+        deterministic_reply_key_version: int | None = None,
+        deterministic_reply_length: int | None = None,
+        deterministic_reply_chunk_count: int | None = None,
     ) -> TelegramAdmissionResult:
         """Atomically deduplicate, apply durable admission limits, and audit delivery.
 
@@ -173,6 +178,19 @@ class TelegramInteractionsRepository:
                         }
                     )
 
+            has_deterministic_reply = all(
+                value is not None
+                for value in (
+                    deterministic_reply_ciphertext,
+                    deterministic_reply_key_version,
+                    deterministic_reply_length,
+                    deterministic_reply_chunk_count,
+                )
+            )
+            if has_deterministic_reply and effective.status is InteractionStatus.ACCEPTED:
+                effective = effective.model_copy(
+                    update={"status": InteractionStatus.RESPONSE_READY}
+                )
             parsed = await self._insert_interaction(effective, now)
             await self._record_delivery(
                 interaction_id=parsed.id,
@@ -181,6 +199,15 @@ class TelegramInteractionsRepository:
                 delivery_status=parsed.status.value,
                 received_at=now,
             )
+            if has_deterministic_reply and parsed.status is InteractionStatus.RESPONSE_READY:
+                await self._create_pending_response(
+                    interaction_id=parsed.id,
+                    content_ciphertext=deterministic_reply_ciphertext,
+                    content_key_version=deterministic_reply_key_version,
+                    content_length=deterministic_reply_length,
+                    chunk_count=deterministic_reply_chunk_count,
+                    now=now,
+                )
             await self._session.commit()
         except Exception:
             await self._session.rollback()
@@ -280,7 +307,12 @@ class TelegramInteractionsRepository:
                 "payload_fingerprint": interaction.payload_fingerprint,
                 "error_class": interaction.error_class,
                 "error_detail_code": interaction.error_detail_code,
-                "accepted_at": now if interaction.status is InteractionStatus.ACCEPTED else None,
+                "accepted_at": (
+                    now
+                    if interaction.status
+                    in {InteractionStatus.ACCEPTED, InteractionStatus.RESPONSE_READY}
+                    else None
+                ),
                 "now": now,
             },
         )
@@ -288,6 +320,54 @@ class TelegramInteractionsRepository:
         if row is None:  # pragma: no cover - INSERT RETURNING always returns one row
             raise RuntimeError("Interaction insert did not return a row")
         return self._interaction_from_row(row)
+
+    async def _create_pending_response(
+        self,
+        *,
+        interaction_id: UUID,
+        content_ciphertext: bytes,
+        content_key_version: int,
+        content_length: int,
+        chunk_count: int,
+        now: datetime,
+    ) -> LogicalResponse:
+        """Create deterministic outbox data inside the caller's open transaction."""
+        created = await self._session.execute(
+            text("""
+                INSERT INTO ancora.logical_responses (
+                    interaction_id, response_kind, content_ciphertext,
+                    content_key_version, content_length, chunk_count, status, created_at
+                ) VALUES (
+                    :interaction_id, 'agent_final', :content_ciphertext,
+                    :content_key_version, :content_length, :chunk_count,
+                    'pending_delivery', :now
+                )
+                RETURNING id, interaction_id, response_kind, content_ciphertext,
+                    content_key_version, content_length, chunk_count, status, created_at
+            """),
+            {
+                "interaction_id": interaction_id,
+                "content_ciphertext": content_ciphertext,
+                "content_key_version": content_key_version,
+                "content_length": content_length,
+                "chunk_count": chunk_count,
+                "now": now,
+            },
+        )
+        row = created.fetchone()
+        if row is None:  # pragma: no cover - INSERT RETURNING always returns one row
+            raise RuntimeError("Logical response insert did not return a row")
+        response = self._response_from_row(row)
+        await self._session.execute(
+            text("""
+                INSERT INTO ancora.telegram_response_deliveries (
+                    logical_response_id, chunk_index, status
+                )
+                SELECT :logical_response_id, generate_series(0, :chunk_count - 1), 'pending'
+            """),
+            {"logical_response_id": response.id, "chunk_count": chunk_count},
+        )
+        return response
 
     async def _record_delivery(
         self,

@@ -20,10 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import Settings
 from src.domain.interactions.admission import TelegramAdmissionPolicy
 from src.domain.interactions.models import TelegramAdmissionLimits
+from src.domain.interactions.pairing_service import TelegramPairingService
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.service import TelegramInteractionService
 from src.observability import get_telemetry, log_context_scope
 from src.repositories.interactions import TelegramInteractionsRepository
+from src.repositories.pairing import TelegramPairingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +47,10 @@ def validate_telegram_admission_settings(settings: Settings) -> None:
         missing.append("TELEGRAM_WEBHOOK_SECRET_TOKEN")
     if not settings.telegram_payload_encryption_key:
         missing.append("TELEGRAM_PAYLOAD_ENCRYPTION_KEY")
-    if not settings.allowed_user_ids:
-        missing.append("ALLOWED_TELEGRAM_USER_IDS")
+    if not settings.allowed_user_ids and not settings.telegram_pairing_enabled:
+        missing.append("ALLOWED_TELEGRAM_USER_IDS or TELEGRAM_PAIRING_ENABLED")
+    if settings.telegram_pairing_enabled and not settings.telegram_pairing_code_pepper:
+        missing.append("TELEGRAM_PAIRING_CODE_PEPPER")
     if missing:
         raise ValueError("TELEGRAM_ADMISSION_ENABLED requires: " + ", ".join(missing))
 
@@ -141,7 +145,22 @@ def _service_factory(settings: Settings) -> ServiceFactory:
     )
 
     def create(session: AsyncSession) -> TelegramInteractionService:
-        return TelegramInteractionService(TelegramInteractionsRepository(session), cipher)
+        pairing_repository = TelegramPairingRepository(session)
+        pairing_service = (
+            TelegramPairingService(
+                pairing_repository,
+                code_pepper=settings.telegram_pairing_code_pepper,
+            )
+            if settings.telegram_pairing_enabled
+            else None
+        )
+        return TelegramInteractionService(
+            TelegramInteractionsRepository(session),
+            cipher,
+            pairing_repository=pairing_repository,
+            pairing_service=pairing_service,
+            pairing_enabled=settings.telegram_pairing_enabled,
+        )
 
     return create
 

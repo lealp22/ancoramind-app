@@ -211,9 +211,14 @@ entropía y se persisten sólo como HMAC con `TELEGRAM_PAIRING_CODE_PEPPER`; la
 emisión devuelve el código una única vez. **Actualización T2:** el canje atómico
 ya existe en Core (`FOR UPDATE` de invitación + advisory lock por usuario), aplica
 TTL/cupo/estado/replay y crea como máximo una solicitud `pending` por usuario; la
-cola administrativa permite listar/rechazar con actor/motivo. Aún no hay comando
-Telegram `/pair` ni consulta de autorización desde admission: ningún usuario
-adicional puede llegar al Agent por este incremento.
+cola administrativa permite listar/rechazar con actor/motivo. **Actualización T3:**
+`TELEGRAM_PAIRING_ENABLED` activa `/pair <code>` sólo en chat privado; el código se
+canjea antes del Agent, se redacta del payload durable y genera una respuesta fija
+por outbox sin llamada LLM. Admission conserva `ALLOWED_TELEGRAM_USER_IDS` como
+ruta técnica y además consulta la autorización durable activa en cada nuevo update,
+por lo que una revocación bloquea el siguiente update sin reinicio. Validación local:
+484 unitarias y 71 integraciones passing; quedan T4 (runbook/flags de despliegue y
+E2E Telegram/Railway controlado con cuenta no productiva).
 
 ---
 

@@ -24,7 +24,17 @@ class TelegramAdmissionPolicy:
     def __init__(self, allowed_user_ids: set[int] | frozenset[int]):
         self._allowed_user_ids = frozenset(allowed_user_ids)
 
-    def evaluate(self, update: NormalizedTelegramUpdate) -> AdmissionDecision:
+    def is_technical_allowlisted(self, telegram_user_id: int) -> bool:
+        """Return whether configuration explicitly authorizes this Telegram identity."""
+        return telegram_user_id in self._allowed_user_ids
+
+    def evaluate(
+        self,
+        update: NormalizedTelegramUpdate,
+        *,
+        has_active_authorization: bool = False,
+        permits_pairing: bool = False,
+    ) -> AdmissionDecision:
         """Classify a normalized update without using its personal content."""
         if update.update_type == "unsupported":
             return AdmissionDecision(InteractionStatus.IGNORED, "unsupported_update")
@@ -32,6 +42,12 @@ class TelegramAdmissionPolicy:
             return AdmissionDecision(InteractionStatus.REJECTED, "non_private_chat")
         if update.telegram_user_id is None:
             return AdmissionDecision(InteractionStatus.REJECTED, "missing_telegram_user_id")
-        if update.telegram_user_id not in self._allowed_user_ids:
-            return AdmissionDecision(InteractionStatus.REJECTED, "user_not_allowlisted")
-        return AdmissionDecision(InteractionStatus.ACCEPTED)
+        if self.is_technical_allowlisted(update.telegram_user_id):
+            return AdmissionDecision(InteractionStatus.ACCEPTED)
+        if has_active_authorization:
+            return AdmissionDecision(InteractionStatus.ACCEPTED)
+        if permits_pairing:
+            # This narrowly permits deterministic onboarding only; it never
+            # authorizes an Agent/LLM run for an otherwise unknown identity.
+            return AdmissionDecision(InteractionStatus.ACCEPTED)
+        return AdmissionDecision(InteractionStatus.REJECTED, "user_not_allowlisted")

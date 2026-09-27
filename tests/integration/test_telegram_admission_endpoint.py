@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -13,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agent.telegram_admission import install_telegram_admission_endpoint
 from src.config import Settings
+from src.domain.interactions.pairing import hash_pairing_code
+from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.interactions.processor import InteractionProcessor
+from src.domain.interactions.service import PAIRING_PENDING_REPLY
 from src.repositories.database import get_session
+from src.repositories.pairing import TelegramPairingRepository
 
 pytestmark = pytest.mark.integration
 
@@ -44,6 +50,7 @@ def _update(
     chat_type: str = "private",
     user_id: int = 999,
     chat_id: int = 333,
+    text_value: str = "content that must not leave the ledger ciphertext",
 ) -> dict[str, Any]:
     return {
         "update_id": update_id,
@@ -51,7 +58,7 @@ def _update(
             "message_id": update_id + 1,
             "chat": {"id": chat_id, "type": chat_type},
             "from": {"id": user_id},
-            "text": "content that must not leave the ledger ciphertext",
+            "text": text_value,
         },
     }
 
@@ -79,6 +86,37 @@ def _app(settings: Settings) -> FastAPI:
     app = FastAPI()
     install_telegram_admission_endpoint(app, settings, get_session)
     return app
+
+
+class _Runner:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def run(self, input_text: str, **_: object) -> str:
+        self.calls.append(input_text)
+        return "unexpected agent response"
+
+
+class _Sender:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, str]] = []
+
+    async def send_text(self, chat_id: int, text_value: str) -> int:
+        self.calls.append((chat_id, text_value))
+        return 1
+
+    async def send_typing(self, chat_id: int) -> None:
+        return None
+
+
+async def _create_pairing_invitation(session: AsyncSession, code: str) -> object:
+    return await TelegramPairingRepository(session).create_invitation(
+        code_hash=hash_pairing_code(code, "pairing-pepper"),
+        max_uses=1,
+        expires_at=datetime.now(tz=UTC) + timedelta(hours=1),
+        created_by="integration-operator",
+        reason="controlled evaluator",
+    )
 
 
 async def test_private_allowlisted_update_is_committed_before_200(session: AsyncSession) -> None:
@@ -236,3 +274,141 @@ async def test_admission_rejects_configured_user_or_chat_capacity(
         )
     ).one()
     assert row.error_detail_code == expected_code
+
+
+async def test_private_pairing_uses_outbox_without_agent_or_raw_code_persistence(
+    session: AsyncSession,
+) -> None:
+    code = "pairing-code-with-at-least-twenty-characters"
+    await _create_pairing_invitation(session, code)
+    settings = _settings(
+        telegram_pairing_enabled=True,
+        telegram_pairing_code_pepper="pairing-pepper",
+    )
+    app = _app(settings)
+
+    response = await _post(
+        app,
+        _update(501, user_id=1501, text_value=f"/pair {code}"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "response_ready"
+    interaction = (
+        await session.execute(
+            text("""
+                SELECT status, payload_ciphertext
+                FROM ancora.telegram_interactions
+                WHERE id = :id
+            """),
+            {"id": response.json()["correlation_id"]},
+        )
+    ).one()
+    assert interaction.status == "response_ready"
+    assert code.encode() not in interaction.payload_ciphertext
+    stored_response = (
+        await session.execute(
+            text("""
+                SELECT content_ciphertext
+                FROM ancora.logical_responses
+                WHERE interaction_id = :id
+            """),
+            {"id": response.json()["correlation_id"]},
+        )
+    ).one()
+    assert code.encode() not in stored_response.content_ciphertext
+
+    runner = _Runner()
+    sender = _Sender()
+    processor = InteractionProcessor(
+        session_factory=get_session,
+        payload_cipher=TelegramPayloadCipher(
+            settings.telegram_payload_encryption_key,
+            settings.telegram_payload_key_version,
+        ),
+        agent_runner=runner,
+        sender=sender,
+    )
+    assert await processor.run_once() == 1
+    assert runner.calls == []
+    assert sender.calls == [(333, PAIRING_PENDING_REPLY)]
+
+
+async def test_pairing_is_private_only_and_duplicate_update_has_one_request_and_response(
+    session: AsyncSession,
+) -> None:
+    code = "another-pairing-code-with-at-least-twenty"
+    await _create_pairing_invitation(session, code)
+    app = _app(
+        _settings(
+            telegram_pairing_enabled=True,
+            telegram_pairing_code_pepper="pairing-pepper",
+        )
+    )
+    group = await _post(
+        app,
+        _update(511, chat_type="group", user_id=1511, text_value=f"/pair {code}"),
+    )
+    first = await _post(app, _update(512, user_id=1512, text_value=f"/pair {code}"))
+    duplicate = await _post(app, _update(512, user_id=1512, text_value=f"/pair {code}"))
+
+    assert group.json()["status"] == "rejected"
+    assert first.json()["status"] == "response_ready"
+    assert duplicate.json() == {
+        "status": "response_ready",
+        "duplicate": True,
+        "correlation_id": first.json()["correlation_id"],
+    }
+    counts = (
+        await session.execute(
+            text("""
+                SELECT
+                    (SELECT count(*) FROM ancora.telegram_pairing_requests) AS requests,
+                    (SELECT count(*) FROM ancora.logical_responses) AS responses
+            """)
+        )
+    ).one()
+    assert (counts.requests, counts.responses) == (1, 1)
+
+
+async def test_durable_authorization_admits_and_revocation_is_immediate(
+    session: AsyncSession,
+) -> None:
+    code = "authorization-code-with-at-least-twenty"
+    await _create_pairing_invitation(session, code)
+    pairing = TelegramPairingRepository(session)
+    redemption = await pairing.redeem_invitation(
+        code_hash=hash_pairing_code(code, "pairing-pepper"),
+        telegram_user_id=1601,
+    )
+    assert redemption.request is not None
+    approved = await pairing.approve_request(
+        redemption.request.id,
+        actor="integration-operator",
+        reason="approved evaluator",
+    )
+    assert approved is not None
+    app = _app(
+        _settings(
+            telegram_pairing_enabled=True,
+            telegram_pairing_code_pepper="pairing-pepper",
+        )
+    )
+
+    authorized = await _post(app, _update(521, user_id=1601, text_value="hola"))
+    assert authorized.json()["status"] == "accepted"
+    assert await pairing.revoke_authorization(
+        1601,
+        actor="integration-operator",
+        reason="access withdrawn",
+    )
+    revoked = await _post(app, _update(522, user_id=1601, text_value="hola de nuevo"))
+
+    assert revoked.json()["status"] == "rejected"
+    rejected = (
+        await session.execute(
+            text("SELECT error_detail_code FROM ancora.telegram_interactions WHERE id = :id"),
+            {"id": revoked.json()["correlation_id"]},
+        )
+    ).one()
+    assert rejected.error_detail_code == "user_not_allowlisted"

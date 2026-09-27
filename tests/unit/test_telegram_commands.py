@@ -12,6 +12,7 @@ from src.domain.interactions.commands import (
     handle_telegram_command,
     next_session_id,
     parse_telegram_command,
+    parse_telegram_pairing_command,
     telemetry_label,
 )
 
@@ -56,6 +57,17 @@ class TestParseTelegramCommand:
     )
     def test_non_commands_stay_conversation(self, text: str | None) -> None:
         assert parse_telegram_command(text) is None
+
+    def test_pairing_requires_one_bounded_credential_argument(self) -> None:
+        code = "a" * 24
+
+        pairing = parse_telegram_pairing_command(f"/pair {code}")
+
+        assert pairing is not None
+        assert pairing.code == code
+        assert parse_telegram_pairing_command("/pair") is None
+        assert parse_telegram_pairing_command(f"/pair {code} trailing") is None
+        assert parse_telegram_pairing_command("/pair too-short") is None
 
 
 class TestHandleTelegramCommand:

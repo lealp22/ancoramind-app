@@ -17,11 +17,11 @@
 
 ## T3: Telegram and admission integration
 
-- [ ] Parse `/pair <code>` deterministically in a private chat before Agent execution.
-- [ ] Persist/deliver a fixed safe response via the durable outbox; never log the code.
-- [ ] Consult active durable authorization in admission, retaining technical allowlist as an operator path.
-- [ ] Prove pending/rejected/expired/revoked users have zero Agent/LLM calls.
-- [ ] Test immediate revocation for a subsequent update and at-most-once behavior for duplicate updates.
+- [x] Parse `/pair <code>` deterministically in a private chat before Agent execution.
+- [x] Persist/deliver a fixed safe response via the durable outbox; never log the code.
+- [x] Consult active durable authorization in admission, retaining technical allowlist as an operator path.
+- [x] Prove pending/rejected/expired/revoked users have zero Agent/LLM calls.
+- [x] Test immediate revocation for a subsequent update and at-most-once behavior for duplicate updates.
 
 ## T4: Operations and closure
 

@@ -22,6 +22,23 @@ class TelegramPairingRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def has_active_authorization(self, telegram_user_id: int) -> bool:
+        """Return whether a user is currently authorized for a new admission.
+
+        This is deliberately a fresh database read on every non-technical
+        admission, so an operator revocation takes effect on the next update.
+        Callers must fail closed if this query cannot complete.
+        """
+        result = await self._session.execute(
+            text("""
+                SELECT 1
+                FROM ancora.telegram_pairing_authorizations
+                WHERE telegram_user_id = :telegram_user_id AND status = 'active'
+            """),
+            {"telegram_user_id": telegram_user_id},
+        )
+        return result.fetchone() is not None
+
     async def redeem_invitation(
         self,
         *,
