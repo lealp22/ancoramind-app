@@ -7,6 +7,7 @@
 ```powershell
 .venv\Scripts\Activate.ps1
 python -m pytest tests/unit/test_telegram_pairing.py -q
+python -m pytest tests/unit/test_telegram_pairing_script.py -q
 python -m pytest tests/unit/ -q
 python -m pytest tests/integration/ -q
 ruff check src/ tests/ scripts/ migrations/
@@ -29,12 +30,18 @@ ruff check src/ tests/ scripts/ migrations/
   request and one logical response are persisted.
 - [x] Operator CLI and documented staging flags use only the bearer-protected
   admin API; mutations require an auditable actor and reason, without direct SQL
-  access or code arguments.
+  access or code arguments. CLI hardening tests cover actor requirements,
+  non-2xx exit status and bearer non-disclosure.
 - [ ] Controlled Railway E2E preserves Telegram update idempotency and outbox delivery.
 
 ## Evidence (local, 2026-09-27)
 
-- `python -m pytest tests/unit/ -q` → 490 passed.
+- `python -m pytest tests/unit/ -q` → 491 passed; 2 known Windows-only failures
+  in `test_run_e2e_powershell.py` caused by PowerShell line wrapping `stderr`
+  when the workspace path contains a space (`The Bridge`), unrelated to pairing.
 - `python -m pytest tests/integration/ -q` → 71 passed.
 - `ruff check src/ tests/ scripts/ migrations/` and `git diff --check` → passed.
+- `mypy scripts/telegram_pairing.py` → passed. `mypy src/` still reports 93
+  pre-existing errors across 14 unrelated source files; it is informative only
+  and not a CI gate.
 - No public webhook was registered and no Telegram account was contacted during this validation.

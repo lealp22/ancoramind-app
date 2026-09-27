@@ -217,7 +217,8 @@ canjea antes del Agent, se redacta del payload durable y genera una respuesta fi
 por outbox sin llamada LLM. Admission conserva `ALLOWED_TELEGRAM_USER_IDS` como
 ruta técnica y además consulta la autorización durable activa en cada nuevo update,
 por lo que una revocación bloquea el siguiente update sin reinicio. Validación local:
-484 unitarias y 71 integraciones passing; quedan T4 (runbook/flags de despliegue y
+491 unitarias passing + 2 fallos ambientales conocidos de PowerShell/ruta con
+espacios, y 71 integraciones passing; quedan T4 (runbook/flags de despliegue y
 E2E Telegram/Railway controlado con cuenta no productiva). **Actualización T4
 local:** `scripts/telegram_pairing.py` opera la API administrativa protegida
 (emitir/listar/aprobar/rechazar/revocar) sin acceso SQL directo, y

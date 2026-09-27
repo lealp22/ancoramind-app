@@ -120,12 +120,29 @@ código efímero: no redirigir stdout a archivos, CI o herramientas de transcrip
    evidencia. Aprobarla y enviar un mensaje nuevo: debe ser admitido.
 6. Revocar la autorización y enviar otro mensaje nuevo: debe ser rechazado. No
    copiar el contenido de mensajes a la evidencia.
-7. Revocar la invitación si aún estuviera activa, deshabilitar los dos flags de
-   pairing tras la ventana y redeployar. Si se registró el webhook sólo para esta
-   prueba, decidir explícitamente si se conserva o se elimina; no borrarlo de
-   manera implícita.
+7. Ejecutar el rollback de §5 tras la ventana. Si se registró el webhook sólo
+   para esta prueba, decidir explícitamente si se conserva o se elimina; no
+   borrarlo de manera implícita.
 
-## 5. Triage seguro
+## 5. Rollback obligatorio tras un E2E
+
+1. Listar solicitudes pendientes y decidirlas explícitamente; no dejar
+   solicitudes ambiguas para la siguiente ventana.
+2. Revocar cada autorización del cohort con un motivo que identifique el cierre
+   del E2E. Confirmar que un update **nuevo** de cada cuenta ya no es admitido.
+3. Revocar las invitaciones activas restantes para impedir canjes tardíos.
+4. En Railway, establecer `TELEGRAM_PAIRING_ENABLED=false` y
+   `TELEGRAM_PAIRING_ADMIN_ENABLED=false`; redesplegar y comprobar `/health`.
+   No borrar `TELEGRAM_PAIRING_CODE_PEPPER` durante el incidente: conservarlo
+   hasta haber revisado la auditoría y completar la política de retención.
+5. Registrar evidencia exclusivamente metadata-only: UUIDs de invitación y
+   solicitud, `telegram_user_id`, actor, timestamps, deployment y estados. No
+   registrar códigos, bearer, payloads, mensajes ni contenido de respuestas.
+6. El webhook no se elimina automáticamente. Mantenerlo sólo si sigue apuntando
+   al endpoint aprobado; cualquier cambio o borrado requiere autorización
+   explícita y se hace con `scripts/telegram_webhook.py`.
+
+## 6. Triage seguro
 
 | Señal | Acción |
 |---|---|

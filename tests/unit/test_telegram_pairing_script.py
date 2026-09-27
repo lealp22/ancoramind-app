@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+from types import SimpleNamespace
 
 import pytest
 
+from scripts import telegram_pairing
 from scripts.telegram_pairing import build_operation
 
 
@@ -85,3 +87,106 @@ def test_revocations_target_the_correct_durable_state() -> None:
 def test_unknown_command_is_rejected_without_network_access() -> None:
     with pytest.raises(ValueError, match="Unsupported pairing command"):
         build_operation(argparse.Namespace(command="unknown"))
+
+
+def test_main_list_pending_does_not_require_actor_or_print_bearer(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_parse_args",
+        lambda: argparse.Namespace(command="list-pending", limit=10, base_url="https://example.test"),
+    )
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_settings",
+        lambda: SimpleNamespace(runtime_config_admin_token="bearer-that-must-not-print"),
+    )
+
+    def request(**kwargs: object) -> tuple[int, str]:
+        captured.update(kwargs)
+        return 200, '{"requests": []}'
+
+    monkeypatch.setattr(telegram_pairing, "_request", request)
+
+    assert telegram_pairing.main() == 0
+
+    output = capsys.readouterr()
+    assert captured["actor"] is None
+    assert "bearer-that-must-not-print" not in output.out
+    assert "bearer-that-must-not-print" not in output.err
+    assert '"requests": []' in output.out
+
+
+def test_main_issue_requires_actor_before_making_a_request(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_ACTOR", raising=False)
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_parse_args",
+        lambda: argparse.Namespace(
+            command="issue",
+            max_uses=1,
+            expires_in_minutes=60,
+            reason="controlled evaluator",
+            base_url="https://example.test",
+        ),
+    )
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_settings",
+        lambda: SimpleNamespace(runtime_config_admin_token="bearer-that-must-not-print"),
+    )
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_request",
+        lambda **_: pytest.fail("A mutation without an actor must not make a request"),
+    )
+
+    assert telegram_pairing.main() == 1
+
+    output = capsys.readouterr()
+    assert "RUNTIME_CONFIG_ADMIN_ACTOR is required" in output.err
+    assert "bearer-that-must-not-print" not in output.err
+
+
+def test_main_preserves_one_time_issue_response_and_returns_failure_for_http_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("RUNTIME_CONFIG_ADMIN_ACTOR", "operator@example.com")
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_parse_args",
+        lambda: argparse.Namespace(
+            command="issue",
+            max_uses=1,
+            expires_in_minutes=60,
+            reason="controlled evaluator",
+            base_url="https://example.test",
+        ),
+    )
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_settings",
+        lambda: SimpleNamespace(runtime_config_admin_token="bearer-that-must-not-print"),
+    )
+    monkeypatch.setattr(
+        telegram_pairing,
+        "_request",
+        lambda **_: (201, '{"code":"one-time-code","invitation":{"id":"safe-id"}}'),
+    )
+
+    assert telegram_pairing.main() == 0
+    output = capsys.readouterr()
+    assert "one-time-code" in output.out
+    assert "bearer-that-must-not-print" not in output.out
+
+    monkeypatch.setattr(telegram_pairing, "_request", lambda **_: (409, '{"detail":"conflict"}'))
+
+    assert telegram_pairing.main() == 1
+    assert "HTTP 409" in capsys.readouterr().out
