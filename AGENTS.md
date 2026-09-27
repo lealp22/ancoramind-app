@@ -15,11 +15,10 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 455 unit
-  tests + 64 integration tests; los integration requieren PostgreSQL/Docker
-  (se omiten sin esa infraestructura). Un test unitario
-  (`test_run_e2e_powershell`) falla en Windows por codepage/ruta con acentos:
-  es ambiental y ajeno al producto. Ruff limpio en `src/ tests/ scripts/ migrations/` (gate global en CI).
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 493 unit
+  tests + 71 integration tests; los integration requieren PostgreSQL/Docker
+  (se omiten sin esa infraestructura). Ruff limpio en
+  `src/ tests/ scripts/ migrations/` (gate global en CI).
 
 ---
 
@@ -223,10 +222,10 @@ alias existente (rompe la trazabilidad de `effective_gateway_route`). Ver
 # Activar venv (Git Bash)
 source .venv/Scripts/activate
 
-# Tests unitarios (455 — 454 passing; el de PowerShell E2E es ambiental en Windows)
+# Tests unitarios
 python -m pytest tests/unit/ -v
 
-# Integration tests (64 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (71 — PostgreSQL dockerizado; se saltan sin Docker)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo

@@ -9,6 +9,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "run-e2e.ps1"
 
 
+def _normalize_powershell_output(value: str) -> str:
+    """Collapse display wrapping that Windows PowerShell inserts into stderr."""
+    return " ".join(value.split())
+
+
 def _run_check(env_file: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -77,7 +82,7 @@ def test_check_mode_rejects_unknown_provider(tmp_path: Path) -> None:
     result = _run_check(env_file)
 
     assert result.returncode == 1
-    assert "Unknown LLM_PROVIDER" in result.stderr
+    assert "Unknown LLM_PROVIDER" in _normalize_powershell_output(result.stderr)
 
 
 def test_check_mode_rejects_public_base_url_with_a_path(tmp_path: Path) -> None:
@@ -105,4 +110,4 @@ def test_check_mode_rejects_public_base_url_with_a_path(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 1
-    assert "PublicBaseUrl must be a clean HTTPS URL" in result.stderr
+    assert "PublicBaseUrl must be a clean HTTPS URL" in _normalize_powershell_output(result.stderr)

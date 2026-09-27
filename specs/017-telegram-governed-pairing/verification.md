@@ -36,9 +36,11 @@ ruff check src/ tests/ scripts/ migrations/
 
 ## Evidence (local, 2026-09-27)
 
-- `python -m pytest tests/unit/ -q` → 491 passed; 2 known Windows-only failures
-  in `test_run_e2e_powershell.py` caused by PowerShell line wrapping `stderr`
-  when the workspace path contains a space (`The Bridge`), unrelated to pairing.
+- `test_run_e2e_powershell.py` normaliza exclusivamente whitespace de `stderr`
+  antes de comprobar mensajes de error: Windows PowerShell puede insertar saltos
+  de línea al mostrar rutas con espacios (`The Bridge`), sin alterar el contrato
+  de salida ni ocultar el código de salida no exitoso.
+- `python -m pytest tests/unit/ -q` → 493 passed.
 - `python -m pytest tests/integration/ -q` → 71 passed.
 - `ruff check src/ tests/ scripts/ migrations/` and `git diff --check` → passed.
 - `mypy scripts/telegram_pairing.py` → passed. `mypy src/` still reports 93
