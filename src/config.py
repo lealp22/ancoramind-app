@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     """Bearer token for the HTTPS admin API; Railway secret only."""
     runtime_config_bootstrap_default_route: str = "ancoramind-default"
     """Secret-free logical route used before the DB control plane is available."""
+    telegram_pairing_admin_enabled: bool = False
+    """Expose protected operator endpoints for governed Telegram evaluator pairing."""
+    telegram_pairing_code_pepper: str = ""
+    """Secret HMAC pepper for invitation codes; never persist or log the raw code."""
     app_env: str = "development"
 
     # ── ngrok ─────────────────────────────────────────

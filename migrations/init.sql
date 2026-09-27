@@ -191,6 +191,58 @@ CREATE TABLE IF NOT EXISTS ancora.runtime_config_activations (
 CREATE INDEX IF NOT EXISTS idx_runtime_config_activations_revision
     ON ancora.runtime_config_activations(revision);
 
+-- Governed Telegram evaluator onboarding (BL-24)
+-- Redeemable invitation codes are stored only as keyed hashes.
+CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code_hash VARCHAR(128) NOT NULL UNIQUE,
+    status VARCHAR(31) NOT NULL,
+    max_uses INT NOT NULL CHECK (max_uses > 0),
+    use_count INT NOT NULL DEFAULT 0 CHECK (use_count >= 0 AND use_count <= max_uses),
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_by VARCHAR(255),
+    revoked_reason TEXT,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_pairing_invitations_active_expiry
+    ON ancora.telegram_pairing_invitations(expires_at)
+    WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invitation_id UUID NOT NULL
+        REFERENCES ancora.telegram_pairing_invitations(id) ON DELETE RESTRICT,
+    telegram_user_id BIGINT NOT NULL,
+    status VARCHAR(31) NOT NULL,
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    decided_by VARCHAR(255),
+    decision_reason TEXT,
+    decided_at TIMESTAMPTZ,
+    CONSTRAINT uq_pairing_request_invitation_user UNIQUE (invitation_id, telegram_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pairing_requests_pending
+    ON ancora.telegram_pairing_requests(requested_at)
+    WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_authorizations (
+    telegram_user_id BIGINT PRIMARY KEY,
+    request_id UUID NOT NULL
+        REFERENCES ancora.telegram_pairing_requests(id) ON DELETE RESTRICT,
+    status VARCHAR(31) NOT NULL,
+    authorized_by VARCHAR(255) NOT NULL,
+    reason TEXT NOT NULL,
+    authorized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_by VARCHAR(255),
+    revoked_reason TEXT,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_pairing_authorizations_active
+    ON ancora.telegram_pairing_authorizations(telegram_user_id)
+    WHERE status = 'active';
+
 CREATE TABLE IF NOT EXISTS ancora.telegram_interactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     bot_id BIGINT NOT NULL,

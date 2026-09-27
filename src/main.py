@@ -41,6 +41,10 @@ from src.agent.telegram_admission import (
     install_telegram_admission_endpoint,
     validate_telegram_admission_settings,
 )
+from src.agent.telegram_pairing_admin import (
+    install_telegram_pairing_admin_api,
+    validate_telegram_pairing_admin_settings,
+)
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
 from src.domain.runtime_config.service import RuntimeConfigManager
@@ -238,6 +242,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         sys.exit(1)
     validate_telegram_admission_settings(settings)
     validate_runtime_config_admin_settings(settings)
+    validate_telegram_pairing_admin_settings(settings)
     runtime_config_manager = create_runtime_config_manager(settings, get_session)
     health_registry = HealthRegistry()
     health_registry.set_component("app", "healthy")
@@ -276,7 +281,11 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     # ── AgentOS + Telegram ────────────────────────────
     allowlist = settings.allowed_user_ids
     base_app: FastAPI | None = None
-    if settings.telegram_admission_enabled or settings.runtime_config_admin_enabled:
+    if (
+        settings.telegram_admission_enabled
+        or settings.runtime_config_admin_enabled
+        or settings.telegram_pairing_admin_enabled
+    ):
         base_app = FastAPI()
     if settings.telegram_admission_enabled:
         assert base_app is not None
@@ -286,6 +295,10 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         assert base_app is not None
         install_runtime_config_admin_api(base_app, settings, runtime_config_manager)
         logger.info("Runtime config admin API enabled at /admin/runtime-config")
+    if settings.telegram_pairing_admin_enabled:
+        assert base_app is not None
+        install_telegram_pairing_admin_api(base_app, settings, get_session)
+        logger.info("Governed Telegram pairing admin API enabled at /admin/telegram-pairing")
 
     agent_os = AgentOS(
         agents=[ancora_agent],

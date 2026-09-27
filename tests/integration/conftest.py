@@ -72,6 +72,8 @@ TRUNCATE_SQL = """
     TRUNCATE TABLE ancora.telegram_response_deliveries,
         ancora.logical_responses, ancora.telegram_deliveries,
         ancora.llm_usage_events, ancora.telegram_interactions,
+        ancora.telegram_pairing_authorizations, ancora.telegram_pairing_requests,
+        ancora.telegram_pairing_invitations,
         ancora.runtime_config_active, ancora.runtime_config_activations,
         ancora.runtime_config_revisions,
         ancora.notes, ancora.documents, ancora.ai_extractions,

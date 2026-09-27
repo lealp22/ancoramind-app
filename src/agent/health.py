@@ -221,7 +221,8 @@ class HealthRegistry:
         """Return a non-negative local freshness value without performing I/O."""
         if self._last_interaction_processed_at is None:
             return 0.0
-        return max(0.0, (datetime.now(tz=UTC) - self._last_interaction_processed_at).total_seconds())
+        elapsed = datetime.now(tz=UTC) - self._last_interaction_processed_at
+        return max(0.0, elapsed.total_seconds())
 
 
 def install_health_readiness_endpoint(app: FastAPI, registry: HealthRegistry) -> None:

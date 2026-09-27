@@ -10,7 +10,11 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from src.agent.health import HealthRegistry, install_health_monitor_lifespan, install_health_readiness_endpoint
+from src.agent.health import (
+    HealthRegistry,
+    install_health_monitor_lifespan,
+    install_health_readiness_endpoint,
+)
 from src.config import Settings
 
 
@@ -29,11 +33,12 @@ async def _wait_for(condition: Callable[[], bool], *, timeout_seconds: float = 0
 
 
 def _settings(**overrides: object) -> Settings:
-    return Settings(
-        ancora_database_url="postgresql+asyncpg://user:pass@localhost/db",
-        health_probe_interval_seconds=5,
-        **overrides,
-    )
+    values: dict[str, object] = {
+        "ancora_database_url": "postgresql+asyncpg://user:pass@localhost/db",
+        "health_probe_interval_seconds": 5,
+    }
+    values.update(overrides)
+    return Settings(**values)
 
 
 async def test_monitor_degrades_db_and_finished_worker_without_stopping_readiness(

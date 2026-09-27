@@ -9,7 +9,11 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from src.agent.health import HealthRegistry, _gateway_readiness_url, install_health_readiness_endpoint
+from src.agent.health import (
+    HealthRegistry,
+    _gateway_readiness_url,
+    install_health_readiness_endpoint,
+)
 
 
 class _Telemetry:
@@ -109,7 +113,8 @@ def test_last_processed_interaction_is_aggregate_only(monkeypatch: pytest.Monkey
     assert snapshot["interactions"]["last_processed_at"]
     assert isinstance(snapshot["interactions"]["last_processed_age_seconds"], float)
     assert snapshot["interactions"]["last_processed_age_seconds"] >= 0
-    assert any(name == "ancora.interactions.last_processed.age_seconds" for name, *_ in telemetry.gauges)
+    metric_name = "ancora.interactions.last_processed.age_seconds"
+    assert any(name == metric_name for name, *_ in telemetry.gauges)
     assert "correlation" not in str(snapshot).lower()
     assert "telegram_user" not in str(snapshot).lower()
 

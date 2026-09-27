@@ -176,7 +176,7 @@ ejecuta el Agent como máximo una vez, el modelo cambia sin redeploy, ningún ru
 supera su budget, LiteLLM falla cerrado, la interacción es trazable por
 `correlation_id` y no se exporta contenido personal.
 
-### BL-24 · Onboarding de usuarios Telegram mediante invitaciones gobernadas
+### BL-24 · Onboarding de usuarios Telegram mediante invitaciones gobernadas 🔶 en curso — specs/017
 `ALLOWED_TELEGRAM_USER_IDS` permite una allowlist técnica, pero no es un proceso
 práctico de alta para un grupo de evaluadores aún no definido: no se debe abrir
 el bot a cualquier usuario ni pedir a cada persona que averigüe su Telegram ID.
@@ -202,6 +202,15 @@ ya autorizada.
 **Prioridad P0:** desbloquea pruebas controladas con múltiples personas y debe
 integrarse con la admission durable de `specs/013`, no mediante un bypass de la
 allowlist actual.
+
+**Actualización 2026-09-27 (T1):** creado `specs/017-telegram-governed-pairing`
+y la base auditable: migración Alembic `0005_telegram_pairing`, bootstrap
+idempotente y API administrativa apagada por defecto (`TELEGRAM_PAIRING_ADMIN_ENABLED`)
+que reutiliza bearer + actor obligatorio. Las invitaciones se generan con alta
+entropía y se persisten sólo como HMAC con `TELEGRAM_PAIRING_CODE_PEPPER`; la
+emisión devuelve el código una única vez. Aún no hay canje `/pair` ni consulta de
+autorización desde admission: ningún usuario adicional puede llegar al Agent por
+este incremento.
 
 ---
 

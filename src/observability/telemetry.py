@@ -162,7 +162,9 @@ class MetadataTelemetry:
         self._counters: dict[str, Any] = {}
         self._histograms: dict[str, Any] = {}
         self._gauges: dict[str, Any] = {}
-        self._gauge_values: dict[tuple[str, tuple[tuple[str, str | bool | int | float], ...]], float] = {}
+        self._gauge_values: dict[
+            tuple[str, tuple[tuple[str, str | bool | int | float], ...]], float
+        ] = {}
 
     @contextmanager
     def span(

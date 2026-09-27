@@ -76,6 +76,12 @@ GOVERNANCE_TABLES = {
     "telegram_response_deliveries",
 }
 
+PAIRING_TABLES = {
+    "telegram_pairing_authorizations",
+    "telegram_pairing_invitations",
+    "telegram_pairing_requests",
+}
+
 
 @dataclass(frozen=True)
 class MigrationDatabase:
@@ -205,7 +211,7 @@ def test_alembic_fresh_install_and_latest_downgrade(
     command.upgrade(config, "head")
 
     assert _current_revision(migration_database) == HEAD_REVISION
-    assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES | PAIRING_TABLES
     assert {
         "source_interaction_id",
         "idempotency_key",
@@ -228,6 +234,7 @@ def test_alembic_fresh_install_and_latest_downgrade(
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert not (PAIRING_TABLES & _tables(migration_database))
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
     command.upgrade(config, "head")
