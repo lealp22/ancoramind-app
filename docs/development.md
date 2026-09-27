@@ -262,7 +262,7 @@ pytest tests/e2e/
 
 ```bash
 ruff check src/
-# Informativo local por ahora; `mypy src/` está limpio desde specs/019.
+# Gate global en CI sobre `src/`; también debe ejecutarse antes de abrir una PR.
 mypy src/
 ```
 

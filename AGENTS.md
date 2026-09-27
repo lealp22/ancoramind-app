@@ -17,8 +17,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Lenguaje:** Python 3.12+
 - **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 506 unit
   tests + 71 integration tests; los integration requieren PostgreSQL/Docker
-  (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios;
-  Ruff es gate global en CI y mypy sigue siendo informativo.
+  (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios; ambos son
+  gates globales en CI.
 
 ---
 
@@ -252,7 +252,7 @@ pip install -e ".[dev]"
 # Lint (gate global — también en CI)
 ruff check src/ tests/ scripts/ migrations/
 
-# Type checking (informativo; no es gate CI, limpio localmente desde specs/019)
+# Type checking (gate global en CI desde specs/020)
 mypy src/
 ```
 

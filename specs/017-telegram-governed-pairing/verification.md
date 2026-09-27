@@ -44,5 +44,5 @@ ruff check src/ tests/ scripts/ migrations/
 - `python -m pytest tests/integration/ -q` → 71 passed.
 - `ruff check src/ tests/ scripts/ migrations/` and `git diff --check` → passed.
 - `mypy scripts/telegram_pairing.py` → passed. Desde specs/019, `mypy src/`
-  también está limpio (105 módulos); sigue siendo informativo y no es un gate CI.
+  también está limpio (105 módulos); desde specs/020 es gate del job `quality`.
 - No public webhook was registered and no Telegram account was contacted during this validation.

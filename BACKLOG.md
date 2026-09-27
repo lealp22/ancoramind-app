@@ -666,12 +666,12 @@ silenciar errores. Resultado: `mypy src/` limpio en 105 módulos; se corrigieron
 `GovernedInteractionRunner`, repositorios SQLAlchemy y helpers de tools. Ver
 `specs/019-mypy-hardening/`.
 
-### Propuesta · Convertir `mypy src/` en gate CI — specs/020
+### Calidad estática · `mypy src/` como gate CI 🔶 rollout pendiente — specs/020
 
-`mypy src/` ya está limpio en 105 módulos bajo configuración estricta, pero sigue
-siendo un check local informativo. La propuesta 020 define la adopción explícita
-como gate, el orden del job, el criterio de rollback y la evidencia requerida; no
-modifica `.github/workflows/ci.yml` sin decisión de adopción.
+Con aprobación explícita, el job `quality` ejecuta `mypy src/` después de Ruff y
+antes de los tests unitarios. El alcance mantiene 105 módulos de `src/` con modo
+estricto; no incluye tests, scripts ni migraciones. Pendiente registrar la primera
+ejecución verde de GitHub Actions tras el push.
 
 ### BL-34 · Política de contexto por tokens y compactación gobernada
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota

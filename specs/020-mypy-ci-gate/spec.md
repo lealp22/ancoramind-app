@@ -1,7 +1,7 @@
 # Spec: 020 — Mypy CI Gate
 
-> **Backlog:** calidad estática propuesta
-> **Status:** propuesta; no aprobada (2026-09-27)
+> **Backlog:** calidad estática
+> **Status:** implementada localmente; pendiente evidencia CI (2026-09-27)
 > **Target:** convertir `mypy src/` en una comprobación obligatoria de CI sin
 > relajar la configuración estricta ni ampliar el alcance a tests o scripts.
 
@@ -10,10 +10,10 @@
 ## Contexto
 
 La spec 019 cerró `mypy src/` sin errores: 105 módulos comprobados con
-`strict = true`. El workflow actual sólo ejecuta Ruff y tests; por tanto, una
-regresión de tipos puede entrar en `main` aunque el chequeo local siga documentado.
+`strict = true`. La aprobación explícita incorpora el mismo comando al job
+`quality`, para impedir que una regresión de tipos entre en `main`.
 
-## Propuesta
+## Implementación aprobada
 
 Añadir al job existente `quality` de `.github/workflows/ci.yml` un paso explícito:
 
@@ -22,7 +22,7 @@ Añadir al job existente `quality` de `.github/workflows/ci.yml` un paso explíc
   run: mypy src/
 ```
 
-Debe ejecutarse después de instalar dependencias y antes de los tests unitarios.
+El paso se ejecuta después de Ruff y antes de los tests unitarios.
 No se añade un job separado ni se ejecuta `mypy` sobre `tests/`, `scripts/` o
 migraciones en esta fase: el contrato validado y limpio es exactamente `src/`.
 

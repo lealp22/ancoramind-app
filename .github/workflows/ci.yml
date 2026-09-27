@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: ruff check src/ tests/ scripts/ migrations/
 
+      - name: Type check
+        run: mypy src/
+
       - name: Unit tests
         run: pytest tests/unit/ -q
         # src.main creates the AgentOS app during module import. This is a
