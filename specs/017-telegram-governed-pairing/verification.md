@@ -1,6 +1,6 @@
 # Verification: 017 — Governed Telegram Pairing
 
-> **Status:** 🔶 T1–T3 implemented locally as of 2026-09-27; controlled Telegram/Railway E2E remains pending.
+> **Status:** 🔶 T1–T4 local implementation complete as of 2026-09-27; controlled Telegram/Railway E2E remains pending.
 
 ## Local verification required
 
@@ -27,11 +27,14 @@ ruff check src/ tests/ scripts/ migrations/
   new update without requiring an app restart.
 - [x] A duplicate `/pair` update is idempotent by `bot_id + update_id`: one pairing
   request and one logical response are persisted.
+- [x] Operator CLI and documented staging flags use only the bearer-protected
+  admin API; mutations require an auditable actor and reason, without direct SQL
+  access or code arguments.
 - [ ] Controlled Railway E2E preserves Telegram update idempotency and outbox delivery.
 
 ## Evidence (local, 2026-09-27)
 
-- `python -m pytest tests/unit/ -q` → 484 passed.
+- `python -m pytest tests/unit/ -q` → 490 passed.
 - `python -m pytest tests/integration/ -q` → 71 passed.
 - `ruff check src/ tests/ scripts/ migrations/` and `git diff --check` → passed.
 - No public webhook was registered and no Telegram account was contacted during this validation.

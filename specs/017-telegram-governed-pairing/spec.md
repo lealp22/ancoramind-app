@@ -52,8 +52,16 @@ metadata only.
   without retaining the raw code.
 - Operator API lists bounded pending work and rejects requests with actor/reason.
 
-## Next increment
+## T3/T4 local increments (2026-09-27)
 
-- `/pair <code>` deterministic command/outbox response and admission integration
-  that checks active authorizations without bypassing existing controls.
-- Railway E2E and runbook.
+- `/pair <code>` is parsed deterministically before Agent execution, is private
+  chat-only, redacts its credential before durable interaction storage and writes
+  a fixed safe reply to the transactional outbox.
+- Admission accepts either the technical allowlist or a fresh active durable
+  authorization lookup, so a revocation blocks the next new update without a
+  restart.
+- `scripts/telegram_pairing.py` operates the protected admin API for issuance,
+  pending-request review and revocation. `docs/runbooks-017-telegram-pairing.md`
+  defines rollout, rotation and approved E2E procedure.
+- A real Telegram/Railway E2E still requires explicit webhook authorization and a
+  non-production evaluator account.

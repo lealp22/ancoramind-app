@@ -104,6 +104,14 @@ RUNTIME_CONFIG_ADMIN_ENABLED=false
 # the approved bootstrap configuration and contain no secrets.
 # RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE=ancoramind-default
 
+# BL-24 pairing remains disabled unless an explicitly approved, non-production
+# evaluator rollout is in progress. The admin API is bearer protected and has no
+# CORS surface; the code pepper is independent from payload encryption.
+TELEGRAM_PAIRING_ADMIN_ENABLED=false
+TELEGRAM_PAIRING_ENABLED=false
+# TELEGRAM_PAIRING_CODE_PEPPER=<hmac-secret-independiente>
+# Operational procedure: docs/runbooks-017-telegram-pairing.md
+
 LLM_PROVIDER=<openai|openrouter|openai-like>
 LLM_MODEL=<modelo-elegido>
 OPENAI_API_KEY=<si-aplica>

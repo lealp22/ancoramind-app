@@ -25,6 +25,6 @@
 
 ## T4: Operations and closure
 
-- [ ] Add administrative CLI/runbook and production rollout flags.
+- [x] Add administrative CLI/runbook and production rollout flags.
 - [ ] Execute controlled Railway E2E with a non-production evaluator account.
 - [ ] Record evidence with metadata only and update BACKLOG.md on closure.
