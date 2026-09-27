@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "run-e2e.ps1"
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="run-e2e.ps1 smoke tests require Windows PowerShell",
+)
 
 
 def _normalize_powershell_output(value: str) -> str:
