@@ -17,12 +17,12 @@ from src.repositories.vehicles import VehiclesRepository
 from src.security.user_context import UserContext
 
 
-async def _get_vehicle_service():
+async def _get_vehicle_service() -> VehicleService:
     session = await get_session()
     return VehicleService(VehiclesRepository(session), MaintenanceRepository(session))
 
 
-async def _get_actions_repo():
+async def _get_actions_repo() -> ActionProposalsRepository:
     session = await get_session()
     return ActionProposalsRepository(session)
 

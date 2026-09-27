@@ -187,6 +187,35 @@ async def test_runner_uses_automatic_document_tool_for_media(
     assert captured["files"] is None
 
 
+async def test_runner_rejects_non_text_document_ingestion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, _ = _runner()
+
+    async def fake_analyze_document(run_context: Any, *, images: Any, files: Any) -> object:
+        return {"structured": True}
+
+    monkeypatch.setattr("src.agent.tools.documents.analyze_document", fake_analyze_document)
+
+    with pytest.raises(ValueError, match="document ingestion returned non-text"):
+        await runner.run(
+            "He adjuntado un documento.",
+            user_id="88",
+            session_id="tg:ancoramind:77",
+            run_id="run-media-non-text",
+            correlation_id=uuid4(),
+            telegram_update_id=9001,
+            media=(
+                ResolvedTelegramMedia(
+                    content=b"%PDF-1.4",
+                    filename="factura.pdf",
+                    mime_type="application/pdf",
+                    is_image=False,
+                ),
+            ),
+        )
+
+
 async def test_runner_rejects_non_text_content() -> None:
     runner, factory = _runner()
 

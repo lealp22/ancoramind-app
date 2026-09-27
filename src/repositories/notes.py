@@ -39,6 +39,8 @@ class NotesRepository:
             "now": now,
         })
         row = result.fetchone()
+        if row is None:
+            raise RuntimeError("Note insert did not return a row")
         await self._session.commit()
         return Note(
             id=row.id,

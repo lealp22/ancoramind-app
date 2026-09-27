@@ -26,7 +26,7 @@ class CalendarProvider(Protocol):
 
     async def list_events(
         self, user_external_id: str, start: datetime, end: datetime
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         """List events in a date range from the external calendar."""
         ...
 
@@ -46,5 +46,5 @@ class NoopCalendarProvider:
 
     async def list_events(
         self, user_external_id: str, start: datetime, end: datetime
-    ) -> list[dict]:
+    ) -> list[dict[str, object]]:
         return []

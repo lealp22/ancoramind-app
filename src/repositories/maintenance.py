@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.vehicles.models import VehicleMaintenance, VehicleMaintenanceCreate
@@ -31,6 +31,8 @@ class MaintenanceRepository:
             "notes": data.notes, "src": data.source_document_id, "now": now,
         })
         row = r.fetchone()
+        if row is None:
+            raise RuntimeError("Vehicle maintenance insert did not return a row")
         await self._session.commit()
         return VehicleMaintenance(
             id=row.id, vehicle_id=row.vehicle_id, user_id=row.user_id,
@@ -57,7 +59,7 @@ class MaintenanceRepository:
         return _row_to_maintenance(row) if row else None
 
 
-def _row_to_maintenance(row) -> VehicleMaintenance:
+def _row_to_maintenance(row: Row[tuple[object, ...]]) -> VehicleMaintenance:
     return VehicleMaintenance(
         id=row.id, vehicle_id=row.vehicle_id, user_id=row.user_id,
         date=row.date, mileage_km=row.mileage_km, description=row.description,

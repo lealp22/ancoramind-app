@@ -42,6 +42,8 @@ class DocumentsRepository:
             "now": now,
         })
         row = result.fetchone()
+        if row is None:
+            raise RuntimeError("Document insert did not return a row")
         await self._session.commit()
         return Document(
             id=row.id,
@@ -131,6 +133,8 @@ class DocumentsRepository:
             "conf": confidence, "now": now,
         })
         row = result.fetchone()
+        if row is None:
+            raise RuntimeError("AI extraction insert did not return a row")
         await self._session.commit()
         return AIExtraction(
             id=row.id, document_id=data.document_id, provider=row.provider,

@@ -18,6 +18,7 @@ from uuid import UUID
 
 from agno.media import File, Image
 from agno.run import RunContext
+from agno.run.agent import RunOutput
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.domain.interactions.media import ResolvedTelegramMedia
@@ -132,25 +133,35 @@ class GovernedInteractionRunner:
                         # the nested extraction resolves ancoramind-vision.
                         from src.agent.tools.documents import analyze_document
 
-                        operation = analyze_document(
-                            run_context,
-                            images=images or None,
-                            files=files or None,
+                        document_output = await asyncio.wait_for(
+                            analyze_document(
+                                run_context,
+                                images=images or None,
+                                files=files or None,
+                            ),
+                            timeout=context.budget.seconds_remaining(),
                         )
+                        if not isinstance(document_output, str):
+                            raise ValueError(
+                                "Governed document ingestion returned non-text content"
+                            )
+                        return document_output
                     else:
                         agent = self._factory.create_for_run(context)
-                        operation = agent.arun(
-                            input_text,
-                            stream=False,
-                            user_id=user_id,
-                            session_id=session_id,
-                            run_id=run_id,
-                            run_context=run_context,
+                        agent_output: RunOutput = await asyncio.wait_for(
+                            agent.arun(
+                                input_text,
+                                stream=False,
+                                user_id=user_id,
+                                session_id=session_id,
+                                run_id=run_id,
+                                run_context=run_context,
+                            ),
+                            timeout=context.budget.seconds_remaining(),
                         )
-                    output = await asyncio.wait_for(
-                        operation,
-                        timeout=context.budget.seconds_remaining(),
-                    )
+                        if not isinstance(agent_output.content, str):
+                            raise ValueError("Governed interaction run returned non-text content")
+                        return agent_output.content
                 except TimeoutError as exc:
                     get_telemetry().mark_error(span, "ExecutionBudgetExceededError")
                     get_telemetry().counter(
@@ -169,10 +180,3 @@ class GovernedInteractionRunner:
                         attributes={"ancora.status": "completed"},
                         enabled=observability.metrics_enabled,
                     )
-        if media:
-            if not isinstance(output, str):
-                raise ValueError("Governed document ingestion returned non-text content")
-            return output
-        if not isinstance(output.content, str):
-            raise ValueError("Governed interaction run returned non-text content")
-        return output.content

@@ -29,6 +29,8 @@ class VehiclesRepository:
             "vin": data.vin, "now": now,
         })
         row = r.fetchone()
+        if row is None:
+            raise RuntimeError("Vehicle insert did not return a row")
         await self._session.commit()
         return Vehicle(id=row.id, user_id=row.user_id, make=row.make, model=row.model,
                        year=row.year, registration=row.registration, nickname=row.nickname,

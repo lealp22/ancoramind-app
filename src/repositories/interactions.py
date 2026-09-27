@@ -200,6 +200,10 @@ class TelegramInteractionsRepository:
                 received_at=now,
             )
             if has_deterministic_reply and parsed.status is InteractionStatus.RESPONSE_READY:
+                assert deterministic_reply_ciphertext is not None
+                assert deterministic_reply_key_version is not None
+                assert deterministic_reply_length is not None
+                assert deterministic_reply_chunk_count is not None
                 await self._create_pending_response(
                     interaction_id=parsed.id,
                     content_ciphertext=deterministic_reply_ciphertext,

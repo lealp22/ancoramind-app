@@ -12,12 +12,12 @@ from src.repositories.reminders import RemindersRepository
 from src.security.user_context import UserContext
 
 
-async def _get_reminder_service():
+async def _get_reminder_service() -> ReminderService:
     session = await get_session()
     return ReminderService(RemindersRepository(session))
 
 
-async def _get_actions_repo():
+async def _get_actions_repo() -> ActionProposalsRepository:
     session = await get_session()
     return ActionProposalsRepository(session)
 

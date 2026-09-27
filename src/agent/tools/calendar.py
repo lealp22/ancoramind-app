@@ -13,12 +13,12 @@ from src.repositories.database import get_session
 from src.security.user_context import UserContext
 
 
-async def _get_calendar_service():
+async def _get_calendar_service() -> CalendarService:
     session = await get_session()
     return CalendarService(CalendarRepository(session), NoopCalendarProvider())
 
 
-async def _get_actions_repo():
+async def _get_actions_repo() -> ActionProposalsRepository:
     session = await get_session()
     return ActionProposalsRepository(session)
 

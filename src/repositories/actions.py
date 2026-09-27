@@ -1,10 +1,14 @@
 """Action proposals repository — governance layer for WRITE operations."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+ProposalPayload = dict[str, Any]
+ProposalRecord = dict[str, Any]
 
 
 class ActionProposalsRepository:
@@ -17,9 +21,9 @@ class ActionProposalsRepository:
         self,
         user_id: str,
         tool_name: str,
-        payload: dict,
+        payload: ProposalPayload,
         source_document_id: UUID | None = None,
-    ) -> dict:
+    ) -> ProposalRecord:
         """Create a pending action proposal."""
         import json
         now = datetime.now(tz=UTC)
@@ -34,6 +38,8 @@ class ActionProposalsRepository:
             "src": source_document_id, "now": now,
         })
         row = result.fetchone()
+        if row is None:
+            raise RuntimeError("Action proposal insert did not return a row")
         await self._session.commit()
         return {
             "id": str(row.id),
@@ -47,7 +53,7 @@ class ActionProposalsRepository:
             "created_at": row.created_at.isoformat(),
         }
 
-    async def get_pending(self, user_id: str, proposal_id: str) -> dict | None:
+    async def get_pending(self, user_id: str, proposal_id: str) -> ProposalRecord | None:
         """Get a pending proposal by ID."""
         stmt = text("""
             SELECT id,user_id,tool_name,status,payload,source_document_id,created_at
@@ -69,7 +75,7 @@ class ActionProposalsRepository:
             ),
         }
 
-    async def confirm(self, user_id: str, proposal_id: str) -> dict | None:
+    async def confirm(self, user_id: str, proposal_id: str) -> ProposalRecord | None:
         """Confirm a pending proposal."""
         now = datetime.now(tz=UTC)
         stmt = text("""

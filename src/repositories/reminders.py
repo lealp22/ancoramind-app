@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.reminders.models import Reminder, ReminderCreate
@@ -29,6 +29,8 @@ class RemindersRepository:
             "src_action": data.source_action_id, "now": now,
         })
         row = r.fetchone()
+        if row is None:
+            raise RuntimeError("Reminder insert did not return a row")
         await self._session.commit()
         return _row_to_reminder(row)
 
@@ -66,15 +68,16 @@ class RemindersRepository:
             UPDATE ancora.reminders
             SET status='fired'
             WHERE id=:id AND user_id=:uid AND status='pending'
+            RETURNING id
         """)
         r = await self._session.execute(
             stmt, {"id": reminder_id, "uid": user_id}
         )
         await self._session.commit()
-        return r.rowcount > 0
+        return r.fetchone() is not None
 
 
-def _row_to_reminder(row) -> Reminder:
+def _row_to_reminder(row: Row[tuple[object, ...]]) -> Reminder:
     return Reminder(
         id=row.id, user_id=row.user_id, title=row.title, description=row.description,
         trigger_at=row.trigger_at, status=row.status,

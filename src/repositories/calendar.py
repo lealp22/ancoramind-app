@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import text
+from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.calendar.models import CalendarEvent, CalendarEventCreate
@@ -30,6 +30,8 @@ class CalendarRepository:
             "peid": provider_event_id, "src": data.source_document_id, "now": now,
         })
         row = r.fetchone()
+        if row is None:
+            raise RuntimeError("Calendar event insert did not return a row")
         await self._session.commit()
         return _row_to_event(row)
 
@@ -45,7 +47,7 @@ class CalendarRepository:
         return [_row_to_event(row) for row in r.fetchall()]
 
 
-def _row_to_event(row) -> CalendarEvent:
+def _row_to_event(row: Row[tuple[object, ...]]) -> CalendarEvent:
     return CalendarEvent(
         id=row.id, user_id=row.user_id, title=row.title, description=row.description,
         location=row.location, start_at=row.start_at, end_at=row.end_at,

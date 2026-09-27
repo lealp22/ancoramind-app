@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-26
+Última actualización: 2026-09-27
 
 ---
 
@@ -29,7 +29,7 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 455 unit + 64 integration — Ruff limpio en
+Tests: 498 unit + 71 integration — Ruff limpio en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -657,6 +657,14 @@ máximo una vez; otro usuario no puede leer estado, respuesta, adjuntos ni
 propuestas; tests contract/unit/integration y E2E sobre Railway.
 
 ## P3 — Calidad del agente
+
+### Deuda técnica · Hardening incremental de `mypy src/` ✅ completada — specs/019
+
+Baseline local del 2026-09-27: 93 errores en 14 archivos bajo el modo estricto
+actual. El trabajo se hace por grupos cohesivos sin relajar configuración ni
+silenciar errores. Resultado: `mypy src/` limpio en 105 módulos; se corrigieron
+`GovernedInteractionRunner`, repositorios SQLAlchemy y helpers de tools. Ver
+`specs/019-mypy-hardening/`.
 
 ### BL-34 · Política de contexto por tokens y compactación gobernada
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota
