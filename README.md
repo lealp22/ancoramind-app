@@ -31,7 +31,7 @@ Canonical data persisted with full provenance
 ## Architecture
 
 ```
-Telegram → Agno AgentOS → AncoraMind Agent → Tools → AncoraMind Core → PostgreSQL
+Telegram → admission / idempotency → AgentOS → governed agent → Tools → AncoraMind Core → PostgreSQL
 ```
 
 See [docs/architecture.md](docs/architecture.md) for full details.
@@ -42,6 +42,8 @@ See [docs/architecture.md](docs/architecture.md) for full details.
 - **Agent Runtime ≠ Core** — Agno is replaceable infrastructure; Core is the product
 - **Probabilistic / Deterministic boundary** — LLM decides which capability; Core decides permissions
 - **Canonical memory** — PostgreSQL is the source of truth, not conversation memory
+- **Governed mutations** — WRITE and EXTERNAL_ACTION operations require an ActionProposal and human confirmation
+- **Governed inference** — model access is budgeted, auditable, and routed through versioned runtime configuration
 
 ---
 
@@ -50,15 +52,25 @@ See [docs/architecture.md](docs/architecture.md) for full details.
 ```bash
 # Clone and setup
 git clone <repo-url>
-cd ancoramind-core
+cd ancoramind-app
 
 # Copy environment config
 cp .env.example .env
 # Edit .env with your LLM and Telegram credentials
 
-# Start with Docker
-docker compose up -d
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Optional: start local PostgreSQL when .env uses the local backend
+docker compose --profile postgres up -d postgres
+
+# Start the application
+python -m src.main
 ```
+
+For daily startup, Supabase-backed setups, Telegram webhook configuration, and
+Railway deployment, see [Quick Start](docs/quick-start.md) and
+[E2E Deployment](docs/deployment-e2e.md).
 
 ---
 
@@ -74,10 +86,12 @@ docker compose up -d
 | [ADR-005](docs/adr/ADR-005-governed-llm-access-runtime-config.md) | Runtime model configuration and LiteLLM Gateway |
 | [ADR-006](docs/adr/ADR-006-opentelemetry-observability.md) | OpenTelemetry and Grafana Cloud observability |
 | [Development](docs/development.md) | Local development guide |
+| [Adding Tools](docs/adding-tools.md) | Capability/tool implementation guide |
 | [Quick Start](docs/quick-start.md) | Guía de arranque rápido diario |
 | [E2E Deployment](docs/deployment-e2e.md) | Step-by-step Telegram + PostgreSQL deployment |
 | [Railway Deployment](docs/deployment-railway.md) | Railway + GitHub CI/CD + stable Telegram webhook |
 | [Operational Runbooks](docs/runbooks-013.md) | Triage, LiteLLM Gateway, circuit breaker, budgets and incident recovery |
+| [Spec-020](specs/020-mypy-ci-gate/spec.md) | Strict `mypy src/` quality gate in CI |
 
 ---
 
@@ -90,9 +104,10 @@ docker compose up -d
 | Database | PostgreSQL |
 | Channel | Telegram (private chats) |
 | Validation | Pydantic |
-| LLM Gateway | LiteLLM Proxy pilot implemented locally (T11/T12: circuit breaker, rate limits, cost governance); private Railway rollout pending |
+| LLM Access | Governed `LLMAccess` with runtime snapshots, budgets, cost ledger and versioned LiteLLM Gateway aliases |
 | Observability | Metadata-only OpenTelemetry; private Collector/Grafana rollout prepared |
 | Deployment | Docker local; Railway prepared for managed deployment |
+| Quality | GitHub Actions: Ruff, strict `mypy src/`, unit tests, integration tests, and Collector-config validation |
 
 ---
 
@@ -102,16 +117,18 @@ docker compose up -d
 src/
 ├── agent/          ← Agno integration (infrastructure)
 ├── domain/         ← Business logic (product)
-├── services/       ← Application services
 ├── repositories/   ← PostgreSQL access
 ├── storage/        ← Document storage abstraction
 ├── security/       ← Identity, authorization, policy
+├── notifications/  ← Telegram delivery and safe markup rendering
 └── governance/     ← Metadata, risk, audit
 
 prompts/            ← Versioned AI assets
 specs/              ← Spec-driven development
 evals/              ← Agentic evaluations
 docs/               ← Architecture, governance, ADRs
+gateway/            ← LiteLLM Proxy pilot configuration
+observability/      ← Private OpenTelemetry Collector configuration
 ```
 
 ---
@@ -124,6 +141,8 @@ docs/               ← Architecture, governance, ADRs
 - [x] M3: Document Memory (attachment → storage → extraction)
 - [x] M4: Vehicle Vertical Slice (invoice → maintenance → query)
 - [x] M5: Calendar & Reminders
+- [x] BL-21: Multi-list TODOs with governed mutations
+- [x] Strict static quality gate: Ruff + `mypy src/` in GitHub Actions
 - [x] BL-23 T2–T14: governed LLM access, durable admission, execution budget,
       document extraction port, metadata-only OpenTelemetry, the LiteLLM
       Gateway pilot, cost/reliability governance (circuit breaker, rate
@@ -132,9 +151,9 @@ docs/               ← Architecture, governance, ADRs
       (load/crash/retention suite + operational runbooks) (Railway rollout of
       Collector/Grafana/LiteLLM, benchmark with a real key and E2E remain pending;
       BL-23 stays open)
-- [ ] MVP: Usable personal assistant (E2E Telegram validation)
+- [ ] MVP: Usable personal assistant (complete Telegram E2E validation remains)
 
-### Capabilities (19 tools)
+### Capabilities (32 tools when `ANCORA_DATABASE_URL` is configured)
 
 | Domain | Tools | Risk |
 |---|---|---|
@@ -146,9 +165,26 @@ docs/               ← Architecture, governance, ADRs
 | Vehicles (write) | `propose_vehicle_maintenance`, `execute_vehicle_maintenance` | WRITE |
 | Reminders | `list_reminders`, `propose_reminder`, `execute_reminder` | READ/WRITE |
 | Calendar | `check_calendar`, `propose_calendar_event`, `execute_calendar_event` | READ/EXTERNAL_ACTION |
+| TODO lists | `list_todo_lists`, `propose_todo_list`, `execute_todo_list`, `propose_todo_list_rename`, `propose_todo_list_delete` | READ/WRITE/DESTRUCTIVE |
+| TODO items | `list_todo_items`, `propose_todo_item`, `propose_todo_item_update`, `propose_todo_item_complete`, `propose_todo_item_reopen`, `propose_todo_item_move`, `propose_todo_item_delete`, `execute_todo_item` | READ/WRITE/DESTRUCTIVE |
 
-> WRITE / EXTERNAL_ACTION operations use ActionProposal governance:
+> All WRITE, EXTERNAL_ACTION, and DESTRUCTIVE operations use ActionProposal governance:
 > propose → user confirmation → execute → audit.
+
+Without `ANCORA_DATABASE_URL`, the application starts in a degraded mode with
+only the system time tool available; domain tools are intentionally not loaded.
+
+### Quality checks
+
+```bash
+ruff check src/ tests/ scripts/ migrations/
+mypy src/
+pytest tests/unit/ -q
+pytest tests/integration/ -q  # Requires Docker/PostgreSQL
+```
+
+GitHub Actions runs Ruff and strict `mypy src/` before the unit suite, plus
+separate integration and OpenTelemetry Collector configuration jobs.
 
 ---
 

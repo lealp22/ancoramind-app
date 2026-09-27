@@ -1,7 +1,7 @@
 # Spec: 020 — Mypy CI Gate
 
 > **Backlog:** calidad estática
-> **Status:** implementada localmente; pendiente evidencia CI (2026-09-27)
+> **Status:** completada (2026-09-27)
 > **Target:** convertir `mypy src/` en una comprobación obligatoria de CI sin
 > relajar la configuración estricta ni ampliar el alcance a tests o scripts.
 
@@ -53,6 +53,13 @@ migraciones en esta fase: el contrato validado y limpio es exactamente `src/`.
    Actions sobre Python 3.12.
 4. Si aparece una incompatibilidad específica de runner/paquete, se documenta y
    se corrige de forma acotada; no se desactiva el modo estricto como atajo.
+
+## Evidencia de cierre
+
+- La ejecución del job `quality` en GitHub Actions quedó verde tras subir el
+  cambio que añade `Type check` (`mypy src/`), confirmado el 2026-09-27.
+- El gate se ejecuta en `ubuntu-latest` con Python 3.12, entre Ruff y los tests
+  unitarios, sin ampliar el alcance fuera de `src/`.
 
 ## Rollback
 

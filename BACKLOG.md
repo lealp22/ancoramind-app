@@ -666,12 +666,12 @@ silenciar errores. Resultado: `mypy src/` limpio en 105 módulos; se corrigieron
 `GovernedInteractionRunner`, repositorios SQLAlchemy y helpers de tools. Ver
 `specs/019-mypy-hardening/`.
 
-### Calidad estática · `mypy src/` como gate CI 🔶 rollout pendiente — specs/020
+### Calidad estática · `mypy src/` como gate CI ✅ completada — specs/020
 
 Con aprobación explícita, el job `quality` ejecuta `mypy src/` después de Ruff y
 antes de los tests unitarios. El alcance mantiene 105 módulos de `src/` con modo
-estricto; no incluye tests, scripts ni migraciones. Pendiente registrar la primera
-ejecución verde de GitHub Actions tras el push.
+estricto; no incluye tests, scripts ni migraciones. La primera ejecución verde de
+GitHub Actions fue confirmada el 2026-09-27.
 
 ### BL-34 · Política de contexto por tokens y compactación gobernada
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota

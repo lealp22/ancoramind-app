@@ -1,6 +1,6 @@
 # Tasks — Spec 020: Mypy CI Gate
 
-> **Status:** implementación local completa; pendiente evidencia GitHub Actions.
+> **Status:** completada (evidencia CI confirmada el 2026-09-27).
 
 - [x] T1 · Documentar el baseline limpio de specs/019 y el comando exacto.
 - [x] T2 · Definir el alcance inicial (`mypy src/`) y los límites explícitos.
@@ -8,5 +8,5 @@
 - [x] T4 · Obtener aprobación para modificar `.github/workflows/ci.yml`.
 - [x] T5 · Añadir el paso `Type check` al job `quality` después de Ruff y antes de
       los tests unitarios.
-- [ ] T6 · Verificar una ejecución verde en GitHub Actions, registrar la evidencia
+- [x] T6 · Verificar una ejecución verde en GitHub Actions, registrar la evidencia
       CI y actualizar el estado de esta spec.
