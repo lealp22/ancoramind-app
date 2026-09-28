@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-28
+Última actualización: 2026-09-29
 
 ---
 
@@ -27,6 +27,7 @@
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
+| BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 509 unit + 71 integration — Ruff limpio en
@@ -577,6 +578,78 @@ y provenance, y declarar extracción parcial/truncada al usuario. **Prioridad P2
 **Criterio de cierre:** fixtures benignas y maliciosas (ZIP bomb, path traversal,
 macro, archivo renombrado y workbook desmesurado), deduplicación, aislamiento por
 usuario y E2E Telegram por cada formato soportado.
+
+### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 en curso — specs/021
+Existe un servidor MCP externo (`C:\Users\0020572\OneDrive - ViewNext\IA\Research\tools\mcp_doc_to_markdown.py`,
+fuera de este repositorio) con conversores ya probados: PDF con capa de texto y
+DOCX → Markdown (`pymupdf4llm`, `mammoth`/`markdownify` vía `docx_to_md_app.py`),
+PDF escaneado → Markdown por visión página a página (`pdf_img_to_md.py`,
+reutilizable como adaptador `DocumentExtractionPort` — mismo patrón que T9/BL-6),
+detección de PDF escaneado vs. texto (`get_pdf_info`, basado en
+`page.get_text("text")` con PyMuPDF), VTT → Markdown y **Markdown → DOCX**
+(`markdown_docx_converter.py`).
+
+**No se conecta ese servidor MCP como infraestructura del runtime** (viola
+AGENTS.md §2.1/§2.9: no es un provider gobernado, no pasa por `LLMAccess`, no
+tiene `RuntimeConfigSnapshot`/budget/auditoría y vive fuera del repo). Lo que se
+incorpora es la **lógica determinista de conversión** portada a
+`src/domain/documents/` detrás de un puerto de infraestructura, siguiendo el
+mismo patrón que `DocumentExtractionPort`:
+
+1. **Selección de ruta de extracción por capa de texto.** Antes de invocar la
+   ruta visual (`ancoramind-vision`, BL-6), comprobar con PyMuPDF si el PDF tiene
+   texto extraíble (equivalente a `get_pdf_info`/`likely_scanned`). Si lo tiene,
+   extraer con `pymupdf4llm` (determinista, sin coste de inferencia ni budget);
+   si no, seguir la ruta visual ya implementada. Esto es exactamente el
+   refinamiento ya anotado en BL-6 ("detectar capa de texto para preferir
+   extracción textual… reservar visión para escaneados") y cierra ese pendiente.
+2. **Extracción DOCX determinista** como parte de BL-35 (ingesta ofimática):
+   reutilizar el enfoque de `docx_to_md_app.py` (texto + tablas a Markdown, modo
+   `remove`/`save` para imágenes) detrás del mismo puerto, con los límites de
+   seguridad ya exigidos en BL-35 (sin macros, sin relaciones externas, límites
+   de tamaño/profundidad).
+3. **Markdown → PDF para compartir salidas del asistente.** Hoy AncoraMind sólo
+   entrega texto/HTML por Telegram (BL-29). Añadir una capability
+   `propose_export_document` / `execute_export_document` (o, si se decide READ
+   por ser generación efímera sin escritura canónica, justificarlo explícitamente
+   en el spec) que convierta un Markdown (nota, resumen, lista TODO exportada,
+   etc.) a PDF y lo entregue como documento adjunto de Telegram
+   (`sendDocument`). El repo de origen no incluye un conversor Markdown→PDF
+   (sólo Markdown→DOCX); evaluar en el spec una librería determinista sin
+   dependencias de sistema pesadas (p. ej. generar DOCX con
+   `markdown_docx_converter.py` y convertir a PDF, o un renderer HTML→PDF
+   embebible) y documentar la decisión con sus límites de tamaño/tiempo.
+4. **VTT → Markdown** como adaptador adicional de `DocumentExtractionPort` si
+   aparece un caso de uso real (transcripciones de reuniones); no implementar
+   especulativamente sin ese caso.
+
+**Restricciones de gobernanza a preservar:** el contenido de cualquier documento
+convertido sigue siendo DATA, nunca instrucciones (AGENTS.md §2.8); la
+inferencia de la ruta visual sigue pasando por `LLMAccess`/Gateway con
+`RuntimeConfigSnapshot`, budget y auditoría (no se copia `create_vision_llm_client`
+tal cual — ese cliente físico directo del script de origen debe sustituirse por
+el adaptador `DocumentExtractionPort` ya existente); ninguna conversión ejecuta
+macros ni sigue referencias externas; los límites de tamaño/páginas/tiempo ya
+vigentes para documentos (BL-6/BL-35) aplican igual aquí. Dependencias de Python
+nuevas (`pymupdf4llm`, `mammoth`, `markdownify`, `python-docx`) se añaden a
+`pyproject.toml` sólo tras confirmar licencia y huella de instalación.
+
+**Prioridad P2.** El punto 1 (detección de capa de texto) es de bajo esfuerzo y
+ahorro directo de coste — candidato a adelantarse dentro del benchmark de BL-6.
+Los puntos 2 y 3 dependen de BL-35 y BL-29 respectivamente y deben spec-earse
+junto a ellos, no de forma aislada. **Criterio de cierre:** PDF de texto usa la
+ruta determinista (cero coste de inferencia) y PDF escaneado sigue usando
+visión; export Markdown→PDF probado con al menos una nota/lista real y entregado
+por Telegram con evidencia en `verification.md`; ningún adaptador nuevo crea un
+provider físico ni bypassa `LLMAccess`.
+
+**Actualización 2026-09-29 (specs/021 creado):** SDD redactado con tres fases.
+Fase 1 (detección de capa de texto + extracción determinista de PDF con
+`pymupdf4llm`) es autocontenida y lista para implementar — resuelve el
+refinamiento pendiente de BL-6. Fase 2 (DOCX determinista) queda bloqueada por
+el cierre de BL-35. Fase 3 (export Markdown→PDF) queda bloqueada por una
+decisión de diseño propia (DOCX→PDF vs. HTML→PDF) y por BL-29. Ver
+`specs/021-document-conversion-toolkit/`.
 
 ### BL-13 · Memoria personal y consolidación gobernada «Dream»
 Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad
