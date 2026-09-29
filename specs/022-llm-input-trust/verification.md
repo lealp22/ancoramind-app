@@ -34,9 +34,22 @@ sin Collector local; sin fallos de tests. Sin integration/E2E ni Agent/LLM real;
 
 ## Pendiente
 
+- 2026-09-30: diseño P0 acordado en `consent-design.md` (UX «Sí» solo para una
+  propuesta presentada, ID explícito para varias, TTL 15 minutos, evidencia
+  durable vinculada al evento posterior y política sin replay ambiguo).
+  Añadido parser **sin conectar** a `src/domain/interactions/consent_intent.py`:
+  23 nuevos unit tests de frases aisladas e identificadores, **no es prueba de
+  autenticación ni autoriza operaciones**. `python -m pytest tests/unit/ -q`
+  → **544 passed**; `python -m ruff check src/ tests/ scripts/ migrations/`
+  → limpio; `python -m mypy src/` → limpio (107 módulos);
+  `python scripts/run_evals.py` → 27 casos / 6 categorías;
+  `git diff --check` → limpio. Exportador OTel advierte de ausencia de
+  Collector en `localhost:4318`. Sin migración, guard conectado,
+  integration ni E2E en este incremento: **P0 y BL-39 siguen abiertos**.
 - Validar el comportamiento real de los modelos y la ruta multimodal del
   Agent principal con un harness aislado; las unit tests prueban contratos
   de serialización, no inmunidad semántica a prompt injection.
 - P0: autorización determinista de todas las mutaciones mediante prueba de
-  consentimiento; requiere diseño de estados y pruebas de DB/Telegram.
+  consentimiento; el diseño de estados existe, pero faltan implementación y
+  pruebas de DB/Telegram.
 - No se han realizado E2E ni cambios operativos/remotos.

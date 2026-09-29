@@ -64,6 +64,10 @@ cierre: `docs/llm-security-hardening.md` y `specs/022-llm-input-trust/`.
 prompt versionado 1.2 y `suggested_actions` ya no devuelto en respuestas de
 tools documentales. **No resuelve el P0 de consentimiento**, ni protege aún
 adjuntos entregados directamente al Agent o notas/resultados de otras tools.
+**Diseño P0 (2026-09-30):** `specs/022-llm-input-trust/consent-design.md`
+define UX de confirmación inequívoca, entrega previa, caducidad de 15 minutos,
+consumo único, estados y fallos ambiguos; inventaría ejecutores, WRITE directos
+y ruta AgentOS heredada. **Solo diseño: P0 no implementado ni validado.**
 
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 

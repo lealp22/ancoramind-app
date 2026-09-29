@@ -10,7 +10,7 @@ confianza, aunque lo suba el propio usuario. Ninguno debe autorizar operaciones
 WRITE/EXTERNAL_ACTION/DESTRUCTIVE ni alterar las instrucciones del Agent. No
 existe RAG actualmente. Véase `docs/llm-security-hardening.md`.
 
-### P0 — consentimiento verificable (pendiente, no implementado en esta fase)
+### P0 — consentimiento verificable (diseño acordado; no implementado)
 
 Invariante: `execute_*` debe rechazar cualquier propuesta no autorizada mediante
 un evento de usuario **posterior a la propuesta**, autenticado por el canal,
@@ -22,13 +22,13 @@ Múltiples propuestas abiertas requieren referencia inequívoca; «Sí» ambiguo
 debe pedir aclaración. El canal/transporte no se presupone Telegram dentro de
 `domain/`; el adaptador de Telegram obtiene la identidad/turno del ledger.
 
-Antes de implementar: decidir UX de `Sí` frente a confirmación explícita por
-ID, ubicación y caducidad de evidencia durable, transacción atómica con la
-acción externa y estados ante fallo ambiguo (no replay automático; ADR-004).
-Inventariar todos los `execute_*` y WRITE directos como `remember_note` y la
-ingesta automática; cualquier excepción a AGENTS.md debe aprobarse y quedar
-reflejada en `docs/architecture.md`. No aplicar un guard solo a una tool dejando
-las demás abiertas, ni considerar un `prompt` de confirmación como control.
+Diseño de UX, TTL, procedencia, estados, transacciones y tratamiento de fallo
+ambiguo: `consent-design.md`. Incluye inventario de todos los `execute_*`,
+`remember_note` y la ingesta automática, y bloqueo de la ruta AgentOS legado
+sin evidencia equivalente. Aún no se ha implementado ni validado con DB/Telegram.
+No aplicar un guard solo a una tool dejando las demás abiertas, ni considerar
+un `prompt` de confirmación como control. Toda excepción a AGENTS.md requiere
+aprobación y reflejo en `docs/architecture.md`.
 
 ### P1 — frontera documental (primer incremento local)
 
