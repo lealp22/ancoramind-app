@@ -6,6 +6,12 @@ The `run_context` parameter is injected automatically by Agno.
 
 from agno.run import RunContext
 
+from src.agent.tools.untrusted_results import (
+    MAX_NOTE_CHARS,
+    MAX_RESULT_RECORDS,
+    bounded_text,
+    render_retrieved_records,
+)
 from src.domain.notes.service import NotesService
 from src.repositories.database import get_session
 from src.repositories.notes import NotesRepository
@@ -70,12 +76,18 @@ async def search_notes(
     notes = await service.search(user_ctx, query)
 
     if not notes:
-        return "No encontré notas" + (f' que coincidan con "{query}".' if query else ".")
+        return "No encontré notas que coincidan con la búsqueda." if query else "No encontré notas."
 
-    lines = []
-    for note in notes:
-        created = note.created_at.strftime("%Y-%m-%d %H:%M")
-        lines.append(f"- [{created}] {note.content}")
-
-    header = f"Encontré {len(notes)} nota(s)" + (f' sobre "{query}"' if query else "") + ":\n\n"
-    return header + "\n".join(lines)
+    records: list[dict[str, object]] = []
+    for note in notes[:MAX_RESULT_RECORDS]:
+        content, truncated = bounded_text(note.content, MAX_NOTE_CHARS)
+        records.append(
+            {
+                "source": "canonical_note",
+                "id": str(note.id),
+                "created_at": note.created_at.isoformat(),
+                "content": content,
+                "content_truncated": truncated,
+            }
+        )
+    return render_retrieved_records("search_notes", records, len(notes))

@@ -22,9 +22,11 @@
 - [ ] T7 · Unit/integration tests de replay, carrera, múltiples propuestas,
       cross-user, expiración, rollback y fallo ambiguo; E2E solo con
       infraestructura y autorización operativa.
-- [ ] T8 · Provenance/acotación de notas y resultados de tools, adjunto directo
-      al Agent y fallback legado; incluir ataques multimodales cuando haya
-      harness apropiado.
+- [ ] T8 · Primer segmento completado: procedencia/acotación de las lecturas de notas y
+      documentos con unit tests. Pendiente: `analyze_document`, resto de tools,
+      adjunto directo al Agent y fallback legado; ensayos multimodales reales
+      cuando exista harness apropiado.
 - [ ] T9 · Con BL-8, ejecutar corpus adversarial/benigno sintético sobre Agent
       gobernado, con tools sin I/O; benchmark offline de detectores opcionales.
       No registrar contenido en observabilidad ni añadir vendor sin evaluación.
+      El corpus está ampliado, pero no se ha ejecutado contra el Agent.

@@ -38,7 +38,7 @@ def _request() -> EvalExecutionRequest:
 def test_load_eval_cases_validates_and_materializes_all_synthetic_cases() -> None:
     cases = load_eval_cases()
 
-    assert len(cases) == 19
+    assert len(cases) == 27
     assert {case.category for case in cases} == {
         "confirmation",
         "documents",

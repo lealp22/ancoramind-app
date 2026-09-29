@@ -12,6 +12,13 @@ from agno.media import File, Image
 from agno.run import RunContext
 
 from src.agent.document_vision import DocumentVisionPreparationError, prepare_visual_pages
+from src.agent.tools.untrusted_results import (
+    MAX_FILENAME_CHARS,
+    MAX_RESULT_RECORDS,
+    MAX_SUMMARY_CHARS,
+    bounded_text,
+    render_retrieved_records,
+)
 from src.domain.documents.service import DocumentService
 from src.repositories.database import get_session
 from src.repositories.documents import DocumentsRepository
@@ -73,17 +80,27 @@ async def search_documents(run_context: RunContext, query: str | None = None) ->
     docs = await service.search_documents(user_ctx, query)
 
     if not docs:
-        return "No encontré documentos" + (f' que coincidan con "{query}".' if query else ".")
-
-    lines = []
-    for doc in docs:
-        created = doc.created_at.strftime("%Y-%m-%d %H:%M")
-        size_kb = doc.size_bytes / 1024
-        lines.append(
-            f"- `{doc.id}` | {doc.original_filename} ({size_kb:.0f} KB, {doc.mime_type}, {created})"
+        return (
+            "No encontré documentos que coincidan con la búsqueda."
+            if query
+            else "No encontré documentos."
         )
-    header = f"Encontré {len(docs)} documento(s)" + (f' sobre "{query}"' if query else "") + ":\n\n"
-    return header + "\n".join(lines)
+
+    records: list[dict[str, object]] = []
+    for doc in docs[:MAX_RESULT_RECORDS]:
+        filename, truncated = bounded_text(doc.original_filename, MAX_FILENAME_CHARS)
+        records.append(
+            {
+                "source": "canonical_document",
+                "id": str(doc.id),
+                "filename": filename,
+                "filename_truncated": truncated,
+                "mime_type": doc.mime_type[:127],
+                "size_bytes": doc.size_bytes,
+                "created_at": doc.created_at.isoformat(),
+            }
+        )
+    return render_retrieved_records("search_documents", records, len(docs))
 
 
 async def get_document(run_context: RunContext, document_id: str) -> str:
@@ -101,29 +118,41 @@ async def get_document(run_context: RunContext, document_id: str) -> str:
     try:
         doc_id = UUID(document_id)
     except ValueError:
-        return f"ID de documento no válido: {document_id}"
+        return "ID de documento no válido."
 
     result = await service.get_document(user_ctx, doc_id)
     if not result:
-        return f"Documento no encontrado: {document_id}"
+        return "Documento no encontrado."
 
     doc = result.document
+    filename, filename_truncated = bounded_text(doc.original_filename, MAX_FILENAME_CHARS)
+    record: dict[str, object] = {
+        "source": "canonical_document",
+        "id": str(doc.id),
+        "filename": filename,
+        "filename_truncated": filename_truncated,
+        "mime_type": doc.mime_type[:127],
+        "size_bytes": doc.size_bytes,
+        "created_at": doc.created_at.isoformat(),
+    }
     ext = result.extraction
-    lines = [
-        f"📄 **{doc.original_filename}**",
-        f"   ID: `{doc.id}`",
-        f"   Tipo: {doc.mime_type} | Tamaño: {doc.size_bytes / 1024:.0f} KB",
-        f"   Recibido: {doc.created_at.strftime('%Y-%m-%d %H:%M')}",
-    ]
-
     if ext and ext.extraction:
-        e = ext.extraction
-        lines.append(f"\n🤖 **Extracción IA** (confidence: {ext.confidence or 'N/A'})")
-        if e.get("document_type"):
-            lines.append(f"   Tipo detectado: {e['document_type']}")
-        if e.get("summary"):
-            lines.append(f"   Resumen: {e['summary']}")
-    return "\n".join(lines)
+        extracted: dict[str, object] = {
+            "source": "ai_extraction_unverified",
+            "confidence": ext.confidence,
+        }
+        kind = ext.extraction.get("document_type")
+        if isinstance(kind, str):
+            extracted["document_type"], extracted["document_type_truncated"] = (
+                bounded_text(kind, MAX_FILENAME_CHARS)
+            )
+        summary = ext.extraction.get("summary")
+        if isinstance(summary, str):
+            extracted["summary"], extracted["summary_truncated"] = bounded_text(
+                summary, MAX_SUMMARY_CHARS
+            )
+        record["extraction"] = extracted
+    return render_retrieved_records("get_document", [record], 1)
 
 
 def _image_mime_type(content: bytes, declared: str | None) -> str:

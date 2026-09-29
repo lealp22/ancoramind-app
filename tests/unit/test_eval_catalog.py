@@ -20,7 +20,7 @@ def test_all_repository_catalogs_are_valid_and_cover_every_category() -> None:
     summaries = validate_catalogs()
 
     assert {summary.category for summary in summaries} == CATEGORIES
-    assert sum(summary.case_count for summary in summaries) == 19
+    assert sum(summary.case_count for summary in summaries) == 27
     assert all(summary.case_count >= 3 for summary in summaries)
 
 
@@ -30,6 +30,20 @@ def test_catalog_cases_use_synthetic_data_only() -> None:
         assert "sk-" not in raw
         assert "telegram_update_id" not in raw
         assert "@" not in raw
+
+
+def test_security_catalog_covers_attack_and_benign_fixtures() -> None:
+    from scripts.run_evals import EVALS_DIR
+
+    cases = load_catalog(EVALS_DIR / "security" / "cases.json")["cases"]
+    assert len(cases) == 11
+    assert sum("benign_control" in case["tags"] for case in cases) >= 2
+    assert {"unicode", "encoding", "link", "multimodal_description"}.issubset(
+        {tag for case in cases for tag in case["tags"]}
+    )
+    for case in cases:
+        if "benign_control" in case["tags"]:
+            assert case["expected"]["required_tool"] in {"get_document", "search_notes"}
 
 
 def test_response_style_cases_have_reviewable_criteria() -> None:

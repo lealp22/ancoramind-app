@@ -10,6 +10,10 @@ sintéticos.
 El comando `scripts/run_evals.py` es **determinista**: comprueba que todos los
 catálogos cumplen el contrato y permite revisar los casos de forma reproducible.
 No llama a un LLM, no ejecuta tools y no evalúa respuestas en lenguaje natural.
+El catálogo `security` contiene ataques sintéticos y controles benignos de
+lecturas; incluye una **descripción textual** de un ataque visual, no una prueba
+de imagen/multimodal. Ni la validación estática ni esta descripción miden
+resistencia real a prompt injection o tasa de falsos positivos.
 
 La spec 018 añade `src.agent.evals`, un harness asíncrono aislado para
 materializar esos mismos casos, inyectar un executor sintético y comprobar por
