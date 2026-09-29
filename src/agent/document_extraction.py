@@ -23,6 +23,7 @@ from agno.agent import Agent
 from agno.media import Image
 from pydantic import BaseModel
 
+from src.agent.instructions import load_prompt
 from src.domain.documents.extraction import DocumentExtractionOutcome, DocumentVisualPage
 from src.domain.llm_access.context import current_execution_context, execution_context_scope
 from src.domain.llm_access.models import (
@@ -42,12 +43,6 @@ if TYPE_CHECKING:
     from src.domain.llm_access.access import LLMAccess
 
 logger = logging.getLogger(__name__)
-
-EXTRACTION_INSTRUCTIONS = [
-    "Extract structured information from the document description.",
-    "Be precise. Use null for unknown fields.",
-]
-
 
 class AgnoDocumentExtractionAdapter:
     """Extract structured document data through the governed LLMAccess frontier."""
@@ -143,7 +138,7 @@ class AgnoDocumentExtractionAdapter:
         agent = Agent(
             model=model,
             output_schema=schema,
-            instructions=list(EXTRACTION_INSTRUCTIONS),
+            instructions=[load_prompt("skills/document_extraction.md")],
             markdown=False,
             retries=0,
             telemetry=False,
@@ -232,4 +227,4 @@ def _coerce_content[TSchema: BaseModel](content: Any, schema: type[TSchema]) -> 
     return None
 
 
-__all__ = ["AgnoDocumentExtractionAdapter", "EXTRACTION_INSTRUCTIONS"]
+__all__ = ["AgnoDocumentExtractionAdapter"]

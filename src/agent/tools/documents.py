@@ -123,8 +123,6 @@ async def get_document(run_context: RunContext, document_id: str) -> str:
             lines.append(f"   Tipo detectado: {e['document_type']}")
         if e.get("summary"):
             lines.append(f"   Resumen: {e['summary']}")
-        if e.get("suggested_actions"):
-            lines.append(f"   💡 Acciones sugeridas: {', '.join(e['suggested_actions'])}")
     return "\n".join(lines)
 
 
@@ -229,8 +227,6 @@ async def analyze_document(
                 lines.append(f"   Tipo: {e['document_type']}")
             if e.get("summary"):
                 lines.append(f"   {e['summary']}")
-            if e.get("suggested_actions"):
-                lines.append(f"   💡 Acciones sugeridas: {', '.join(e['suggested_actions'])}")
         results.append("\n".join(lines))
 
     return "\n\n".join(results)

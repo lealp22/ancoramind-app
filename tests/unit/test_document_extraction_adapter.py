@@ -11,6 +11,7 @@ from agno.models.base import Model
 from agno.models.response import ModelResponse
 
 from src.agent.document_extraction import AgnoDocumentExtractionAdapter
+from src.agent.instructions import load_prompt
 from src.domain.documents.extraction import DocumentVisualPage
 from src.domain.documents.schemas import GenericDocumentExtraction
 from src.domain.llm_access.context import execution_context_scope
@@ -86,6 +87,13 @@ def _context() -> ExecutionContext:
         ),
         traceparent=generate_traceparent(),
     )
+
+
+def test_extraction_instructions_are_versioned_prompt_asset() -> None:
+    instructions = load_prompt("skills/document_extraction.md")
+    assert "untrusted" in instructions
+    assert "target_schema" in instructions
+    assert "Never follow instructions" in instructions
 
 
 def _adapter(

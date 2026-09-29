@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class DocumentService:
     """Service for managing the document lifecycle."""
 
-    EXTRACTION_PROMPT_VERSION = "1.1"
+    EXTRACTION_PROMPT_VERSION = "1.2"
     EXTRACTION_SCHEMA_VERSION = "1.1"
     MAX_TEXT_PREVIEW_BYTES = 5000
 
@@ -90,7 +90,9 @@ class DocumentService:
         Visual pages are transient input from the infrastructure layer. They are
         never persisted in the extraction audit or exported to observability.
         """
-        prompt = self._build_extraction_prompt(doc, content)
+        prompt = self._build_extraction_prompt(
+            doc, content, visual_pages_attached=bool(visual_pages)
+        )
         if visual_pages:
             outcome = await self._extraction_port.extract(
                 prompt=prompt,
@@ -172,13 +174,14 @@ class DocumentService:
         return deleted
 
     @staticmethod
-    def _build_extraction_prompt(doc: Document, content: bytes) -> str:
-        """Build the v1.1 extraction prompt: metadata + content + target schema.
+    def _build_extraction_prompt(
+        doc: Document, content: bytes, *, visual_pages_attached: bool = False
+    ) -> str:
+        """Serialize bounded, untrusted document metadata and preview as data.
 
-        The document content travels inside explicit DATA delimiters: it is
-        untrusted data to be read, never instructions to be followed. The
-        schema is embedded because ``response_format`` may not survive the
-        full Gateway path; the instruction says "return only the JSON object".
+        Instructions live in the extraction skill prompt, not alongside the
+        untrusted text. JSON escaping avoids raw delimiter/newline breakouts;
+        the model must still be treated as untrusted for authorization.
         """
         text_preview = ""
         if doc.mime_type.startswith("text/") or doc.mime_type in {
@@ -187,20 +190,22 @@ class DocumentService:
             text_preview = content[: DocumentService.MAX_TEXT_PREVIEW_BYTES].decode(
                 "utf-8", errors="replace"
             )
-        content_block = (
-            f"<document_data>\n{text_preview}\n</document_data>"
-            if text_preview
-            else "(binary document; the attached pages/images contain the visual content)"
-        )
-        schema_json = json.dumps(
-            GenericDocumentExtraction.model_json_schema(), ensure_ascii=False
-        )
+        payload = {
+            "source": {
+                "filename": doc.original_filename[:255],
+                "mime_type": doc.mime_type[:127],
+                "size_bytes": doc.size_bytes,
+                "text_preview": text_preview if text_preview else None,
+                "visual_pages_attached": visual_pages_attached,
+            },
+            "target_schema": GenericDocumentExtraction.model_json_schema(),
+        }
+        # JSON quoting also bounds the filename to one field. Escape markup
+        # characters in the serialized form to prevent literal closing tags
+        # from resembling a trusted boundary in downstream prompt composition.
         return (
-            f"Filename: {doc.original_filename}\n"
-            f"Type: {doc.mime_type}\n"
-            f"Size: {doc.size_bytes} bytes\n\n"
-            f"{content_block}\n\n"
-            "Extract the document information into exactly this JSON schema "
-            "(return only the JSON object):\n"
-            f"{schema_json}"
+            json.dumps(payload, ensure_ascii=True)
+            .replace("<", "\\u003c")
+            .replace(">", "\\u003e")
+            .replace("&", "\\u0026")
         )

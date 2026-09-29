@@ -44,10 +44,10 @@ otro backlog en curso.
 2. **El Markdown extraído es DATA, nunca instrucciones** (AGENTS.md §2.8):
    entra como contenido no confiable, sujeto a los mismos límites de tamaño
    (`MAX_TEXT_PREVIEW_BYTES`) y al mismo pipeline de extracción estructurada
-   (`GenericDocumentExtraction`). El `<document_data>` actual por sí solo no
-   impide que contenido adversarial incluya `</document_data>`; serializar
-   filename y texto sin elevar su confianza. Coordinar el cambio con
-   BL-39/`docs/llm-security-hardening.md` antes de ampliar este flujo.
+   (`GenericDocumentExtraction`). BL-39/specs/022 sustituyó el
+   `<document_data>` anterior por serialización JSON de `source`/`target_schema`;
+   no elevar filename/texto a autoridad. Coordinar tests del nuevo PDF textual
+   con BL-39/`docs/llm-security-hardening.md` antes de ampliar este flujo.
 3. **Sin provider físico nuevo.** La detección y la extracción determinista no
    crean ningún cliente LLM; sólo usan PyMuPDF/`pymupdf4llm` localmente. La
    ruta visual sigue intacta y sigue pasando por `AgnoDocumentExtractionAdapter`
@@ -113,9 +113,9 @@ analyze_document (tool)
   se inyecta en el prompt igual que hoy se inyecta `text_preview` para
   `text/*`, evitando tocar `_build_extraction_prompt` más de lo necesario
   para la conversión (extender el criterio de "tiene texto" a PDFs con capa de
-  texto detectada). **No mantener como garantía de seguridad** el fence
-  `<document_data>`: la serialización y tests de inyección se coordinan con
-  BL-39 antes de activar el camino textual ampliado.
+  texto detectada). **No considerar garantía de seguridad** la serialización
+  JSON introducida por BL-39: los tests de texto extraído de PDF y adjunto
+  original entregado al Agent se coordinan antes de activar la ruta ampliada.
 - **No se crea un nuevo puerto de dominio** para esto: es preprocesamiento de
   infraestructura (extracción de bytes → texto), no una inferencia gobernada;
   encaja en la misma capa que ya prepara `visual_pages`.

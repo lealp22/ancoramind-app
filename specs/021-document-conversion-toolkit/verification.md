@@ -16,10 +16,10 @@ mypy src/
 
 ## Pending acceptance evidence
 
-- [ ] Antes de activar la ruta PDF textual, BL-39 cubre filename y contenido
-      adversarial (`</document_data>`), sin tratar el delimitador como control
-      de autorización; el adjunto original entregado al Agent principal se
-      incluye en los ensayos de seguridad.
+- [ ] Antes de activar la ruta PDF textual, BL-39/specs/022 valida filename y
+      contenido PDF adversarial (`</document_data>`) con la representación JSON;
+      el adjunto original entregado al Agent principal se incluye en ensayos de
+      seguridad. El JSON no es un control de autorización.
 
 - [ ] Un PDF con capa de texto extraíble se procesa sin invocar el extraction
       port de visión (verificado por mock/spy en unit test), y la extracción

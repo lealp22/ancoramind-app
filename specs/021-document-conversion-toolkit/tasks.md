@@ -26,9 +26,9 @@
       equivalente) para aceptar el texto ya extraído de un PDF con capa de
       texto de la misma forma que ya acepta `text/*` — respetando
       `MAX_TEXT_PREVIEW_BYTES`. Antes de activar la ruta, coordinar con
-      BL-39 la serialización de filename y texto no confiables: no aceptar
-      `<document_data>` como límite de seguridad; probar cierre de delimitador
-      dentro de contenido adversarial y metadatos.
+      BL-39/specs/022 el uso de la serialización JSON ya introducida para
+      filename y texto no confiables; probar cierre falso de delimitador en
+      PDF textual y metadatos sin tratar el JSON como límite de autoridad.
 - [ ] T6 · Unit tests de `analyze_document`/`DocumentService.ingest` con un
       PDF-con-texto simulado: verificar que el extraction port de visión NO se
       invoca (mock/spy) y que la extracción persistida referencia la ruta

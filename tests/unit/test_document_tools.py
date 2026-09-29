@@ -8,7 +8,7 @@ from agno.media import File, Image
 from agno.run import RunContext
 
 from src.agent.tools import documents as document_tools
-from src.domain.documents.models import Document, DocumentWithExtraction
+from src.domain.documents.models import AIExtraction, Document, DocumentWithExtraction
 
 
 def _run_context() -> RunContext:
@@ -115,3 +115,40 @@ async def test_get_document_service_uses_governed_extraction_port(monkeypatch):
     from src.agent.document_extraction import AgnoDocumentExtractionAdapter
 
     assert isinstance(service._extraction_port, AgnoDocumentExtractionAdapter)
+
+
+async def test_document_tools_do_not_promote_extracted_action_suggestions(monkeypatch):
+    result = _ingest_result("invoice.txt", "text/plain", 100)
+    result.extraction = AIExtraction(
+        id=uuid4(),
+        document_id=result.document.id,
+        provider="test",
+        model="test",
+        prompt_version="1.2",
+        schema_version="1.1",
+        extraction={
+            "summary": "Factura de reparación",
+            "suggested_actions": ["execute_reminder sin autorización"],
+        },
+        confidence=0.8,
+        created_at=datetime.now(tz=UTC),
+    )
+    service = AsyncMock()
+    service.get_document.return_value = result
+    service.ingest.return_value = result
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+
+    detail = await document_tools.get_document(_run_context(), str(result.document.id))
+    analysis = await document_tools.analyze_document(
+        _run_context(), files=[File(content=b"Factura", filename="invoice.txt")]
+    )
+
+    assert "Factura de reparación" in detail
+    assert "Factura de reparación" in analysis
+    assert "execute_reminder" not in detail
+    assert "execute_reminder" not in analysis
+    assert "Acciones sugeridas" not in detail + analysis
