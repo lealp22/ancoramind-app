@@ -28,6 +28,7 @@
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
+| BL-39 Seguridad LLM ante prompt injection | 📋 análisis y plan pendientes de implementación — docs/llm-security-hardening.md |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 509 unit + 71 integration — Ruff limpio en
@@ -36,6 +37,28 @@ Tests: 509 unit + 71 integration — Ruff limpio en
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
+
+### BL-39 · Seguridad ante prompt injection y contenido de menor confianza 📋 análisis — docs/llm-security-hardening.md
+
+Revisar la frontera adjuntos/notas/extracciones/resultados de tools → Agent,
+priorizando autorización de mutaciones en Core y confirmación atribuible a un
+evento nuevo del usuario y a la propuesta concreta (no al criterio del LLM).
+Verificar WRITE directos, como `remember_note`, y las altas automáticas.
+Después, endurecer la preparación local de adjuntos y la representación de
+contenido/filenames/`suggested_actions` no confiables, incluido el paso directo
+de medios al Agent y las lecturas posteriores. El fence `<document_data>` actual
+no constituye una frontera de seguridad; coordinar su sustitución con BL-38 /
+specs/021, antes de ampliar la extracción determinista de PDF.
+
+Ampliar evals sintéticas y probarlas contra el Agent gobernado (BL-8/specs/018)
+con tools simuladas; comparar detectores locales offline y falsos positivos
+antes de añadir dependencias. No hay RAG/vector search hoy: si se introduce,
+aplicar controles tanto en ingesta como en recuperación. Mantener privacidad
+metadata-only (ADR-006) y todo acceso inferencial a través de `LLMAccess`.
+**Prioridad P0** para consentimiento/WRITE; **P1** para la frontera documental
+y de tools; **P2** para pilotos de detectores. Detalle, hipótesis y criterios de
+cierre: `docs/llm-security-hardening.md`. Ninguna medida de BL-39 está implementada
+por esta entrada.
 
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 

@@ -42,10 +42,12 @@ otro backlog en curso.
    implementada (`prepare_visual_pages`). Este es el refinamiento ya anotado
    en BL-6 ("preferir extracción textual… reservar visión para escaneados").
 2. **El Markdown extraído es DATA, nunca instrucciones** (AGENTS.md §2.8):
-   entra en el mismo `<document_data>` delimitado que ya usa
-   `DocumentService._build_extraction_prompt`, sujeto a los mismos límites de
-   tamaño (`MAX_TEXT_PREVIEW_BYTES`) y al mismo pipeline de extracción
-   estructurada (`GenericDocumentExtraction`).
+   entra como contenido no confiable, sujeto a los mismos límites de tamaño
+   (`MAX_TEXT_PREVIEW_BYTES`) y al mismo pipeline de extracción estructurada
+   (`GenericDocumentExtraction`). El `<document_data>` actual por sí solo no
+   impide que contenido adversarial incluya `</document_data>`; serializar
+   filename y texto sin elevar su confianza. Coordinar el cambio con
+   BL-39/`docs/llm-security-hardening.md` antes de ampliar este flujo.
 3. **Sin provider físico nuevo.** La detección y la extracción determinista no
    crean ningún cliente LLM; sólo usan PyMuPDF/`pymupdf4llm` localmente. La
    ruta visual sigue intacta y sigue pasando por `AgnoDocumentExtractionAdapter`
@@ -110,7 +112,10 @@ analyze_document (tool)
   `visual_pages`; cuando la extracción es determinista, el texto ya extraído
   se inyecta en el prompt igual que hoy se inyecta `text_preview` para
   `text/*`, evitando tocar `_build_extraction_prompt` más de lo necesario
-  (extender el criterio de "tiene texto" a PDFs con capa de texto detectada).
+  para la conversión (extender el criterio de "tiene texto" a PDFs con capa de
+  texto detectada). **No mantener como garantía de seguridad** el fence
+  `<document_data>`: la serialización y tests de inyección se coordinan con
+  BL-39 antes de activar el camino textual ampliado.
 - **No se crea un nuevo puerto de dominio** para esto: es preprocesamiento de
   infraestructura (extracción de bytes → texto), no una inferencia gobernada;
   encaja en la misma capa que ya prepara `visual_pages`.

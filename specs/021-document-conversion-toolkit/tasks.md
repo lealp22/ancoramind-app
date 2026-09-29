@@ -25,7 +25,10 @@
 - [ ] T5 · Ajustar `DocumentService._build_extraction_prompt` (o el punto
       equivalente) para aceptar el texto ya extraído de un PDF con capa de
       texto de la misma forma que ya acepta `text/*` — respetando
-      `MAX_TEXT_PREVIEW_BYTES` y el delimitador `<document_data>`.
+      `MAX_TEXT_PREVIEW_BYTES`. Antes de activar la ruta, coordinar con
+      BL-39 la serialización de filename y texto no confiables: no aceptar
+      `<document_data>` como límite de seguridad; probar cierre de delimitador
+      dentro de contenido adversarial y metadatos.
 - [ ] T6 · Unit tests de `analyze_document`/`DocumentService.ingest` con un
       PDF-con-texto simulado: verificar que el extraction port de visión NO se
       invoca (mock/spy) y que la extracción persistida referencia la ruta
