@@ -4,10 +4,11 @@
 
 ## Fase 1 — Detección de capa de texto + extracción determinista de PDF (este incremento)
 
-- [ ] T1 · `has_extractable_text(content: bytes) -> bool` (PyMuPDF, sin I/O
+- [x] T1 · `has_extractable_text(content: bytes) -> bool` (PyMuPDF, sin I/O
       externo, sin persistir el PDF) en `src/agent/document_vision.py`.
       Unit tests: PDF con texto, PDF escaneado (sin texto), PDF vacío/corrupto
-      (error controlado, no excepción sin capturar).
+      (error controlado, no excepción sin capturar). Incremento aislado:
+      aún no se invoca desde la tool ni selecciona ruta de extracción.
 - [ ] T2 · `extract_pdf_text_markdown(content: bytes, *, max_pages: int) ->
       str` usando `pymupdf4llm.to_markdown()`, acotado a `max_pages` (alinear
       valor con `document_vision_max_pdf_pages` o un límite propio si se

@@ -1,6 +1,21 @@
 # Verification: 021 — Document Conversion Toolkit
 
-> **Status:** 🔶 draft — Fase 1 sin implementar (2026-09-29)
+> **Status:** 🔶 Fase 1 parcial — solo detección local T1 (2026-09-30)
+
+## Incremento T1 — 2026-09-30
+
+`has_extractable_text` clasifica bytes de PDF en memoria con PyMuPDF, sin
+persistencia ni cliente LLM. Las pruebas crean PDFs con texto, página en blanco,
+imagen sin texto, texto en página posterior, PDF vacío/corrupto y PDF cifrado.
+Los documentos inválidos o cifrados devuelven error tipado. **La función aún no
+se llama desde `analyze_document`: no modifica ingesta, costes ni ruta visual.**
+No se instaló `pymupdf4llm` ni se declara completada Fase 1; siguen pendientes
+T2–T9 y la coordinación de seguridad con BL-39 antes de activar el nuevo flujo.
+
+Validación local: `python -m pytest tests/unit/ -q` → **551 passed**;
+`python -m pytest tests/integration/ -q` → **71 skipped** (sin PostgreSQL);
+`python -m ruff check src/ tests/ scripts/ migrations/` → limpio;
+`python -m mypy src/` → limpio (107 módulos); `git diff --check` → limpio.
 
 ## Local verification required (al implementar Fase 1)
 
