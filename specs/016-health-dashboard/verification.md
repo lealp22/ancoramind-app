@@ -15,10 +15,28 @@
 | Fallo inesperado de una dependencia del monitor | ✅ Se registra sólo un warning y el monitor continúa; la cancelación se propaga normalmente |
 | Dashboard y reglas de alertas versionados | ✅ JSON válido; nombres/labels quedan pendientes de normalización contra series reales |
 
-No se pudo ejecutar Pytest ni Ruff en esta estación el 2026-09-24: no existe
+## Evidencia local adicional — 2026-09-30 (T7 parcial)
+
+Una prueba de regresión en `tests/unit/test_health_monitor_lifecycle.py` combina
+un fallo de la fachada de métricas (medidor local que falla al publicar las
+transiciones `healthy` → `degraded`, con invocaciones verificadas), base de datos
+inaccesible y task del worker terminada: el monitor sigue vivo,
+`/health/readiness` responde `200` y publica
+ambos componentes como `degraded` sin filtrar el detalle privado. No hubo
+Collector/OTLP real, despliegue ni cambios en las rutas de producción. Esta
+prueba no sustituye la matriz operativa ni cierra T7/BL-33.
+
+Validación local (2026-09-30): `python -m pytest tests/unit/ -q` → **552 passed**;
+`python -m pytest tests/integration/ -q` → **71 skipped** (sin PostgreSQL);
+`python -m ruff check src/ tests/ scripts/ migrations/` → limpio;
+`python -m mypy src/` → limpio (107 módulos); `git diff --check` → limpio.
+OTel advirtió de que no había Collector en `localhost:4318`; no afectó a los
+resultados de los tests.
+
+El 2026-09-24 no se pudo ejecutar Pytest ni Ruff en esa estación: no existía
 `.venv` del proyecto y los intérpretes disponibles son Python 3.10/3.11, mientras
-que el proyecto requiere Python 3.12+. La validación pendiente tras preparar ese
-entorno es:
+que el proyecto requiere Python 3.12+. Una vez preparado el entorno, los
+comandos de validación local son:
 
 ```powershell
 .venv\Scripts\Activate.ps1

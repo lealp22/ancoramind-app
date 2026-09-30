@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 from fastapi import FastAPI
+from opentelemetry import trace
 
 from src.agent.health import (
     HealthRegistry,
@@ -16,6 +17,7 @@ from src.agent.health import (
     install_health_readiness_endpoint,
 )
 from src.config import Settings
+from src.observability.telemetry import MetadataTelemetry
 
 
 async def _readiness(app: FastAPI) -> httpx.Response:
@@ -75,6 +77,67 @@ async def test_monitor_degrades_db_and_finished_worker_without_stopping_readines
         assert payload["components"]["reminder_worker"]["status"] == "degraded"
         assert not app.state.health_monitor_task.done()
         assert "password" not in response.text.lower()
+
+    assert not hasattr(app.state, "health_monitor_task")
+
+
+async def test_readiness_survives_metric_export_failure_with_db_and_worker_degraded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The metric sink must not turn health probes into a functional dependency."""
+
+    class FailingMeter:
+        def __init__(self) -> None:
+            self.failed_transitions = 0
+
+        def create_up_down_counter(self, name: str) -> FailingMeter:
+            return self
+
+        def add(self, value: float, *, attributes: object) -> None:
+            if value < 0:
+                self.failed_transitions += 1
+                raise RuntimeError("collector credential=private")
+
+    app = FastAPI()
+    registry = HealthRegistry()
+    install_health_readiness_endpoint(app, registry)
+    meter = FailingMeter()
+    telemetry = MetadataTelemetry(trace.get_tracer("health-test"), meter)
+    monkeypatch.setattr(
+        "src.agent.health.get_telemetry",
+        lambda: telemetry,
+    )
+    registry.set_component("database", "healthy")
+    registry.set_component("reminder_worker", "healthy")
+
+    async def unavailable_session() -> object:
+        raise RuntimeError("postgres password=private")
+
+    async def finished_worker() -> None:
+        return None
+
+    worker_task = asyncio.create_task(finished_worker())
+    await worker_task
+    app.state.reminder_worker_task = worker_task
+    install_health_monitor_lifespan(
+        app,
+        _settings(),
+        session_factory=unavailable_session,
+        registry=registry,
+    )
+
+    async with app.router.lifespan_context(app):
+        await _wait_for(
+            lambda: registry.snapshot()["components"]["reminder_worker"]["status"] == "degraded"
+        )
+        response = await _readiness(app)
+
+        assert response.status_code == 200
+        assert response.json()["components"]["database"]["status"] == "degraded"
+        assert response.json()["components"]["reminder_worker"]["status"] == "degraded"
+        assert not app.state.health_monitor_task.done()
+        assert "private" not in response.text
+        assert meter.failed_transitions >= 2
 
     assert not hasattr(app.state, "health_monitor_task")
 
