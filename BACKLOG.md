@@ -29,14 +29,68 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 spec redactado con 6 fases ordenadas por riesgo; nada implementado todavía — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 509 unit + 71 integration — Ruff limpio en
+Tests: 552 unit + 71 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
+
+### BL-40 · Remediación de auditoría técnica (2026-10-02) 🔶 en curso — specs/023
+
+Auditoría de coherencia especificación/implementación (2026-10-02) detectó 8
+hallazgos accionables, organizados en 6 fases con orden de ejecución explícito
+en `specs/023-audit-remediation/tasks.md`:
+
+1. **🔴 Crítico — API REST de AgentOS expuesta sin autenticación.** `/config`,
+   `/memories`, `/agents/*/runs`, `/sessions`, `/docs`, `/openapi.json`
+   accesibles sin credencial en la configuración actual (confirmado por
+   inspección local de `app.openapi()`; pendiente confirmar contra Railway
+   real antes de cerrar). Posible bypass completo de admission/gobernanza.
+2. **🟠 Alto — `UserContext` con fallback silencioso + `APP_ENV` insegura por
+   defecto.** Identidad puede degradar a `"unknown"`; `APP_ENV=development`
+   (default actual) desactiva la validación del secret de webhook en Agno.
+3. **🟠 Alto — Fuga de sesiones DB + UUID sin validar en tools.** Ninguna
+   tool cierra `get_session()`; varios `UUID(...)` sin capturar y mensajes
+   de error que exponen detalle interno (`str(e)[:200]`).
+4. **🔴 Crítico — Consentimiento de mutaciones mediado por el LLM.**
+   `execute_*`/`remember_note` no verifican una confirmación nueva atribuible
+   al usuario tras una entrega verificada; `mark_executed` no exige
+   `status='confirmed'`. Implementa el T6b/T7/T8 ya diseñados en
+   `specs/022-llm-input-trust/consent-design.md` (depende de fase 3).
+5. **🟠 Alto — Zona horaria naive en recordatorios/calendario.** Fechas sin
+   tz se persisten asumiendo UTC; un recordatorio a "las 17:00" puede
+   disparar 1-2h tarde/pronto según DST.
+6. **🟡 Medio — Sincronización documental.** Recuentos de tests desfasados,
+   specs marcados "pendiente" ya implementados, tablas de capabilities
+   obsoletas en `docs/architecture.md`, prompts con contrato JSON que
+   ninguna tool implementa, código muerto (`src/agent/context.py`,
+   `src/services/`, `src/governance/` vacíos).
+
+**Orden de ejecución:** fase 1 → 2 → 3 → 4 → 5 → 6 (fase 4 depende de fase 3;
+el resto son independientes y priorizadas por riesgo).
+
+**Decisiones aprobadas (2026-10-02):**
+- **T1.2:** intentar primero quitar las rutas REST de AgentOS que no usamos
+  (preferida); si no es viable técnicamente, caer a `OS_SECURITY_KEY` como
+  fallback — documentar cuál se aplicó.
+- **T4.7:** `analyze_document` sigue siendo automático (enviar un documento
+  ya es la señal de intención de guardarlo — mejor UX, excepción aprobada a
+  la regla WRITE). A cambio se añade `propose_document_delete`/
+  `execute_document_delete`, que hoy no existe, para el caso "no quiero
+  esto guardado".
+- **T5.1:** zona horaria fija (`Europe/Madrid`) para toda la app por ahora,
+  pero el código accede a ella solo a través de una función
+  `resolve_user_timezone()`, lista para pasar a configuración por usuario en
+  el futuro sin tocar tools/servicios. Se descarta guardar un offset
+  numérico (se rompe con el cambio de hora estacional).
+
+**Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
+Ver `specs/023-audit-remediation/`.
+
 
 ### BL-39 · Seguridad ante prompt injection y contenido de menor confianza 🔶 en curso — specs/022
 
@@ -45,6 +99,7 @@ priorizando autorización de mutaciones en Core y confirmación atribuible a un
 evento nuevo del usuario y a la propuesta concreta (no al criterio del LLM).
 Verificar WRITE directos, como `remember_note`, y las altas automáticas.
 Después, endurecer la preparación local de adjuntos y la representación de
+
 contenido/filenames/`suggested_actions` no confiables, incluido el paso directo
 de medios al Agent y las lecturas posteriores. El antiguo fence
 `<document_data>` no era una frontera de seguridad; la serialización JSON
