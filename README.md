@@ -153,12 +153,12 @@ observability/      ← Private OpenTelemetry Collector configuration
       BL-23 stays open)
 - [ ] MVP: Usable personal assistant (complete Telegram E2E validation remains)
 
-### Capabilities (32 tools when `ANCORA_DATABASE_URL` is configured)
+### Capabilities (33 tools when `ANCORA_DATABASE_URL` is configured)
 
 | Domain | Tools | Risk |
 |---|---|---|
 | System | `get_current_datetime` | READ |
-| Notes | `remember_note`, `search_notes` | WRITE/READ |
+| Notes | `propose_note`, `execute_note`, `search_notes` | WRITE/READ |
 | Documents | `search_documents`, `get_document`, `analyze_document` | READ/EXTRACT |
 | Vehicles | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history` | READ |
 | Vehicles (creation) | `propose_vehicle`, `execute_vehicle` | WRITE |

@@ -300,7 +300,7 @@ def get_vehicle_summary(vehicle_reference: str | None = None):
 | Dominio | Tools | Riesgo |
 |---|---|---|
 | **Utility** | `get_current_datetime` | READ |
-| **Memory** | `remember_note`, `search_notes` | READ/WRITE |
+| **Memory** | `propose_note`, `execute_note`, `search_notes` | WRITE/READ |
 | **Documents** | `get_document`, `search_documents`, `analyze_document`, `delete_document` | READ/DESTRUCTIVE |
 | **Vehicles** | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history`, `register_vehicle_maintenance` | READ/WRITE |
 | **Reminders** | `create_reminder` | WRITE |

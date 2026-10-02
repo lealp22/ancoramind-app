@@ -132,7 +132,15 @@
         claim pre-Agent) + 7 mocks de tools actualizados al nuevo método.
       - Resultados: `ruff` y `mypy src/` limpios; unit 605 passed;
         integration 93 passed.
-- [ ] T4.6–T4.9 pendientes. Ver también
+- [x] T4.6 implementada y verificada localmente (2026-10-02):
+      - `remember_note` → `propose_note`/`execute_note`, mismo patrón
+        ActionProposal que el resto de WRITE. `main.py` registra 2 tools
+        en vez de 1 (32→33 tools totales); `README.md`/`docs/
+        architecture.md` actualizados.
+      - 6 tests unitarios nuevos + 1 ajustado (schema de Agno).
+      - Resultados: `ruff` y `mypy src/` limpios; unit 609 passed;
+        integration 93 passed.
+- [ ] T4.7–T4.9 pendientes. Ver también
       `specs/022-llm-input-trust/verification.md`.
 
 ## Fase 5 — Zona horaria

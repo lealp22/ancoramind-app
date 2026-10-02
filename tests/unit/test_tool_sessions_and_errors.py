@@ -72,9 +72,9 @@ class TestClosesSessions:
         assert len(first) == 2 and all(session.closed for session in first)
 
     def test_preserves_agno_schema(self) -> None:
-        function = Function.from_callable(notes.remember_note)
-        assert function.name == "remember_note"
-        assert "canonical memory" in (function.description or "")
+        function = Function.from_callable(notes.propose_note)
+        assert function.name == "propose_note"
+        assert "requires user confirmation" in (function.description or "")
         assert list(function.parameters["properties"]) == ["content"]
 
 

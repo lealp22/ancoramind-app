@@ -319,9 +319,22 @@ mensaje de error expone detalle interno.
       7 mocks de tools actualizados (`.confirm.return_value` →
       `.confirm_or_use_confirmed.return_value`). 605 unit + 93 integration
       passing; `ruff`/`mypy src/` limpios.
-- [ ] T4.6 · `remember_note`: convertir a `propose_note`/`execute_note` con
-      el mismo patrón `ActionProposal` (AGENTS.md §2.4). Actualizar
-      `prompts/skills/*.md` y `docs/adding-tools.md` si cambia el ejemplo.
+- [x] T4.6 · **Implementado (2026-10-02).** `remember_note` sustituido por
+      `propose_note`/`execute_note` con el mismo patrón `ActionProposal` que
+      el resto de WRITE (`tool_name="remember_note"` en el payload, para no
+      romper el histórico de propuestas). `propose_note` valida contenido no
+      vacío y no escribe; `execute_note` usa `confirm_or_use_confirmed`
+      (igual que T4.5) y solo entonces llama a `NotesService.remember`.
+      `main.py` registra las 2 tools nuevas en vez de 1 (32→33 tools
+      totales); `README.md`/`docs/architecture.md` actualizados. No hacía
+      falta tocar `prompts/skills/*.md` ni `docs/adding-tools.md`: ninguno
+      menciona `remember_note` por nombre.
+      Tests: 6 unitarios nuevos en `tests/unit/test_note_tools.py`
+      (propone sin escribir, rechaza contenido vacío sin proponer, ejecuta
+      solo tras confirmación, no escribe sin propuesta pendiente) + 1
+      ajustado en `test_tool_sessions_and_errors.py` (schema de Agno sobre
+      `propose_note`). 609 unit + 93 integration passing; `ruff`/`mypy src/`
+      limpios.
 - [x] T4.7 · **Decisión aprobada (2026-10-02):** `analyze_document`/
       `DocumentService.ingest` **se mantienen automáticos** — enviar un
       documento ya es una señal de intención suficiente ("quiero que esto

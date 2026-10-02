@@ -29,10 +29,10 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.5 hechas, T4.6–T4.9 pendientes; Fases 5–6 pendientes — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.6 hechas, T4.7 decidida, T4.8–T4.9 pendientes; Fases 5–6 pendientes — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 605 unit + 93 integration — Ruff y `mypy src/` limpios en
+Tests: 609 unit + 93 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -145,8 +145,16 @@ ya quedó `confirmed` por el claim pre-Agent de T4.3, la tool la ejecuta sin
 que el LLM la autorice. Se eligió esta vía "con reserva" en vez de quitar
 `confirm()` del todo, porque sin ella el bot se habría roto mientras el
 flag siga apagado (que es como está hoy en producción). 605 unit + 93
-integration passing. **Pendiente:** T4.6–T4.9 (notas, inventario completo,
-tests de carrera transversales y limpieza final).
+integration passing.
+
+**Fase 4 — T4.6 implementada localmente (2026-10-02):** `remember_note`
+escribía directamente desde la llamada del LLM, sin ActionProposal ni
+confirmación — era la última excepción a la regla WRITE de AGENTS.md §2.4.
+Sustituida por `propose_note`/`execute_note` con el mismo patrón que el
+resto de tools: proponer no escribe, ejecutar exige confirmación (vía
+`confirm_or_use_confirmed`, igual que T4.5). 32→33 tools registradas.
+609 unit + 93 integration passing. **Pendiente:** T4.8–T4.9 (inventario
+completo de tests de carrera y actualización final de specs/022).
 
 **Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
 Ver `specs/023-audit-remediation/`.

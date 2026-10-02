@@ -87,11 +87,11 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         )
         logger.info("Domain database initialized")
 
-        from src.agent.tools.notes import remember_note, search_notes
+        from src.agent.tools.notes import execute_note, propose_note, search_notes
 
-        tools.extend([remember_note, search_notes])
-        _NOTE_TOOLS.extend([remember_note, search_notes])
-        logger.info("Note tools registered: remember_note, search_notes")
+        tools.extend([propose_note, execute_note, search_notes])
+        _NOTE_TOOLS.extend([propose_note, execute_note, search_notes])
+        logger.info("Note tools registered: propose_note, execute_note, search_notes")
 
         from src.agent.tools.documents import (
             analyze_document,
