@@ -20,8 +20,10 @@ os.environ["AGNO_TELEMETRY"] = "false"
 
 from agno.os.app import AgentOS
 from agno.os.interfaces.telegram import Telegram
+from agno.os.settings import AgnoAPISettings
 from fastapi import FastAPI
 
+from src.agent.agent_os_rest_guard import install_agent_os_rest_guard
 from src.agent.ancora_agent import (
     create_ancora_agent,
     create_db,
@@ -45,6 +47,7 @@ from src.agent.server import resolve_server_config
 from src.agent.telegram_admission import (
     install_telegram_admission_endpoint,
     validate_telegram_admission_settings,
+    validate_webhook_secret_settings,
 )
 from src.agent.telegram_pairing_admin import (
     install_telegram_pairing_admin_api,
@@ -245,6 +248,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     if not settings.telegram_token:
         logger.error("TELEGRAM_TOKEN is required. Set it in .env or environment.")
         sys.exit(1)
+    validate_webhook_secret_settings(settings)
     validate_telegram_admission_settings(settings)
     validate_runtime_config_admin_settings(settings)
     validate_telegram_pairing_admin_settings(settings)
@@ -319,14 +323,25 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         on_route_conflict="preserve_base_app",
         tracing=False,
         telemetry=False,
+        # docs_enabled=False closes /docs, /redoc and /openapi.json
+        # entirely outside development (specs/023 T1): AncoraMind never
+        # serves that surface in production.
+        settings=AgnoAPISettings(docs_enabled=settings.app_env.lower() == "development"),
     )
 
     app = agent_os.get_app()
     install_health_readiness_endpoint(app, health_registry)
+    if settings.agent_os_security_key:
+        install_agent_os_rest_guard(app, settings.agent_os_security_key)
+        logger.info(
+            "AgentOS REST surface gated behind AGENT_OS_SECURITY_KEY "
+            "(Telegram/admin/health routes unaffected)"
+        )
     logger.info(
         "AgentOS app created — webhook: /telegram/webhook (%s)",
         "AncoraMind admission" if settings.telegram_admission_enabled else "AgentOS",
     )
+
 
     # ── Runtime config (T6) ────────────────────────────
     # Install it before workers: outer worker wrappers enter this lifecycle first.

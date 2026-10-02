@@ -28,27 +28,33 @@ class UserContext:
     def from_run_context(cls, run_context: RunContext) -> "UserContext":
         """Resolve UserContext from an Agno RunContext.
 
-        Extracts the user identifier from the session ID.
-        Session format: tg:{entity_id}:{chat_id}
+        Uses ``run_context.user_id`` (set by the governed runner / AgentOS)
+        and, only for the legacy Telegram path, the chat id embedded in the
+        session id (``tg:{entity}:{chat_id}[:generation]``).
+
+        Fails closed (specs/023 T2): if neither source yields a trusted
+        identity, raises instead of degrading to a shared placeholder such
+        as ``"unknown"`` — otherwise unrelated runs would read and write the
+        same canonical data.
 
         Args:
             run_context: Agno RunContext provided automatically to tools.
 
         Returns:
             Resolved UserContext with trusted identity.
-        """
-        # Try user_id from run_context first (set by AgentOS)
-        if run_context.user_id:
-            return cls(user_id=run_context.user_id)
 
-        # Fallback: extract from session_id (format: tg:entity:chat_id)
+        Raises:
+            ValueError: If the RunContext carries no trusted identity.
+        """
+        if run_context.user_id and run_context.user_id.strip():
+            return cls(user_id=run_context.user_id.strip())
+
         session_id = run_context.session_id or ""
         parts = session_id.split(":")
-        if len(parts) >= 3 and parts[0] == "tg":
-            return cls(user_id=parts[2])
+        if len(parts) >= 3 and parts[0] == "tg" and parts[2].strip():
+            return cls(user_id=parts[2].strip())
 
-        # Last resort: use session_id as identifier
-        return cls(user_id=session_id or "unknown")
+        raise ValueError("UserContext: no trusted identity in RunContext")
 
 
 def get_current_user_context() -> UserContext:

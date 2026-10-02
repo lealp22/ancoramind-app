@@ -70,7 +70,14 @@ class Settings(BaseSettings):
     """Enable private-chat `/pair <code>` redemption and durable authorization admission."""
     telegram_pairing_code_pepper: str = ""
     """Secret HMAC pepper for invitation codes; never persist or log the raw code."""
-    app_env: str = "development"
+    app_env: str = "production"
+    """Deployment environment. Defaults to the safe value (specs/023 T2):
+    local development must opt in explicitly with APP_ENV=development, which
+    relaxes Agno's webhook-secret check and AgentOS REST guarding."""
+    agent_os_security_key: str = ""
+    """Bearer token Agno's AgentOS requires on every REST route except
+    /, /health, /info, /docs, /redoc. Railway secret only; required
+    whenever APP_ENV != "development" (specs/023 T1)."""
 
     # ── ngrok ─────────────────────────────────────────
     ngrok_url: str = ""
@@ -174,3 +181,23 @@ class Settings(BaseSettings):
         if not self.litellm_proxy_default_route.strip():
             raise ValueError("LITELLM_PROXY_DEFAULT_ROUTE must not be blank")
         return self
+
+    @model_validator(mode="after")
+    def validate_agent_os_security_key(self) -> "Settings":
+        """Fail closed: never run AgentOS's REST surface unauthenticated outside dev.
+
+        Agno's AgentOS mounts REST routes (/agents/*/runs, /sessions,
+        /memories, /config, /eval-runs, ...) that AncoraMind does not use —
+        the Agent only runs through the Telegram webhook. Those routes
+        accept a client-supplied user_id, bypassing admission/governance
+        entirely if left open (specs/023 T1).
+        """
+        if self.app_env.lower() == "development":
+            return self
+        if not self.agent_os_security_key.strip():
+            raise ValueError(
+                "AGENT_OS_SECURITY_KEY is required when APP_ENV != 'development' "
+                "(AgentOS REST routes would otherwise be reachable without auth)"
+            )
+        return self
+

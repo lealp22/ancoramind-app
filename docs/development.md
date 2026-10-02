@@ -280,7 +280,9 @@ Pydantic Settings en `src/config.py`, `extra="ignore"`).
 | `LLM_BASE_URL` | Endpoint custom (obligatorio en `openai-like`) | — |
 | `AGENT_TOOL_CALL_LIMIT` | Límite duro de tools por ejecución; evita bucles de tool-calling | `8` |
 | `TELEGRAM_TOKEN` | Token del bot (de @BotFather) | — |
-| `TELEGRAM_WEBHOOK_SECRET_TOKEN` | Secret que Telegram envía al webhook en producción | — |
+| `TELEGRAM_WEBHOOK_SECRET_TOKEN` | Secret que Telegram envía al webhook; obligatorio al arrancar fuera de `development` | — |
+| `APP_ENV` | Entorno; declarar `development` en local (relaja secret de webhook y guard REST) | `production` (default seguro — specs/023) |
+| `AGENT_OS_SECURITY_KEY` | Bearer que protege la API REST de AgentOS; obligatorio fuera de `development` | — |
 | `TELEGRAM_PAYLOAD_ENCRYPTION_KEY` | Clave Fernet para payload recuperable del ledger | — |
 | `TELEGRAM_PAYLOAD_KEY_VERSION` | Versión de la clave Fernet | `1` |
 | `TELEGRAM_ADMISSION_ENABLED` | Activa endpoint propio durable; requiere secretos/DB/allowlist | `false` |

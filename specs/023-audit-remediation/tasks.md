@@ -12,47 +12,79 @@
 `/memories`, `/config`, `/docs`, `/openapi.json`) sea alcanzable sin
 autenticación, y verificarlo contra el entorno real antes de cerrar.
 
-- [ ] T1.1 · **Verificación en caliente (no destructiva).** Contra el dominio
-      Railway actual: `curl -i https://<dominio>/config`,
-      `curl -i https://<dominio>/openapi.json`. Si devuelven `200`, documentar
-      el hallazgo con timestamp en `verification.md` antes de tocar código
-      (evidencia de explotabilidad real, no solo local).
+- [ ] T1.1 · **Verificación en caliente (no destructiva) — BLOQUEADA
+      (2026-10-02): el servicio Railway está pausado.** Intento registrado:
+      `curl -i https://ancoramind-app-production.up.railway.app/health` →
+      `404` con `x-railway-fallback: true` y
+      `{"status":"error","code":404,"message":"Application not found"}` —
+      es el 404 propio del edge de Railway cuando no hay servicio activo
+      detrás del dominio, no una respuesta de la app. No se puede distinguir
+      "ruta cerrada" de "servicio apagado" en este estado. **Retomar esta
+      tarea cuando el servicio esté reanudado**, repitiendo contra
+      `/config`, `/openapi.json`, `/docs`, `/sessions`, `/memories`,
+      `/eval-runs` y registrando el resultado en `verification.md` antes de
+      tocar código si alguna devuelve `200`.
 - [x] T1.2 · **Decisión aprobada (2026-10-02):** intentar (a) y caer a (b)
       automáticamente si (a) no es técnicamente viable; documentar en
       `verification.md` cuál de las dos se aplicó y por qué.
-      - **(a) Preferida — quitar las rutas.** No usamos la API REST de Agno
-        (solo hablamos con el bot por Telegram vía nuestro webhook, ya
-        protegido). Investigar si `AgentOS(...)` permite omitir
-        `/agents/*/runs`, `/sessions`, `/memories`, `/config`, `/eval-runs`,
-        `/docs`/`/openapi.json` (parámetros del constructor — p.ej. no pasar
-        ciertos routers, o un flag de superficie reducida en
-        `agno.os.app.AgentOS`). Si existe esa opción, usarla: menos
-        superficie, sin secreto nuevo que gestionar/rotar.
-      - **(b) Fallback — poner candado.** Si (a) no es viable sin romper algo
-        que sí necesitamos (p.ej. `/health`), configurar `OS_SECURITY_KEY`
-        (mecanismo nativo de Agno) con un secreto Railway-only de alta
-        entropía, verificando que activa `_add_auth_middleware` sobre
-        *todas* las rutas del `base_app` combinado (incluida
-        `/telegram/webhook` legado si sigue montado). Rotación del secreto
-        documentada igual que el resto de secretos Railway-only del repo.
-      - En ambos casos: `app_debug=False` ⇒ sin `/docs`/`/openapi.json` en
-        producción (Starlette/FastAPI `docs_url=None` si `AgentOS` lo
-        permite pasar).
-- [ ] T1.3 · Implementar la opción elegida en `src/main.py` /
-      `src/agent/ancora_agent.py` (lo que corresponda). Si es (b), añadir
-      `Settings.agent_os_security_key: str = ""` con validación fail-closed
-      análoga a `validate_litellm_proxy_settings` (si `APP_ENV=production` y
-      la clave está vacía, no arrancar — ver fase 2 para la lógica de
-      `APP_ENV`).
-- [ ] T1.4 · Test unitario: construir la app con `TELEGRAM_TOKEN` dummy y
-      `APP_ENV=production`, listar `app.openapi()["paths"]` o inspeccionar
-      middlewares, y afirmar que una petición sin credencial a `/config` o
-      `/memories` devuelve `401`/`403` (usar `TestClient` de FastAPI/Starlette,
-      ya transitivo vía `fastapi`). Este test debe fallar hoy (red test) y
-      pasar tras T1.3.
+
+      **Resultado de la investigación (2026-10-02):** opción (a) **no es
+      viable**. `AgentOS.get_app()`/`_add_built_in_routes()` añaden
+      incondicionalmente los routers de agentes, sesiones, memoria,
+      aprendizajes, métricas, trazas, eval-runs, etc. (no hay parámetro
+      para omitirlos selectivamente sin forkear Agno). **Se aplica (b):**
+      - `AgentOS(..., settings=AgnoAPISettings(os_security_key=...))`
+        activa `_add_auth_middleware`, que exige `Authorization: Bearer
+        <key>` en todas las rutas **excepto** `/`, `/health`, `/info`,
+        `/docs`, `/redoc` (excluidas por defecto — bien, porque Railway
+        healthcheck necesita `/health` público).
+      - `AgnoAPISettings(docs_enabled=False)` desactiva por completo
+        `/docs`, `/redoc` y `/openapi.json` (devuelven 404 en vez de 200),
+        cerrando el único hueco que la exclusión de auth deja abierto.
+      - Combinando ambas, la única ruta pública queda `/`, `/health` e
+        `/info` (metadata mínima, sin datos de usuario) — aceptable.
+
+- [x] T1.3 · **Implementado (2026-10-02).** `OS_SECURITY_KEY` nativo de Agno
+      no es reusable sin más: protege *todas* las rutas del `base_app`
+      combinado excepto una lista fija (`/`, `/health`, `/info`, `/docs`,
+      `/redoc` + prefijos de interfaces Agno "self-authenticating"), que no
+      incluye nuestras rutas propias (`/admin/runtime-config`,
+      `/admin/telegram-pairing`, `/health/readiness`) — las habría roto.
+      Se implementó en su lugar `src/agent/agent_os_rest_guard.py`: un
+      middleware propio y acotado por prefijo que exige
+      `Authorization: Bearer <AGENT_OS_SECURITY_KEY>` únicamente en rutas
+      que **no** empiecen por `/`, `/health`, `/telegram`, `/admin` (deja
+      intacto el esquema de auth de cada endpoint propio). `src/config.py`
+      añade `agent_os_security_key: str = ""` con validación fail-closed
+      (`validate_agent_os_security_key`, análoga a
+      `validate_litellm_proxy_settings`): si `APP_ENV != "development"` y la
+      clave está vacía, `Settings()` lanza `ValueError` al construirse — la
+      app no arranca. `src/main.py` pasa además
+      `AgentOS(..., settings=AgnoAPISettings(docs_enabled=app_env==
+      "development"))`, cerrando `/docs`/`/redoc`/`/openapi.json` del todo
+      fuera de desarrollo, e instala el guard tras `get_app()` solo si
+      `agent_os_security_key` está configurada.
+- [x] T1.4 · **Implementado.** `tests/unit/test_agent_os_rest_guard.py` (4
+      tests: ruta Agno sin credencial → 401; con credencial incorrecta →
+      401; con credencial correcta → 200; rutas propias — `/health`,
+      `/telegram/webhook`, `/admin/runtime-config`, `/` — nunca gateadas) +
+      `tests/unit/test_config.py` (3 tests: `APP_ENV=production` sin clave →
+      `ValidationError`; `APP_ENV=development` sin clave → OK; clave
+      aceptada en producción) + ampliación de
+      `tests/unit/test_telegram_admission_wiring.py` (verifica que
+      `create_app()` instala el guard con la clave correcta y que
+      `AgnoAPISettings.docs_enabled` es `False` en producción). Verificado
+      también manualmente con `TestClient` contra la app real: `/config`,
+      `/sessions`, `/memories`, `/docs`, `/openapi.json` → `401` sin
+      credencial y `200` con el bearer correcto; `/health` siempre `200`;
+      comportamiento en `APP_ENV=development` sin cambios (retrocompatible).
 - [ ] T1.5 · Re-ejecutar T1.1 contra Railway tras el despliegue para confirmar
-      el cierre real, no solo local. Registrar en `verification.md`.
-- [ ] T1.6 · `ruff check`, `mypy src/`, `pytest tests/unit/` en verde.
+      el cierre real, no solo local. **Bloqueada igual que T1.1** — el
+      servicio está pausado (ver `verification.md`). Registrar en
+      `verification.md` en cuanto se reanude.
+- [x] T1.6 · `ruff check src/ tests/ scripts/ migrations/` y `mypy src/`
+      limpios; `pytest tests/unit/` → 560 passed (552 previas + 8 nuevas).
+
 
 **Criterio de cierre:** `/config`, `/memories`, `/agents/*/runs`, `/sessions`,
 `/docs`, `/openapi.json` devuelven 401/403/404 sin credencial válida, tanto
@@ -63,39 +95,88 @@ documentada).
 
 ## Fase 2 — `UserContext` fail-closed + `APP_ENV` seguro por defecto (🟠 alto)
 
-- [ ] T2.1 · `UserContext.from_run_context`: eliminar el fallback a
-      `session_id` completo o `"unknown"`. Si no hay `run_context.user_id` y
-      el `session_id` no tiene el formato `tg:{entity}:{chat_id}`, lanzar
-      `ValueError("UserContext: no trusted identity in RunContext")` en vez
-      de degradar silenciosamente. Las tools que llaman a esta función ya
-      están en un `try/except` amplio en algunos sitios — revisar que la
-      excepción se propague como error de tool, no como respuesta "unknown"
-      persistida en BD.
-- [ ] T2.2 · Unit tests: `run_context` sin `user_id` y con `session_id`
-      vacío/malformado → `ValueError`; formato correcto → user_id esperado
-      (casos ya cubiertos deben seguir pasando).
-- [ ] T2.3 · `Settings.app_env`: cambiar el default de `"development"` a
-      `"production"` en `src/config.py`. Actualizar `.env.example`,
-      `docker-compose.yml` (mantener `APP_ENV=development` explícito ahí,
-      ya que es un entorno local real) y `docs/development.md` para que el
-      desarrollador local tenga que declarar `APP_ENV=development`
-      explícitamente en su `.env`.
-- [ ] T2.4 · Añadir un `model_validator` en `Settings` (igual patrón que
-      `validate_litellm_proxy_settings`): si `app_env != "development"` y
-      `telegram_webhook_secret_token` está vacío pero el admission legado de
-      Agno pudiera recibir tráfico (es decir, siempre que
-      `TELEGRAM_TOKEN` esté seteado), registrar un `logger.warning` fuerte;
-      documentar que Agno exige el secret en modo no-development (ya lo hace
-      `agno.os.interfaces.telegram.security.get_webhook_secret_token`), así
-      que basta con el cambio de default — pero añadir un test que lo
-      confirme explícitamente para esta base de código.
-- [ ] T2.5 · Test de regresión: con `APP_ENV` no seteado (ausente del
-      entorno), `Settings().app_env == "production"`.
-- [ ] T2.6 · `ruff check`, `mypy src/`, `pytest tests/unit/` en verde.
+- [x] T2.1 · **Implementado (2026-10-02).** `UserContext.from_run_context`
+      ya no cae a `session_id` completo ni a `"unknown"`: acepta
+      `run_context.user_id` (no vacío) o, solo en la ruta legacy, el chat id
+      de `tg:{entity}:{chat_id}[:generation]`; en cualquier otro caso lanza
+      `ValueError("UserContext: no trusted identity in RunContext")`.
+      Comprobado que ninguna tool captura esa excepción para persistir
+      datos: se lanza antes de abrir sesión o repositorio, así que se
+      propaga como error de tool sin escribir nada. Los dos caminos reales
+      (runner gobernado con `user_id=str(telegram_user_id)` y AgentOS
+      legacy con `user_id=from.id`) siempre aportan identidad.
+- [x] T2.2 · `tests/unit/test_user_context.py`: el antiguo
+      `test_from_run_context_fallback` (que esperaba `"unknown"`) pasa a
+      fail-closed, con casos parametrizados para `session_id` arbitrario,
+      segmentos insuficientes, chat id vacío, esquema no Telegram y
+      `user_id` en blanco. Los casos válidos existentes siguen pasando.
+- [x] T2.3 · `Settings.app_env` pasa de `"development"` a `"production"`
+      por defecto. `.env.example` lo documenta; `docker-compose.yml` ya fija
+      `APP_ENV=development` (sin cambios); `docs/development.md` añade
+      `APP_ENV` y `AGENT_OS_SECURITY_KEY` a la tabla de variables. Nuevo
+      `tests/conftest.py` declara `APP_ENV=development` para las suites
+      (el mismo opt-in que hace un desarrollador local), con `setdefault`
+      para respetar un valor explícito; los tests de producción lo
+      sobrescriben con `monkeypatch`.
+- [x] T2.4 · **Mejora sobre lo planificado:** en vez de solo un
+      `logger.warning`, `validate_webhook_secret_settings()` (en
+      `src/agent/telegram_admission.py`, invocada en `create_app()`) hace
+      fallar el arranque si `APP_ENV != "development"` y falta
+      `TELEGRAM_WEBHOOK_SECRET_TOKEN`. Motivo: Agno ya rechaza esos updates
+      en tiempo de petición, así que un warning dejaría el bot caído en
+      silencio; fallar al arrancar lo hace visible en el healthcheck de
+      Railway. 3 tests en `tests/unit/test_telegram_admission.py`.
+- [x] T2.5 · `test_app_env_defaults_to_production` y
+      `test_missing_app_env_fails_closed_without_production_secrets` en
+      `tests/unit/test_config.py`.
+- [x] T2.6 · `ruff check` y `mypy src/` limpios; `pytest tests/unit/` →
+      570 passed; `pytest tests/integration/` → 71 passed (PostgreSQL
+      Docker local), confirmando que el nuevo `tests/conftest.py` no rompe
+      la suite de integración.
 
 **Criterio de cierre:** sin `APP_ENV` explícito, la app arranca en modo
 "producción" (secret de webhook exigido); `UserContext` nunca degrada a un
-usuario `"unknown"`.
+usuario `"unknown"`. ✅ Cumplido localmente.
+
+---
+
+## Fase 3 — Cierre de sesiones DB + validación de UUID en tools (🟠 alto)
+
+> Restaurada el 2026-10-02: una edición previa demasiado grande la perdió
+> al escribir la Fase 4; el contenido es el mismo que se había planificado.
+
+**Objetivo:** evitar agotamiento del pool de conexiones bajo carga y errores
+no controlados por UUID malformado en tools.
+
+- [ ] T3.1 · Auditar `src/agent/tools/*.py`: cada `_get_*_service()`/
+      `_get_actions_repo()` llama `await get_session()` sin cerrar. Usar
+      `async with` sobre `AsyncSession` (SQLAlchemy 2.0 lo soporta),
+      manteniendo los `commit()` explícitos actuales (sin cambiar la
+      semántica transaccional — eso es Fase 4/T6b).
+- [ ] T3.2 · Aplicar el patrón en `notes.py`, `documents.py`, `vehicles.py`,
+      `maintenance.py`, `reminders.py`, `calendar.py`, `todos.py`. Cuando una
+      tool use dos sesiones (servicio + `ActionProposalsRepository`), cerrar
+      cada una; no compartir sesión entre repos sin motivo.
+- [ ] T3.3 · Unit tests: una sesión falsa registra `close()`; afirmar que se
+      cierra tras cada tool, también por el camino de error.
+- [ ] T3.4 · Validación de UUID: generalizar `todos.py::_parse_uuid` en un
+      helper común (`src/agent/tools/_validation.py`) y usarlo en
+      `calendar.py`, `reminders.py`, `maintenance.py`, `vehicles.py` en vez
+      de `UUID(source_document_id)` sin capturar; devolver mensaje legible en
+      español.
+- [ ] T3.5 · Sustituir `except Exception as e: ... str(e)[:200]` por un
+      mensaje fijo en español y llevar el detalle solo a `logger.exception`
+      (nunca a la respuesta que ve el LLM/usuario). Aplicar en
+      `calendar.py`, `reminders.py`, `maintenance.py`, `vehicles.py`,
+      `todos.py`.
+- [ ] T3.6 · Unit tests por archivo: UUID inválido → mensaje controlado;
+      excepción genérica → mensaje fijo y detalle registrado solo en logs.
+- [ ] T3.7 · `ruff check`, `mypy src/`, `pytest tests/unit/` en verde;
+      `pytest tests/integration/` si cambian firmas de repositorios.
+
+**Criterio de cierre:** ninguna tool deja una sesión DB abierta tras su
+retorno; ningún UUID malformado produce un traceback sin capturar; ningún
+mensaje de error expone detalle interno.
 
 ---
 

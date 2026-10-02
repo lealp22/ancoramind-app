@@ -76,6 +76,13 @@ TELEGRAM_TOKEN=<bot-production-token>
 TELEGRAM_WEBHOOK_SECRET_TOKEN=<secret-aleatorio>
 ALLOWED_TELEGRAM_USER_IDS=452022640
 
+# Required whenever APP_ENV != development (specs/023 T1): gates AgentOS's
+# REST surface (/agents/*/runs, /sessions, /memories, /config, /eval-runs,
+# ...), which AncoraMind never calls. Railway secret only; rotate like any
+# other bearer in this list. /telegram/webhook, /admin/*, and /health are
+# unaffected.
+AGENT_OS_SECURITY_KEY=<secret-aleatorio>
+
 # T4 durable admission is implemented but deliberately disabled until T5
 # connects the processor/Agent claim. Do not enable it in production yet.
 TELEGRAM_ADMISSION_ENABLED=false

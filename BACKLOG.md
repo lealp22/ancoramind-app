@@ -29,10 +29,10 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 spec redactado con 6 fases ordenadas por riesgo; nada implementado todavía — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–2 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 3–6 pendientes — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 552 unit + 71 integration — Ruff y `mypy src/` limpios en
+Tests: 570 unit + 71 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -88,8 +88,30 @@ el resto son independientes y priorizadas por riesgo).
   el futuro sin tocar tools/servicios. Se descarta guardar un offset
   numérico (se rompe con el cambio de hora estacional).
 
+**Fase 1 implementada localmente (2026-10-02):** `AgentOS` no permite omitir
+routers selectivamente ni `OS_SECURITY_KEY` nativo es reusable sin romper
+`/admin/*`/`/health/readiness` (su exclusión por defecto no cubre rutas
+propias) — se implementó un middleware propio
+(`src/agent/agent_os_rest_guard.py`) que exige bearer solo en las rutas REST
+de Agno, dejando intactas `/telegram/*`, `/admin/*`, `/health*`. Fail-closed:
+`APP_ENV != "development"` sin `AGENT_OS_SECURITY_KEY` impide arrancar.
+`/docs`/`/redoc`/`/openapi.json` cerrados fuera de development. 8 tests
+nuevos, 560 unit passing, Ruff/mypy limpios. **Pendiente:** T1.1/T1.5
+(verificación contra Railway) bloqueadas — el servicio está pausado;
+retomar cuando se reanude.
+
+**Fase 2 implementada localmente (2026-10-02):** `UserContext` ya no degrada a
+`"unknown"` ni usa un `session_id` arbitrario como identidad (fail-closed con
+`ValueError`). `APP_ENV` pasa a `production` por defecto; fuera de development
+la app no arranca sin `AGENT_OS_SECURITY_KEY` ni
+`TELEGRAM_WEBHOOK_SECRET_TOKEN`. `tests/conftest.py` declara
+`APP_ENV=development` para las suites. 570 unit + 71 integration passing,
+Ruff/mypy limpios. **Antes de reanudar Railway:** añadir
+`AGENT_OS_SECURITY_KEY` a las variables del servicio.
+
 **Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
 Ver `specs/023-audit-remediation/`.
+
 
 
 ### BL-39 · Seguridad ante prompt injection y contenido de menor confianza 🔶 en curso — specs/022

@@ -33,6 +33,23 @@ SessionFactory = Callable[[], Awaitable[AsyncSession]]
 ServiceFactory = Callable[[AsyncSession], TelegramInteractionService]
 
 
+def validate_webhook_secret_settings(settings: Settings) -> None:
+    """Fail closed at startup when the Telegram webhook would be unauthenticated.
+
+    Outside development, Agno's legacy Telegram interface rejects every update
+    at request time if ``TELEGRAM_WEBHOOK_SECRET_TOKEN`` is missing, and the
+    durable admission endpoint requires it too. Detecting it at startup turns a
+    silent runtime outage into an explicit configuration error (specs/023 T2).
+    In development Agno skips the check, so the secret stays optional there.
+    """
+    if settings.app_env.lower() == "development":
+        return
+    if not settings.telegram_webhook_secret_token.strip():
+        raise ValueError(
+            "TELEGRAM_WEBHOOK_SECRET_TOKEN is required when APP_ENV != 'development'"
+        )
+
+
 def validate_telegram_admission_settings(settings: Settings) -> None:
     """Fail closed when the enabled durable endpoint lacks a security prerequisite."""
     if not settings.telegram_admission_enabled:

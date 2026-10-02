@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.agent.telegram_admission import (
     install_telegram_admission_endpoint,
     validate_telegram_admission_settings,
+    validate_webhook_secret_settings,
 )
 from src.config import Settings
 from src.domain.interactions.models import (
@@ -76,6 +77,36 @@ def test_enabled_admission_requires_every_security_prerequisite(
 ) -> None:
     with pytest.raises(ValueError, match=expected_name):
         validate_telegram_admission_settings(_settings(**override))
+
+
+def test_webhook_secret_required_outside_development() -> None:
+    """specs/023 T2: a non-development app fails at startup, not per request."""
+    settings = _settings(
+        telegram_admission_enabled=False,
+        telegram_webhook_secret_token="",
+        app_env="production",
+        agent_os_security_key="test-only-secret",
+    )
+    with pytest.raises(ValueError, match="TELEGRAM_WEBHOOK_SECRET_TOKEN"):
+        validate_webhook_secret_settings(settings)
+
+
+def test_webhook_secret_optional_in_development() -> None:
+    settings = _settings(
+        telegram_admission_enabled=False,
+        telegram_webhook_secret_token="",
+        app_env="development",
+    )
+    validate_webhook_secret_settings(settings)
+
+
+def test_webhook_secret_accepted_in_production() -> None:
+    settings = _settings(
+        telegram_admission_enabled=False,
+        app_env="production",
+        agent_os_security_key="test-only-secret",
+    )
+    validate_webhook_secret_settings(settings)
 
 
 async def test_invalid_secret_is_rejected_without_opening_session() -> None:

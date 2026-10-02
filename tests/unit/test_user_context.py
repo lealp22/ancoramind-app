@@ -42,14 +42,34 @@ class TestUserContext:
         ctx = UserContext.from_run_context(rc)
         assert ctx.user_id == "67890"
 
-    def test_from_run_context_fallback(self):
+    def test_from_run_context_without_identity_fails_closed(self):
+        """specs/023 T2: no shared 'unknown' identity is ever produced."""
         rc = RunContext(
             run_id="run-3",
             session_id="",
             user_id=None,
         )
-        ctx = UserContext.from_run_context(rc)
-        assert ctx.user_id == "unknown"
+        with pytest.raises(ValueError, match="no trusted identity"):
+            UserContext.from_run_context(rc)
+
+    @pytest.mark.parametrize(
+        "session_id",
+        [
+            "random-session-id",  # previously became the user_id verbatim
+            "tg:ancora",  # too few segments
+            "tg:ancora:",  # empty chat id
+            "web:ancora:12345",  # not the Telegram scheme
+        ],
+    )
+    def test_from_run_context_rejects_untrusted_session_ids(self, session_id):
+        rc = RunContext(run_id="run-5", session_id=session_id, user_id=None)
+        with pytest.raises(ValueError, match="no trusted identity"):
+            UserContext.from_run_context(rc)
+
+    def test_from_run_context_rejects_blank_user_id(self):
+        rc = RunContext(run_id="run-6", session_id="", user_id="   ")
+        with pytest.raises(ValueError, match="no trusted identity"):
+            UserContext.from_run_context(rc)
 
     def test_frozen_dataclass(self):
         ctx = UserContext(user_id="test")

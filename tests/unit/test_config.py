@@ -29,7 +29,10 @@ class TestSettings:
         monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_ENABLED", raising=False)
         monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_TOKEN", raising=False)
         monkeypatch.delenv("RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE", raising=False)
-        monkeypatch.delenv("APP_ENV", raising=False)
+        # The other defaults are asserted in an explicit development
+        # environment; the safe APP_ENV default itself is covered by
+        # test_app_env_defaults_to_production (specs/023 T2).
+        monkeypatch.setenv("APP_ENV", "development")
         monkeypatch.delenv("LOG_LEVEL", raising=False)
         monkeypatch.delenv("OBSERVABILITY_JSON_LOGS", raising=False)
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
@@ -59,7 +62,9 @@ class TestSettings:
         monkeypatch.setenv("LLM_MODEL", "custom-model")
         monkeypatch.setenv("AGENT_TOOL_CALL_LIMIT", "5")
         monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("AGENT_OS_SECURITY_KEY", "test-only-secret")
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+
 
         settings = Settings(_env_file=None)
         assert settings.llm_model == "custom-model"
@@ -140,6 +145,49 @@ class TestSettings:
         assert settings.runtime_config_admin_enabled is True
         assert settings.runtime_config_admin_token == "admin-secret"
         assert settings.runtime_config_bootstrap_default_route == "ancoramind-fast"
+
+    def test_app_env_defaults_to_production(self, monkeypatch):
+        """specs/023 T2: with APP_ENV absent, the app runs in its safe mode
+        (production), so production secrets are demanded rather than
+        silently skipped."""
+        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.setenv("AGENT_OS_SECURITY_KEY", "test-only-secret")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.app_env == "production"
+
+    def test_missing_app_env_fails_closed_without_production_secrets(self, monkeypatch):
+        monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.delenv("AGENT_OS_SECURITY_KEY", raising=False)
+
+        with pytest.raises(ValidationError, match="AGENT_OS_SECURITY_KEY"):
+            Settings(_env_file=None)
+
+    def test_agent_os_security_key_required_outside_development(self, monkeypatch):
+        """specs/023 T1: a non-development app must not expose AgentOS's REST
+        surface without a bearer credential."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.delenv("AGENT_OS_SECURITY_KEY", raising=False)
+
+        with pytest.raises(ValidationError, match="AGENT_OS_SECURITY_KEY"):
+            Settings(_env_file=None)
+
+    def test_agent_os_security_key_not_required_in_development(self, monkeypatch):
+        monkeypatch.setenv("APP_ENV", "development")
+        monkeypatch.delenv("AGENT_OS_SECURITY_KEY", raising=False)
+
+        settings = Settings(_env_file=None)
+
+        assert settings.agent_os_security_key == ""
+
+    def test_agent_os_security_key_accepted_in_production(self, monkeypatch):
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("AGENT_OS_SECURITY_KEY", "a-real-secret")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.agent_os_security_key == "a-real-secret"
 
     @pytest.mark.parametrize("value", ["0", "21"])
     def test_agent_tool_call_limit_rejects_unsafe_values(self, monkeypatch, value):
