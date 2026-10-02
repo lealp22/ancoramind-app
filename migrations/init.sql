@@ -402,3 +402,63 @@ CREATE INDEX IF NOT EXISTS idx_action_proposals_source_interaction
 CREATE UNIQUE INDEX IF NOT EXISTS uq_action_proposals_idempotency_key
     ON ancora.action_proposals(idempotency_key)
     WHERE idempotency_key IS NOT NULL;
+
+-- Consent evidence for governed mutations (Alembic 0006_proposal_consent,
+-- specs/023 T4.1 + specs/022 consent-design.md). Legacy rows without
+-- provenance/payload_hash are kept for audit but are never executable.
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS payload_hash VARCHAR(64);
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS chat_id BIGINT;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS bot_id BIGINT;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS presented_at TIMESTAMPTZ;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS presented_response_id UUID;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS confirming_interaction_id UUID;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS executing_at TIMESTAMPTZ;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE ancora.action_proposals ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(127);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_namespace n ON n.oid = c.connamespace
+        WHERE n.nspname = 'ancora'
+          AND c.conname = 'fk_action_proposals_presented_response'
+    ) THEN
+        ALTER TABLE ancora.action_proposals
+        ADD CONSTRAINT fk_action_proposals_presented_response
+        FOREIGN KEY (presented_response_id)
+        REFERENCES ancora.logical_responses(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_namespace n ON n.oid = c.connamespace
+        WHERE n.nspname = 'ancora'
+          AND c.conname = 'fk_action_proposals_confirming_interaction'
+    ) THEN
+        ALTER TABLE ancora.action_proposals
+        ADD CONSTRAINT fk_action_proposals_confirming_interaction
+        FOREIGN KEY (confirming_interaction_id)
+        REFERENCES ancora.telegram_interactions(id) ON DELETE RESTRICT;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_namespace n ON n.oid = c.connamespace
+        WHERE n.nspname = 'ancora'
+          AND c.conname = 'ck_action_proposals_status'
+    ) THEN
+        ALTER TABLE ancora.action_proposals
+        ADD CONSTRAINT ck_action_proposals_status
+        CHECK (status IN (
+            'pending_confirmation', 'confirmed', 'executing', 'executed',
+            'failed_definitive', 'failed_ambiguous', 'expired', 'discarded'
+        ));
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_action_proposals_confirming_interaction
+    ON ancora.action_proposals(confirming_interaction_id)
+    WHERE confirming_interaction_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_action_proposals_pending_principal
+    ON ancora.action_proposals(user_id, bot_id, chat_id)
+    WHERE status = 'pending_confirmation';

@@ -14,6 +14,12 @@ from uuid import UUID
 from agno.run import RunContext
 from pydantic import ValidationError
 
+from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.validation import (
+    internal_error_reply,
+    invalid_proposal_reply,
+    parse_uuid,
+)
 from src.domain.todos.models import TodoItem, TodoItemCreate, TodoItemUpdate
 from src.domain.todos.service import TodosService
 from src.repositories.actions import ActionProposalsRepository
@@ -25,20 +31,17 @@ _PRIORITY_ICONS = {"high": "🔴", "normal": "🟡", "low": "🟢"}
 
 
 async def _get_todos_service() -> TodosService:
-    session = await get_session()
+    session = track_session(await get_session())
     return TodosService(TodosRepository(session))
 
 
 async def _get_actions_repo() -> ActionProposalsRepository:
-    session = await get_session()
+    session = track_session(await get_session())
     return ActionProposalsRepository(session)
 
 
 def _parse_uuid(value: str, label: str) -> UUID | str:
-    try:
-        return UUID(value)
-    except ValueError:
-        return f"ID no válido ({label}): {value}"
+    return parse_uuid(value, label)
 
 
 def _parse_due_date(value: str | None) -> datetime | str | None:
@@ -76,6 +79,7 @@ async def _create_proposal(
     )
 
 
+@closes_sessions
 async def list_todo_lists(run_context: RunContext) -> str:
     """List your TODO lists.
 
@@ -107,6 +111,7 @@ async def list_todo_lists(run_context: RunContext) -> str:
     return "\n".join(lines)
 
 
+@closes_sessions
 async def propose_todo_list(run_context: RunContext, name: str) -> str:
     """PROPOSE a new TODO list — requires user confirmation.
 
@@ -134,6 +139,7 @@ async def propose_todo_list(run_context: RunContext, name: str) -> str:
     )
 
 
+@closes_sessions
 async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
     """Execute a confirmed TODO-list proposal.
 
@@ -173,11 +179,12 @@ async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
         await actions_repo.mark_executed(user_context.user_id, proposal_id)
         return result
     except (KeyError, TypeError, ValueError) as error:
-        return f"❌ Datos de propuesta no válidos: {str(error)[:200]}"
+        return invalid_proposal_reply("execute_todo_list", error)
     except Exception as error:
-        return f"❌ Error: {str(error)[:200]}"
+        return internal_error_reply("execute_todo_list", error)
 
 
+@closes_sessions
 async def propose_todo_list_rename(run_context: RunContext, list_id: str, name: str) -> str:
     """PROPOSE renaming a TODO list — requires user confirmation.
 
@@ -214,6 +221,7 @@ async def propose_todo_list_rename(run_context: RunContext, list_id: str, name: 
     )
 
 
+@closes_sessions
 async def propose_todo_list_delete(run_context: RunContext, list_id: str) -> str:
     """PROPOSE deleting a TODO list and its tasks — requires confirmation.
 
@@ -249,6 +257,7 @@ async def propose_todo_list_delete(run_context: RunContext, list_id: str) -> str
     )
 
 
+@closes_sessions
 async def list_todo_items(
     run_context: RunContext,
     list_id: str,
@@ -287,6 +296,7 @@ async def list_todo_items(
     return "\n".join(lines)
 
 
+@closes_sessions
 async def propose_todo_item(
     run_context: RunContext,
     list_id: str,
@@ -352,6 +362,7 @@ async def propose_todo_item(
     return "\n".join(details)
 
 
+@closes_sessions
 async def propose_todo_item_update(
     run_context: RunContext,
     item_id: str,
@@ -411,6 +422,7 @@ async def propose_todo_item_update(
     )
 
 
+@closes_sessions
 async def propose_todo_item_complete(run_context: RunContext, item_id: str) -> str:
     """PROPOSE marking a TODO task as done — requires user confirmation.
 
@@ -425,6 +437,7 @@ async def propose_todo_item_complete(run_context: RunContext, item_id: str) -> s
     return await _propose_todo_item_status(run_context, item_id, "done", "completar")
 
 
+@closes_sessions
 async def propose_todo_item_reopen(run_context: RunContext, item_id: str) -> str:
     """PROPOSE reopening a TODO task — requires user confirmation.
 
@@ -460,6 +473,7 @@ async def _propose_todo_item_status(
     )
 
 
+@closes_sessions
 async def propose_todo_item_move(run_context: RunContext, item_id: str, target_list_id: str) -> str:
     """PROPOSE moving a TODO task to another list — requires confirmation.
 
@@ -491,6 +505,7 @@ async def propose_todo_item_move(run_context: RunContext, item_id: str, target_l
     )
 
 
+@closes_sessions
 async def propose_todo_item_delete(run_context: RunContext, item_id: str) -> str:
     """PROPOSE deleting a TODO task — requires user confirmation.
 
@@ -518,6 +533,7 @@ async def propose_todo_item_delete(run_context: RunContext, item_id: str) -> str
     )
 
 
+@closes_sessions
 async def execute_todo_item(run_context: RunContext, proposal_id: str) -> str:
     """Execute a confirmed TODO-item proposal.
 
@@ -598,6 +614,6 @@ async def execute_todo_item(run_context: RunContext, proposal_id: str) -> str:
         await actions_repo.mark_executed(user_context.user_id, proposal_id)
         return result
     except (KeyError, TypeError, ValueError, ValidationError) as error:
-        return f"❌ Datos de propuesta no válidos: {str(error)[:200]}"
+        return invalid_proposal_reply("execute_todo_item", error)
     except Exception as error:
-        return f"❌ Error: {str(error)[:200]}"
+        return internal_error_reply("execute_todo_item", error)

@@ -32,6 +32,7 @@ from src.domain.llm_access.models import (
     ExecutionBudgetExceededError,
     ExecutionContext,
     GovernanceViolationError,
+    InteractionProvenance,
     generate_traceparent,
     governance_metadata,
 )
@@ -68,8 +69,13 @@ class GovernedInteractionRunner:
         telegram_update_id: int,
         telegram_message_id: int | None = None,
         media: tuple[ResolvedTelegramMedia, ...] = (),
+        provenance: InteractionProvenance | None = None,
     ) -> str:
-        """Execute one governed non-streaming run with trusted identity."""
+        """Execute one governed non-streaming run with trusted identity.
+
+        ``provenance`` is resolved by the processor from the admitted
+        interaction; ``propose_*`` tools read it from the bound context.
+        """
         snapshot = self._config_manager.snapshot()
         if snapshot.config.cost_governance is not None:
             if self._spend_reader is None:
@@ -93,6 +99,7 @@ class GovernedInteractionRunner:
                 started_at_monotonic=time.monotonic(),
             ),
             traceparent=generate_traceparent(),
+            provenance=provenance,
         )
         with execution_context_scope(context):
             observability = context.config.config.observability

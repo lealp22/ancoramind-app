@@ -5,6 +5,12 @@ from uuid import UUID
 
 from agno.run import RunContext
 
+from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.validation import (
+    internal_error_reply,
+    invalid_proposal_reply,
+    parse_optional_uuid,
+)
 from src.domain.calendar.provider import NoopCalendarProvider
 from src.domain.calendar.service import CalendarService
 from src.repositories.actions import ActionProposalsRepository
@@ -14,15 +20,16 @@ from src.security.user_context import UserContext
 
 
 async def _get_calendar_service() -> CalendarService:
-    session = await get_session()
+    session = track_session(await get_session())
     return CalendarService(CalendarRepository(session), NoopCalendarProvider())
 
 
 async def _get_actions_repo() -> ActionProposalsRepository:
-    session = await get_session()
+    session = track_session(await get_session())
     return ActionProposalsRepository(session)
 
 
+@closes_sessions
 async def check_calendar(
     run_context: RunContext,
     start: str,
@@ -70,6 +77,7 @@ async def check_calendar(
     return "\n".join(lines)
 
 
+@closes_sessions
 async def propose_calendar_event(
     run_context: RunContext,
     title: str,
@@ -108,7 +116,9 @@ async def propose_calendar_event(
         except ValueError:
             return f"Fecha de fin no válida: {end_at}. Usa ISO 8601."
 
-    src_doc = UUID(source_document_id) if source_document_id else None
+    src_doc = parse_optional_uuid(source_document_id, "documento")
+    if isinstance(src_doc, str):
+        return src_doc
 
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.create(
@@ -138,6 +148,7 @@ async def propose_calendar_event(
     return "\n".join(lines)
 
 
+@closes_sessions
 async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> str:
     """Execute a confirmed calendar event proposal.
 
@@ -174,6 +185,6 @@ async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> s
             f"   ID: `{event.id}`"
         )
     except (KeyError, TypeError, ValueError) as e:
-        return f"❌ Datos de propuesta no válidos: {str(e)[:200]}"
+        return invalid_proposal_reply("execute_calendar_event", e)
     except Exception as e:
-        return f"❌ Error al crear evento: {str(e)[:200]}"
+        return internal_error_reply("execute_calendar_event", e)

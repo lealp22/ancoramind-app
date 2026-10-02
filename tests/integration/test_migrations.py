@@ -82,6 +82,20 @@ PAIRING_TABLES = {
     "telegram_pairing_requests",
 }
 
+CONSENT_COLUMNS = {
+    "payload_hash",
+    "chat_id",
+    "bot_id",
+    "presented_at",
+    "presented_response_id",
+    "expires_at",
+    "confirming_interaction_id",
+    "executing_at",
+    "completed_at",
+    "failure_reason",
+}
+"""Columns added by 0006_proposal_consent (specs/023 T4.1)."""
+
 
 @dataclass(frozen=True)
 class MigrationDatabase:
@@ -217,6 +231,7 @@ def test_alembic_fresh_install_and_latest_downgrade(
         "idempotency_key",
         "arguments_fingerprint",
     } <= _columns(migration_database, "action_proposals")
+    assert _columns(migration_database, "action_proposals") >= CONSENT_COLUMNS
     assert {
         "idx_telegram_interactions_user_accepted_at",
         "idx_telegram_interactions_accepted_queue",
@@ -234,7 +249,12 @@ def test_alembic_fresh_install_and_latest_downgrade(
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _note_count(migration_database, "preserved through downgrade") == 1
+
+    command.downgrade(config, GOVERNANCE_REVISION)
+
     assert not (PAIRING_TABLES & _tables(migration_database))
+    assert not (CONSENT_COLUMNS & _columns(migration_database, "action_proposals"))
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
     command.upgrade(config, "head")
@@ -275,6 +295,40 @@ def test_upgrade_adopts_unversioned_existing_schema_with_data(
     assert _current_revision(migration_database) == HEAD_REVISION
     assert _note_count(migration_database, "legacy data survives adoption") == 1
     assert _tables(migration_database) >= GOVERNANCE_TABLES
+
+
+def test_consent_downgrade_folds_new_states_back_to_the_legacy_model(
+    migration_database: MigrationDatabase,
+) -> None:
+    """0006 downgrade must leave only statuses the previous model understood."""
+    config = _alembic_config(migration_database)
+    command.upgrade(config, "0006_proposal_consent")
+
+    with psycopg.connect(migration_database.dsn) as connection:
+        for status in ("executing", "failed_ambiguous", "expired", "discarded", "executed"):
+            connection.execute(
+                """
+                INSERT INTO ancora.action_proposals (user_id, tool_name, status, payload)
+                VALUES (%s, 'create_reminder', %s, '{}'::jsonb)
+                """,
+                ("migration-user", status),
+            )
+        connection.commit()
+
+    command.downgrade(config, "0005_telegram_pairing")
+
+    with psycopg.connect(migration_database.dsn) as connection:
+        statuses = {
+            row[0]
+            for row in connection.execute(
+                "SELECT DISTINCT status FROM ancora.action_proposals"
+            ).fetchall()
+        }
+    assert statuses <= {"pending_confirmation", "confirmed", "executed"}
+    assert not (CONSENT_COLUMNS & _columns(migration_database, "action_proposals"))
+
+    command.upgrade(config, "head")
+    assert _current_revision(migration_database) == HEAD_REVISION
 
 
 def test_init_sql_is_compatible_with_alembic_head(

@@ -1,6 +1,6 @@
 # Verification: 023 — Audit Remediation
 
-> **Status:** 🔶 en curso — Fases 1 y 2 implementadas localmente (2026-10-02);
+> **Status:** 🔶 en curso — Fases 1–3 implementadas localmente (2026-10-02);
 > verificación Railway de Fase 1 bloqueada (servicio pausado).
 
 ## Fase 1 — Superficie REST de AgentOS
@@ -68,11 +68,42 @@
 
 ## Fase 3 — Sesiones DB / validación UUID
 
-- [ ] Pendiente.
+- [x] Implementada y verificada localmente (2026-10-02):
+      - `@closes_sessions` + `track_session()` (`src/agent/tools/sessions.py`)
+        cierran todas las sesiones abiertas durante cada tool, también si
+        falla. 32 tools cubiertas; el schema de Agno no cambia (verificado
+        con `Function.from_callable`).
+      - `src/agent/tools/validation.py`: validación de UUID sin repetir el
+        valor rechazado y mensajes de error fijos (`INTERNAL_ERROR`,
+        `INVALID_PROPOSAL_DATA`); en el log solo queda la clase de la
+        excepción.
+      - 15 tests nuevos en `tests/unit/test_tool_sessions_and_errors.py`.
+        Un primer intento comprobaba `caplog.text` y fallaba en la suite
+        completa porque otro test instala `MetadataOnlyJsonFormatter`
+        (que descarta el texto del mensaje a propósito); se corrigió
+        comprobando los `LogRecord` directamente.
+      - Resultados: `ruff` y `mypy src/` limpios; unit 585 passed;
+        integration 71 passed.
 
 ## Fase 4 — Consentimiento gobernado
 
-- [ ] Pendiente. Ver también `specs/022-llm-input-trust/verification.md`.
+- [x] T4.1–T4.2 implementadas y verificadas localmente (2026-10-02):
+      - Migración `0006_proposal_consent` + `init.sql` equivalente.
+        Probado con PostgreSQL real: instalación desde cero, adopción de
+        `init.sql`, downgrade a la revisión anterior y vuelta a head, y
+        downgrade con filas en estados nuevos (se reconvierten a estados
+        que el modelo anterior entiende).
+      - Repositorio de consentimiento sin commits propios. Concurrencia
+        probada con dos sesiones independientes: un solo ganador, y el
+        perdedor recibe `NOT_PENDING`.
+      - Un bug encontrado al probar con PostgreSQL real que los mocks no
+        habrían detectado: asyncpg rechazaba `complete_execution` porque el
+        mismo parámetro se usaba como `VARCHAR` y como `text`. Se corrigió
+        con un parámetro booleano aparte.
+      - Resultados: `ruff` y `mypy src/` limpios; unit 590 passed;
+        integration 89 passed.
+- [ ] T4.3–T4.9 pendientes. Ver también
+      `specs/022-llm-input-trust/verification.md`.
 
 ## Fase 5 — Zona horaria
 

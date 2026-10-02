@@ -35,7 +35,7 @@ from src.domain.interactions.models import (
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.llm_access.cost_governance import CostGovernanceError
-from src.domain.llm_access.models import ExecutionBudgetExceededError
+from src.domain.llm_access.models import ExecutionBudgetExceededError, InteractionProvenance
 from src.observability import get_telemetry, log_context_scope
 from src.repositories.interactions import TelegramInteractionsRepository
 
@@ -56,6 +56,7 @@ class InteractionAgentRunner(Protocol):
         telegram_update_id: int,
         telegram_message_id: int | None = None,
         media: tuple[ResolvedTelegramMedia, ...] = (),
+        provenance: InteractionProvenance | None = None,
     ) -> str: ...
 
 
@@ -103,6 +104,7 @@ class InteractionProcessor:
         bot_username: str | None = None,
         on_cycle: Callable[[int], None] | None = None,
         on_interaction_completed: Callable[[], None] | None = None,
+        governed_consent: bool = False,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -115,6 +117,8 @@ class InteractionProcessor:
         self._bot_username = bot_username
         self._on_cycle = on_cycle
         self._on_interaction_completed = on_interaction_completed
+        self._governed_consent = governed_consent
+        """specs/023 T4.3-T4.4: off by default; when off, behaviour is unchanged."""
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
 
@@ -284,6 +288,7 @@ class InteractionProcessor:
                     telegram_update_id=interaction.telegram_update_id,
                     telegram_message_id=interaction.telegram_message_id,
                     media=media,
+                    provenance=self._provenance(interaction),
                 )
                 if not content.strip():
                     await self._mark_terminal(
@@ -371,6 +376,16 @@ class InteractionProcessor:
 
         response_ready = interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
         return await self._deliver_response(response_ready)
+
+    def _provenance(self, interaction: TelegramInteraction) -> InteractionProvenance | None:
+        """Trusted origin for ``propose_*`` tools; ``None`` while the rollout is off."""
+        if not self._governed_consent or interaction.chat_id is None:
+            return None
+        return InteractionProvenance(
+            interaction_id=interaction.id,
+            bot_id=interaction.bot_id,
+            chat_id=interaction.chat_id,
+        )
 
     async def _refresh_typing(self, chat_id: int) -> None:
         """Keep Telegram's non-content typing indicator alive during an Agent run."""

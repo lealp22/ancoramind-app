@@ -8,6 +8,12 @@ from uuid import UUID
 
 from agno.run import RunContext
 
+from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.validation import (
+    internal_error_reply,
+    invalid_proposal_reply,
+    parse_optional_uuid,
+)
 from src.domain.vehicles.service import VehicleService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -17,15 +23,16 @@ from src.security.user_context import UserContext
 
 
 async def _get_vehicle_service() -> VehicleService:
-    session = await get_session()
+    session = track_session(await get_session())
     return VehicleService(VehiclesRepository(session), MaintenanceRepository(session))
 
 
 async def _get_actions_repo() -> ActionProposalsRepository:
-    session = await get_session()
+    session = track_session(await get_session())
     return ActionProposalsRepository(session)
 
 
+@closes_sessions
 async def propose_vehicle_maintenance(
     run_context: RunContext,
     vehicle_id: str,
@@ -68,6 +75,10 @@ async def propose_vehicle_maintenance(
 
     work_items = [w.strip() for w in (work_performed or "").split(",") if w.strip()]
 
+    src_doc = parse_optional_uuid(source_document_id, "documento")
+    if isinstance(src_doc, str):
+        return src_doc
+
     # Verify vehicle belongs to user
     service = await _get_vehicle_service()
     target = await service.get_vehicle(user_ctx, vid)
@@ -75,7 +86,6 @@ async def propose_vehicle_maintenance(
         return f"Vehículo no encontrado: {vehicle_id}"
 
     # Create action proposal
-    src_doc = UUID(source_document_id) if source_document_id else None
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.create(
         user_id=user_ctx.user_id,
@@ -112,6 +122,7 @@ async def propose_vehicle_maintenance(
     return "\n".join(lines)
 
 
+@closes_sessions
 async def execute_vehicle_maintenance(run_context: RunContext, proposal_id: str) -> str:
     """Execute a confirmed vehicle maintenance proposal.
 
@@ -157,6 +168,6 @@ async def execute_vehicle_maintenance(run_context: RunContext, proposal_id: str)
             lines.append(f"   Documento origen: `{payload['source_document_id']}`")
         return "\n".join(lines)
     except (KeyError, TypeError, ValueError) as e:
-        return f"❌ Datos de propuesta no válidos: {str(e)[:200]}"
+        return invalid_proposal_reply("execute_vehicle_maintenance", e)
     except Exception as e:
-        return f"❌ Error al registrar: {str(e)[:200]}"
+        return internal_error_reply("execute_vehicle_maintenance", e)

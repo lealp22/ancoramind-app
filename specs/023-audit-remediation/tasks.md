@@ -148,31 +148,47 @@ usuario `"unknown"`. ✅ Cumplido localmente.
 **Objetivo:** evitar agotamiento del pool de conexiones bajo carga y errores
 no controlados por UUID malformado en tools.
 
-- [ ] T3.1 · Auditar `src/agent/tools/*.py`: cada `_get_*_service()`/
-      `_get_actions_repo()` llama `await get_session()` sin cerrar. Usar
-      `async with` sobre `AsyncSession` (SQLAlchemy 2.0 lo soporta),
-      manteniendo los `commit()` explícitos actuales (sin cambiar la
-      semántica transaccional — eso es Fase 4/T6b).
-- [ ] T3.2 · Aplicar el patrón en `notes.py`, `documents.py`, `vehicles.py`,
-      `maintenance.py`, `reminders.py`, `calendar.py`, `todos.py`. Cuando una
-      tool use dos sesiones (servicio + `ActionProposalsRepository`), cerrar
-      cada una; no compartir sesión entre repos sin motivo.
-- [ ] T3.3 · Unit tests: una sesión falsa registra `close()`; afirmar que se
-      cierra tras cada tool, también por el camino de error.
-- [ ] T3.4 · Validación de UUID: generalizar `todos.py::_parse_uuid` en un
-      helper común (`src/agent/tools/_validation.py`) y usarlo en
-      `calendar.py`, `reminders.py`, `maintenance.py`, `vehicles.py` en vez
-      de `UUID(source_document_id)` sin capturar; devolver mensaje legible en
-      español.
-- [ ] T3.5 · Sustituir `except Exception as e: ... str(e)[:200]` por un
-      mensaje fijo en español y llevar el detalle solo a `logger.exception`
-      (nunca a la respuesta que ve el LLM/usuario). Aplicar en
-      `calendar.py`, `reminders.py`, `maintenance.py`, `vehicles.py`,
-      `todos.py`.
-- [ ] T3.6 · Unit tests por archivo: UUID inválido → mensaje controlado;
-      excepción genérica → mensaje fijo y detalle registrado solo en logs.
-- [ ] T3.7 · `ruff check`, `mypy src/`, `pytest tests/unit/` en verde;
-      `pytest tests/integration/` si cambian firmas de repositorios.
+- [x] T3.1 · **Implementado (2026-10-02).** Nuevo
+      `src/agent/tools/sessions.py`: `track_session()` registra cada sesión
+      abierta por los `_get_*` y `@closes_sessions` las cierra al terminar la
+      tool, también si lanza excepción. Se eligió esta opción frente a
+      `async with` en cada tool porque los `_get_*` construyen servicios
+      reutilizados y los tests existentes los sustituyen. `functools.wraps`
+      conserva nombre, docstring y firma: se comprobó con
+      `Function.from_callable` que el schema de Agno sigue igual y que
+      `run_context` sigue sin aparecer en él. Los `commit()` de los
+      repositorios no cambian.
+- [x] T3.2 · Aplicado a las 32 tools de `notes`, `documents`, `vehicles`,
+      `maintenance`, `reminders`, `calendar` y `todos` (una comprobación con
+      AST confirma que no queda ninguna tool pública sin el decorador).
+      `LlmUsageRecorder` ya cerraba sus propias sesiones y no se toca. De
+      paso, `get_document`, `get_vehicle_summary` y
+      `get_vehicle_maintenance_history` validan el UUID **antes** de abrir
+      sesión.
+- [x] T3.3 · `tests/unit/test_tool_sessions_and_errors.py`: cierre con
+      éxito, con excepción y sin fugas entre llamadas; schema de Agno
+      intacto; tools reales (`search_notes`, `execute_calendar_event` con
+      dos sesiones y fallo del servicio) cierran todas sus sesiones.
+- [x] T3.4 · Nuevo `src/agent/tools/validation.py`: `parse_uuid` y
+      `parse_optional_uuid` no repiten el valor rechazado (lo ha generado el
+      LLM y no tiene límite de tamaño). Aplicados a `source_document_id` en
+      `calendar`, `reminders`, `maintenance` y `vehicles`;
+      `todos._parse_uuid` delega en el helper común.
+- [x] T3.5 · Los `except Exception` de los ejecutores (`calendar`,
+      `reminders`, `maintenance`, `vehicles`, `todos` ×2) y los errores de
+      payload devuelven mensajes fijos (`INTERNAL_ERROR`,
+      `INVALID_PROPOSAL_DATA`) y en el log solo queda la *clase* de la
+      excepción. **Excepción deliberada:** el `ValueError` de dominio de
+      `execute_vehicle` (matrícula duplicada) mantiene su mensaje, porque lo
+      construye el servicio con datos del propio usuario y le sirve para
+      entender qué pasó.
+- [x] T3.6 · 15 tests nuevos: mensajes fijos sin texto de la excepción,
+      registro de log solo con la clase del error, UUID inválido rechazado
+      sin tocar la BD (parametrizado en 4 tools) y mensaje compartido con
+      `todos`.
+- [x] T3.7 · `ruff check` y `mypy src/` limpios; `pytest tests/unit/` → 585
+      passed; `pytest tests/integration/` → 71 passed. Las firmas de los
+      repositorios no cambian.
 
 **Criterio de cierre:** ninguna tool deja una sesión DB abierta tras su
 retorno; ningún UUID malformado produce un traceback sin capturar; ningún
@@ -189,34 +205,90 @@ mensaje de error expone detalle interno.
 > implementación de su T6b/T7/T8 pendientes, registrada aquí para
 > integrarse en el plan de remediación con secuencia explícita.
 
-- [ ] T4.1 · Migración Alembic aditiva: añadir a `action_proposals` (o tabla
-      nueva de consentimiento si el diseño de specs/022 lo requiere) los
-      campos para: presentación verificada (`presented_at`,
-      `presented_via_delivery_id` o similar), expiración (`expires_at`,
-      default `created_at + 15 min` fijado en el momento de presentación, no
-      de creación), y estado ampliado (`pending_confirmation` →
-      `presented` → `confirmed` → `executed` / `expired` / `superseded`).
-      Mantener `migrations/init.sql` equivalente a head.
-- [ ] T4.2 · `ActionProposalsRepository`: añadir
-      `mark_presented(proposal_id, delivery_id, presented_at)`,
-      `claim_confirmation(user_id, proposal_id, chat_id, bot_id, now) ->
-      ProposalRecord | ConsentClaimError` con **una sola** transacción que
-      valida: existe, pertenece al mismo `user_id`/`chat_id`/`bot_id`, está
-      `presented` (no solo `pending_confirmation`), no ha expirado, y hace el
-      `UPDATE ... WHERE status='presented' RETURNING ...` atómico (ya no es
-      el actual `confirm()` sin matices). `mark_executed` debe exigir
-      `status='confirmed'` en el `WHERE` (hoy no lo hace — bug a corregir
-      aquí).
-- [ ] T4.3 · Mover la detección de «Sí» / «Sí <UUID>» desde las tools al
-      procesador de interacciones (`domain/interactions/processor.py`),
-      reusando `parse_consent_intent` ya existente, **antes** de invocar al
-      Agent (mismo patrón que `commands.py` resuelve `/new`, AGENTS.md §4).
-      0 propuestas vigentes presentadas → no ejecutar, informar; ≥2 → listar
-      IDs y pedir `Sí <UUID>`, sin invocar al Agent.
-- [ ] T4.4 · Marcar `presented_at`/`presented_via_delivery_id` cuando la
-      outbox confirma la entrega del mensaje que contiene la propuesta
-      (hook junto a `telegram_response_deliveries` en
-      `src/repositories/interactions.py`). Enlazar outbox↔proposal con FK.
+- [x] T4.1 · **Implementado (2026-10-02)** con el modelo de estados de
+      `consent-design.md` (decisión del propietario, más estricto que el
+      borrador inicial de esta tarea): `pending_confirmation → confirmed →
+      executing → executed | failed_definitive | failed_ambiguous`, más
+      `expired`/`discarded` sin ejecución. "Presentada" no es un estado sino
+      evidencia (`presented_at` + `presented_response_id`), así que una
+      propuesta sigue `pending_confirmation` hasta que se reclama.
+      Migración `0006_proposal_consent`: 10 columnas (`payload_hash`,
+      `chat_id`, `bot_id`, `presented_at`, `presented_response_id` → FK a
+      `logical_responses`, `expires_at`, `confirming_interaction_id` → FK a
+      `telegram_interactions`, `executing_at`, `completed_at`,
+      `failure_reason`), CHECK con los 8 estados válidos, índice único
+      parcial sobre `confirming_interaction_id` (un «Sí» autoriza como mucho
+      una propuesta, garantizado por la BD) e índice de pendientes por
+      principal. `init.sql` actualizado y equivalente a head. El downgrade
+      reconvierte los estados nuevos a los que entiende el modelo anterior.
+      Las propuestas existentes sin `payload_hash`/`source_interaction_id`
+      se conservan para auditoría pero **no son ejecutables**.
+- [x] T4.2 · **Implementado.** `src/domain/actions/models.py` (puro, sin
+      Agno ni SQL): `ProposalStatus`, `ConsentRejection` (8 motivos tipados
+      y sin contenido), `ConsentPrincipal`, `ClaimedProposal`,
+      `payload_hash()` (SHA-256 canónico de herramienta + payload) y TTL de
+      15 minutos. `ActionProposalsRepository`:
+      - `create()` acepta `source_interaction_id`/`bot_id`/`chat_id` y
+        guarda siempre el hash del payload normalizado.
+      - `mark_presented()` abre la ventana de consentimiento solo una vez:
+        volver a presentar no amplía el plazo.
+      - `list_confirmable()` usa el reloj de PostgreSQL.
+      - `claim_confirmation()` hace `SELECT … FOR UPDATE`, valida en orden
+        (existencia y usuario → legacy → bot/chat → estado → presentada →
+        caducada → hash del payload) y pasa a `confirmed` registrando la
+        interacción confirmante.
+      - `begin_execution()`/`complete_execution()`: los estados terminales
+        no vuelven a cambiar.
+      - `discard_pending_for_chat()` para `/new`.
+      La API nueva **nunca hace commit**: lo hace quien la llama, para que
+      claim, mutación y estado final vayan en la misma transacción (T4.5).
+      **Bug corregido:** `mark_executed` exige ahora `status='confirmed'` y
+      devuelve si hubo transición; antes sobrescribía cualquier estado del
+      usuario.
+      Tests: 17 de integración en `tests/integration/test_proposal_consent.py`
+      (ciclo completo; un solo uso; una interacción no autoriza dos
+      propuestas; índice único verificado directamente en la BD; 6 rechazos
+      parametrizados; **carrera real entre dos sesiones con un solo
+      ganador**; ventana que no se amplía; `/new`; fallo ambiguo terminal;
+      CHECK de estados; regresión de `mark_executed`) + 2 de migración
+      (columnas en head y downgrade con estados nuevos) + 5 unitarios en
+      `tests/unit/test_proposal_consent_model.py`.
+      **Pendiente para T4.3–T4.5:** los `execute_*` siguen usando la ruta
+      legacy (`confirm`/`mark_executed`). Hasta reescribirlos, las
+      propuestas nuevas se crean sin procedencia y, por tanto, no son
+      reclamables por la API nueva.
+- [ ] T4.3 · Detectar la confirmación en el procesador de interacciones
+      **antes** de invocar al Agent (mismo patrón que `/new`, AGENTS.md §4),
+      detrás de `GOVERNED_CONSENT_ENABLED` (desactivado por defecto: con él
+      apagado el comportamiento actual no cambia). **Decisión del
+      propietario (2026-10-02):** la vía principal son **botones inline
+      Sí/No** bajo el bloque de la propuesta; el «Sí» escrito sigue siendo
+      válido como alternativa (`parse_consent_intent` ya acepta Sí/Si/SI/SÍ,
+      con puntuación final y `Sí <UUID>`). Diseño:
+      - Botón: `callback_data = "c:<uuid>"` (Sí) / `"d:<uuid>"` (No), dentro
+        del límite de 64 bytes de Telegram. El dato del botón es **solo un
+        identificador**, no una prueba: el Core vuelve a validar
+        principal/bot/chat/plazo/hash con `claim_confirmation`. El
+        `callback_query` llega por el mismo admission (secret, chat privado,
+        allowlist, deduplicación por `update_id`) y se responde con
+        `answerCallbackQuery` para que Telegram quite el reloj del botón.
+      - «Sí» escrito: 1 propuesta vigente → se reclama; 0 → mensaje fijo «no
+        hay nada pendiente»; ≥2 → lista fija con IDs y botones, sin Agent.
+      - «No» (botón) → `discarded`, sin Agent.
+      - Tras el claim, se delega en un puerto `ProposalExecutor` (lo
+        implementa T4.5). Mientras no exista, la propuesta queda
+        `confirmed` y se responde con un mensaje fijo: por eso el flag debe
+        seguir apagado hasta T4.5.
+- [ ] T4.4 · Procedencia y presentación verificada:
+      - El runner pasa al Agent, por `RunContext.metadata` (nunca por el
+        LLM), `interaction_id`/`bot_id`/`chat_id` de confianza; los
+        `propose_*` los registran con `ActionProposalsRepository.create`.
+      - Al persistir la respuesta, el Core le añade un bloque fijo por cada
+        propuesta creada en ese run, generado desde el payload guardado (no
+        desde el texto del LLM), con los botones Sí/No.
+      - Cuando Telegram confirma la entrega de ese chunk, se llama a
+        `mark_presented` en la misma transacción que marca la entrega; ahí
+        empiezan los 15 minutos.
 - [ ] T4.5 · Reescribir `execute_vehicle`, `execute_vehicle_maintenance`,
       `execute_reminder`, `execute_calendar_event`, `execute_todo_list`,
       `execute_todo_item`: dejan de llamar `actions_repo.confirm()` bajo

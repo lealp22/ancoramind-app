@@ -29,10 +29,10 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–2 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 3–6 pendientes — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.2 hechas, T4.3–T4.9 pendientes; Fases 5–6 pendientes — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 570 unit + 71 integration — Ruff y `mypy src/` limpios en
+Tests: 590 unit + 89 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -108,6 +108,25 @@ la app no arranca sin `AGENT_OS_SECURITY_KEY` ni
 `APP_ENV=development` para las suites. 570 unit + 71 integration passing,
 Ruff/mypy limpios. **Antes de reanudar Railway:** añadir
 `AGENT_OS_SECURITY_KEY` a las variables del servicio.
+
+**Fase 3 implementada localmente (2026-10-02):** las 32 tools cierran sus
+sesiones de BD con `@closes_sessions`, también cuando fallan (antes cada
+llamada dejaba una conexión del pool sin devolver). `source_document_id` se
+valida antes de tocar la BD, y los errores inesperados devuelven un mensaje
+fijo y solo registran la clase de la excepción. 585 unit + 71 integration
+passing, Ruff/mypy limpios.
+
+**Fase 4 — T4.1/T4.2 implementadas localmente (2026-10-02):** migración
+`0006_proposal_consent` con el modelo de estados de `consent-design.md`
+(`pending_confirmation → confirmed → executing → executed | failed_*`, más
+`expired`/`discarded`), CHECK de estados e índice único que impide que un «Sí»
+autorice dos propuestas. El repositorio añade el claim atómico (bloqueo de
+fila, reloj de la BD, hash del payload, sin commits propios) y corrige
+`mark_executed`, que antes sobrescribía cualquier estado. Las propuestas
+antiguas sin procedencia no son ejecutables. 590 unit + 89 integration
+passing (incluida una carrera real entre dos sesiones). **Pendiente:**
+T4.3–T4.9 (consentimiento antes del Agent, presentación desde la outbox y
+reescritura de los `execute_*`).
 
 **Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
 Ver `specs/023-audit-remediation/`.

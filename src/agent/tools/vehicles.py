@@ -8,6 +8,8 @@ from uuid import UUID
 from agno.run import RunContext
 from pydantic import ValidationError
 
+from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.validation import internal_error_reply, parse_optional_uuid
 from src.domain.vehicles.models import VehicleCreate
 from src.domain.vehicles.service import VehicleService
 from src.repositories.actions import ActionProposalsRepository
@@ -18,15 +20,16 @@ from src.security.user_context import UserContext
 
 
 async def _get_vehicle_service() -> VehicleService:
-    session = await get_session()
+    session = track_session(await get_session())
     return VehicleService(VehiclesRepository(session), MaintenanceRepository(session))
 
 
 async def _get_actions_repo() -> ActionProposalsRepository:
-    session = await get_session()
+    session = track_session(await get_session())
     return ActionProposalsRepository(session)
 
 
+@closes_sessions
 async def find_vehicle(run_context: RunContext, reference: str | None = None) -> str:
     """Find a vehicle by make, model, nickname, or registration.
 
@@ -65,6 +68,7 @@ async def find_vehicle(run_context: RunContext, reference: str | None = None) ->
     return result.message
 
 
+@closes_sessions
 async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
     """Get a complete summary of a vehicle including last maintenance.
 
@@ -76,13 +80,13 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
         vehicle_id: UUID from find_vehicle results.
     """
     user_ctx = UserContext.from_run_context(run_context)
-    service = await _get_vehicle_service()
 
     try:
         vid = UUID(vehicle_id)
     except ValueError:
         return f"ID de vehículo no válido: {vehicle_id}"
 
+    service = await _get_vehicle_service()
     summary = await service.get_summary(user_ctx, vid)
     if not summary:
         return f"Vehículo no encontrado: {vehicle_id}"
@@ -116,6 +120,7 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
     return "\n".join(lines)
 
 
+@closes_sessions
 async def propose_vehicle(
     run_context: RunContext,
     make: str,
@@ -161,12 +166,9 @@ async def propose_vehicle(
         msg = first.get("msg", str(e))[:150]
         return f"Datos del vehículo no válidos ({loc}: {msg})"
 
-    src_doc = None
-    if source_document_id:
-        try:
-            src_doc = UUID(source_document_id)
-        except ValueError:
-            return f"ID de documento no válido: {source_document_id}"
+    src_doc = parse_optional_uuid(source_document_id, "documento")
+    if isinstance(src_doc, str):
+        return src_doc
 
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.create(
@@ -204,6 +206,7 @@ async def propose_vehicle(
     return "\n".join(lines)
 
 
+@closes_sessions
 async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
     """Execute a confirmed vehicle registration proposal.
 
@@ -246,12 +249,15 @@ async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
             lines.append(f"   Documento origen: `{payload['source_document_id']}`")
         return "\n".join(lines)
     except ValueError as e:
-        # p.ej. matrícula duplicada — la propuesta queda confirmada, no ejecutada
+        # Domain rule (e.g. duplicate registration): the service builds a
+        # user-facing Spanish message from canonical data, never infra detail.
+        # The proposal stays confirmed, not executed.
         return f"❌ No se pudo registrar el vehículo: {str(e)[:200]}"
     except Exception as e:
-        return f"❌ Error al registrar el vehículo: {str(e)[:200]}"
+        return internal_error_reply("execute_vehicle", e)
 
 
+@closes_sessions
 async def get_vehicle_maintenance_history(run_context: RunContext, vehicle_id: str) -> str:
     """Get the full maintenance history for a vehicle.
 
@@ -260,13 +266,13 @@ async def get_vehicle_maintenance_history(run_context: RunContext, vehicle_id: s
         vehicle_id: UUID from find_vehicle results.
     """
     user_ctx = UserContext.from_run_context(run_context)
-    service = await _get_vehicle_service()
 
     try:
         vid = UUID(vehicle_id)
     except ValueError:
         return f"ID de vehículo no válido: {vehicle_id}"
 
+    service = await _get_vehicle_service()
     records = await service.get_maintenance_history(user_ctx, vid)
     if not records:
         return "No hay registros de mantenimiento para este vehículo."

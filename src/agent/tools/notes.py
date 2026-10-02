@@ -6,6 +6,7 @@ The `run_context` parameter is injected automatically by Agno.
 
 from agno.run import RunContext
 
+from src.agent.tools.sessions import closes_sessions, track_session
 from src.agent.tools.untrusted_results import (
     MAX_NOTE_CHARS,
     MAX_RESULT_RECORDS,
@@ -19,12 +20,13 @@ from src.security.user_context import UserContext
 
 
 async def _get_notes_service() -> NotesService:
-    """Create a NotesService with a fresh database session."""
-    session = await get_session()
+    """Create a NotesService with a fresh, call-scoped database session."""
+    session = track_session(await get_session())
     repository = NotesRepository(session)
     return NotesService(repository)
 
 
+@closes_sessions
 async def remember_note(
     run_context: RunContext,
     content: str,
@@ -52,6 +54,7 @@ async def remember_note(
     return f"Nota guardada (id: {note.id}). Puedes buscarla después con search_notes."
 
 
+@closes_sessions
 async def search_notes(
     run_context: RunContext,
     query: str | None = None,

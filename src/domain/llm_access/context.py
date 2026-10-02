@@ -6,7 +6,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 
-from src.domain.llm_access.models import ExecutionContext, GovernanceViolationError
+from src.domain.llm_access.models import (
+    ExecutionContext,
+    GovernanceViolationError,
+    InteractionProvenance,
+)
 
 _execution_context_var: ContextVar[ExecutionContext | None] = ContextVar(
     "ancoramind_execution_context",
@@ -23,6 +27,16 @@ def current_execution_context() -> ExecutionContext:
             "no model call is allowed outside a governed run scope"
         )
     return context
+
+
+def current_provenance() -> InteractionProvenance | None:
+    """Trusted origin of the active run, or ``None`` outside a governed run.
+
+    Never raises: tools also run on the legacy AgentOS path, where proposals
+    are simply created without provenance (and are therefore not claimable).
+    """
+    context = _execution_context_var.get()
+    return context.provenance if context is not None else None
 
 
 @contextmanager

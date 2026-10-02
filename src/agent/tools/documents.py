@@ -12,6 +12,7 @@ from agno.media import File, Image
 from agno.run import RunContext
 
 from src.agent.document_vision import DocumentVisionPreparationError, prepare_visual_pages
+from src.agent.tools.sessions import closes_sessions, track_session
 from src.agent.tools.untrusted_results import (
     MAX_FILENAME_CHARS,
     MAX_RESULT_RECORDS,
@@ -48,7 +49,7 @@ async def _get_document_service() -> DocumentService:
     from src.config import Settings
 
     settings = Settings()
-    session = await get_session()
+    session = track_session(await get_session())
     llm_access = AgnoLLMAccess(
         settings=settings,
         usage_recorder=LlmUsageRecorder(get_session).record,
@@ -64,6 +65,7 @@ async def _get_document_service() -> DocumentService:
     )
 
 
+@closes_sessions
 async def search_documents(run_context: RunContext, query: str | None = None) -> str:
     """Search your personal documents by filename.
 
@@ -103,6 +105,7 @@ async def search_documents(run_context: RunContext, query: str | None = None) ->
     return render_retrieved_records("search_documents", records, len(docs))
 
 
+@closes_sessions
 async def get_document(run_context: RunContext, document_id: str) -> str:
     """Get details about a specific document and its AI extraction.
 
@@ -113,13 +116,13 @@ async def get_document(run_context: RunContext, document_id: str) -> str:
         document_id: The document UUID (from search_documents results).
     """
     user_ctx = UserContext.from_run_context(run_context)
-    service = await _get_document_service()
 
     try:
         doc_id = UUID(document_id)
     except ValueError:
         return "ID de documento no válido."
 
+    service = await _get_document_service()
     result = await service.get_document(user_ctx, doc_id)
     if not result:
         return "Documento no encontrado."
@@ -185,6 +188,7 @@ def _media_filename(media: File | Image, mime_type: str, index: int) -> str:
     return f"telegram-media-{media_id}{extension}"
 
 
+@closes_sessions
 async def analyze_document(
     run_context: RunContext,
     images: Sequence[Image] | None = None,

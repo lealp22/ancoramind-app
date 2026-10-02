@@ -194,6 +194,20 @@ class ExecutionBudget:
 
 
 @dataclass(frozen=True)
+class InteractionProvenance:
+    """Trusted origin of a governed run, set by the Core, never by the model.
+
+    ``propose_*`` tools read it to bind each proposal to the admitted
+    interaction, bot and chat that produced it (specs/023 T4.4). Without it a
+    proposal has no consent provenance and can never be confirmed.
+    """
+
+    interaction_id: UUID
+    bot_id: int
+    chat_id: int
+
+
+@dataclass(frozen=True)
 class ExecutionContext:
     """Trusted per-run identity, config and budget for governed inference."""
 
@@ -206,6 +220,7 @@ class ExecutionContext:
     telegram_message_id: int | None = None
     railway_request_id: str | None = None
     traceparent: str | None = None
+    provenance: InteractionProvenance | None = None
 
 
 def generate_traceparent() -> str:

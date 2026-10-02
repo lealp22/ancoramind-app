@@ -5,6 +5,12 @@ from uuid import UUID
 
 from agno.run import RunContext
 
+from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.validation import (
+    internal_error_reply,
+    invalid_proposal_reply,
+    parse_optional_uuid,
+)
 from src.domain.reminders.service import ReminderService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -13,15 +19,16 @@ from src.security.user_context import UserContext
 
 
 async def _get_reminder_service() -> ReminderService:
-    session = await get_session()
+    session = track_session(await get_session())
     return ReminderService(RemindersRepository(session))
 
 
 async def _get_actions_repo() -> ActionProposalsRepository:
-    session = await get_session()
+    session = track_session(await get_session())
     return ActionProposalsRepository(session)
 
 
+@closes_sessions
 async def list_reminders(run_context: RunContext, status: str | None = None) -> str:
     """List your reminders.
 
@@ -50,6 +57,7 @@ async def list_reminders(run_context: RunContext, status: str | None = None) -> 
     return "\n".join(lines)
 
 
+@closes_sessions
 async def propose_reminder(
     run_context: RunContext,
     title: str,
@@ -77,7 +85,9 @@ async def propose_reminder(
     except ValueError:
         return f"Fecha no válida: {trigger_at}. Usa formato ISO 8601 (YYYY-MM-DDTHH:MM)."
 
-    src_doc = UUID(source_document_id) if source_document_id else None
+    src_doc = parse_optional_uuid(source_document_id, "documento")
+    if isinstance(src_doc, str):
+        return src_doc
 
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.create(
@@ -103,6 +113,7 @@ async def propose_reminder(
     return "\n".join(lines)
 
 
+@closes_sessions
 async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
     """Execute a confirmed reminder proposal.
 
@@ -137,6 +148,6 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
             f"   ID: `{reminder.id}`"
         )
     except (KeyError, TypeError, ValueError) as e:
-        return f"❌ Datos de propuesta no válidos: {str(e)[:200]}"
+        return invalid_proposal_reply("execute_reminder", e)
     except Exception as e:
-        return f"❌ Error al crear recordatorio: {str(e)[:200]}"
+        return internal_error_reply("execute_reminder", e)
