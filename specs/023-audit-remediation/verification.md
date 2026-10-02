@@ -102,7 +102,37 @@
         con un parámetro booleano aparte.
       - Resultados: `ruff` y `mypy src/` limpios; unit 590 passed;
         integration 89 passed.
-- [ ] T4.3–T4.9 pendientes. Ver también
+- [x] T4.3–T4.4 implementadas y verificadas localmente (2026-10-02), detrás
+      de `GOVERNED_CONSENT_ENABLED` (apagado por defecto):
+      - Flujo real probado de extremo a extremo con PostgreSQL: una tool
+        simulada crea una propuesta durante el run → el Core añade el
+        bloque fijo + botones Sí/No al entregar → tras confirmar la
+        entrega se marca `presented_at` → un segundo update de tipo
+        `callback_query` con el botón "Sí" confirma la propuesta
+        (`status='confirmed'`), sin segunda ejecución del Agent.
+      - 10 casos unitarios de rechazo/ambigüedad con repositorio mockeado:
+        sin pendientes, varias pendientes, `Sí <UUID>`, 4 motivos de
+        rechazo con mensaje distinto cada uno, confirmar/descartar por
+        botón, texto/callback que no es consentimiento.
+      - **Desviaciones del diseño original**, documentadas en
+        `tasks.md`: la procedencia viaja por `ContextVar` en vez de
+        `RunContext.metadata`; `mark_presented` no comparte transacción
+        con la confirmación de entrega (dos commits, falla cerrado si el
+        segundo no llega); `answerCallbackQuery` no está implementado
+        todavía (el botón no pierde su reloj de carga en el cliente).
+      - Resultados: `ruff` y `mypy src/` limpios; unit 605 passed;
+        integration 91 passed.
+- [x] T4.5 implementada y verificada localmente (2026-10-02):
+      - `confirm_or_use_confirmed()` (camino "con reserva", decisión del
+        propietario sobre el diseño original "sin reserva" de `tasks.md`):
+        comportamiento sin cambios con el flag apagado; con el flag
+        encendido, una propuesta ya confirmada por T4.3 se ejecuta sin que
+        el LLM la autorice. Aplicado a las 6 tools `execute_*`.
+      - 2 tests de integración nuevos (camino legacy; reutilización del
+        claim pre-Agent) + 7 mocks de tools actualizados al nuevo método.
+      - Resultados: `ruff` y `mypy src/` limpios; unit 605 passed;
+        integration 93 passed.
+- [ ] T4.6–T4.9 pendientes. Ver también
       `specs/022-llm-input-trust/verification.md`.
 
 ## Fase 5 — Zona horaria

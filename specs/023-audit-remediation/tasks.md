@@ -257,44 +257,68 @@ mensaje de error expone detalle interno.
       legacy (`confirm`/`mark_executed`). Hasta reescribirlos, las
       propuestas nuevas se crean sin procedencia y, por tanto, no son
       reclamables por la API nueva.
-- [ ] T4.3 · Detectar la confirmación en el procesador de interacciones
-      **antes** de invocar al Agent (mismo patrón que `/new`, AGENTS.md §4),
-      detrás de `GOVERNED_CONSENT_ENABLED` (desactivado por defecto: con él
-      apagado el comportamiento actual no cambia). **Decisión del
-      propietario (2026-10-02):** la vía principal son **botones inline
-      Sí/No** bajo el bloque de la propuesta; el «Sí» escrito sigue siendo
-      válido como alternativa (`parse_consent_intent` ya acepta Sí/Si/SI/SÍ,
-      con puntuación final y `Sí <UUID>`). Diseño:
-      - Botón: `callback_data = "c:<uuid>"` (Sí) / `"d:<uuid>"` (No), dentro
-        del límite de 64 bytes de Telegram. El dato del botón es **solo un
-        identificador**, no una prueba: el Core vuelve a validar
-        principal/bot/chat/plazo/hash con `claim_confirmation`. El
-        `callback_query` llega por el mismo admission (secret, chat privado,
-        allowlist, deduplicación por `update_id`) y se responde con
-        `answerCallbackQuery` para que Telegram quite el reloj del botón.
-      - «Sí» escrito: 1 propuesta vigente → se reclama; 0 → mensaje fijo «no
-        hay nada pendiente»; ≥2 → lista fija con IDs y botones, sin Agent.
-      - «No» (botón) → `discarded`, sin Agent.
-      - Tras el claim, se delega en un puerto `ProposalExecutor` (lo
-        implementa T4.5). Mientras no exista, la propuesta queda
-        `confirmed` y se responde con un mensaje fijo: por eso el flag debe
-        seguir apagado hasta T4.5.
-- [ ] T4.4 · Procedencia y presentación verificada:
-      - El runner pasa al Agent, por `RunContext.metadata` (nunca por el
-        LLM), `interaction_id`/`bot_id`/`chat_id` de confianza; los
-        `propose_*` los registran con `ActionProposalsRepository.create`.
-      - Al persistir la respuesta, el Core le añade un bloque fijo por cada
-        propuesta creada en ese run, generado desde el payload guardado (no
-        desde el texto del LLM), con los botones Sí/No.
-      - Cuando Telegram confirma la entrega de ese chunk, se llama a
-        `mark_presented` en la misma transacción que marca la entrega; ahí
-        empiezan los 15 minutos.
-- [ ] T4.5 · Reescribir `execute_vehicle`, `execute_vehicle_maintenance`,
+- [x] T4.3 · **Implementado (2026-10-02)**, detrás de `GOVERNED_CONSENT_ENABLED`
+      (`Settings.governed_consent_enabled`, apagado por defecto). El
+      procesador resuelve en `_handle_consent_input` (antes de comandos y
+      Agent): botones `c:<uuid>`/`d:<uuid>` vía `parse_consent_callback`, y
+      «Sí»/«Sí <UUID>» vía `parse_consent_intent` ya existente. 0 propuestas
+      vigentes → mensaje fijo; ≥2 → lista con IDs; «No» → `discard_proposal`.
+      Cada rama usa `ActionProposalsRepository.claim_confirmation`, que
+      revalida principal/bot/chat/plazo/hash — el `callback_data` nunca es
+      prueba por sí mismo. Reutiliza la misma ruta de admisión/outbox que
+      `/new` (`_persist_command_reply` → `_deliver_response`): el modelo
+      nunca ve el callback ni el «Sí». **Nota de alcance:** no se ha
+      implementado `answerCallbackQuery` (quitar el reloj de carga del
+      botón en el cliente de Telegram) — queda para cuando se conecte el
+      sender real a `callback_query_id`; no bloquea el resto del flujo.
+      La ejecución real queda en `_execute_claimed`, un marcador de posición
+      que confirma la propuesta y responde con mensaje fijo: implementarlo
+      de verdad es T4.5 (`ProposalExecutor`).
+- [x] T4.4 · **Implementado.** `ExecutionContext.provenance`
+      (`InteractionProvenance`) viaja por `ContextVar`, no por
+      `RunContext.metadata` como se había esbozado — más simple y ya
+      existente para otros usos gobernados; `ActionProposalsRepository.
+      create()` lo lee con `current_provenance()` sin que ninguna tool
+      `propose_*` cambie. `_append_proposal_blocks` añade el bloque de
+      `render_proposal_block` (nuevo `src/domain/actions/presentation.py`)
+      al contenido antes de cifrar/persistir; `_pending_proposal_buttons`
+      adjunta los botones solo al último chunk entregado. Tras confirmar la
+      entrega de ese chunk, `_mark_proposals_presented` vuelve a consultar
+      por `interaction_id` (no se fía del cálculo anterior) y llama a
+      `mark_presented` en una transacción propia — **no la misma
+      transacción que `mark_chunk_delivered`**, a diferencia de lo
+      planificado; un fallo entre ambas deja el chunk entregado sin abrir
+      el plazo, lo que es seguro (falla cerrado) pero no es ejecución
+      atómica estricta. Documentado como limitación conocida.
+      Tests: 4 integración de extremo a extremo en
+      `tests/integration/test_interaction_processor.py` (propone → entrega
+      con botones correctos → `presented_at` fijado → callback confirma →
+      `status='confirmed'`) + 10 unitarios en
+      `tests/unit/test_interaction_processor.py` (texto no es consentimiento,
+      0/1/varias pendientes, `Sí <UUID>`, 4 motivos de rechazo con mensaje
+      distinto, confirmar/descartar por botón, callback malformado) + 1
+      integración de procedencia (T4.2) + 5 unitarios de
+      `render_proposal_block`/botones. 605 unit + 91 integration passing;
+      `ruff`/`mypy src/` limpios.
+
+- [x] T4.5 · **Implementado (2026-10-02) — con reserva, no "sin reserva" como
+      se había esbozado.** Quitar `confirm()` del todo habría roto el bot
+      mientras `GOVERNED_CONSENT_ENABLED` esté apagado (nadie movería nunca
+      una propuesta a `confirmed`). Decisión del propietario: nuevo
+      `ActionProposalsRepository.confirm_or_use_confirmed()` — intenta el
+      `confirm()` legacy primero (comportamiento sin cambios con el flag
+      apagado); si la fila ya no está `pending_confirmation`, comprueba si
+      ya quedó `confirmed` por el claim pre-Agent de T4.3 y, si es así,
+      reutiliza esa confirmación sin que el LLM autorice nada. Aplicado a
+      las 6 tools (`execute_vehicle`, `execute_vehicle_maintenance`,
       `execute_reminder`, `execute_calendar_event`, `execute_todo_list`,
-      `execute_todo_item`: dejan de llamar `actions_repo.confirm()` bajo
-      criterio del LLM; solo ejecutan una propuesta cuyo estado ya es
-      `confirmed` por el claim del Core (T4.3). Si el Core aún no gestiona
-      la confirmación para una ruta dada, rechazar con mensaje claro.
+      `execute_todo_item`), que ya no llaman a `confirm()` directamente.
+      Tests: 2 de integración nuevos en `tests/integration/
+      test_actions_repo.py` (camino legacy sin cambios; una propuesta
+      confirmada por T4.3 se reutiliza sin segunda llamada a `confirm()`);
+      7 mocks de tools actualizados (`.confirm.return_value` →
+      `.confirm_or_use_confirmed.return_value`). 605 unit + 93 integration
+      passing; `ruff`/`mypy src/` limpios.
 - [ ] T4.6 · `remember_note`: convertir a `propose_note`/`execute_note` con
       el mismo patrón `ActionProposal` (AGENTS.md §2.4). Actualizar
       `prompts/skills/*.md` y `docs/adding-tools.md` si cambia el ejemplo.

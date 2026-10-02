@@ -6,10 +6,12 @@ even while the webhook channel is unavailable (see ADR-003 / BL-18).
 """
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import httpx
 
+from src.domain.actions.presentation import ConsentButton
 from src.domain.interactions.processor import TelegramSendError
 from src.domain.reminders.models import Reminder
 from src.notifications.markup import MAX_MESSAGE_CHARS, markdown_to_telegram_html
@@ -117,13 +119,22 @@ class TelegramNotifier:
             return False
         return True
 
-    async def send_text(self, chat_id: int, text: str) -> int:
+    async def send_text(
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        button_rows: Sequence[tuple[ConsentButton, ConsentButton]] | None = None,
+    ) -> int:
         """Send one persisted response chunk and return Telegram's message ID.
 
         Model Markdown is rendered as Telegram HTML (BL-29). Formatting never
         risks the message itself: rendering falls back to plain text when it
         would exceed Telegram's limit, and a markup rejection by the API is
         retried once as plain text before the chunk is reported as failed.
+        ``button_rows`` renders one inline-keyboard row per proposal
+        (specs/023 T4.3-T4.4); on a plain-text retry they stay attached, since
+        Telegram accepts ``reply_markup`` independently of ``parse_mode``.
 
         The T5 processor records ``sending`` before this non-idempotent request.
         Transport uncertainty is marked ambiguous so the caller never resends a
@@ -132,7 +143,9 @@ class TelegramNotifier:
         rendered = markdown_to_telegram_html(text)
         if len(rendered) <= MAX_MESSAGE_CHARS:
             try:
-                return await self._send_message(chat_id, rendered, parse_mode="HTML")
+                return await self._send_message(
+                    chat_id, rendered, parse_mode="HTML", button_rows=button_rows
+                )
             except TelegramSendError as exc:
                 if not exc.definitive or not _is_markup_rejection(exc):
                     raise
@@ -141,7 +154,9 @@ class TelegramNotifier:
                     "resending the chunk as plain text",
                     exc.description,
                 )
-        return await self._send_message(chat_id, text, parse_mode=None)
+        return await self._send_message(
+            chat_id, text, parse_mode=None, button_rows=button_rows
+        )
 
     async def _send_message(
         self,
@@ -149,11 +164,22 @@ class TelegramNotifier:
         text: str,
         *,
         parse_mode: str | None,
+        button_rows: Sequence[tuple[ConsentButton, ConsentButton]] | None = None,
     ) -> int:
         """Issue one sendMessage call, classifying failures by retry safety."""
         payload: dict[str, object] = {"chat_id": chat_id, "text": text}
         if parse_mode is not None:
             payload["parse_mode"] = parse_mode
+        if button_rows:
+            payload["reply_markup"] = {
+                "inline_keyboard": [
+                    [
+                        {"text": yes.label, "callback_data": yes.callback_data},
+                        {"text": no.label, "callback_data": no.callback_data},
+                    ]
+                    for yes, no in button_rows
+                ]
+            }
         try:
             response = await self._client.post(
                 f"{API_BASE_URL}/bot{self._token}/sendMessage",

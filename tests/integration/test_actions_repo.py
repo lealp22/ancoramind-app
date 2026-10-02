@@ -93,3 +93,100 @@ async def test_source_document_set_null_on_document_delete(session, user_a):
     pending = await actions.get_pending(user_a, proposal["id"])
     assert pending is not None
     assert pending["source_document_id"] is None
+
+
+async def test_confirm_or_use_confirmed_prefers_legacy_llm_confirm(session, user_a):
+    """specs/023 T4.5: unchanged behaviour while GOVERNED_CONSENT_ENABLED is off."""
+    repo = ActionProposalsRepository(session)
+    proposal = await repo.create(user_a, "create_reminder", {"title": "ITV"})
+
+    result = await repo.confirm_or_use_confirmed(user_a, proposal["id"])
+
+    assert result is not None
+    assert result["status"] == "confirmed"
+    row = (
+        await session.execute(
+            text("SELECT confirmed_at FROM ancora.action_proposals WHERE id = :id"),
+            {"id": proposal["id"]},
+        )
+    ).one()
+    assert row.confirmed_at is not None
+
+
+async def test_confirm_or_use_confirmed_reuses_pre_agent_claim(session, user_a):
+    """specs/023 T4.5: a proposal already confirmed by T4.3 executes without
+
+    a second ``confirm()`` call — the LLM's «Sí» cannot re-authorise it.
+    """
+    from datetime import UTC, datetime
+    from uuid import UUID
+
+    from src.domain.actions.models import ConsentPrincipal
+
+    repo = ActionProposalsRepository(session)
+    source = (
+        await session.execute(
+            text("""
+                INSERT INTO ancora.telegram_interactions (
+                    bot_id, telegram_update_id, telegram_message_id, chat_id,
+                    telegram_user_id, update_type, status, accepted_at,
+                    received_at, updated_at
+                ) VALUES (9001, 70001, 1, 7001, 7002, 'message', 'accepted',
+                    now(), now(), now())
+                RETURNING id
+            """)
+        )
+    ).scalar_one()
+    proposal = await repo.create(
+        user_a,
+        "create_reminder",
+        {"title": "ITV"},
+        source_interaction_id=source,
+        bot_id=9001,
+        chat_id=7001,
+    )
+    proposal_id = UUID(proposal["id"])
+    response_id = (
+        await session.execute(
+            text("""
+                INSERT INTO ancora.logical_responses (interaction_id, response_kind, status)
+                VALUES (:interaction_id, 'agent', 'delivered')
+                RETURNING id
+            """),
+            {"interaction_id": source},
+        )
+    ).scalar_one()
+    principal = ConsentPrincipal(user_id=user_a, bot_id=9001, chat_id=7001)
+    marked = await repo.mark_presented(
+        [proposal_id],
+        principal=principal,
+        response_id=response_id,
+        presented_at=datetime.now(tz=UTC),
+    )
+    assert marked == 1
+    confirming = (
+        await session.execute(
+            text("""
+                INSERT INTO ancora.telegram_interactions (
+                    bot_id, telegram_update_id, telegram_message_id, chat_id,
+                    telegram_user_id, update_type, status, accepted_at,
+                    received_at, updated_at
+                ) VALUES (9001, 70002, 1, 7001, 7002, 'callback_query', 'accepted',
+                    now(), now(), now())
+                RETURNING id
+            """)
+        )
+    ).scalar_one()
+    claim = await repo.claim_confirmation(
+        proposal_id, principal=principal, confirming_interaction_id=confirming
+    )
+    await session.commit()
+    assert claim.ok
+
+    result = await repo.confirm_or_use_confirmed(user_a, proposal["id"])
+
+    assert result is not None
+    assert result["status"] == "confirmed"
+    assert result["payload"]["title"] == "ITV"
+
+

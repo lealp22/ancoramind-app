@@ -152,6 +152,36 @@ class ActionProposalsRepository:
             "payload": row.payload,
         }
 
+    async def confirm_or_use_confirmed(
+        self, user_id: str, proposal_id: str
+    ) -> ProposalRecord | None:
+        """Legacy ``execute_*`` entry point during the T4.5 transition.
+
+        Tries the old LLM-driven ``confirm()`` first (unchanged behaviour
+        while ``GOVERNED_CONSENT_ENABLED`` is off). If the row is no longer
+        ``pending_confirmation``, it may already be ``confirmed`` by the
+        pre-Agent consent path (specs/023 T4.3) — in that case the already
+        committed confirmation is reused instead of rejecting the proposal.
+        """
+        confirmed = await self.confirm(user_id, proposal_id)
+        if confirmed is not None:
+            return confirmed
+        stmt = text("""
+            SELECT id, tool_name, status, payload
+            FROM ancora.action_proposals
+            WHERE id = :id AND user_id = :uid AND status = 'confirmed'
+        """)
+        result = await self._session.execute(stmt, {"id": UUID(proposal_id), "uid": user_id})
+        row = result.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": str(row.id),
+            "tool_name": row.tool_name,
+            "status": row.status,
+            "payload": row.payload,
+        }
+
     async def mark_executed(self, user_id: str, proposal_id: str) -> bool:
         """Mark a confirmed proposal as executed (legacy path).
 
@@ -382,6 +412,28 @@ class ActionProposalsRepository:
                 "status": status.value,
                 "succeeded": status is ProposalStatus.EXECUTED,
                 "failure_reason": failure_reason,
+            },
+        )
+        return result.fetchone() is not None
+
+    async def discard_proposal(
+        self, proposal_id: UUID, *, principal: ConsentPrincipal, reason: str = "user_declined"
+    ) -> bool:
+        """Discard one pending proposal (the «No» button — specs/023 T4.3)."""
+        result = await self._session.execute(
+            text("""
+                UPDATE ancora.action_proposals
+                SET status = 'discarded', completed_at = now(), failure_reason = :reason
+                WHERE id = :id AND user_id = :uid AND bot_id = :bot_id AND chat_id = :chat_id
+                  AND status = 'pending_confirmation'
+                RETURNING id
+            """),
+            {
+                "id": proposal_id,
+                "uid": principal.user_id,
+                "bot_id": principal.bot_id,
+                "chat_id": principal.chat_id,
+                "reason": reason,
             },
         )
         return result.fetchone() is not None

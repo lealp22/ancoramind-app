@@ -100,7 +100,7 @@ class TestToolsCloseRealSessions:
             return sessions[-1]
 
         actions = AsyncMock()
-        actions.confirm.return_value = {
+        actions.confirm_or_use_confirmed.return_value = {
             "payload": {"title": "Dentista", "start_at": "2026-10-02T17:00:00"}
         }
         service = AsyncMock()
@@ -120,7 +120,7 @@ class TestToolsCloseRealSessions:
 class TestSafeErrorReplies:
     def _patch_calendar(self, monkeypatch, proposal: dict[str, Any], service: Any) -> None:
         actions = AsyncMock()
-        actions.confirm.return_value = proposal
+        actions.confirm_or_use_confirmed.return_value = proposal
         monkeypatch.setattr(calendar, "get_session", AsyncMock(return_value=_FakeSession()))
         monkeypatch.setattr(calendar, "ActionProposalsRepository", lambda _s: actions)
         monkeypatch.setattr(calendar, "CalendarRepository", lambda _s: object())

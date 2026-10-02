@@ -29,10 +29,10 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.2 hechas, T4.3–T4.9 pendientes; Fases 5–6 pendientes — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.5 hechas, T4.6–T4.9 pendientes; Fases 5–6 pendientes — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 590 unit + 89 integration — Ruff y `mypy src/` limpios en
+Tests: 605 unit + 93 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -124,9 +124,29 @@ autorice dos propuestas. El repositorio añade el claim atómico (bloqueo de
 fila, reloj de la BD, hash del payload, sin commits propios) y corrige
 `mark_executed`, que antes sobrescribía cualquier estado. Las propuestas
 antiguas sin procedencia no son ejecutables. 590 unit + 89 integration
-passing (incluida una carrera real entre dos sesiones). **Pendiente:**
-T4.3–T4.9 (consentimiento antes del Agent, presentación desde la outbox y
-reescritura de los `execute_*`).
+passing (incluida una carrera real entre dos sesiones).
+
+**Fase 4 — T4.3/T4.4 implementadas localmente (2026-10-02):** detrás de
+`GOVERNED_CONSENT_ENABLED` (apagado por defecto), el procesador reconoce
+botones Sí/No y el «Sí» escrito **antes** de llamar al Agent, y el Core añade
+un bloque fijo con esos botones a cada propuesta que un run crea, generado
+desde los datos guardados y no desde las palabras del modelo. La propuesta
+solo queda confirmable tras verificar que Telegram entregó ese mensaje.
+Probado de extremo a extremo con PostgreSQL real (propuesta → entrega con
+botones → confirmación por botón). **Pendiente:** `answerCallbackQuery` (el
+botón no deja de mostrar su reloj de carga todavía).
+605 unit + 91 integration passing.
+
+**Fase 4 — T4.5 implementada localmente (2026-10-02):** las 6 tools
+`execute_*` ya no llaman a `confirm()` directamente. Nuevo
+`confirm_or_use_confirmed()`: con el flag apagado se comporta igual que
+antes (el LLM sigue "confirmando"); con el flag encendido, si la propuesta
+ya quedó `confirmed` por el claim pre-Agent de T4.3, la tool la ejecuta sin
+que el LLM la autorice. Se eligió esta vía "con reserva" en vez de quitar
+`confirm()` del todo, porque sin ella el bot se habría roto mientras el
+flag siga apagado (que es como está hoy en producción). 605 unit + 93
+integration passing. **Pendiente:** T4.6–T4.9 (notas, inventario completo,
+tests de carrera transversales y limpieza final).
 
 **Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
 Ver `specs/023-audit-remediation/`.

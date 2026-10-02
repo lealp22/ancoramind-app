@@ -84,7 +84,7 @@ async def test_execute_todo_item_creates_after_confirmation_and_audits(monkeypat
     list_id = uuid4()
     created = _item()
     actions = AsyncMock()
-    actions.confirm.return_value = {
+    actions.confirm_or_use_confirmed.return_value = {
         "tool_name": "create_todo_item",
         "payload": {
             "list_id": str(list_id),
@@ -117,7 +117,7 @@ async def test_execute_todo_item_updates_after_confirmation_and_audits(monkeypat
     item_id = uuid4()
     updated = _item("Nuevo título")
     actions = AsyncMock()
-    actions.confirm.return_value = {
+    actions.confirm_or_use_confirmed.return_value = {
         "tool_name": "update_todo_item",
         "payload": {
             "item_id": str(item_id),
@@ -151,7 +151,7 @@ async def test_execute_todo_item_sets_status_after_confirmation(monkeypatch):
     completed = _item()
     completed.status = "done"
     actions = AsyncMock()
-    actions.confirm.return_value = {
+    actions.confirm_or_use_confirmed.return_value = {
         "tool_name": "set_todo_item_status",
         "payload": {"item_id": str(item_id), "status": "done"},
     }
@@ -175,7 +175,7 @@ async def test_execute_todo_item_moves_after_confirmation(monkeypatch):
     moved = _item()
     moved.list_id = target_list_id
     actions = AsyncMock()
-    actions.confirm.return_value = {
+    actions.confirm_or_use_confirmed.return_value = {
         "tool_name": "move_todo_item",
         "payload": {"item_id": str(item_id), "target_list_id": str(target_list_id)},
     }
@@ -196,7 +196,7 @@ async def test_execute_todo_item_moves_after_confirmation(monkeypatch):
 async def test_execute_todo_item_deletes_after_confirmation(monkeypatch):
     item_id = uuid4()
     actions = AsyncMock()
-    actions.confirm.return_value = {
+    actions.confirm_or_use_confirmed.return_value = {
         "tool_name": "delete_todo_item",
         "payload": {"item_id": str(item_id)},
     }

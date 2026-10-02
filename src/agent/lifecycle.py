@@ -176,6 +176,7 @@ def install_interaction_processor_lifespan(
                 sender=notifier,
                 media_resolver=media_resolver,
                 global_concurrency=settings.telegram_processor_global_concurrency,
+                governed_consent=settings.governed_consent_enabled,
                 on_cycle=(lambda _: health_registry.heartbeat("interaction_processor"))
                 if health_registry is not None
                 else None,

@@ -268,6 +268,7 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
             telegram_update_id: int,
             telegram_message_id: int | None = None,
             media=(),
+            provenance=None,
         ) -> str:
             assert input_text == "hola"
             assert user_id == "5"
@@ -568,3 +569,178 @@ async def test_same_chat_is_processed_in_order(monkeypatch: pytest.MonkeyPatch) 
 
     assert await processor._process_chat_queue([first, second]) == 2
     assert calls == [first.id, second.id]
+
+
+def _consent_processor(
+    monkeypatch: pytest.MonkeyPatch, actions_repo: AsyncMock
+) -> InteractionProcessor:
+    session = AsyncMock()
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    monkeypatch.setattr(processor_module, "ActionProposalsRepository", lambda _: actions_repo)
+    return InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1),
+        agent_runner=AsyncMock(),
+        sender=AsyncMock(),
+        governed_consent=True,
+    )
+
+
+class TestConsentInput:
+    """specs/023 T4.3: resolving Sí/No before the Agent, with mocked repositories."""
+
+    async def test_non_consent_text_falls_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        processor = _consent_processor(monkeypatch, AsyncMock())
+        assert await processor._handle_consent_input(_interaction(), "hola, qué tal") is None
+
+    async def test_bare_si_with_no_pending_proposals(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.list_confirmable.return_value = []
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), "Sí")
+
+        assert reply == "No tienes ninguna propuesta pendiente de confirmar."
+        actions.claim_confirmation.assert_not_awaited()
+
+    async def test_bare_si_with_several_pending_asks_to_pick(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        a, b = uuid4(), uuid4()
+        actions = AsyncMock()
+        actions.list_confirmable.return_value = [a, b]
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), "Sí")
+
+        assert str(a) in reply and str(b) in reply
+        actions.claim_confirmation.assert_not_awaited()
+
+    async def test_bare_si_with_exactly_one_pending_claims_it(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.domain.actions.models import ClaimedProposal, ConsentClaimResult
+
+        proposal_id = uuid4()
+        actions = AsyncMock()
+        actions.list_confirmable.return_value = [proposal_id]
+        actions.claim_confirmation.return_value = ConsentClaimResult(
+            claimed=ClaimedProposal(
+                id=proposal_id,
+                tool_name="create_reminder",
+                payload={},
+                source_document_id=None,
+                confirming_interaction_id=uuid4(),
+            )
+        )
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), "Sí")
+
+        assert str(proposal_id) in reply
+        actions.claim_confirmation.assert_awaited_once()
+
+    async def test_si_with_uuid_claims_that_proposal(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.domain.actions.models import ClaimedProposal, ConsentClaimResult
+
+        proposal_id = uuid4()
+        actions = AsyncMock()
+        actions.claim_confirmation.return_value = ConsentClaimResult(
+            claimed=ClaimedProposal(
+                id=proposal_id,
+                tool_name="create_reminder",
+                payload={},
+                source_document_id=None,
+                confirming_interaction_id=uuid4(),
+            )
+        )
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), f"Sí {proposal_id}")
+
+        assert str(proposal_id) in reply
+        actions.list_confirmable.assert_not_awaited()
+
+    async def test_rejection_reasons_produce_distinct_fixed_replies(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.domain.actions.models import ConsentClaimResult, ConsentRejection
+
+        proposal_id = uuid4()
+        cases = (
+            (ConsentRejection.NOT_FOUND, "no encontré"),
+            (ConsentRejection.EXPIRED, "caducó"),
+            (ConsentRejection.INTERACTION_ALREADY_USED, "ya has confirmado"),
+            (ConsentRejection.NOT_PENDING, "ya no está pendiente"),
+        )
+        for rejection, expected_snippet in cases:
+            actions = AsyncMock()
+            actions.claim_confirmation.return_value = ConsentClaimResult(rejection=rejection)
+            processor = _consent_processor(monkeypatch, actions)
+            reply = await processor._handle_consent_input(_interaction(), f"Sí {proposal_id}")
+            assert expected_snippet in reply.lower()
+
+    async def test_confirm_button_claims_without_touching_discard(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.domain.actions.models import ClaimedProposal, ConsentClaimResult
+
+        proposal_id = uuid4()
+        actions = AsyncMock()
+        actions.claim_confirmation.return_value = ConsentClaimResult(
+            claimed=ClaimedProposal(
+                id=proposal_id,
+                tool_name="create_reminder",
+                payload={},
+                source_document_id=None,
+                confirming_interaction_id=uuid4(),
+            )
+        )
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), f"c:{proposal_id}")
+
+        assert str(proposal_id) in reply
+        actions.discard_proposal.assert_not_awaited()
+
+    async def test_discard_button_discards_without_claiming(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.discard_proposal.return_value = True
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), f"d:{uuid4()}")
+
+        assert reply == "❌ Propuesta descartada."
+        actions.claim_confirmation.assert_not_awaited()
+
+    async def test_discard_button_on_already_resolved_proposal(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.discard_proposal.return_value = False
+        processor = _consent_processor(monkeypatch, actions)
+
+        reply = await processor._handle_consent_input(_interaction(), f"d:{uuid4()}")
+
+        assert reply == "Esa propuesta ya no está pendiente."
+
+    async def test_malformed_callback_like_text_is_not_consent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        actions = AsyncMock()
+        processor = _consent_processor(monkeypatch, actions)
+
+        for raw in ("c:not-a-uuid", "x:" + str(uuid4()), "c:" + str(uuid4()) + " extra"):
+            assert await processor._handle_consent_input(_interaction(), raw) is None
+        actions.claim_confirmation.assert_not_awaited()
+        actions.discard_proposal.assert_not_awaited()
+

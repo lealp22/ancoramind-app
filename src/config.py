@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     """Start the T5 processor; requires the same trusted admission prerequisites."""
     telegram_processor_poll_interval_seconds: float = Field(default=1.0, gt=0)
     telegram_processor_global_concurrency: int = Field(default=2, ge=1, le=20)
+    governed_consent_enabled: bool = False
+    """specs/023 T4.3-T4.4: resolve Sí/No buttons/text before the Agent and
+    append a fixed proposal block to responses. Off by default: with it off,
+    delivery is byte-for-byte unchanged (no T4.5 executor exists yet)."""
     execution_budget_fingerprint_key: str = ""
     """Explicit HMAC key for tool-call fingerprints; when empty, a dedicated
     subkey is derived from TELEGRAM_PAYLOAD_ENCRYPTION_KEY (Railway secrets only)."""

@@ -8,11 +8,21 @@ import logging
 import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.actions.models import ConsentClaimResult, ConsentPrincipal, ConsentRejection
+from src.domain.actions.presentation import (
+    ConsentAction,
+    ConsentButton,
+    ConsentCallback,
+    consent_buttons,
+    parse_consent_callback,
+    render_proposal_block,
+)
 from src.domain.interactions.commands import (
     TelegramCommand,
     default_session_id,
@@ -21,6 +31,7 @@ from src.domain.interactions.commands import (
     parse_telegram_command,
     telemetry_label,
 )
+from src.domain.interactions.consent_intent import parse_consent_intent
 from src.domain.interactions.media import (
     AttachmentResolutionError,
     ResolvedTelegramMedia,
@@ -37,6 +48,7 @@ from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import ExecutionBudgetExceededError, InteractionProvenance
 from src.observability import get_telemetry, log_context_scope
+from src.repositories.actions import ActionProposalsRepository
 from src.repositories.interactions import TelegramInteractionsRepository
 
 logger = logging.getLogger(__name__)
@@ -69,7 +81,13 @@ class TelegramMediaResolverPort(Protocol):
 class TelegramResponseSender(Protocol):
     """Outbound Telegram port returning the confirmed Telegram message ID."""
 
-    async def send_text(self, chat_id: int, text: str) -> int: ...
+    async def send_text(
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        button_rows: Sequence[tuple[ConsentButton, ConsentButton]] | None = None,
+    ) -> int: ...
 
     async def send_typing(self, chat_id: int) -> None: ...
 
@@ -238,6 +256,10 @@ class InteractionProcessor:
             return True
 
         run_id = str(uuid4())
+        if self._governed_consent:
+            consent_reply = await self._handle_consent_input(interaction, input_text)
+            if consent_reply is not None:
+                return await self._reply_deterministically(interaction, consent_reply)
         command = (
             parse_telegram_command(input_text, bot_username=self._bot_username)
             if not attachments
@@ -298,6 +320,7 @@ class InteractionProcessor:
                         error_detail_code="agent_returned_empty_content",
                     )
                     return True
+                content = await self._append_proposal_blocks(interaction, content)
                 encrypted = self._payload_cipher.encrypt({"content": content})
                 chunks = split_telegram_message(content)
                 response = await self._persist_response(
@@ -387,6 +410,83 @@ class InteractionProcessor:
             chat_id=interaction.chat_id,
         )
 
+    async def _append_proposal_blocks(
+        self, interaction: TelegramInteraction, content: str
+    ) -> str:
+        """Append a fixed, Core-rendered block per proposal this run created.
+
+        The block is generated from the stored payload, never from the
+        model's wording, so confirming «Sí» always matches what was shown
+        (specs/023 T4.4). A no-op while the rollout is off.
+        """
+        if not self._governed_consent:
+            return content
+        session = await self._session_factory()
+        try:
+            created = await ActionProposalsRepository(session).list_created_in_interaction(
+                interaction.id, user_id=str(interaction.telegram_user_id)
+            )
+        finally:
+            await session.close()
+        if not created:
+            return content
+        blocks = "\n\n".join(
+            render_proposal_block(row["id"], row["tool_name"], row["payload"]) for row in created
+        )
+        return f"{content}\n\n{blocks}"
+
+    async def _mark_proposals_presented(
+        self, interaction: TelegramInteraction, response_id: UUID
+    ) -> None:
+        """Open the consent window only after Telegram confirmed the delivery.
+
+        Re-queries by interaction instead of trusting the earlier button list:
+        a crash between persisting and delivering must not open a window for a
+        proposal the user never actually saw delivered.
+        """
+        if interaction.chat_id is None or interaction.telegram_user_id is None:
+            return  # pragma: no cover - _run_agent already validated identity
+        principal = ConsentPrincipal(
+            user_id=str(interaction.telegram_user_id),
+            bot_id=interaction.bot_id,
+            chat_id=interaction.chat_id,
+        )
+        session = await self._session_factory()
+        try:
+            repo = ActionProposalsRepository(session)
+            created = await repo.list_created_in_interaction(
+                interaction.id, user_id=principal.user_id
+            )
+            if created:
+                await repo.mark_presented(
+                    [row["id"] for row in created],
+                    principal=principal,
+                    response_id=response_id,
+                    presented_at=datetime.now(tz=UTC),
+                )
+                await session.commit()
+        finally:
+            await session.close()
+
+    async def _pending_proposal_buttons(
+        self, interaction: TelegramInteraction
+    ) -> tuple[tuple[ConsentButton, ConsentButton], ...]:
+        """Sí/No rows for proposals this run just created (specs/023 T4.3-T4.4).
+
+        Returns nothing while the rollout is off, so delivery is byte-for-byte
+        unchanged until T4.5 can act on a confirmed claim.
+        """
+        if not self._governed_consent:
+            return ()
+        session = await self._session_factory()
+        try:
+            created = await ActionProposalsRepository(session).list_created_in_interaction(
+                interaction.id, user_id=str(interaction.telegram_user_id)
+            )
+        finally:
+            await session.close()
+        return tuple(consent_buttons(row["id"]) for row in created)
+
     async def _refresh_typing(self, chat_id: int) -> None:
         """Keep Telegram's non-content typing indicator alive during an Agent run."""
         while True:
@@ -447,6 +547,158 @@ class InteractionProcessor:
             interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
         )
 
+    async def _reply_deterministically(
+        self, interaction: TelegramInteraction, reply_text: str
+    ) -> bool:
+        """Answer a confirmation/discard outcome without any Agent execution.
+
+        Same durable outbox as a command reply (specs/023 T4.3): the model
+        never sees the callback or the «Sí»/«No» text.
+        """
+        encrypted = self._payload_cipher.encrypt({"content": reply_text})
+        chunks = split_telegram_message(reply_text)
+        response = await self._persist_command_reply(
+            interaction.id,
+            agno_session_id=None,
+            content_ciphertext=encrypted.ciphertext,
+            content_key_version=encrypted.key_version,
+            content_length=len(reply_text),
+            chunk_count=len(chunks),
+        )
+        if response is None:
+            # A concurrent claim already answered this update: never reply twice.
+            return False
+        return await self._deliver_response(
+            interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
+        )
+
+    async def _handle_consent_input(
+        self, interaction: TelegramInteraction, input_text: str
+    ) -> str | None:
+        """Resolve a Sí/No button or written «Sí» before any Agent execution.
+
+        Returns the deterministic reply text, or ``None`` if ``input_text``
+        is not consent input (the caller then falls through to commands/Agent
+        as usual). Button data is only an identifier here: every outcome is
+        re-validated by ``ActionProposalsRepository`` against principal, bot,
+        chat, window and payload hash.
+        """
+        if interaction.chat_id is None or interaction.telegram_user_id is None:
+            return None  # pragma: no cover - _run_agent validates identity first
+        principal = ConsentPrincipal(
+            user_id=str(interaction.telegram_user_id),
+            bot_id=interaction.bot_id,
+            chat_id=interaction.chat_id,
+        )
+
+        callback = parse_consent_callback(input_text)
+        if callback is not None:
+            return await self._handle_consent_callback(interaction, principal, callback)
+
+        intent = parse_consent_intent(input_text)
+        if intent is None:
+            return None
+        if intent.proposal_id is not None:
+            return await self._claim_and_report(interaction, principal, intent.proposal_id)
+        return await self._resolve_bare_confirmation(interaction, principal)
+
+    async def _handle_consent_callback(
+        self,
+        interaction: TelegramInteraction,
+        principal: ConsentPrincipal,
+        callback: ConsentCallback,
+    ) -> str:
+        session = await self._session_factory()
+        try:
+            repo = ActionProposalsRepository(session)
+            if callback.action is ConsentAction.DISCARD:
+                discarded = await repo.discard_proposal(callback.proposal_id, principal=principal)
+                await session.commit()
+                return (
+                    "❌ Propuesta descartada."
+                    if discarded
+                    else "Esa propuesta ya no está pendiente."
+                )
+            result = await repo.claim_confirmation(
+                callback.proposal_id,
+                principal=principal,
+                confirming_interaction_id=interaction.id,
+            )
+            await session.commit()
+        finally:
+            await session.close()
+        if not result.ok:
+            return self._consent_rejection_reply(result.rejection)
+        return await self._execute_claimed(result)
+
+    async def _claim_and_report(
+        self,
+        interaction: TelegramInteraction,
+        principal: ConsentPrincipal,
+        proposal_id: UUID,
+    ) -> str:
+        """Written «Sí <UUID>» — same claim path as the confirm button."""
+        session = await self._session_factory()
+        try:
+            result = await ActionProposalsRepository(session).claim_confirmation(
+                proposal_id, principal=principal, confirming_interaction_id=interaction.id
+            )
+            await session.commit()
+        finally:
+            await session.close()
+        if not result.ok:
+            return self._consent_rejection_reply(result.rejection)
+        return await self._execute_claimed(result)
+
+    async def _resolve_bare_confirmation(
+        self, interaction: TelegramInteraction, principal: ConsentPrincipal
+    ) -> str:
+        """Written «Sí» alone: exactly one confirmable proposal, or ask to pick."""
+        session = await self._session_factory()
+        try:
+            repo = ActionProposalsRepository(session)
+            confirmable = await repo.list_confirmable(principal)
+            result = None
+            if len(confirmable) == 1:
+                result = await repo.claim_confirmation(
+                    confirmable[0],
+                    principal=principal,
+                    confirming_interaction_id=interaction.id,
+                )
+                await session.commit()
+        finally:
+            await session.close()
+        if result is None:
+            if not confirmable:
+                return "No tienes ninguna propuesta pendiente de confirmar."
+            ids = "\n".join(f"- `{proposal_id}`" for proposal_id in confirmable)
+            return f"Tienes varias propuestas pendientes. Responde «Sí <ID>»:\n{ids}"
+        if not result.ok:
+            return self._consent_rejection_reply(result.rejection)
+        return await self._execute_claimed(result)
+
+    @staticmethod
+    def _consent_rejection_reply(rejection: ConsentRejection | None) -> str:
+        if rejection in (ConsentRejection.NOT_FOUND, ConsentRejection.LEGACY_PROPOSAL):
+            return "No encontré esa propuesta. Pídemela de nuevo."
+        if rejection is ConsentRejection.EXPIRED:
+            return "Esa propuesta ya caducó (15 min). Pídemela de nuevo."
+        if rejection is ConsentRejection.INTERACTION_ALREADY_USED:
+            return "Ya has confirmado otra propuesta con este mensaje."
+        return "Esa propuesta ya no está pendiente de confirmación."
+
+    async def _execute_claimed(self, result: ConsentClaimResult) -> str:
+        """Placeholder until T4.5 wires a ProposalExecutor port.
+
+        The claim already committed ``confirmed`` durably; execution itself
+        is deliberately out of scope here.
+        """
+        assert result.claimed is not None  # narrowed by callers checking result.ok
+        return (
+            "✅ Confirmado. La ejecución automática se activará próximamente "
+            f"(propuesta `{result.claimed.id}`)."
+        )
+
     async def _stored_session_id(self, chat_id: int) -> str | None:
         """Return the session the ledger last recorded for this chat, if any."""
         session = await self._session_factory()
@@ -501,6 +753,8 @@ class InteractionProcessor:
             return True
 
         deliveries = await self._list_deliveries(response.id)
+        proposal_buttons = await self._pending_proposal_buttons(interaction)
+        last_chunk_index = len(deliveries) - 1
         for delivery in deliveries:
             if delivery.status == "completed":
                 continue
@@ -526,11 +780,25 @@ class InteractionProcessor:
                     get_telemetry().span("telegram.response.send", attributes) as span,
                 ):
                     try:
-                        message_id = await self._sender.send_text(
-                            interaction.chat_id,
-                            chunks[claimed.chunk_index],
+                        buttons_for_chunk = (
+                            proposal_buttons
+                            if claimed.chunk_index == last_chunk_index and proposal_buttons
+                            else None
+                        )
+                        message_id = (
+                            await self._sender.send_text(
+                                interaction.chat_id,
+                                chunks[claimed.chunk_index],
+                                button_rows=buttons_for_chunk,
+                            )
+                            if buttons_for_chunk is not None
+                            else await self._sender.send_text(
+                                interaction.chat_id, chunks[claimed.chunk_index]
+                            )
                         )
                         await self._mark_chunk_delivered(claimed.id, message_id)
+                        if claimed.chunk_index == last_chunk_index and proposal_buttons:
+                            await self._mark_proposals_presented(interaction, response.id)
                         get_telemetry().counter(
                             "ancora.telegram.deliveries",
                             attributes={"ancora.delivery.status": "completed"},

@@ -151,7 +151,7 @@ async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
     """
     user_context = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.confirm(user_context.user_id, proposal_id)
+    proposal = await actions_repo.confirm_or_use_confirmed(user_context.user_id, proposal_id)
     if not proposal:
         return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
 
@@ -546,7 +546,7 @@ async def execute_todo_item(run_context: RunContext, proposal_id: str) -> str:
     """
     user_context = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.confirm(user_context.user_id, proposal_id)
+    proposal = await actions_repo.confirm_or_use_confirmed(user_context.user_id, proposal_id)
     if not proposal:
         return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
 
