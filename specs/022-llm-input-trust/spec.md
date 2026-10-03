@@ -25,10 +25,13 @@ debe pedir aclaración. El canal/transporte no se presupone Telegram dentro de
 Diseño de UX, TTL, procedencia, estados, transacciones y tratamiento de fallo
 ambiguo: `consent-design.md`. Incluye inventario de todos los `execute_*`,
 `remember_note` y la ingesta automática, y bloqueo de la ruta AgentOS legado
-sin evidencia equivalente. Aún no se ha implementado ni validado con DB/Telegram.
-No aplicar un guard solo a una tool dejando las demás abiertas, ni considerar
-un `prompt` de confirmación como control. Toda excepción a AGENTS.md requiere
-aprobación y reflejo en `docs/architecture.md`.
+sin evidencia equivalente. **Implementado y validado con PostgreSQL real
+(2026-10-02, `specs/023-audit-remediation` T4.1–T4.8)**, detrás de
+`GOVERNED_CONSENT_ENABLED` (apagado por defecto en producción — ver
+`verification.md` §"P0 — implementado"). No aplicar un guard solo a una
+tool dejando las demás abiertas, ni considerar un `prompt` de confirmación
+como control. Toda excepción a AGENTS.md requiere aprobación y reflejo en
+`docs/architecture.md`.
 
 ### P1 — frontera documental (primer incremento local)
 

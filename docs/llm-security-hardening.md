@@ -51,9 +51,17 @@ inspección de contenido personal por defecto (AGENTS.md §§2, 7, 10).
   invocan ese método basándose en la decisión del LLM de llamar la tool.
   **Hipótesis a probar:** una instrucción indirecta o un «sí» ambiguo podría
   provocar un execute sin una confirmación nueva, atribuible al usuario y
-  vinculada a la propuesta exacta. `src/agent/tools/notes.py::remember_note`
-  escribe directamente, discrepando de la regla WRITE de AGENTS.md; revisar
-  también ingesta/archivado automático antes de definir excepciones de policy.
+  vinculada a la propuesta exacta. **Actualización (2026-10-02, specs/023
+  Fase 4):** implementado — `_handle_consent_input` resuelve el «Sí»/botón
+  en el procesador, antes del LLM, y `confirm_or_use_confirmed` reutiliza esa
+  confirmación en los 8 `execute_*` existentes (detrás de
+  `GOVERNED_CONSENT_ENABLED`, apagado por defecto en producción).
+  `src/agent/tools/notes.py::remember_note` escribía directamente,
+  discrepando de la regla WRITE de AGENTS.md; sustituido por
+  `propose_note`/`execute_note` con el mismo patrón que el resto de WRITE
+  (T4.6). Revisado también el archivado automático (T4.7: excepción aprobada
+  para `analyze_document`, con `propose_document_delete`/
+  `execute_document_delete` nuevas para el caso "no quiero esto guardado").
 - `evals/security/cases.json` contiene ejemplos sintéticos, pero el runner
   actual valida el catálogo y el harness aislado no demuestra resistencia de
   un Agent real (BL-8/specs/014 y 018). No hay defensa medida todavía.
@@ -71,9 +79,10 @@ El `execute_*` no debería poder auto-confirmar solo porque el LLM lo pidió:
 Core comprueba el consentimiento explícito y consume la autorización una sola
 vez, de forma atómica y auditable. Definir política para varias propuestas
 pendientes, respuestas vagas, repetidas o reenviadas y concurrencia. El Agent
-puede *presentar* una propuesta, no fabricar evidencia de aprobación. Cubrir
-`remember_note` y las altas automáticas conforme a AGENTS.md §7; si se decide
-una excepción, documentarla primero en la jerarquía arquitectónica. No usar
+puede *presentar* una propuesta, no fabricar evidencia de aprobación. **Hecho
+(2026-10-02, specs/023 Fase 4):** `propose_note`/`execute_note` sustituyen a
+`remember_note`; las altas automáticas (`analyze_document`) tienen excepción
+aprobada y documentada en AGENTS.md §2.4/`docs/governance.md` (T4.7). No usar
 un clasificador ni un system prompt como verificador de consentimiento.
 
 ### 2. Preparación local del adjunto (P1, coordinado con BL-38/specs/021)
@@ -153,6 +162,13 @@ una dependencia; este análisis no añade ninguna.
 
 1. **P0:** diseñar y probar consentimiento ligado a evento de usuario +
    propuesta, consumo único, caducidad y propiedad; revisar WRITE directos.
+   **Implementado (2026-10-02, specs/023 Fase 4), detrás de
+   `GOVERNED_CONSENT_ENABLED` (apagado por defecto en producción):**
+   `_handle_consent_input` resuelve «Sí»/botón antes del LLM;
+   `confirm_or_use_confirmed` aplica en los 8 `execute_*` existentes; `/new`
+   invalida propuestas pendientes del chat. Falta: activar el flag en
+   producción, evals adversariales ejecutadas contra el Agent real (sigue
+   siendo el punto 4) y `answerCallbackQuery` del botón Telegram.
    Evals: instrucciones en documento/nota/filename o extracción no pueden
    ejecutar ni confirmar; «sí» ambiguo o anterior tampoco.
 2. **P1:** serialización inicial JSON y tests de cierre de delimitador, Unicode,

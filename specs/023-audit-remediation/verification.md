@@ -157,8 +157,21 @@
         (`processor.py`), con test de integración end-to-end nuevo.
       - Resultados: `ruff` y `mypy src/` limpios; unit 622 passed;
         integration 94 passed.
-- [ ] T4.9 pendiente. Ver también
-      `specs/022-llm-input-trust/verification.md`.
+- [x] T4.9 ejecutada y verificada (2026-10-02):
+      - `pytest tests/unit/ -q` → 622 passed; `pytest tests/integration/ -q`
+        → 94 passed; `ruff check src/ tests/ scripts/ migrations/` → limpio;
+        `mypy src/` → limpio (112 módulos); `python scripts/run_evals.py` →
+        27 casos / 6 categorías; `git diff --check` → limpio.
+      - Corregida referencia obsoleta a `remember_note` en
+        `evals/security/cases.json` (ya no es tool registrada) →
+        `propose_note`/`execute_note`.
+      - Actualizados `specs/022-llm-input-trust/tasks.md` (T6a/T6b/T7 →
+        `[x]`, con remisión a esta spec), `.../verification.md` (sección
+        "P0 — implementado") y `.../spec.md` (cabecera del P0), más
+        `docs/llm-security-hardening.md` y `BACKLOG.md` (BL-39/BL-40), que
+        seguían describiendo el consentimiento como diseño pendiente.
+      - Fase 4 de specs/023 (T4.1–T4.9) completa. Ver también
+        `specs/022-llm-input-trust/verification.md`.
 
 ## Fase 5 — Zona horaria
 

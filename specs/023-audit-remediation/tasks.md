@@ -384,15 +384,37 @@ mensaje de error expone detalle interno.
       verifica `status='discarded'` en PostgreSQL real).
       Resultados: 622 unit + 94 integration passing; `ruff`/`mypy src/`
       limpios.
-- [ ] T4.9 · `ruff check`, `mypy src/`, `pytest tests/unit/` y
-      `tests/integration/` en verde. Actualizar
-      `specs/022-llm-input-trust/tasks.md`/`verification.md`.
+- [x] T4.9 · **Ejecutado y verificado (2026-10-02).** `ruff check`, `mypy src/`,
+      `pytest tests/unit/`, `pytest tests/integration/`, `python
+      scripts/run_evals.py` y `git diff --check` en verde: 622 unit + 94
+      integration passing; `ruff`/`mypy src/` limpios (112 módulos); evals
+      27 casos / 6 categorías (corregida la referencia obsoleta a
+      `remember_note` en `evals/security/cases.json` → `propose_note`/
+      `execute_note`). Actualizados `specs/022-llm-input-trust/tasks.md`
+      (T6a/T6b/T7 marcadas `[x]`, con remisión a esta spec como
+      implementación), `specs/022-llm-input-trust/verification.md` (nueva
+      sección "P0 — implementado") y `specs/022-llm-input-trust/spec.md`
+      (cabecera del P0). También corregidas referencias residuales a
+      `remember_note` como hallazgo abierto en `docs/llm-security-hardening.md`
+      y en `BACKLOG.md` (BL-39/BL-40).
 
 **Criterio de cierre:** ningún `execute_*` ni `remember_note` ejecuta sin un
 claim atómico del Core basado en un «Sí» aislado posterior a una entrega
 verificada; `mark_executed` exige `status='confirmed'`; existe
 `propose_document_delete`/`execute_document_delete` gobernado; tests de
 carrera y replay en verde con PostgreSQL real.
+
+**Cumplido en código y tests (2026-10-02).** Con el flag
+`GOVERNED_CONSENT_ENABLED` encendido, ningún `execute_*` (ni `remember_note`,
+sustituido por `propose_note`/`execute_note`) ejecuta sin el claim atómico;
+`mark_executed` exige `status='confirmed'` desde T4.2; `propose_document_delete`
+/`execute_document_delete` existen desde T4.7; carrera y replay cubiertos con
+PostgreSQL real (T4.1/T4.2/T4.8). **Matiz pendiente de decisión del
+propietario:** el flag sigue apagado por defecto en producción —
+`confirm_or_use_confirmed` cae al `confirm()` legacy mientras tanto, así que
+el criterio de cierre se cumple como capability implementada y probada, no
+como comportamiento ya vigente en producción. Activar el flag en producción
+no forma parte de esta fase.
 
 ---
 

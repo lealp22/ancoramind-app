@@ -49,7 +49,62 @@ sin Collector local; sin fallos de tests. Sin integration/E2E ni Agent/LLM real;
 - Validar el comportamiento real de los modelos y la ruta multimodal del
   Agent principal con un harness aislado; las unit tests prueban contratos
   de serialización, no inmunidad semántica a prompt injection.
-- P0: autorización determinista de todas las mutaciones mediante prueba de
-  consentimiento; el diseño de estados existe, pero faltan implementación y
-  pruebas de DB/Telegram.
 - No se han realizado E2E ni cambios operativos/remotos.
+
+## P0 — implementado (specs/023-audit-remediation, Fase 4)
+
+2026-10-02: T6b/T7 del diseño P0 se implementaron y verificaron localmente
+como parte de `specs/023-audit-remediation` (T4.1–T4.8), detrás del flag
+`GOVERNED_CONSENT_ENABLED` (`Settings.governed_consent_enabled`, **apagado
+por defecto en producción**). Resumen (detalle completo en
+`specs/023-audit-remediation/tasks.md` y `verification.md`):
+
+- Migración `0006_proposal_consent` con el modelo de estados de
+  `consent-design.md` (`pending_confirmation → confirmed → executing →
+  executed | failed_definitive | failed_ambiguous`, más `expired`/`discarded`),
+  CHECK de estados, `payload_hash` y procedencia (`source_interaction_id`,
+  `bot_id`, `chat_id`).
+- `ActionProposalsRepository`: nueva API de consentimiento
+  (`claim_confirmation`, `begin_execution`, `complete_execution`,
+  `discard_pending_for_chat`, `list_confirmable`, `mark_presented`) que nunca
+  hace commit por sí misma — el llamador controla la transacción.
+- `InteractionProcessor._handle_consent_input` resuelve botones
+  `c:<uuid>`/`d:<uuid>` y «Sí»/«Sí <UUID>» **antes** de comandos y del Agent,
+  reutilizando el mismo outbox durable que una respuesta normal. `/new`
+  invoca `discard_pending_for_chat` (hueco real encontrado en T4.8: el
+  método existía desde T4.1 pero no tenía caller).
+- `confirm_or_use_confirmed()` nuevo en el repositorio: intenta el `confirm()`
+  legacy primero (comportamiento sin cambios con el flag apagado — el bot
+  sigue funcionando hoy en producción vía el criterio del LLM, decisión
+  explícita del propietario); si la propuesta ya quedó `confirmed` por el
+  claim pre-Agent, la reutiliza sin que el LLM la autorice. Aplicado a los
+  8 `execute_*` existentes: `execute_vehicle`, `execute_vehicle_maintenance`,
+  `execute_reminder`, `execute_calendar_event`, `execute_todo_list`,
+  `execute_todo_item`, `execute_note`, `execute_document_delete`.
+- `remember_note` (el único WRITE directo sin propuesta) sustituido por
+  `propose_note`/`execute_note`. `propose_document_delete`/
+  `execute_document_delete` nuevas — cierran el hueco de que no existía
+  ninguna tool de borrado de documentos.
+- **Excepción aprobada y documentada** (no un bypass sin registrar):
+  `analyze_document`/`DocumentService.ingest` siguen siendo automáticos —
+  AGENTS.md §2.4 y `docs/governance.md` explican la justificación de UX.
+- Tests: 17 de integración en `test_proposal_consent.py` (ciclo completo,
+  un solo uso, **carrera real entre dos sesiones con un solo ganador**, 6
+  rechazos parametrizados, ventana que no se amplía, `/new`, fallo ambiguo
+  terminal, CHECK de estados, regresión de `mark_executed`) + 2 de
+  migración + 5 unitarios de modelo + 8 parametrizados
+  (`TestExecuteWithoutAConfirmedProposal`, uno por cada `execute_*`) + 1
+  test de integración end-to-end nuevo para `/new`.
+- Resultados finales (2026-10-02): `pytest tests/unit/ -q` → **622 passed**;
+  `pytest tests/integration/ -q` → **94 passed**; `ruff check src/ tests/
+  scripts/ migrations/` → limpio; `mypy src/` → limpio (112 módulos);
+  `python scripts/run_evals.py` → 27 casos / 6 categorías (actualizado
+  `remember_note` → `propose_note`/`execute_note` en
+  `evals/security/cases.json`); `git diff --check` → limpio.
+
+**Lo que sigue sin cerrar P0 por completo:** el flag está apagado en
+producción (decisión explícita, para no romper el bot mientras se valida);
+`answerCallbackQuery` no está conectado al sender real de Telegram (el botón
+mantiene su reloj de carga); y T8/T9 (procedencia en el resto de tools,
+corpus adversarial ejecutado contra el Agent real) siguen pendientes, igual
+que antes de este incremento.

@@ -29,7 +29,7 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.8 hechas, T4.9 pendiente; Fases 5–6 pendientes — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4 (T4.1–T4.9) completa; Fases 5–6 pendientes — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 622 unit + 94 integration — Ruff y `mypy src/` limpios en
@@ -59,8 +59,9 @@ en `specs/023-audit-remediation/tasks.md`:
 4. **🔴 Crítico — Consentimiento de mutaciones mediado por el LLM.**
    `execute_*`/`remember_note` no verifican una confirmación nueva atribuible
    al usuario tras una entrega verificada; `mark_executed` no exige
-   `status='confirmed'`. Implementa el T6b/T7/T8 ya diseñados en
-   `specs/022-llm-input-trust/consent-design.md` (depende de fase 3).
+   `status='confirmed'`. **Resuelto (2026-10-02):** T6b/T7 de
+   `specs/022-llm-input-trust/consent-design.md` implementados en Fase 4
+   (T4.1–T4.8) detrás de `GOVERNED_CONSENT_ENABLED` (apagado por defecto).
 5. **🟠 Alto — Zona horaria naive en recordatorios/calendario.** Fechas sin
    tz se persisten asumiendo UTC; un recordatorio a "las 17:00" puede
    disparar 1-2h tarde/pronto según DST.
@@ -169,8 +170,19 @@ propuestas pendientes del chat**: `discard_pending_for_chat` existía desde
 T4.1 pero `_handle_command` no lo llamaba, dejando una propuesta confirmable
 con «Sí» tras resetear la conversación. Corregido (best-effort, no bloquea
 la respuesta de `/new`) con un test de integración end-to-end nuevo.
-622 unit + 94 integration passing. **Pendiente:** T4.9 (verificación final
-en verde + actualizar specs/022).
+622 unit + 94 integration passing.
+
+**Fase 4 — T4.9 ejecutada (2026-10-02), Fase 4 completa (T4.1–T4.9):**
+`ruff check`, `mypy src/`, `pytest tests/unit/`, `pytest tests/integration/`,
+`python scripts/run_evals.py` y `git diff --check` en verde (622 unit + 94
+integration; evals 27 casos/6 categorías tras corregir una referencia
+obsoleta a `remember_note` en `evals/security/cases.json`). Actualizados
+`specs/022-llm-input-trust/tasks.md`/`verification.md`/`spec.md`,
+`docs/llm-security-hardening.md` y las entradas de BL-39 más arriba, que
+describían el consentimiento como diseño sin implementar — ya está
+implementado y probado contra PostgreSQL real, detrás de
+`GOVERNED_CONSENT_ENABLED` (apagado por defecto en producción; activarlo no
+es parte de esta fase).
 
 **Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
 Ver `specs/023-audit-remediation/`.
@@ -182,7 +194,9 @@ Ver `specs/023-audit-remediation/`.
 Revisar la frontera adjuntos/notas/extracciones/resultados de tools → Agent,
 priorizando autorización de mutaciones en Core y confirmación atribuible a un
 evento nuevo del usuario y a la propuesta concreta (no al criterio del LLM).
-Verificar WRITE directos, como `remember_note`, y las altas automáticas.
+**Hecho (2026-10-02, specs/023 Fase 4):** WRITE directos (antes `remember_note`,
+hoy `propose_note`/`execute_note`) y los 8 `execute_*` ya exigen esa
+confirmación, detrás de `GOVERNED_CONSENT_ENABLED` (apagado en producción).
 Después, endurecer la preparación local de adjuntos y la representación de
 
 contenido/filenames/`suggested_actions` no confiables, incluido el paso directo
@@ -207,7 +221,11 @@ adjuntos entregados directamente al Agent o notas/resultados de otras tools.
 **Diseño P0 (2026-09-30):** `specs/022-llm-input-trust/consent-design.md`
 define UX de confirmación inequívoca, entrega previa, caducidad de 15 minutos,
 consumo único, estados y fallos ambiguos; inventaría ejecutores, WRITE directos
-y ruta AgentOS heredada. **Solo diseño: P0 no implementado ni validado.**
+y ruta AgentOS heredada.
+**Implementado y validado con PostgreSQL real (2026-10-02):** T6b/T7 del
+diseño P0 se completaron en `specs/023-audit-remediation` (T4.1–T4.8), detrás
+de `GOVERNED_CONSENT_ENABLED` (apagado por defecto en producción). Detalle en
+`specs/022-llm-input-trust/verification.md` §"P0 — implementado" y en BL-40.
 
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 
