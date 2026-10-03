@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     document_vision_max_pdf_pages: int = Field(default=3, ge=1, le=10)
     """Maximum PDF pages rendered to images for the vision extraction route."""
 
+    user_timezone: str = "Europe/Madrid"
+    """IANA timezone used to interpret/display naive datetimes app-wide
+    (specs/023 T5.1 — single fixed value for now). Read only via
+    ``src.domain.preferences.timezone.resolve_user_timezone``; no other
+    module may read this field directly."""
+
     # ── Reminder worker (BL-5 / ADR-003) ─────────────
     reminder_worker_enabled: bool = True
     """Start the reminder background worker. Auto-gated: also requires

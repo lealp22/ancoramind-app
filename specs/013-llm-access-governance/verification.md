@@ -50,33 +50,50 @@
 
 ## Acceptance matrix
 
-| ID | Escenario | Resultado | Evidencia |
-|---|---|---|---|
-| A | Mismo update varias veces → una interaction y un Agent run | ✅ Railway 2026-09-18 | `8dc1bbe3-05b7-43c8-b947-9d0ac20d0142` (update sintetico 978199899 reenviado 2 veces): 1 interaccion `completed`, `model_call_count=1`, `gateway_request_count=1`, `llm_usage_events=1`, `logical_responses=1` |
-| B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ Railway 2026-09-18 | Misma interaccion: 2 deliveries (`accepted` + `duplicate`), mismo `correlation_id`, `agno_run_id=ae28cfa1-9b6c-4ef6-a40f-8347015a553f` |
-| C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ Railway 2026-09-19 | Manager cachea snapshot y CAS actualiza futuros runs; T14 añade la publicación del alias en caliente (ADR-005 decisión 9) verificada sobre el Gateway real local **y en Railway**: revisión 2 (`ancoramind-default-r2` → `z-ai/glm-5.3-flash`) activada con CAS, mensaje real de Telegram con `effective_gateway_route='ancoramind-default-r2'` y rollback bidireccional a la revisión 1 |
-| D | Config inválida → last-known-good/bootstrap permanece | ✅ T6 | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
-| E | Primary falla → no se supera attempt budget | ✅ T12 local | Retries Gateway/LiteLLM a 0 verificados con el Gateway real; num_retries=0 sin fallbacks; el budget ya valida 2 attempts/call como techo para su evolución |
-| F | Circuit open → cero llamadas al upstream afectado | ✅ T12 local | Con `allowed_fails:2`/`cooldown_time:10` y upstream muerto: 3 fallos abrieron el circuit; 429 `No deployments available` fast-fail sin llamadas al upstream; tras cooldown el probe volvió al upstream (HALF_OPEN→CLOSED) |
-| G | Rate/budget agotado → no hay inferencia adicional | ✅ T8 local | Model/Gateway/coste bloquean antes del provider; timeout cancela el run; processor registra el límite sin replay |
-| H | Tool loop → fingerprint/budget lo detiene | ✅ T8 local | HMAC canónico + hook async; Agno `StopAgentRun` corta la repetición sin una tercera inferencia |
-| I | Interacción completa trazable por `correlation_id` | ✅ T10 local | Spans/logs metadata-only para admission, queue, Agent, LLM, tools y delivery; IDs excluidos de labels de métricas |
-| J | Crash antes de `agent_started` → recuperable | ✅ T5 | `accepted` se lista y reclama ordenadamente |
-| K | Crash después de `agent_started` → `failed_ambiguous`, sin replay | ✅ T5 | Recovery marca `restart_after_agent_started`; runner no vuelve a llamarse |
-| L | Crash tras `response_ready` → delivery recuperable | ✅ T5 | Recovery conserva `response_ready` y entrega outbox existente |
-| M | Crash durante delivery → no reenvío automático ambiguo | ✅ T5 | Recovery marca `restart_during_delivery`, sin `sendMessage` adicional |
-| N | Grupo/canal Telegram → no alcanza el Agent | ✅ Railway 2026-09-18 | `e5771e0b-58b8-4a7f-a4ac-7abce13f5221` (update 978199900 grupo): `rejected`/`non_private_chat`, `200`, `model=0`, `gw=0`, `llm_events=0` |
-| O | Usuario no allowlisted → no alcanza el Agent | ✅ Railway 2026-09-18 | `835553e7-58f9-4d1d-bf3b-eb14036410cf` (update 978199901 intruso): `rejected`/`user_not_allowlisted`, `200`, `model=0`, `gw=0`, `llm_events=0` |
-| P | Extracción documental comparte config, budget y trace | ✅ T9 local | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
-| Q | Gateway caído → fail closed sin OpenRouter directo | ✅ local + Railway wiring | `LITELLM_PROXY_ENABLED=true` con URL privada y virtual key; la app arranca sólo con ambos secrets y el update real atravesó LiteLLM privado. La caída real del Gateway sigue pendiente como prueba controlada |
-| R | Collector caído → aplicación continúa | ✅ T10 local | Setup/export/shutdown OTel fail-open; test simula fallo de exporter y el Collector config valida con endpoint dummy |
-| S | Logs/traces no contienen contenido personal | ✅ T10 local | Allowlist, JSON sin mensaje/args, redacción Collector y privacy tests bloquean prompts/mensajes/respuestas/args/results |
-| T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ T6 | Dos activaciones con mismo expected solo completan una; segunda 409 |
-| U | Run activo durante cambio → conserva revisión anterior | ✅ T6 | Snapshots futuros por run y publish no muta snapshot hasta CAS correcto |
-| V | Duplicate delivery → no consume rate limit | ✅ Railway 2026-09-18 | Duplicado `duplicate=true` conserva correlation ID con `llm_events=1`/`responses=1` (un solo run) |
-| W | Rate limit superado → `2xx` y cero inferencias | ✅ T4 | burst/min/hora/cola ⇒ `rejected`, `200`, sin Agent |
-| X | Tool call 12 → permitida si queda budget | ✅ T7 base | Factory per-run recibe hard ceiling 12 desde snapshot |
-| Y | Tool call 13 → rechazada por hard ceiling | ✅ T7 base | Agent `tool_call_limit=12`; tool hooks/budget detallado llega en T8 |
+> **specs/023 T6.8:** columna "Entorno" añadida explícitamente (antes el
+> ✅ mezclaba entorno y referencia a la tarea de forma ambigua, p.ej. "✅ T6"
+> no decía si eso se validó en local o en Railway). Un caso es "Railway" solo
+> cuando la evidencia cita un update/interacción real procesado en Railway;
+> el resto se validó únicamente con tests unit/integration locales, nunca
+> contra el despliegue real — así lo reflejaba ya BACKLOG.md para BL-23
+> ("Railway rollout... pendiente") pero esta tabla no lo distinguía fila a
+> fila.
+
+| ID | Escenario | Resultado | Entorno | Evidencia |
+|---|---|---|---|---|
+| A | Mismo update varias veces → una interaction y un Agent run | ✅ | Railway (2026-09-18) | `8dc1bbe3-05b7-43c8-b947-9d0ac20d0142` (update sintetico 978199899 reenviado 2 veces): 1 interaccion `completed`, `model_call_count=1`, `gateway_request_count=1`, `llm_usage_events=1`, `logical_responses=1` |
+| B | Railway request IDs distintos + mismo update → duplicate delivery | ✅ | Railway (2026-09-18) | Misma interaccion: 2 deliveries (`accepted` + `duplicate`), mismo `correlation_id`, `agno_run_id=ae28cfa1-9b6c-4ef6-a40f-8347015a553f` |
+| C | Cambio runtime → siguiente run usa nueva revisión sin redeploy | ✅ | Local + Railway (2026-09-19) | Manager cachea snapshot y CAS actualiza futuros runs; T14 añade la publicación del alias en caliente (ADR-005 decisión 9) verificada sobre el Gateway real local **y en Railway**: revisión 2 (`ancoramind-default-r2` → `z-ai/glm-5.3-flash`) activada con CAS, mensaje real de Telegram con `effective_gateway_route='ancoramind-default-r2'` y rollback bidireccional a la revisión 1 |
+| D | Config inválida → last-known-good/bootstrap permanece | ✅ | Local (T6, unit/integration) | Payload inválido/secret-like crea 422 sin revisión ni cambio activo |
+| E | Primary falla → no se supera attempt budget | ✅ | Local (T12, Gateway real local) | Retries Gateway/LiteLLM a 0 verificados con el Gateway real; num_retries=0 sin fallbacks; el budget ya valida 2 attempts/call como techo para su evolución |
+| F | Circuit open → cero llamadas al upstream afectado | ✅ | Local (T12, Gateway real local) | Con `allowed_fails:2`/`cooldown_time:10` y upstream muerto: 3 fallos abrieron el circuit; 429 `No deployments available` fast-fail sin llamadas al upstream; tras cooldown el probe volvió al upstream (HALF_OPEN→CLOSED) |
+| G | Rate/budget agotado → no hay inferencia adicional | ✅ | Local (T8, unit/integration) | Model/Gateway/coste bloquean antes del provider; timeout cancela el run; processor registra el límite sin replay |
+| H | Tool loop → fingerprint/budget lo detiene | ✅ | Local (T8, unit/integration) | HMAC canónico + hook async; Agno `StopAgentRun` corta la repetición sin una tercera inferencia |
+| I | Interacción completa trazable por `correlation_id` | ✅ | Local (T10, unit/integration) | Spans/logs metadata-only para admission, queue, Agent, LLM, tools y delivery; IDs excluidos de labels de métricas |
+| J | Crash antes de `agent_started` → recuperable | ✅ | Local (T5, unit/integration) | `accepted` se lista y reclama ordenadamente |
+| K | Crash después de `agent_started` → `failed_ambiguous`, sin replay | ✅ | Local (T5, unit/integration) | Recovery marca `restart_after_agent_started`; runner no vuelve a llamarse |
+| L | Crash tras `response_ready` → delivery recuperable | ✅ | Local (T5, unit/integration) | Recovery conserva `response_ready` y entrega outbox existente |
+| M | Crash durante delivery → no reenvío automático ambiguo | ✅ | Local (T5, unit/integration) | Recovery marca `restart_during_delivery`, sin `sendMessage` adicional |
+| N | Grupo/canal Telegram → no alcanza el Agent | ✅ | Railway (2026-09-18) | `e5771e0b-58b8-4a7f-a4ac-7abce13f5221` (update 978199900 grupo): `rejected`/`non_private_chat`, `200`, `model=0`, `gw=0`, `llm_events=0` |
+| O | Usuario no allowlisted → no alcanza el Agent | ✅ | Railway (2026-09-18) | `835553e7-58f9-4d1d-bf3b-eb14036410cf` (update 978199901 intruso): `rejected`/`user_not_allowlisted`, `200`, `model=0`, `gw=0`, `llm_events=0` |
+| P | Extracción documental comparte config, budget y trace | ✅ | Local (T9, unit/integration) | Port + adaptador `LLMAccess`; el run gobernado ve `model_calls`/`gateway_requests` crecer con la extracción |
+| Q | Gateway caído → fail closed sin OpenRouter directo | 🔶 parcial | Local (wiring) + Railway (solo arranque) | `LITELLM_PROXY_ENABLED=true` con URL privada y virtual key; la app arranca sólo con ambos secrets y el update real atravesó LiteLLM privado. La caída real del Gateway en Railway (apagar el proxy en caliente) sigue pendiente como prueba controlada |
+| R | Collector caído → aplicación continúa | ✅ | Local (T10, unit/integration) | Setup/export/shutdown OTel fail-open; test simula fallo de exporter y el Collector config valida con endpoint dummy |
+| S | Logs/traces no contienen contenido personal | ✅ | Local (T10, unit/integration) | Allowlist, JSON sin mensaje/args, redacción Collector y privacy tests bloquean prompts/mensajes/respuestas/args/results |
+| T | Activaciones concurrentes → compare-and-swap evita pisadas | ✅ | Local (T6, unit/integration) | Dos activaciones con mismo expected solo completan una; segunda 409 |
+| U | Run activo durante cambio → conserva revisión anterior | ✅ | Local (T6, unit/integration) | Snapshots futuros por run y publish no muta snapshot hasta CAS correcto |
+| V | Duplicate delivery → no consume rate limit | ✅ | Railway (2026-09-18) | Duplicado `duplicate=true` conserva correlation ID con `llm_events=1`/`responses=1` (un solo run) |
+| W | Rate limit superado → `2xx` y cero inferencias | ✅ | Local (T4, unit/integration) | burst/min/hora/cola ⇒ `rejected`, `200`, sin Agent |
+| X | Tool call 12 → permitida si queda budget | ✅ | Local (T7, unit) | Factory per-run recibe hard ceiling 12 desde snapshot |
+| Y | Tool call 13 → rechazada por hard ceiling | ✅ | Local (T7, unit) | Agent `tool_call_limit=12`; tool hooks/budget detallado llega en T8 |
+
+**Resumen por entorno:** 6/25 casos (A, B, C, N, O, V) tienen evidencia de un
+update/interacción real en Railway; C y Q combinan Railway con local; los
+otros 18 solo están cubiertos por tests unit/integration locales, nunca
+ejecutados contra el despliegue real. Esto es lo que BL-23/BACKLOG.md ya
+describía como pendiente ("rollout Railway de LiteLLM privado... validado";
+"Collector/Grafana... pendiente") — esta matriz ahora lo hace explícito caso
+por caso en vez de dejarlo en un ✅ ambiguo.
 
 ## Production validation
 

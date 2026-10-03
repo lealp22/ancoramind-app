@@ -61,9 +61,6 @@ from src.repositories.database import get_session
 
 logger = logging.getLogger(__name__)
 
-# ── Optional domain tools (require ANCORA_DATABASE_URL) ──
-_NOTE_TOOLS: list[Any] = []
-
 
 def _init_domain_tools(settings: Settings) -> list[Any]:
     """Initialize domain tools if the domain database is configured.
@@ -90,7 +87,6 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         from src.agent.tools.notes import execute_note, propose_note, search_notes
 
         tools.extend([propose_note, execute_note, search_notes])
-        _NOTE_TOOLS.extend([propose_note, execute_note, search_notes])
         logger.info("Note tools registered: propose_note, execute_note, search_notes")
 
         from src.agent.tools.documents import (

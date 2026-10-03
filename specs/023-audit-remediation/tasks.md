@@ -435,31 +435,110 @@ no forma parte de esta fase.
       servicios. **Se descarta** guardar un offset numérico por usuario
       (se rompe con el cambio de hora estacional) y depender de que el
       usuario especifique la zona en cada mensaje (frágil).
-- [ ] T5.2 · Implementar `resolve_user_timezone()` como se describe en
-      T5.1. `src/domain/reminders/models.py` / `calendar/models.py`:
-      normalizar cualquier `datetime` *naive* recibido asumiendo la zona
-      resuelta y convirtiendo a UTC antes de persistir (usar
-      `zoneinfo.ZoneInfo`, stdlib, sin dependencia nueva). Rechazar con
-      mensaje claro si el valor es ambiguo (hora inexistente/duplicada por
-      cambio de horario) en vez de fallar silenciosamente.
-- [ ] T5.3 · Tools (`reminders.py`, `calendar.py`): al formatear fechas de
-      vuelta al usuario (`trigger_at.strftime(...)`), convertir de UTC a la
-      zona resuelta por `resolve_user_timezone()` antes de mostrar, para que
-      lo que el usuario escribió y lo que ve coincidan.
-- [ ] T5.4 · `get_current_datetime`: devolver también la hora local (vía
-      `resolve_user_timezone()`) además de UTC, documentándolo en el
-      docstring (el LLM usa esta tool para resolver "hoy", "esta semana",
-      etc.). Nota: esta tool no recibe `run_context` hoy (ver T6.9) — si se
-      necesita `user_context` para resolver la zona, añadirlo aquí mismo en
-      vez de duplicar la excepción documentada en T6.9.
-- [ ] T5.5 · Unit tests: entrada `17:00` naive con zona resuelta
-      `Europe/Madrid` en verano (UTC+2) → persistido como `15:00Z`; worker de
-      recordatorios dispara en el instante UTC correcto; respuesta formateada
-      muestra `17:00` de nuevo. Caso de cambio de horario (DST) cubierto con
-      un dato de prueba fijo en octubre/marzo.
+- [x] T5.2 · **Hecho (2026-10-03).** Ubicación decidida:
+      `src/domain/preferences/timezone.py` (módulo propio, no
+      `security/user_context.py` — la zona horaria es una preferencia, no
+      identidad; mantiene `security/` sin depender de la capa de
+      repositorios el día que la zona sea por usuario). Expone:
+      - `resolve_user_timezone(user_context) -> ZoneInfo`: hoy ignora
+        `user_context` y lee `Settings().user_timezone` (único punto de
+        lectura de ese setting, como fija T5.1).
+      - `to_utc(value, tz) -> datetime`: normaliza a UTC. Un valor *aware*
+        se convierte tal cual; uno *naive* se interpreta en `tz`. Usa
+        `zoneinfo.ZoneInfo` (stdlib) — se añadió `tzdata>=2024.1` como
+        dependencia explícita en `pyproject.toml` porque Windows no trae
+        una base IANA de sistema y `zoneinfo` depende del paquete `tzdata`
+        para resolverla (ya estaba presente de forma transitiva vía
+        `alembic`/`psycopg`/`pydantic`, pero no declarada).
+      - `AmbiguousOrNonExistentTimeError(ValueError)`: se lanza en vez de
+        fallar en silencio cuando la hora *naive* cae en un hueco
+        (inexistente, cambio de primavera) o un solape (ambiguo, cambio de
+        otoño) de DST — detectado comparando `fold=0`/`fold=1` y
+        verificando el *roundtrip* UTC→local.
 
-- [ ] T5.6 · `ruff check`, `mypy src/`, `pytest tests/unit/` y
-      `tests/integration/` en verde.
+      **Desviación respecto al texto original de T5.2 (normalizar en
+      `models.py`):** los validadores de Pydantic no reciben
+      `user_context`, así que no pueden resolver una zona horaria. La
+      normalización real vive en la capa de servicio
+      (`ReminderService.create_reminder`, `CalendarService.create_event`),
+      que ya recibe `user_context` y es el único punto que construye los
+      modelos de persistencia. `ReminderCreate.trigger_at` y
+      `CalendarEventCreate.start_at`/`end_at` añaden un `field_validator`
+      que exige *aware* como red de seguridad (defensa en profundidad: un
+      futuro caller que construya el modelo sin pasar por el servicio no
+      puede persistir un naive ambiguo). Como `AmbiguousOrNonExistentTimeError`
+      hereda de `ValueError`, los `except (KeyError, TypeError, ValueError)`
+      ya existentes en `execute_reminder`/`execute_calendar_event`
+      (`src/agent/tools/reminders.py` / `calendar.py`) la capturan sin
+      cambios adicionales y devuelven el mensaje al usuario vía
+      `invalid_proposal_reply`. El paso `propose_*` sigue sin tocar: no
+      llama al servicio, solo guarda el ISO string en el payload de la
+      propuesta — la validación ocurre al confirmar (`execute_*`), antes de
+      persistir, que es el requisito real de T5.2.
+
+      Tests: `tests/unit/test_preferences_timezone.py` (resolución, aware
+      pass-through, naive verano/invierno, ambiguo, inexistente) +
+      actualizados `tests/unit/test_reminder_calendar_models.py` (naive
+      rechazado por el validador).
+- [x] T5.3 · **Hecho (2026-10-03).** Añadida
+      `to_local_display(value, tz) -> datetime` a
+      `domain/preferences/timezone.py` (convierte un valor persistido —
+      aware, UTC en la práctica — a la zona resuelta; un naive se trata como
+      UTC defensivamente). Aplicada en los 4 puntos que leen un valor ya
+      persistido: `list_reminders`, `execute_reminder`, `check_calendar`
+      (por evento) y `execute_calendar_event`. `propose_reminder` y
+      `propose_calendar_event` **no** se tocaron: muestran el ISO que el
+      usuario escribió tal cual, antes de cualquier conversión — ya coincide
+      con lo que escribió por construcción, no hay bug ahí.
+      **Alcance añadido (mismo origen del bug, no listado explícitamente en
+      el texto original de T5.3):** `check_calendar` también pasaba
+      `start`/`end` *naive* sin normalizar al filtro SQL de
+      `CalendarService.check_calendar` → mismo problema de offset que en la
+      escritura, pero en la lectura por rango. Ahora normaliza con
+      `to_utc()` antes de consultar (capturando
+      `AmbiguousOrNonExistentTimeError` con una respuesta fija) y conserva
+      los valores originales *tal como los escribió el usuario* solo para
+      el mensaje "no tienes eventos entre X y Y".
+- [x] T5.4 · **Hecho (2026-10-03).** `get_current_datetime` ahora recibe
+      `run_context: RunContext` como primer parámetro (deja de ser la única
+      tool sin él — resuelve para esta tool, por anticipado, la pregunta que
+      T6.9 iba a plantear) y devuelve dos líneas: `UTC: ...` y
+      `Local (Europe/Madrid): ...`, vía `resolve_user_timezone()`. Docstring
+      actualizado indicando que el LLM debe usar el valor "Local" para
+      resolver expresiones relativas antes de llamar a
+      `propose_reminder`/`propose_calendar_event`.
+- [x] T5.5 · **Hecho (2026-10-03).** Cobertura en tres niveles:
+      - `tests/unit/test_preferences_timezone.py` — `to_utc`/
+        `resolve_user_timezone` aislados: naive verano/invierno, aware
+        pass-through, ambiguo (otoño, solape), inexistente (primavera,
+        hueco).
+      - `tests/unit/test_reminder_calendar_service.py` — a nivel de
+        servicio: `ReminderService.create_reminder` /
+        `CalendarService.create_event` con `17:00`/`17:30` naive en verano
+        e invierno → `data.trigger_at`/`data.start_at` persistido en UTC
+        correcto (p.ej. `17:00` verano Europe/Madrid → `15:00Z`); rechazo de
+        entrada ambigua/inexistente antes de llamar al repositorio
+        (`repo.create.assert_not_awaited()`).
+      - `tests/unit/test_reminder_calendar_timezone_display.py` — cadena
+        completa tool→servicio→(repo mockeado)→tool: ISO naive en el
+        payload de la propuesta → `execute_reminder`/`execute_calendar_event`
+        persisten el instante UTC correcto y la respuesta formateada
+        muestra la hora local original (`17:00`/`17:30`, nunca el UTC
+        crudo); `list_reminders`/`check_calendar` convierten un valor
+        almacenado en UTC de vuelta a local al mostrarlo; casos DST con
+        fecha fija de octubre (ambiguo) y marzo (inexistente).
+      No se añadió un test de integración específico para el worker: ya
+      opera comparando contra `trigger_at` en UTC
+      (`WHERE trigger_at <= :now`, con `now = datetime.now(tz=UTC)`) y no
+      cambió en esta fase — su corrección depende únicamente de que
+      `create_reminder` persista el UTC correcto, cubierto arriba.
+- [x] T5.6 · **Hecho (2026-10-03).** `ruff check src/ tests/ scripts/
+      migrations/` limpio. `mypy src/` limpio (114 ficheros). `pytest
+      tests/unit/` → 641 passed (excluyendo
+      `test_telegram_admission_wiring.py`, que falla al recolectar por
+      falta de `TELEGRAM_TOKEN` en el entorno — preexistente, confirmado
+      reproducible en `main` antes de esta fase, no relacionado). `pytest
+      tests/integration/` (PostgreSQL vía Docker) → 94 passed.
 
 **Criterio de cierre:** un recordatorio o evento creado con una hora local
 dicha por el usuario se dispara/consulta en esa misma hora local, con
@@ -469,50 +548,85 @@ pruebas que cubren al menos un cambio de horario de verano/invierno.
 
 ## Fase 6 — Sincronización documental (🟡 medio)
 
-- [ ] T6.1 · Actualizar recuento de tests en `AGENTS.md`, `README.md`,
-      `BACKLOG.md` al valor real tras cada fase anterior (ejecutar
-      `pytest tests/unit/ -q` y `pytest tests/integration/ -q --collect-only`
-      para los números exactos en el momento del commit final de esta spec).
-- [ ] T6.2 · Actualizar `> **Status:**` en `specs/001`, `specs/009`,
-      `specs/010`, `specs/013` y los ADR-004/005 que digan "pendiente"/
-      "implementation pending" cuando el código ya está implementado
-      (confirmar caso por caso contra el código actual, no asumir).
-- [ ] T6.3 · Reescribir `docs/architecture.md` §10 (tabla de capabilities)
-      para que coincida con la tabla real de `README.md` (32 tools, nombres
-      `propose_*`/`execute_*` correctos, incluir TODO lists).
-- [ ] T6.4 · Corregir `specs/011-todo-lists/verification.md` §"items
-      directos sin propose/execute" para reflejar que, tras fase 4, todo
-      item también pasa por propose/execute (si fase 4 ya se completó) o
-      anotar explícitamente la discrepancia pendiente (si no).
-- [ ] T6.5 · `docs/governance.md`: quitar la referencia a
-      `skills/calendar.md` (no existe) o crear el fichero si la skill de
-      calendario merece su propio prompt separado de `tool_contract.md`
-      (decidir y documentar la elección). Revisar si `assemble_instructions`
-      debería cargar `document_extraction.md` y no lo hace — si es
-      intencional, documentarlo; si es un olvido, añadirlo.
-- [ ] T6.6 · `prompts/tool_contract.md`: el bloque "Tool Result Patterns"
-      (JSON `{"status": ...}`) no corresponde a ninguna tool real (todas
-      devuelven texto en español). Sustituir por una descripción fiel al
-      formato real de retorno (texto con emojis/negritas, ver AGENTS.md §4)
-      o implementar el contrato JSON si se decide que es preferible — elegir
-      y documentar, no dejar la discrepancia.
-- [ ] T6.7 · Eliminar o justificar código muerto: `src/agent/context.py`
-      (`UserContext` legado, no usado — confirmar con
-      `search_codebase`/`grep` antes de borrar), `src/services/__init__.py`
-      y `src/governance/__init__.py` vacíos (decidir si se quitan o se deja
-      nota de "reservado para uso futuro"), `_NOTE_TOOLS` global en
-      `src/main.py` (confirmar si algo lo consume; si no, eliminar).
-- [ ] T6.8 · `specs/013-llm-access-governance/verification.md`: añadir una
-      columna explícita "entorno" (local/Railway) a la matriz A–Y en vez de
-      un solo ✅ ambiguo, para que BACKLOG.md y el spec no se contradigan
-      sobre qué está realmente validado en producción.
-- [ ] T6.9 · Revisar/documentar por qué `get_current_datetime` no recibe
-      `run_context` (única tool sin ese parámetro) — si es intencional
-      (no necesita identidad), anotarlo en AGENTS.md §4 como excepción
-      explícita; si no, evaluar si debería tenerlo por consistencia (sin
-      cambiar su comportamiento).
-- [ ] T6.10 · `ruff check`, `mypy src/`, `pytest tests/unit/` en verde tras
-      cualquier eliminación de código.
+- [x] T6.1 · **Hecho (2026-10-03).** Recuento real tras Fase 5:
+      643 unit (`pytest tests/unit/`) + 94 integration
+      (`pytest tests/integration/ -q --collect-only`, PostgreSQL/Docker).
+      Actualizado en `AGENTS.md` (cabecera + árbol §3) y `BACKLOG.md`
+      (snapshot). `README.md` no tenía un recuento de tests que corregir
+      (su cabecera de capabilities decía "35 tools", ya correcto — ver T6.3).
+- [x] T6.2 · **Hecho (2026-10-03).** Verificado caso por caso contra
+      `verification.md` de cada spec antes de tocar nada (nunca asumido):
+      specs/001 ("draft" → implemented), specs/009 ("pendiente" →
+      implemented 2026-09-09, 94 passed), specs/010 ("pendiente" →
+      implemented 2026-09-09), specs/013 ("implementation pending" → 🔶
+      T2–T14 implementados localmente, con los pendientes reales
+      enumerados) y ADR-004/ADR-005 (mismo ajuste que specs/013, con
+      pointer a `verification.md`).
+- [x] T6.3 · **Hecho (2026-10-03).** Reescrita `docs/architecture.md` §10
+      para que sea un espejo exacto de la tabla de `README.md` §Capabilities
+      (35 tools, no 32 — el número de la tarea original estaba desactualizado;
+      verificado contando los `tools.extend(...)` reales en
+      `_init_domain_tools()`/`src/main.py`): nombres `propose_*`/`execute_*`
+      correctos, vehicle creation separada de vehicle write, TODO lists y
+      TODO items incluidos.
+- [x] T6.4 · **Hecho (2026-10-03).** specs/011 Fase 4 (specs/023) ya está
+      completa — añadida una nota fechada en `verification.md` que marca la
+      decisión original de 2026-09-10 ("items directos sin propose/execute")
+      como superada por specs/023 Fase 4, sin reescribir la entrada
+      histórica (se preserva como registro de la decisión original, por la
+      convención de BACKLOG.md de no editar specs completados).
+- [x] T6.5 · **Hecho (2026-10-03) — hallazgo real, no solo documental:**
+      `skills/calendar.md` sí existe en disco (al contrario de lo que
+      asumía el enunciado de la tarea), pero **nunca estaba cableado en
+      `assemble_instructions()`** — un olvido real desde que se escribió el
+      fichero (confirmado con `git log --follow`), no una decisión
+      documentada. Corregido añadiéndolo a
+      `src/agent/instructions.py::assemble_instructions()` (con test de
+      regresión). `document_extraction.md` confirmado como exclusión
+      intencional: lo carga `src/agent/document_extraction.py` directamente
+      para la llamada de extracción separada, no el agente principal — ya
+      documentado en código, y ahora también en `docs/governance.md`.
+- [x] T6.6 · **Hecho (2026-10-03).** Elegida la opción "describir el
+      formato real" (implementar un contrato JSON across 35 tools quedaba
+      fuera de alcance de una fase de sincronización documental). Sustituido
+      el bloque `{"status": ...}` en `prompts/tool_contract.md` por una
+      descripción fiel con ejemplos reales tomados de `validation.py` y de
+      tools concretas (reminders/notes), terminando en una línea explícita:
+      "no hay un campo `status`, no lo esperes ni lo inventes".
+- [x] T6.7 · **Hecho (2026-10-03).** Confirmado por grep (sin matches fuera
+      de `__pycache__`/`egg-info` autogenerado) y eliminado:
+      - `src/agent/context.py` — `UserContext` legado (shape distinto al
+        canónico de `src/security/user_context.py`), sin ningún import.
+      - `src/services/__init__.py` (paquete `src/services/` completo,
+        vacío salvo el docstring) — a diferencia de `src/governance/`, que
+        sí está documentado como "reservado" en AGENTS.md §3 y README.md
+        (se deja tal cual), `src/services/` no aparecía en ningún documento
+        de estructura; se eliminó en vez de justificarlo.
+      - `_NOTE_TOOLS` global en `src/main.py` — se escribía
+        (`.extend(...)`) pero nunca se leía en ningún sitio.
+      `ruff`/`mypy`/`pytest tests/unit/` en verde tras la eliminación (ver
+      T6.10).
+- [x] T6.8 · **Hecho (2026-10-03).** Añadida la columna "Entorno" a la
+      matriz A–Y de `specs/013-llm-access-governance/verification.md`,
+      separada del ✅ genérico. Clasificación resultante: 6/25 casos (A, B,
+      C, N, O, V) con evidencia de Railway real; C y Q combinan Railway con
+      local; los 18 restantes solo tienen cobertura unit/integration local,
+      nunca ejecutados contra el despliegue real — ahora explícito fila a
+      fila en vez de mezclado dentro del texto del ✅.
+- [x] T6.9 · **Resuelto en Fase 5 (T5.4, 2026-10-03), no intencional.**
+      `get_current_datetime` no recibía `run_context` simplemente porque
+      nunca necesitó identidad hasta que T5.4 le pidió resolver la zona
+      horaria del usuario — en ese momento se le añadió `run_context` como
+      primer parámetro, igual que al resto de tools (`src/agent/tools/system.py`).
+      No se cambió su comportamiento observable salvo la línea "Local"
+      añadida por T5.4. No hace falta anotar una excepción en AGENTS.md §4:
+      la regla "`run_context` como primer parámetro de toda tool" nunca tuvo
+      ahí una excepción documentada, y ahora es cierta sin salvedades.
+- [x] T6.10 · **Hecho (2026-10-03).** `ruff check src/ tests/ scripts/
+      migrations/` limpio. `mypy src/` limpio (112 ficheros — 114 antes de
+      T6.7, menos los 2 ficheros eliminados). `pytest tests/unit/` → 645
+      passed (643 de Fase 5 + 2 tests nuevos de T6.5 — regresión de la
+      skill de calendario y de la exclusión de `document_extraction.md`).
 
 **Criterio de cierre:** ningún documento (AGENTS/README/BACKLOG/specs/prompts)
 contradice el estado real del código verificado en las fases 1–5.

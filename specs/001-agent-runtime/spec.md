@@ -1,7 +1,7 @@
 # Spec: 001 — Agent Runtime Functional
 
 > **Milestone:** M1 — Agent Runtime funcional
-> **Status:** draft
+> **Status:** implemented — ver `verification.md`
 > **Target:** Telegram private chat + Agno + AgentOS + LLM + session + 1 Tool
 
 ---

@@ -39,6 +39,12 @@ def assemble_instructions() -> list[str]:
     # Skills — add as domains are implemented
     instructions.append(load_prompt("skills/documents.md"))
     instructions.append(load_prompt("skills/vehicle_maintenance.md"))
+    instructions.append(load_prompt("skills/calendar.md"))
     instructions.append(load_prompt("skills/todos.md"))
+
+    # `skills/document_extraction.md` is NOT loaded here on purpose: it is the
+    # system prompt for the separate, schema-constrained extraction call in
+    # src/agent/document_extraction.py, not for the main conversational agent
+    # (specs/023 T6.5).
 
     return instructions

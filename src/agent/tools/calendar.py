@@ -13,6 +13,12 @@ from src.agent.tools.validation import (
 )
 from src.domain.calendar.provider import NoopCalendarProvider
 from src.domain.calendar.service import CalendarService
+from src.domain.preferences.timezone import (
+    AmbiguousOrNonExistentTimeError,
+    resolve_user_timezone,
+    to_local_display,
+    to_utc,
+)
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.calendar import CalendarRepository
 from src.repositories.database import get_session
@@ -47,6 +53,7 @@ async def check_calendar(
         end: Optional end datetime. Defaults to end of the same day.
     """
     user_ctx = UserContext.from_run_context(run_context)
+    tz = resolve_user_timezone(user_ctx)
     service = await _get_calendar_service()
 
     try:
@@ -62,18 +69,33 @@ async def check_calendar(
     else:
         end_dt = start_dt.replace(hour=23, minute=59, second=59)
 
-    events = await service.check_calendar(user_ctx, start_dt, end_dt)
+    # start_dt/end_dt may be naive (local wall-clock, specs/023 T5.2/T5.3) —
+    # normalize to UTC for the query, but keep the originals for the "sin
+    # eventos" message so it echoes exactly what the user asked for.
+    try:
+        start_query = to_utc(start_dt, tz)
+        end_query = to_utc(end_dt, tz)
+    except AmbiguousOrNonExistentTimeError:
+        return (
+            "La fecha indicada no existe o es ambigua por el cambio de horario "
+            "de verano/invierno. Especifica un offset UTC explícito u otra hora."
+        )
+
+    events = await service.check_calendar(user_ctx, start_query, end_query)
 
     if not events:
         return f"No tienes eventos entre {start_dt:%Y-%m-%d} y {end_dt:%Y-%m-%d}."
 
     lines = [f"📅 **Eventos** ({len(events)}):\n"]
-    for e in events:
-        start_str = e.start_at.strftime("%Y-%m-%d %H:%M")
-        end_str = f" → {e.end_at.strftime('%H:%M')}" if e.end_at else ""
-        lines.append(f"- **{e.title}** — {start_str}{end_str}")
-        if e.location:
-            lines.append(f"   📍 {e.location}")
+    for event in events:
+        local_start = to_local_display(event.start_at, tz)
+        start_str = local_start.strftime("%Y-%m-%d %H:%M")
+        end_str = (
+            f" → {to_local_display(event.end_at, tz).strftime('%H:%M')}" if event.end_at else ""
+        )
+        lines.append(f"- **{event.title}** — {start_str}{end_str}")
+        if event.location:
+            lines.append(f"   📍 {event.location}")
     return "\n".join(lines)
 
 
@@ -179,9 +201,10 @@ async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> s
             else None,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
+        local_start = to_local_display(event.start_at, resolve_user_timezone(user_ctx))
         return (
             f"✅ **Evento añadido al calendario**: {event.title}\n"
-            f"   Inicio: {event.start_at.strftime('%Y-%m-%d %H:%M')}\n"
+            f"   Inicio: {local_start.strftime('%Y-%m-%d %H:%M')}\n"
             f"   ID: `{event.id}`"
         )
     except (KeyError, TypeError, ValueError) as e:

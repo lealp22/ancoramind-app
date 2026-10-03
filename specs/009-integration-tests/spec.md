@@ -1,7 +1,7 @@
 # Spec: 009 — Integration Tests with Real PostgreSQL
 
 > **Backlog:** BL-2
-> **Status:** specified (pendiente de implementación)
+> **Status:** implemented (2026-09-09) — ver `verification.md`
 > **Target:** Validar los repositorios reales de AncoraMind Core contra el
 > PostgreSQL dockerizado del propio repo, sin depender de Telegram (BL-18) ni
 > de Supabase. Es la vía de validación de M3–M5 mientras el canal está pausado.

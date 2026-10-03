@@ -5,6 +5,7 @@ from uuid import UUID
 
 from src.domain.calendar.models import CalendarEvent, CalendarEventCreate
 from src.domain.calendar.provider import CalendarProvider
+from src.domain.preferences.timezone import resolve_user_timezone, to_utc
 from src.repositories.calendar import CalendarRepository
 from src.security.user_context import UserContext
 
@@ -26,9 +27,21 @@ class CalendarService:
         location: str | None = None,
         source_document_id: UUID | None = None,
     ) -> CalendarEvent:
-        """Create an event (EXTERNAL_ACTION — caller handles confirmation)."""
+        """Create an event (EXTERNAL_ACTION — caller handles confirmation).
+
+        ``start_at``/``end_at`` may be naive (interpreted in the user's
+        resolved timezone — specs/023 T5.2) or timezone-aware (used as-is);
+        either way they are normalized to UTC before persisting.
+
+        Raises:
+            AmbiguousOrNonExistentTimeError: if a naive value falls in a
+                DST fold/gap in the resolved timezone.
+        """
+        tz = resolve_user_timezone(user_context)
         data = CalendarEventCreate(
-            title=title, start_at=start_at, end_at=end_at,
+            title=title,
+            start_at=to_utc(start_at, tz),
+            end_at=to_utc(end_at, tz) if end_at is not None else None,
             description=description, location=location,
             source_document_id=source_document_id,
         )

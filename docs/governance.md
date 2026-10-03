@@ -58,10 +58,20 @@ prompts/
 └── skills/
     ├── documents.md
     ├── vehicle_maintenance.md
-    └── calendar.md
+    ├── calendar.md
+    ├── todos.md
+    └── document_extraction.md   ← NO se carga aquí (ver nota)
 ```
 
-No crear un único system prompt gigantesco.
+No crear un único system prompt gigantesco. `assemble_instructions()`
+(`src/agent/instructions.py`) carga identity, soul, tool_contract, telegram
+y todas las skills de dominio, **excepto** `document_extraction.md`: ese
+prompt es el system prompt de la llamada de extracción estructurada separada
+(`src/agent/document_extraction.py`, schema-constrained), no del agente
+conversacional principal — exclusión intencional, no un olvido
+(specs/023 T6.5). Hasta 2026-10-03, `skills/calendar.md` existía en disco
+pero no estaba cableado en `assemble_instructions()` (olvido real, corregido
+en specs/023 Fase 6).
 
 ---
 

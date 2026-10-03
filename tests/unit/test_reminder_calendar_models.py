@@ -9,7 +9,9 @@ from src.domain.reminders.models import Reminder, ReminderCreate
 
 class TestReminderCreate:
     def test_valid(self):
-        rc = ReminderCreate(title="Llamar dentista", trigger_at=datetime(2026, 8, 28, 17, 0))
+        rc = ReminderCreate(
+            title="Llamar dentista", trigger_at=datetime(2026, 8, 28, 17, 0, tzinfo=UTC)
+        )
         assert rc.title == "Llamar dentista"
         assert rc.status if hasattr(rc, "status") else True
 
@@ -17,7 +19,14 @@ class TestReminderCreate:
         import pytest
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
-            ReminderCreate(title="", trigger_at=datetime(2026, 8, 28))
+            ReminderCreate(title="", trigger_at=datetime(2026, 8, 28, tzinfo=UTC))
+
+    def test_naive_trigger_at_rejected(self):
+        """specs/023 T5.2: a naive datetime must be normalized before this model."""
+        import pytest
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            ReminderCreate(title="t", trigger_at=datetime(2026, 8, 28, 17, 0))
 
 
 class TestReminder:
@@ -32,9 +41,18 @@ class TestReminder:
 
 class TestCalendarEventCreate:
     def test_valid(self):
-        ce = CalendarEventCreate(title="Dentista", start_at=datetime(2026, 8, 28, 17, 30))
+        ce = CalendarEventCreate(
+            title="Dentista", start_at=datetime(2026, 8, 28, 17, 30, tzinfo=UTC)
+        )
         assert ce.title == "Dentista"
         assert ce.end_at is None
+
+    def test_naive_start_at_rejected(self):
+        """specs/023 T5.2: a naive datetime must be normalized before this model."""
+        import pytest
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            CalendarEventCreate(title="Dentista", start_at=datetime(2026, 8, 28, 17, 30))
 
 
 class TestCalendarEvent:

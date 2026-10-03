@@ -1,7 +1,8 @@
 # ADR-004 — Telegram admission con ejecución Agent at-most-once
 
-> **Status:** Accepted (diseño aprobado 2026-09-13; implementación pendiente —
-> specs/013, BL-23)
+> **Status:** Accepted — implementado localmente (T2–T14, diseño aprobado
+> 2026-09-13); rollout Railway completo y Collector/Grafana pendientes —
+> specs/013/verification.md, BL-23
 > **Contexto:** hardening del canal Telegram tras un incidente de amplificación
 > de inferencias y el assessment del endpoint AgentOS de Agno 2.9.0.
 

@@ -46,16 +46,20 @@
 
 ## Tool Result Patterns
 
-Tools return structured results:
+Every tool returns a single Spanish-language text string meant to be relayed
+to the user as-is (bold title, aligned data, moderate emoji) — never JSON.
+Read it to decide what happened; don't invent structure that isn't there:
 
-```json
-{"status": "found", "data": {...}}
-{"status": "not_found"}
-{"status": "ambiguous", "candidates": [...]}
-{"status": "error", "message": "..."}
-```
+- **Found/success** — e.g. `"✅ **Recordatorio creado**: ...\n   Cuándo: ...\n   ID: \`...\`"`.
+  Relay it; don't restate the data from memory.
+- **Not found** — e.g. `"No se encontró la propuesta \`...\` o ya no está pendiente."`,
+  `"No tienes recordatorios."` Tell the user plainly.
+- **Ambiguous** — the tool lists the candidates in the text itself
+  (e.g. `find_vehicle` lists matches); ask the user to pick one of those.
+- **Error** — fixed, content-free messages like `"❌ Los datos de la propuesta
+  no son válidos. Crea una propuesta nueva."` or `"❌ Error interno al procesar
+  la operación. Inténtalo de nuevo más tarde."` (`src/agent/tools/validation.py`).
+  Report it, don't guess what went wrong or retry silently.
 
-- `found` → use the data
-- `not_found` → tell the user
-- `ambiguous` → ask the user to pick
-- `error` → report the error, don't guess
+There is no `status` field anywhere — don't ask a tool for one, don't claim
+one in your own output, and don't parse the reply as JSON.

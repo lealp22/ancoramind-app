@@ -46,8 +46,9 @@ class TestAssembleInstructions:
         """Should return a list of strings."""
         instructions = assemble_instructions()
         assert isinstance(instructions, list)
-        # identity + soul + tool_contract + telegram + documents + vehicles + todos
-        assert len(instructions) == 7
+        # identity + soul + tool_contract + telegram + documents + vehicles
+        # + calendar + todos
+        assert len(instructions) == 8
         assert all(isinstance(item, str) for item in instructions)
 
     def test_vehicle_skill_loaded(self):
@@ -83,6 +84,18 @@ class TestAssembleInstructions:
         """The todos skill (lists + items) should be included."""
         instructions = assemble_instructions()
         assert any("Todo Lists" in block for block in instructions)
+
+    def test_calendar_skill_loaded(self):
+        """specs/023 T6.5: the calendar skill was written but never wired in
+        until now — regression guard."""
+        instructions = assemble_instructions()
+        assert any("Skill — Calendar" in block for block in instructions)
+
+    def test_document_extraction_skill_not_in_main_agent_instructions(self):
+        """document_extraction.md is loaded by the separate extraction call
+        (src/agent/document_extraction.py), not by the main agent (T6.5)."""
+        prompt_text = "\n".join(assemble_instructions())
+        assert "Document extraction — untrusted input" not in prompt_text
 
     def test_tool_catalogs_are_not_duplicated_in_prompt_text(self):
         """Tool schemas, not Markdown inventories, are the capability source of truth."""

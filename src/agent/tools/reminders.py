@@ -11,6 +11,7 @@ from src.agent.tools.validation import (
     invalid_proposal_reply,
     parse_optional_uuid,
 )
+from src.domain.preferences.timezone import resolve_user_timezone, to_local_display
 from src.domain.reminders.service import ReminderService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -41,6 +42,7 @@ async def list_reminders(run_context: RunContext, status: str | None = None) -> 
         status: Optional filter (pending, fired, dismissed). Defaults to all.
     """
     user_ctx = UserContext.from_run_context(run_context)
+    tz = resolve_user_timezone(user_ctx)
     service = await _get_reminder_service()
     reminders = await service.list_reminders(user_ctx, status)
 
@@ -49,7 +51,7 @@ async def list_reminders(run_context: RunContext, status: str | None = None) -> 
 
     lines = [f"⏰ **Recordatorios** ({len(reminders)}):\n"]
     for r in reminders:
-        trigger = r.trigger_at.strftime("%Y-%m-%d %H:%M")
+        trigger = to_local_display(r.trigger_at, tz).strftime("%Y-%m-%d %H:%M")
         status_icon = {"pending": "⏳", "fired": "✅", "dismissed": "❌"}.get(r.status, "")
         lines.append(f"{status_icon} **{r.title}** — {trigger} [{r.status}]")
         if r.description:
@@ -142,9 +144,10 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
             else None,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
+        local_trigger = to_local_display(reminder.trigger_at, resolve_user_timezone(user_ctx))
         return (
             f"✅ **Recordatorio creado**: {reminder.title}\n"
-            f"   Cuándo: {reminder.trigger_at.strftime('%Y-%m-%d %H:%M')}\n"
+            f"   Cuándo: {local_trigger.strftime('%Y-%m-%d %H:%M')}\n"
             f"   ID: `{reminder.id}`"
         )
     except (KeyError, TypeError, ValueError) as e:

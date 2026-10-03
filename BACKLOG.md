@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-09-29
+Última actualización: 2026-10-03
 
 ---
 
@@ -29,10 +29,10 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4 (T4.1–T4.9) completa; Fases 5–6 pendientes — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 622 unit + 94 integration — Ruff y `mypy src/` limpios en
+Tests: 643 unit + 94 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -64,12 +64,22 @@ en `specs/023-audit-remediation/tasks.md`:
    (T4.1–T4.8) detrás de `GOVERNED_CONSENT_ENABLED` (apagado por defecto).
 5. **🟠 Alto — Zona horaria naive en recordatorios/calendario.** Fechas sin
    tz se persisten asumiendo UTC; un recordatorio a "las 17:00" puede
-   disparar 1-2h tarde/pronto según DST.
+   disparar 1-2h tarde/pronto según DST. **Resuelto (2026-10-03):** Fase 5
+   completa — `resolve_user_timezone()`/`to_utc()`/`to_local_display()` en
+   `src/domain/preferences/timezone.py`, normalización en los servicios de
+   reminders/calendar, display convertido de vuelta en las tools,
+   `get_current_datetime` devuelve también hora local.
 6. **🟡 Medio — Sincronización documental.** Recuentos de tests desfasados,
    specs marcados "pendiente" ya implementados, tablas de capabilities
    obsoletas en `docs/architecture.md`, prompts con contrato JSON que
    ninguna tool implementa, código muerto (`src/agent/context.py`,
-   `src/services/`, `src/governance/` vacíos).
+   `src/services/`, `src/governance/` vacíos). **Resuelto (2026-10-03):**
+   Fase 6 completa — recuentos y `> **Status:**` actualizados, tabla de
+   capabilities sincronizada con README, contrato de tools reescrito al
+   formato real, `src/agent/context.py` y `src/services/` eliminados
+   (`src/governance/` se mantiene — está documentado como reservado),
+   hallazgo adicional corregido: `skills/calendar.md` existía pero nunca se
+   cargaba en `assemble_instructions()`.
 
 **Orden de ejecución:** fase 1 → 2 → 3 → 4 → 5 → 6 (fase 4 depende de fase 3;
 el resto son independientes y priorizadas por riesgo).

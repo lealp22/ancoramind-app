@@ -3,6 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from src.domain.preferences.timezone import resolve_user_timezone, to_utc
 from src.domain.reminders.models import Reminder, ReminderCreate
 from src.repositories.reminders import RemindersRepository
 from src.security.user_context import UserContext
@@ -23,10 +24,20 @@ class ReminderService:
         source_document_id: UUID | None = None,
         source_action_id: UUID | None = None,
     ) -> Reminder:
-        """Create a reminder (WRITE — caller handles confirmation)."""
+        """Create a reminder (WRITE — caller handles confirmation).
+
+        ``trigger_at`` may be naive (interpreted in the user's resolved
+        timezone — specs/023 T5.2) or timezone-aware (used as-is); either
+        way it is normalized to UTC before persisting.
+
+        Raises:
+            AmbiguousOrNonExistentTimeError: if a naive ``trigger_at`` falls
+                in a DST fold/gap in the resolved timezone.
+        """
+        tz = resolve_user_timezone(user_context)
         data = ReminderCreate(
             title=title,
-            trigger_at=trigger_at,
+            trigger_at=to_utc(trigger_at, tz),
             description=description,
             source_document_id=source_document_id,
             source_action_id=source_action_id,

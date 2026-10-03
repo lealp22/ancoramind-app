@@ -1,7 +1,9 @@
 # Spec: 013 — Governed LLM Access and Telegram Admission
 
 > **Backlog:** BL-23
-> **Status:** approved design — implementation pending (2026-09-13)
+> **Status:** 🔶 T2–T14 implementados localmente (diseño aprobado 2026-09-13);
+> rollout Collector/Grafana, dashboards/alertas y validación Railway completa
+> del cambio de modelo en caliente pendientes — ver `verification.md` y BL-23
 > **Target:** convertir la entrada Telegram y el acceso a modelos LLM en
 > capabilities gobernadas, idempotentes, configurables y observables.
 

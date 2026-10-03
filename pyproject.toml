@@ -26,6 +26,7 @@ dependencies = [
     "opentelemetry-api>=1.38.0,<2.0.0",
     "opentelemetry-sdk>=1.38.0,<2.0.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.38.0,<2.0.0",
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]

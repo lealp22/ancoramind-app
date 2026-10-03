@@ -1,7 +1,7 @@
 # Spec: 010 — Reminder Background Worker
 
 > **Backlog:** BL-5
-> **Status:** specified (pendiente de implementación)
+> **Status:** implemented (2026-09-09) — ver `verification.md`
 > **Decisiones:** docs/adr/ADR-003-reminder-worker.md
 > **Target:** Disparar los recordatorios `pending` cuyo `trigger_at` ha vencido
 > y notificar al usuario por Telegram — sin depender del canal webhook (BL-18).

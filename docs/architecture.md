@@ -297,14 +297,25 @@ def get_vehicle_summary(vehicle_reference: str | None = None):
 ---
 ## 10. Capabilities iniciales
 
+> Tabla sincronizada con la de `README.md` §Capabilities — 35 tools cuando
+> `ANCORA_DATABASE_URL` está configurado (sin ella, solo `get_current_datetime`
+> se registra; el resto de tools de dominio se omiten intencionalmente).
+
 | Dominio | Tools | Riesgo |
 |---|---|---|
-| **Utility** | `get_current_datetime` | READ |
-| **Memory** | `propose_note`, `execute_note`, `search_notes` | WRITE/READ |
-| **Documents** | `get_document`, `search_documents`, `analyze_document`, `propose_document_delete`, `execute_document_delete` | READ/DESTRUCTIVE |
-| **Vehicles** | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history`, `register_vehicle_maintenance` | READ/WRITE |
-| **Reminders** | `create_reminder` | WRITE |
-| **Calendar** | `check_calendar`, `create_calendar_event` | READ/EXTERNAL_ACTION |
+| System | `get_current_datetime` | READ |
+| Notes | `propose_note`, `execute_note`, `search_notes` | WRITE/READ |
+| Documents | `search_documents`, `get_document`, `analyze_document`, `propose_document_delete`, `execute_document_delete` | READ/EXTRACT/DESTRUCTIVE |
+| Vehicles | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history` | READ |
+| Vehicles (creation) | `propose_vehicle`, `execute_vehicle` | WRITE |
+| Vehicles (write) | `propose_vehicle_maintenance`, `execute_vehicle_maintenance` | WRITE |
+| Reminders | `list_reminders`, `propose_reminder`, `execute_reminder` | READ/WRITE |
+| Calendar | `check_calendar`, `propose_calendar_event`, `execute_calendar_event` | READ/EXTERNAL_ACTION |
+| TODO lists | `list_todo_lists`, `propose_todo_list`, `execute_todo_list`, `propose_todo_list_rename`, `propose_todo_list_delete` | READ/WRITE/DESTRUCTIVE |
+| TODO items | `list_todo_items`, `propose_todo_item`, `propose_todo_item_update`, `propose_todo_item_complete`, `propose_todo_item_reopen`, `propose_todo_item_move`, `propose_todo_item_delete`, `execute_todo_item` | READ/WRITE/DESTRUCTIVE |
+
+Toda operación WRITE/EXTERNAL_ACTION/DESTRUCTIVE sigue el patrón ActionProposal:
+`propose_*` → confirmación del usuario → `execute_*` → auditoría (§13).
 
 ---
 

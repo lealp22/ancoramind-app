@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-09-28
+> Última actualización: 2026-10-03
 
 ---
 
@@ -15,8 +15,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 509 unit
-  tests + 71 integration tests; los integration requieren PostgreSQL/Docker
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 643 unit
+  tests + 94 integration tests; los integration requieren PostgreSQL/Docker
   (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios; ambos son
   gates globales en CI.
 
@@ -134,9 +134,16 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             014-agentic-evals (base determinista) +
                             018-agentic-evals-execution-harness (harness aislado),
                             015-powershell-e2e (implementada),
-                            016-health-dashboard (en curso — BL-33)
-tests/unit/              ← 509 tests
-tests/integration/        ← 71 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+                            016-health-dashboard (en curso — BL-33),
+                            017-telegram-governed-pairing (implementada),
+                            019-mypy-hardening + 020-mypy-ci-gate (gate global en
+                            CI), 021-document-conversion-toolkit (Fase 1 lista para
+                            implementar — BL-38), 022-llm-input-trust (primer
+                            incremento local — BL-39),
+                            023-audit-remediation (Fases 1–5 implementadas
+                            localmente; Fase 6 en curso — BL-40)
+tests/unit/              ← 643 tests
+tests/integration/        ← 94 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, deployment-railway, runbooks-013

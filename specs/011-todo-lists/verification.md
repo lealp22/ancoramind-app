@@ -46,8 +46,17 @@ orden. El contenido de la spec refleja fielmente lo construido, no al revés.
 
 1. **Un solo `execute_todo_list`** para create/rename/delete (dispatch por
    `proposal.tool_name`) en vez de tres executors — menos superficie para el LLM.
-2. **Items directos sin propose/execute**: reversibles como notes (memoria
-   canónica sin efectos externos); solo las listas pasan por gobernanza.
+2. **Items directos sin propose/execute** (decisión original, 2026-09-10):
+   reversibles como notes (memoria canónica sin efectos externos); solo las
+   listas pasan por gobernanza.
+   **Superado (2026-10-03, specs/023 Fase 4):** tras la auditoría de
+   gobernanza, toda mutación de item (`propose_todo_item`,
+   `propose_todo_item_update`, `propose_todo_item_complete`,
+   `propose_todo_item_reopen`, `propose_todo_item_move`,
+   `propose_todo_item_delete` + `execute_todo_item`) pasa también por
+   ActionProposal — no hay excepciones por reversibilidad (AGENTS.md §7).
+   Este punto queda como registro histórico de la decisión original; el
+   estado actual de las tools es el de `README.md` §Capabilities.
 3. **`position` por inserción** (`MAX+1`); `move_item` re-anexa al final.
    Reorden arbitrario queda como backlog futuro (la spec original mencionaba
    "reordenar (drag-and-drop lógica)" — alcance reducido conscientemente).
