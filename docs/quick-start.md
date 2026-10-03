@@ -1,74 +1,72 @@
 # AncoraMind — Guía de Arranque Rápido
 
-> Para arrancar después de la primera configuración (credenciales ya en `.env`).
-> Primera vez: ver [docs/deployment-e2e.md](deployment-e2e.md).
+> **ngrok no se usa en este proyecto** desde el incidente de seguridad de red
+> del 2026-09-07 (BL-18) — no reabrir ese canal sin autorización explícita.
+> El flujo vigente para probar con Telegram real es GitHub → Railway (dominio
+> HTTPS estable). Esta guía es el día a día una vez el servicio Railway ya
+> existe. Para crearlo por primera vez: ver
+> [deployment-railway.md](deployment-railway.md).
 
-## Arranque con Supabase (3 pasos)
+## Arranque día a día (Railway)
 
-Si `.env` usa el session pooler de Supabase y
-`DOCUMENT_STORAGE_BACKEND=supabase`, **no hay que arrancar Docker**.
+El dominio de Railway es estable entre deployments y el webhook de Telegram
+**se registra una sola vez** contra él
+(`deployment-railway.md` §5) — no hay que repetirlo en cada sesión de trabajo,
+solo si cambia el dominio, el token o el secret.
 
-> Si acabas de cambiar de Docker local a Supabase, abre una terminal nueva o
-> vuelve a cargar `.env` antes de ejecutar la app. Las variables ya exportadas
-> en el terminal tienen prioridad sobre el fichero `.env`.
+### 1. Subir el cambio
 
-### 1. ngrok (ventana nueva, dejar abierta)
-
-**Git Bash:**
 ```bash
-~/tools/ngrok.exe http 7777
+git push origin <tu-rama>
+# o, tras aprobar la Pull Request:
+git push origin main
 ```
 
-**PowerShell:**
-```powershell
-& "$HOME\tools\ngrok.exe" http 7777
-```
+Railway observa `main` (o la rama configurada) y despliega automáticamente
+tras un CI verde (`deployment-railway.md` §6). Comprueba el estado del
+deployment en el dashboard de Railway o con:
 
-Copiar la URL HTTPS que muestra (ej: `https://xxx.ngrok-free.dev`)
-
-### 2. Registrar webhook (⚠️ cambia cada vez que reinicies ngrok)
-
-**Git Bash:**
 ```bash
-source <(grep -v '^#' .env | sed 's/^/export /')
-curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook?url=URL_DE_NGROK/telegram/webhook"
+curl -s https://<service>.up.railway.app/health
 ```
 
-**PowerShell:**
-```powershell
-Get-Content .env | ForEach-Object {
-    if ($_ -match '^([^#].*?)=(.*)$') {
-        [Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-    }
-}
-$url = "$env:TELEGRAM_TOKEN/setWebhook?url=URL_DE_NGROK/telegram/webhook"
-Invoke-RestMethod "https://api.telegram.org/bot$url"
+### 2. Probar en Telegram
+
+Con el deployment en estado saludable, el bot ya está escuchando en el
+dominio Railway — no hace falta ningún paso adicional de túnel o webhook.
+Escribe directamente al bot.
+
+### 3. Si el webhook no está registrado (servicio nuevo o rotación de secretos)
+
+Solo en ese caso, desde una terminal local con `.env` apuntando al mismo
+`TELEGRAM_TOKEN`/`TELEGRAM_WEBHOOK_SECRET_TOKEN` que Railway:
+
+```bash
+python scripts/telegram_webhook.py set --base-url https://<service>.up.railway.app
+python scripts/telegram_webhook.py status
 ```
 
-Debe responder: `{"ok":true,...,"description":"Webhook was set"}`
+Detalle completo en [deployment-railway.md](deployment-railway.md) §5.
 
-### 3. Lanzar AncoraMind
+---
 
-**Git Bash / PowerShell (igual):**
+## Desarrollo local sin Telegram real
+
+Para iterar código sin desplegar ni tocar el bot (tests, lint, probar la app
+arranca sin errores):
+
 ```bash
 python -m src.main
 ```
 
----
+Localmente requiere `.env` con `TELEGRAM_TOKEN` (la app registra las rutas de
+Agno aunque no reciba updates reales sin un webhook público). Sin
+`ANCORA_DATABASE_URL` arranca igual pero sin domain tools (degradación
+graceful) — ver [development.md](development.md).
 
-## Parada
+### Alternativa: PostgreSQL y storage locales
 
-1. `Ctrl+C` en la consola de AncoraMind
-2. `Ctrl+C` en la ventana de ngrok
-
-Supabase es gestionado: no hay ningún contenedor que detener.
-
----
-
-## Alternativa: PostgreSQL y storage locales
-
-Si `.env` apunta a `localhost` y usa `DOCUMENT_STORAGE_BACKEND=local`, antes
-del paso 1 hay que arrancar PostgreSQL:
+Si `.env` apunta a `localhost` y usa `DOCUMENT_STORAGE_BACKEND=local`:
 
 ```bash
 docker compose up postgres -d
@@ -80,16 +78,19 @@ Al terminar:
 docker compose down
 ```
 
+Antes de la primera ejecución, o tras una migración nueva, aplicar
+`migrations/init.sql` (bootstrap fresh) o `alembic upgrade head`.
+
 ---
 
-## Verificación rápida
+## Verificación rápida (contra Railway)
 
-**Webhook (Git Bash / PowerShell):**
+**Webhook:**
 ```bash
 curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo"
 ```
 
-**Tablas del dominio local (esperado: 8 filas):**
+**Tablas del dominio (local, 8 filas esperadas):**
 ```bash
 # Git Bash
 docker compose exec postgres psql -U ancora -d ancoramind -c "\dt ancora.*"
@@ -110,35 +111,27 @@ Probar en Telegram:
 | Síntoma | Solución |
 |---|---|
 | Error 404 de OpenRouter | El modelo caducó — cambiar `LLM_MODEL` en `.env` |
-| Bot no responde | ¿ngrok corriendo? ¿webhook con URL actual? ¿AncoraMind corriendo? |
+| Bot no responde | ¿deployment Railway saludable (`/health`)? ¿webhook registrado contra el dominio actual? |
+| Error de columna/tabla inexistente al proponer una acción | Faltan migraciones — `alembic upgrade head` contra `ANCORA_DATABASE_URL` |
 | `ECONNREFUSED 5432` con BD local | `docker compose up postgres -d` |
 | Error de conexión Supabase | Comprobar que el proyecto está activo y que ambas URLs usan el Session pooler (puerto 5432) |
 | `No module named psycopg2` | `AGNO_DATABASE_URL` debe empezar por `postgresql+psycopg://` |
 | Storage Supabase falla | `SUPABASE_URL` debe ser `https://<ref>.supabase.co`, no `<ref>.storage.supabase.co` |
-| Webhook 404 Not Found | Token mal cargado — repetir la carga de `.env` del paso 2 |
-| `pending_update_count > 0` | Mensajes encolados; llegan al arrancar AncoraMind |
-| Solo 1 tool en logs | Falta `ANCORA_DATABASE_URL` en `.env` o PostgreSQL caído |
+| Webhook 404 Not Found | Token mal cargado al registrar el webhook — repetir con el `.env` correcto |
+| `pending_update_count > 0` | Mensajes encolados; llegan en el siguiente deployment saludable |
+| Solo 1 tool en logs | Falta `ANCORA_DATABASE_URL` en Railway o PostgreSQL/Supabase caído |
 
 ---
 
 ## Script automatizado
 
-El script detecta si la BD es local o Supabase. Solo arranca Docker y aplica
-`migrations/init.sql` en modo local:
-
-```bash
-bash scripts/run-e2e.sh --check   # solo verificar prerrequisitos
-bash scripts/run-e2e.sh           # secuencia completa
-bash scripts/run-e2e.sh --reset   # resetear webhook antes de registrar
-```
-
-En PowerShell, usa el equivalente nativo:
-
 ```powershell
-.\scripts\run-e2e.ps1 -Check
-.\scripts\run-e2e.ps1
-.\scripts\run-e2e.ps1 -Reset
-
-# Si la app ya está en Railway, no inicia ngrok ni una app local:
+.\scripts\run-e2e.ps1 -Check   # solo verificar prerrequisitos
 .\scripts\run-e2e.ps1 -PublicBaseUrl https://<service>.up.railway.app
+.\scripts\run-e2e.ps1 -Reset -PublicBaseUrl https://<service>.up.railway.app
 ```
+
+El script PowerShell soporta además un flujo local con ngrok como alternativa
+histórica (`sin -PublicBaseUrl`) — **no usar esa rama en esta red** sin
+autorización explícita (BL-18). Usa siempre `-PublicBaseUrl` apuntando al
+dominio Railway.

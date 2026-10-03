@@ -2,17 +2,21 @@
 
 > Comandos multi-shell: los que usan `<` (redirección bash) no funcionan en
 > PowerShell — se indica la alternativa cuando aplica.
-> Arranque día a día: ver [quick-start.md](quick-start.md). Primera vez:
-> ver [deployment-e2e.md](deployment-e2e.md). Despliegue gestionado: ver
-> [deployment-railway.md](deployment-railway.md).
+> Para probar con Telegram real: ver [deployment-railway.md](deployment-railway.md)
+> (único flujo vigente desde BL-18 — ngrok no se usa en este proyecto desde el
+> incidente de seguridad del 2026-09-07). [quick-start.md](quick-start.md)
+> cubre el día a día una vez el servicio Railway existe.
+> [deployment-e2e.md](deployment-e2e.md) es la guía histórica de primera
+> configuración, con un paso de ngrok ya no vigente — léela con esa salvedad.
 
 ## Prerequisites
 
 - Python 3.12+
 - Proyecto Supabase activo (opción principal) o Docker & Docker Compose
   (alternativa local)
-- ngrok solo si se trabaja localmente con webhook (pausado en esta red; ver
-  BL-18). Railway no lo necesita.
+- ngrok **no se usa** en este proyecto (incidente de seguridad 2026-09-07,
+  BL-18). El dominio estable de Railway sustituye cualquier necesidad de
+  túnel local.
 - Credenciales en `.env` (ver [`.env.example`](../.env.example))
 
 ## Setup

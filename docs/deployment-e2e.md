@@ -1,5 +1,13 @@
 # AncoraMind — Guía de Despliegue E2E
 
+> **⚠️ Flujo histórico, no vigente para el paso de ngrok.** Desde el
+> incidente de seguridad de red del 2026-09-07 (BL-18), **ngrok no se usa en
+> este proyecto**. Para probar con Telegram real hoy, usar
+> [deployment-railway.md](deployment-railway.md) (GitHub → Railway, dominio
+> HTTPS estable, webhook registrado una sola vez). El resto de esta guía
+> (clonar, bot de Telegram, LLM, Supabase) sigue siendo válido; solo el paso
+> de túnel/ngrok para exponer un proceso local no se usa.
+>
 > **Objetivo:** Lanzar AncoraMind completo con Telegram + Supabase y validar
 > todos los milestones (M1–M5) de extremo a extremo.
 
@@ -11,7 +19,7 @@
 |---|---|
 | Python 3.12+ | `python --version` |
 | Git | `git --version` |
-| ngrok | [descargar](https://ngrok.com/download) + cuenta gratuita |
+| ~~ngrok~~ (no usar — ver aviso arriba) | — |
 | Cuenta de Telegram | [telegram.org](https://telegram.org) |
 | API key de LLM | OpenAI, OpenRouter u otro proveedor compatible |
 | Proyecto Supabase | Opción principal: PostgreSQL + Storage gestionados |
