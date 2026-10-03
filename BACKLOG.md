@@ -22,13 +22,13 @@
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
-| BL-8 Evals agentic | 🔶 19 casos sintéticos, runner estático y harness aislado; pendiente adaptador contra Agent/LLM gobernado — specs/014 + 018 |
+| BL-8 Evals agentic | 🔶 27 casos sintéticos, runner estático, harness aislado y adaptador físico (sin inferencia real) implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
 | BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) implementada localmente; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
-| BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
+| BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs; pendiente confirmaciones WRITE, adjunto directo al Agent, evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
@@ -237,6 +237,28 @@ y ruta AgentOS heredada.
 diseño P0 se completaron en `specs/023-audit-remediation` (T4.1–T4.8), detrás
 de `GOVERNED_CONSENT_ENABLED` (apagado por defecto en producción). Detalle en
 `specs/022-llm-input-trust/verification.md` §"P0 — implementado" y en BL-40.
+
+**Punto 1 implementado localmente (2026-10-03, specs/022 T8 segundo
+segmento):** el envoltorio `untrusted_results` (acotado/truncado/marcado
+`trust: "untrusted_data"`) que ya cubría `search_documents`/`get_document`/
+`search_notes` se extiende a las tools de lectura restantes: `find_vehicle`,
+`get_vehicle_summary`, `get_vehicle_maintenance_history` (vehículos.py),
+`list_reminders` (reminders.py), `check_calendar` (calendar.py) y
+`list_todo_lists`/`list_todo_items` (todos.py) — ninguna existía con tests de
+tool antes de este incremento, así que se crean `test_vehicle_tools.py`,
+`test_reminder_tools.py`, `test_calendar_tools.py` y se ampliá
+`test_todos_tools.py` (18 tests nuevos, 723 unit passing). `MAX_RESULT_RECORDS`
+aplicado donde no había límite de registros (`get_vehicle_maintenance_history`
+devolvía el historial completo sin cap). `prompts/tool_contract.md` corregido
+— afirmaba "never JSON"/"don't parse the reply as JSON" cuando
+`search_documents`/`get_document`/`search_notes` ya devolvían el envoltorio
+desde specs/022; ahora documenta ambas formas de respuesta. **Alcance
+explícitamente fuera de este incremento** (ver `docs/llm-security-hardening.md`
+§3 y `specs/022/tasks.md` T8): las respuestas de confirmación
+`propose_*`/`execute_*` (ecoan contenido en el mismo turno en que el usuario
+lo escribió, riesgo distinto al de datos de terceros recuperados después), el
+adjunto original entregado directamente al Agent principal (no solo su
+extracción) y la ruta AgentOS legada.
 
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 
@@ -1075,11 +1097,27 @@ determinísticamente outcome, tool requerida/vetada y confirmación. El reporte
 proyecta sólo metadata; input, contexto y respuesta permanecen en memoria. No
 crea Agent, provider, `LLMAccess`, sesión de DB ni tools de producción.
 
-**Pendiente:** implementar el adaptador físico contra un Agent gobernado con
-`LLMAccess`/Gateway, `RuntimeConfigSnapshot` y budget separados, y tools
-simuladas sin I/O; acordar scoring semántico y baseline por ruta lógica; y añadir
-la modalidad LLM al flujo CI/E2E con credenciales y presupuesto explícitamente
-aprobados. No almacenar contenido personal en datasets, outputs ni telemetría.
+**Actualización 2026-10-03 (specs/018 T6):** adaptador físico implementado
+localmente — `GovernedPhysicalEvalExecutor`
+(`src/agent/eval_physical_executor.py`) ejecuta un Agent real por caso,
+modelo resuelto vía `LLMAccess` inyectado (nunca un provider directo),
+`RuntimeConfigSnapshot`/budget propios de evaluación (bootstrap, sin
+PostgreSQL) y un catálogo de 15 tools simuladas sin I/O
+(`src/agent/eval_tools.py`, sin importar `src.repositories`/`src.storage`/
+tools de producción). Probado solo con un `Model` scripted en memoria — sin
+credenciales, sin red, sin coste (`tests/unit/test_eval_tools.py` +
+`tests/unit/test_eval_physical_executor.py`, 705 unit tests en total).
+`outcome` se deriva únicamente de las tools realmente invocadas; un sentinel
+`no_tool_call` sustituye a `clarify`/`safe_response` cuando no se invoca
+ninguna (distinguirlos exige juzgar el texto de respuesta — eso es T8, no
+T6). Detalle en `specs/018-agentic-evals-execution-harness/verification.md`.
+
+**Pendiente:** T7 — ejecutar la modalidad LLM real contra el adaptador físico
+ya construido, con credenciales y presupuesto explícitamente aprobados,
+fuera de CI por defecto (bloqueado por decisión de coste del propietario, no
+por código). T8 — acordar scoring semántico y baseline por ruta lógica con
+etiquetas humanas (bloqueado por etiquetado manual del propietario). No
+almacenar contenido personal en datasets, outputs ni telemetría.
 
 **Propuesta para el siguiente incremento (2026-09-26; no implementada):** probar
 Jev como juez semántico *opcional* de los casos sintéticos de `response_style`,

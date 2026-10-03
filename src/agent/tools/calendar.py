@@ -8,6 +8,12 @@ from uuid import UUID
 from agno.run import RunContext
 
 from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.untrusted_results import (
+    MAX_RESULT_RECORDS,
+    MAX_TITLE_CHARS,
+    bounded_text,
+    render_retrieved_records,
+)
 from src.agent.tools.validation import (
     internal_error_reply,
     invalid_proposal_reply,
@@ -99,18 +105,30 @@ async def check_calendar(
     if not events:
         return f"No tienes eventos entre {start_dt:%Y-%m-%d} y {end_dt:%Y-%m-%d}."
 
-    lines = [f"📅 **Eventos** ({len(events)}):\n"]
-    for event in events:
+    bounded_events = events[:MAX_RESULT_RECORDS]
+    records: list[dict[str, object]] = []
+    for event in bounded_events:
+        title, title_truncated = bounded_text(event.title, MAX_TITLE_CHARS)
         local_start = to_local_display(event.start_at, tz)
-        start_str = local_start.strftime("%Y-%m-%d %H:%M")
-        end_str = (
-            f" → {to_local_display(event.end_at, tz).strftime('%H:%M')}" if event.end_at else ""
-        )
-        recurring_marker = " 🔁" if event.recurrence_rule else ""
-        lines.append(f"- **{event.title}** — {start_str}{end_str}{recurring_marker}")
+        record: dict[str, object] = {
+            "source": "calendar_event",
+            "id": str(event.id),
+            "title": title,
+            "title_truncated": title_truncated,
+            "start_at": local_start.strftime("%Y-%m-%d %H:%M"),
+            "end_at": (
+                to_local_display(event.end_at, tz).strftime("%Y-%m-%d %H:%M")
+                if event.end_at
+                else None
+            ),
+            "recurring": bool(event.recurrence_rule),
+        }
         if event.location:
-            lines.append(f"   📍 {event.location}")
-    return "\n".join(lines)
+            location, location_truncated = bounded_text(event.location, MAX_TITLE_CHARS)
+            record["location"] = location
+            record["location_truncated"] = location_truncated
+        records.append(record)
+    return render_retrieved_records("check_calendar", records, len(events))
 
 
 @closes_sessions

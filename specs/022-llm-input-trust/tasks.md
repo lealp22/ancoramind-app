@@ -50,10 +50,24 @@
       WRITE existentes, incluida TODO. Fresh/upgrade/downgrade probados en
       los tests de migración. E2E con Telegram/infraestructura real sigue
       sin ejecutarse (requiere autorización operativa aparte).
-- [ ] T8 · Primer segmento completado: procedencia/acotación de las lecturas de notas y
-      documentos con unit tests. Pendiente: `analyze_document`, resto de tools,
-      adjunto directo al Agent y fallback legado; ensayos multimodales reales
-      cuando exista harness apropiado.
+- [ ] T8 · Segundo segmento completado (2026-10-03): `find_vehicle`,
+      `get_vehicle_summary`, `get_vehicle_maintenance_history`,
+      `list_reminders`, `check_calendar`, `list_todo_lists` y
+      `list_todo_items` ya pasan por `src/agent/tools/untrusted_results.py`
+      (mismo acotado/truncado/marcado `trust: untrusted_data` que
+      `search_documents`/`get_document`/`search_notes`), con unit tests
+      adversariales nuevos (`test_vehicle_tools.py`, `test_reminder_tools.py`,
+      `test_calendar_tools.py`, ampliación de `test_todos_tools.py`).
+      `prompts/tool_contract.md` actualizado — ya no afirma "never JSON"
+      cuando una parte creciente de las tools ya devuelve el envoltorio JSON.
+      **Fuera de alcance deliberado de este segmento:** las respuestas de
+      confirmación `propose_*`/`execute_*` (ecoan lo que el propio usuario
+      acaba de escribir en el mismo turno — riesgo distinto a datos de
+      terceros recuperados después; cambiar su formato arriesga romper el
+      texto de confirmación). Pendiente: `analyze_document`, el adjunto
+      original entregado directamente al Agent (no solo su extracción), la
+      ruta AgentOS legada, y ensayos multimodales reales cuando exista
+      harness apropiado (BL-8).
 - [ ] T9 · Con BL-8, ejecutar corpus adversarial/benigno sintético sobre Agent
       gobernado, con tools sin I/O; benchmark offline de detectores opcionales.
       No registrar contenido en observabilidad ni añadir vendor sin evaluación.

@@ -11,9 +11,19 @@
 - [x] T4 · Añadir unit tests con executor fake que demuestren la ausencia de
       inputs/contextos/respuestas en el reporte.
 - [x] T5 · Actualizar documentación y BACKLOG.
-- [ ] T6 · Diseñar e implementar el adaptador físico: Agent gobernado por
-      `LLMAccess`, `RuntimeConfigSnapshot`/budget de evaluación separados y
-      catálogo de tools simuladas sin I/O.
+- [x] T6 · Adaptador físico implementado (2026-10-03):
+      `src/agent/eval_physical_executor.py::GovernedPhysicalEvalExecutor` +
+      catálogo de tools simuladas en `src/agent/eval_tools.py`. Agent
+      gobernado por `LLMAccess` inyectado, `RuntimeConfigSnapshot`/budget de
+      evaluación separados (bootstrap, sin PostgreSQL), sin reutilizar
+      `GovernedAgentFactory` (acoplado a history/db de producción). Probado
+      con un `Model` scripted en memoria (sin red/coste) —
+      `tests/unit/test_eval_tools.py` + `tests/unit/test_eval_physical_executor.py`.
+      **Decisión documentada:** `outcome` sólo deriva de las tools realmente
+      invocadas; un sentinel `no_tool_call` sustituye a `clarify`/
+      `safe_response` cuando no se invoca ninguna tool, porque distinguir
+      esos dos requiere juzgar el texto de respuesta semánticamente — eso es
+      T8, no T6. Detalle en `verification.md`.
 - [ ] T7 · Con credenciales y presupuesto aprobados, ejecutar la modalidad LLM
       fuera de CI por defecto y capturar evidencia metadata-only.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con

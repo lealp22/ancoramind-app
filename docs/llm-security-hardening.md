@@ -114,10 +114,17 @@ del texto, limitar volumen y marcar explícitamente «contenido de terceros/no
 instrucciones». No convertir `suggested_actions`, `summary` o una nota en
 evidencia de intención del usuario. `suggested_actions` ya no se expone en las
 dos respuestas documentales (se conserva en la extracción persistida por
-compatibilidad); falta auditar el resto de resultados no confiables.
-Controlar también el camino de adjunto original entregado al Agent principal,
-no solo el de extracción. Permisos y destinatarios externos deben verificarse
-en Core; no proporcionar una herramienta genérica de HTTP/SQL para eludirlo.
+compatibilidad). **Resuelto (2026-10-03) para el resto de tools de lectura:**
+`find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history`,
+`list_reminders`, `check_calendar`, `list_todo_lists` y `list_todo_items` ya
+pasan por el mismo envoltorio (`src/agent/tools/untrusted_results.py`), con
+`trust: "untrusted_data"` explícito y campos acotados/truncados. Pendiente:
+las respuestas de confirmación `propose_*`/`execute_*` (ecoan contenido en el
+mismo turno en que el usuario lo escribió — riesgo distinto, no auditado
+aquí), el adjunto original entregado directamente al Agent principal (no solo
+su extracción), y la ruta AgentOS legada. Permisos y destinatarios externos
+deben verificarse en Core; no proporcionar una herramienta genérica de
+HTTP/SQL para eludirlo.
 
 Si se introduce RAG, aplicar la misma política **al ingerir y al recuperar**:
 scope por usuario, procedencia por chunk, límite de tamaño, delimitación en
@@ -179,6 +186,10 @@ una dependencia; este análisis no añade ninguna.
    queda preservar procedencia y tratar extracción, notas y resultados de
    otras tools como datos al recuperarlos. Testear que resumen adversarial no
    causa `propose_*`/`execute_*` sin petición/confirmación válida.
+   **Resuelto (2026-10-03) para las tools de lectura de vehículos,
+   recordatorios, calendario y TODOs** — ver sección 3 más arriba; pendientes
+   las confirmaciones `propose_*`/`execute_*`, el adjunto directo al Agent y
+   la ruta AgentOS legada.
 4. **P2:** ampliar `evals/security/` con negativos benignos, ataques en español,
    Unicode, base64, enlaces y contenido multimodal; usar el harness gobernado
    cuando exista (BL-8), con tools simuladas, sin exponer datos reales. Medir

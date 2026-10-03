@@ -6,6 +6,13 @@ from uuid import UUID
 from agno.run import RunContext
 
 from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.untrusted_results import (
+    MAX_RESULT_RECORDS,
+    MAX_SUMMARY_CHARS,
+    MAX_TITLE_CHARS,
+    bounded_text,
+    render_retrieved_records,
+)
 from src.agent.tools.validation import (
     internal_error_reply,
     invalid_proposal_reply,
@@ -51,16 +58,25 @@ async def list_reminders(run_context: RunContext, status: str | None = None) -> 
     if not reminders:
         return "No tienes recordatorios" + (f" con estado '{status}'." if status else ".")
 
-    lines = [f"⏰ **Recordatorios** ({len(reminders)}):\n"]
-    for r in reminders:
-        trigger = to_local_display(r.trigger_at, tz).strftime("%Y-%m-%d %H:%M")
-        status_icon = {"pending": "⏳", "fired": "✅", "dismissed": "❌"}.get(r.status, "")
-        recurring_marker = " 🔁" if r.recurrence_rule else ""
-        lines.append(f"{status_icon} **{r.title}** — {trigger} [{r.status}]{recurring_marker}")
+    bounded = reminders[:MAX_RESULT_RECORDS]
+    records: list[dict[str, object]] = []
+    for r in bounded:
+        title, title_truncated = bounded_text(r.title, MAX_TITLE_CHARS)
+        record: dict[str, object] = {
+            "source": "reminder",
+            "id": str(r.id),
+            "title": title,
+            "title_truncated": title_truncated,
+            "status": r.status,
+            "trigger_at": to_local_display(r.trigger_at, tz).strftime("%Y-%m-%d %H:%M"),
+            "recurring": bool(r.recurrence_rule),
+        }
         if r.description:
-            lines.append(f"   {r.description}")
-        lines.append(f"   ID: `{r.id}`")
-    return "\n".join(lines)
+            description, description_truncated = bounded_text(r.description, MAX_SUMMARY_CHARS)
+            record["description"] = description
+            record["description_truncated"] = description_truncated
+        records.append(record)
+    return render_retrieved_records("list_reminders", records, len(reminders))
 
 
 @closes_sessions

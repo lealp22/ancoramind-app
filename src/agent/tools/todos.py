@@ -15,6 +15,13 @@ from agno.run import RunContext
 from pydantic import ValidationError
 
 from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.untrusted_results import (
+    MAX_RESULT_RECORDS,
+    MAX_SUMMARY_CHARS,
+    MAX_TITLE_CHARS,
+    bounded_text,
+    render_retrieved_records,
+)
 from src.agent.tools.validation import (
     internal_error_reply,
     invalid_proposal_reply,
@@ -26,8 +33,6 @@ from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
 from src.repositories.todos import TodosRepository
 from src.security.user_context import UserContext
-
-_PRIORITY_ICONS = {"high": "🔴", "normal": "🟡", "low": "🟢"}
 
 
 async def _get_todos_service() -> TodosService:
@@ -53,17 +58,22 @@ def _parse_due_date(value: str | None) -> datetime | str | None:
         return f"Fecha no válida: {value}. Usa formato ISO 8601 (YYYY-MM-DD)."
 
 
-def _format_list_line(list_id: UUID, name: str) -> str:
-    return f"📋 **{name}** — `{list_id}`"
-
-
-def _format_item_line(item: TodoItem) -> str:
-    icon = "✅" if item.status == "done" else "⏳"
-    priority = _PRIORITY_ICONS.get(item.priority or "", "")
-    due = f" — 📅 {item.due_date.strftime('%Y-%m-%d')}" if item.due_date else ""
-    description = f"\n   {item.description}" if item.description else ""
-    priority_text = f"{priority} " if priority else ""
-    return f"{icon} {priority_text}**{item.title}** `{item.id}` [{item.status}]{due}{description}"
+def _todo_item_record(item: TodoItem) -> dict[str, object]:
+    title, title_truncated = bounded_text(item.title, MAX_TITLE_CHARS)
+    record: dict[str, object] = {
+        "source": "todo_item",
+        "id": str(item.id),
+        "title": title,
+        "title_truncated": title_truncated,
+        "status": item.status,
+        "priority": item.priority,
+        "due_date": item.due_date.strftime("%Y-%m-%d") if item.due_date else None,
+    }
+    if item.description:
+        description, description_truncated = bounded_text(item.description, MAX_SUMMARY_CHARS)
+        record["description"] = description
+        record["description_truncated"] = description_truncated
+    return record
 
 
 async def _create_proposal(
@@ -100,15 +110,24 @@ async def list_todo_lists(run_context: RunContext) -> str:
             '(ej. "Crea una lista Trabajo").'
         )
 
-    lines = [f"📋 **Tus listas TODO** ({len(lists)}):\n"]
-    for todo_list in lists:
+    bounded_lists = lists[:MAX_RESULT_RECORDS]
+    records: list[dict[str, object]] = []
+    for todo_list in bounded_lists:
         items = await service.list_items(user_context, todo_list.id)
         pending = sum(1 for item in (items or []) if item.status == "pending")
         total = len(items or [])
-        lines.append(
-            f"{_format_list_line(todo_list.id, todo_list.name)} — {pending}/{total} pendientes"
+        name, name_truncated = bounded_text(todo_list.name, MAX_TITLE_CHARS)
+        records.append(
+            {
+                "source": "todo_list",
+                "id": str(todo_list.id),
+                "name": name,
+                "name_truncated": name_truncated,
+                "pending_count": pending,
+                "total_count": total,
+            }
         )
-    return "\n".join(lines)
+    return render_retrieved_records("list_todo_lists", records, len(lists))
 
 
 @closes_sessions
@@ -291,9 +310,8 @@ async def list_todo_items(
         return f"No se encontró la lista `{list_id}`."
     if not items:
         return "La lista no tiene tareas con esos filtros. 📭"
-    lines = [f"📋 **Tareas** ({len(items)}):\n"]
-    lines.extend(_format_item_line(item) for item in items)
-    return "\n".join(lines)
+    records = [_todo_item_record(item) for item in items[:MAX_RESULT_RECORDS]]
+    return render_retrieved_records("list_todo_items", records, len(items))
 
 
 @closes_sessions

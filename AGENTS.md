@@ -17,10 +17,12 @@ recordatorios y eventos, con trazabilidad completa.
 - **Lenguaje:** Python 3.12+
 - **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO +
   recurrencia/snooze (BL-41/specs/024) + extracción determinista de PDF con
-  capa de texto (BL-38 Fase 1/specs/021). 693 unit tests + 94 integration
-  tests; los integration requieren PostgreSQL/Docker
-  (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios; ambos son
-  gates globales en CI.
+  capa de texto (BL-38 Fase 1/specs/021) + adaptador físico de evals sin
+  inferencia real (BL-8/specs/018 T6) + frontera `untrusted_results`
+  extendida a vehículos/recordatorios/calendario/TODOs (BL-39/specs/022 T8).
+  723 unit tests + 94 integration tests; los integration requieren
+  PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
+  limpios; ambos son gates globales en CI.
 
 ---
 

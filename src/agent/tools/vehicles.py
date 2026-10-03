@@ -9,8 +9,15 @@ from agno.run import RunContext
 from pydantic import ValidationError
 
 from src.agent.tools.sessions import closes_sessions, track_session
+from src.agent.tools.untrusted_results import (
+    MAX_RESULT_RECORDS,
+    MAX_SUMMARY_CHARS,
+    MAX_TITLE_CHARS,
+    bounded_text,
+    render_retrieved_records,
+)
 from src.agent.tools.validation import internal_error_reply, parse_optional_uuid
-from src.domain.vehicles.models import VehicleCreate
+from src.domain.vehicles.models import Vehicle, VehicleCreate, VehicleMaintenance
 from src.domain.vehicles.service import VehicleService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -27,6 +34,29 @@ async def _get_vehicle_service() -> VehicleService:
 async def _get_actions_repo() -> ActionProposalsRepository:
     session = track_session(await get_session())
     return ActionProposalsRepository(session)
+
+
+def _vehicle_record(v: Vehicle) -> dict[str, object]:
+    """Bound and label a vehicle's free-text fields (make/model/nickname/plate)."""
+    display_name, display_name_truncated = bounded_text(v.display_name, MAX_TITLE_CHARS)
+    make, make_truncated = bounded_text(v.make, MAX_TITLE_CHARS)
+    model, model_truncated = bounded_text(v.model, MAX_TITLE_CHARS)
+    record: dict[str, object] = {
+        "source": "vehicle",
+        "id": str(v.id),
+        "display_name": display_name,
+        "display_name_truncated": display_name_truncated,
+        "make": make,
+        "make_truncated": make_truncated,
+        "model": model,
+        "model_truncated": model_truncated,
+        "year": v.year,
+    }
+    if v.registration:
+        registration, registration_truncated = bounded_text(v.registration, MAX_TITLE_CHARS)
+        record["registration"] = registration
+        record["registration_truncated"] = registration_truncated
+    return record
 
 
 @closes_sessions
@@ -46,26 +76,42 @@ async def find_vehicle(run_context: RunContext, reference: str | None = None) ->
     result = await service.find_vehicle(user_ctx, reference)
 
     if result.status == "found" and result.vehicle:
-        v = result.vehicle
-        lines = [
-            f"🚗 **{v.display_name}**",
-            f"   ID: `{v.id}`",
-            f"   Marca: {v.make} | Modelo: {v.model}",
-        ]
-        if v.year:
-            lines.append(f"   Año: {v.year}")
-        if v.registration:
-            lines.append(f"   Matrícula: {v.registration}")
-        return "\n".join(lines)
+        return render_retrieved_records("find_vehicle", [_vehicle_record(result.vehicle)], 1)
 
     if result.status == "ambiguous":
-        lines = [result.message, ""]
-        for i, v in enumerate(result.candidates, 1):
-            extra = f" ({v.registration})" if v.registration else ""
-            lines.append(f"  {i}. {v.display_name}{extra} — `{v.id}`")
-        return "\n".join(lines)
+        candidates = result.candidates[:MAX_RESULT_RECORDS]
+        records = [_vehicle_record(v) for v in candidates]
+        return render_retrieved_records("find_vehicle", records, len(result.candidates))
 
     return result.message
+
+
+def _maintenance_record(m: VehicleMaintenance) -> dict[str, object]:
+    """Bound and label a maintenance entry's free-text fields (invoice-origin)."""
+    description, description_truncated = bounded_text(m.description, MAX_SUMMARY_CHARS)
+    record: dict[str, object] = {
+        "source": "vehicle_maintenance",
+        "id": str(m.id),
+        "date": m.date.isoformat(),
+        "mileage_km": m.mileage_km,
+        "description": description,
+        "description_truncated": description_truncated,
+    }
+    if m.workshop:
+        workshop, workshop_truncated = bounded_text(m.workshop, MAX_TITLE_CHARS)
+        record["workshop"] = workshop
+        record["workshop_truncated"] = workshop_truncated
+    if m.cost:
+        cost, cost_truncated = bounded_text(m.cost, MAX_TITLE_CHARS)
+        record["cost"] = cost
+        record["cost_truncated"] = cost_truncated
+    if m.work_performed:
+        work_performed, work_performed_truncated = bounded_text(
+            ", ".join(m.work_performed), MAX_SUMMARY_CHARS
+        )
+        record["work_performed"] = work_performed
+        record["work_performed_truncated"] = work_performed_truncated
+    return record
 
 
 @closes_sessions
@@ -91,33 +137,12 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
     if not summary:
         return f"Vehículo no encontrado: {vehicle_id}"
 
-    v = summary.vehicle
-    lines = [
-        f"🚗 **{v.display_name}**",
-        f"   ID: `{v.id}`",
-        f"   {v.make} {v.model}"
-        + (f" ({v.year})" if v.year else "")
-        + (f" — {v.registration}" if v.registration else ""),
-        f"   Total intervenciones: {summary.total_maintenance_count}",
-    ]
-
-    if summary.last_maintenance:
-        m = summary.last_maintenance
-        lines.append("\n🔧 **Último mantenimiento:**")
-        lines.append(f"   Fecha: {m.date}")
-        if m.mileage_km:
-            lines.append(f"   Kilometraje: {m.mileage_km:,} km")
-        lines.append(f"   {m.description}")
-        if m.workshop:
-            lines.append(f"   Taller: {m.workshop}")
-        if m.cost:
-            lines.append(f"   Importe: {m.cost}")
-        if m.work_performed:
-            lines.append(f"   Trabajos: {', '.join(m.work_performed)}")
-    else:
-        lines.append("\n   Sin historial de mantenimiento.")
-
-    return "\n".join(lines)
+    record = _vehicle_record(summary.vehicle)
+    record["total_maintenance_count"] = summary.total_maintenance_count
+    record["last_maintenance"] = (
+        _maintenance_record(summary.last_maintenance) if summary.last_maintenance else None
+    )
+    return render_retrieved_records("get_vehicle_summary", [record], 1)
 
 
 @closes_sessions
@@ -277,10 +302,7 @@ async def get_vehicle_maintenance_history(run_context: RunContext, vehicle_id: s
     if not records:
         return "No hay registros de mantenimiento para este vehículo."
 
-    lines = [f"🔧 **Historial de mantenimiento** ({len(records)} intervenciones):\n"]
-    for m in records:
-        km = f" — {m.mileage_km:,} km" if m.mileage_km else ""
-        cost = f" — {m.cost}" if m.cost else ""
-        lines.append(f"- **{m.date}**{km}: {m.description}{cost}")
-
-    return "\n".join(lines)
+    bounded_records = [_maintenance_record(m) for m in records[:MAX_RESULT_RECORDS]]
+    return render_retrieved_records(
+        "get_vehicle_maintenance_history", bounded_records, len(records)
+    )

@@ -10,6 +10,10 @@ MAX_RESULT_RECORDS = 10
 MAX_NOTE_CHARS = 1200
 MAX_FILENAME_CHARS = 255
 MAX_SUMMARY_CHARS = 1200
+#: Short free-text fields (vehicle make/model/nickname, reminder/event
+#: title, TODO list name...). Same bound as MAX_FILENAME_CHARS, named for
+#: readability at the call site.
+MAX_TITLE_CHARS = 255
 
 
 def bounded_text(value: str, limit: int) -> tuple[str, bool]:
