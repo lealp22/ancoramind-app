@@ -129,7 +129,7 @@ requires_confirmation: true
 | **READ** | Solo consulta | `get_vehicle_summary` |
 | **WRITE** | Modifica datos canónicos | `register_vehicle_maintenance` |
 | **EXTERNAL_ACTION** | Actúa fuera del sistema | `create_calendar_event` |
-| **DESTRUCTIVE** | Elimina datos | `delete_document` |
+| **DESTRUCTIVE** | Elimina datos | `execute_document_delete` |
 
 ### Matriz de confirmación
 
@@ -141,7 +141,7 @@ requires_confirmation: true
 | `register_vehicle_maintenance` | WRITE | Sí |
 | `create_reminder` | WRITE | Sí |
 | `create_calendar_event` | EXTERNAL_ACTION | Sí |
-| `delete_document` | DESTRUCTIVE | Sí |
+| `execute_document_delete` | DESTRUCTIVE | Sí |
 
 ---
 

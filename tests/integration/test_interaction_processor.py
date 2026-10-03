@@ -335,6 +335,62 @@ async def _accepted_callback(
     return result.interaction.id
 
 
+async def _accepted_command_interaction(
+    session: AsyncSession,
+    cipher: TelegramPayloadCipher,
+    update_id: int,
+    *,
+    command: str = "/new",
+) -> UUID:
+    encrypted = cipher.encrypt({"update_id": update_id, "text": command})
+    result = await TelegramInteractionsRepository(session).admit(
+        TelegramInteractionCreate(
+            bot_id=41,
+            telegram_update_id=update_id,
+            telegram_message_id=update_id + 1,
+            chat_id=77,
+            telegram_user_id=88,
+            update_type="message",
+            payload_ciphertext=encrypted.ciphertext,
+            payload_key_version=encrypted.key_version,
+            payload_fingerprint=encrypted.fingerprint,
+        ),
+        TelegramDeliveryCreate(railway_request_id=f"delivery-{update_id}", http_status=200),
+    )
+    return result.interaction.id
+
+
+async def test_new_command_discards_pending_proposals_of_the_chat(
+    session: AsyncSession,
+) -> None:
+    """specs/023 T4.8 + consent-design.md: /new invalidates pending proposals."""
+    cipher = _cipher()
+    await _accepted_interaction(session, cipher, update_id=701)
+    runner = ProposingRunner()
+    sender = FakeSender()
+    processor = InteractionProcessor(
+        session_factory=get_session,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+        governed_consent=True,
+    )
+
+    assert await processor.run_once() == 1
+    assert runner.proposal_id is not None
+
+    await _accepted_command_interaction(session, cipher, update_id=702, command="/new")
+    assert await processor.run_once() == 1
+
+    status = (
+        await session.execute(
+            text("SELECT status FROM ancora.action_proposals WHERE id = :id"),
+            {"id": runner.proposal_id},
+        )
+    ).scalar_one()
+    assert status == "discarded"
+
+
 async def test_governed_consent_button_claims_the_proposal_it_presented(
     session: AsyncSession,
 ) -> None:

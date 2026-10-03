@@ -301,7 +301,7 @@ def get_vehicle_summary(vehicle_reference: str | None = None):
 |---|---|---|
 | **Utility** | `get_current_datetime` | READ |
 | **Memory** | `propose_note`, `execute_note`, `search_notes` | WRITE/READ |
-| **Documents** | `get_document`, `search_documents`, `analyze_document`, `delete_document` | READ/DESTRUCTIVE |
+| **Documents** | `get_document`, `search_documents`, `analyze_document`, `propose_document_delete`, `execute_document_delete` | READ/DESTRUCTIVE |
 | **Vehicles** | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history`, `register_vehicle_maintenance` | READ/WRITE |
 | **Reminders** | `create_reminder` | WRITE |
 | **Calendar** | `check_calendar`, `create_calendar_event` | READ/EXTERNAL_ACTION |

@@ -140,7 +140,24 @@
       - 6 tests unitarios nuevos + 1 ajustado (schema de Agno).
       - Resultados: `ruff` y `mypy src/` limpios; unit 609 passed;
         integration 93 passed.
-- [ ] T4.7–T4.9 pendientes. Ver también
+- [x] T4.7 implementada además de aprobada (2026-10-02):
+      - `propose_document_delete`/`execute_document_delete` nuevas (DESTRUCTIVE,
+        propose/confirm). Registradas en `_init_domain_tools()` (33→35 tools).
+      - `prompts/skills/documents.md`, `README.md`, `docs/architecture.md`,
+        `docs/governance.md`, `AGENTS.md` actualizados.
+      - Resultados: `ruff` y `mypy src/` limpios; unit 614 passed;
+        integration 94 passed.
+- [x] T4.8 implementada y verificada localmente (2026-10-02):
+      - 8 tests parametrizados (`TestExecuteWithoutAConfirmedProposal`) cubren
+        los 8 `execute_*` existentes contra `confirm_or_use_confirmed`
+        devolviendo `None`.
+      - **Hallazgo real:** `/new` no invocaba `discard_pending_for_chat`
+        (existía desde T4.1 pero sin caller). Corregido en
+        `_handle_command`/`_discard_pending_proposals_for_chat`
+        (`processor.py`), con test de integración end-to-end nuevo.
+      - Resultados: `ruff` y `mypy src/` limpios; unit 622 passed;
+        integration 94 passed.
+- [ ] T4.9 pendiente. Ver también
       `specs/022-llm-input-trust/verification.md`.
 
 ## Fase 5 — Zona horaria

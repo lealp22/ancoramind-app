@@ -350,11 +350,40 @@ mensaje de error expone detalle interno.
       `_init_domain_tools()`, actualizar `prompts/skills/documents.md` y
       `README.md` (tabla de capabilities). Esto cubre el caso "no quiero
       esto guardado" sin penalizar el caso común.
-- [ ] T4.8 · Unit + integration tests parametrizados por cada `execute_*`
-      (incluido `execute_document_delete`) y rama TODO: replay del mismo
-      update, confirmaciones concurrentes, propuesta no presentada/expirada,
-      `Sí` sin vigentes, `Sí` con 2+, usuario/chat/bot cruzado, `/new`
-      invalidando propuestas del chat.
+      **Implementado (2026-10-02):** `propose_document_delete` valida el
+      UUID y la propiedad del documento (vía `get_document`) antes de crear
+      la propuesta; `execute_document_delete` usa `confirm_or_use_confirmed`
+      (igual que T4.5/T4.6) y solo entonces llama a
+      `DocumentService.delete_document`. Registradas en `_init_domain_tools()`
+      (33→35 tools totales); `prompts/skills/documents.md`, `README.md`,
+      `docs/architecture.md` y `docs/governance.md` actualizados.
+- [x] T4.8 · **Implementado (2026-10-02).** Unit + integration tests
+      parametrizados por cada `execute_*` (incluido `execute_document_delete`)
+      y rama TODO: `TestExecuteWithoutAConfirmedProposal` en
+      `tests/unit/test_tool_sessions_and_errors.py` (8 casos — reminder,
+      calendar, maintenance, vehicle, todo list, todo item, note, document
+      delete — todos verifican que `confirm_or_use_confirmed` devolviendo
+      `None` deja el servicio sin invocar). Las ramas de carrera real
+      (confirmaciones concurrentes, un solo ganador, propuesta no
+      presentada/expirada, usuario/chat/bot cruzado) ya estaban cubiertas en
+      `tests/integration/test_proposal_consent.py` (T4.1/T4.2, PostgreSQL
+      real) y no se duplican aquí.
+      **Hueco real encontrado y cerrado:** `/new` nunca invocaba
+      `discard_pending_for_chat` — el método existía en el repositorio
+      (T4.1) pero `_handle_command` no lo llamaba, así que una propuesta
+      pendiente seguía siendo confirmable con «Sí» tras resetear la
+      conversación, contradiciendo `consent-design.md` ("`/new` invalida
+      pendientes"). Añadido `_discard_pending_proposals_for_chat` en
+      `processor.py`, invocado desde `_handle_command` cuando
+      `handling.resets_session` y `governed_consent` están activos
+      (best-effort: un fallo no bloquea la respuesta de `/new`, la ventana
+      de 15 minutos sigue siendo la red de seguridad). Nuevo test de
+      integración end-to-end
+      `test_new_command_discards_pending_proposals_of_the_chat` en
+      `tests/integration/test_interaction_processor.py` (propone, `/new`,
+      verifica `status='discarded'` en PostgreSQL real).
+      Resultados: 622 unit + 94 integration passing; `ruff`/`mypy src/`
+      limpios.
 - [ ] T4.9 · `ruff check`, `mypy src/`, `pytest tests/unit/` y
       `tests/integration/` en verde. Actualizar
       `specs/022-llm-input-trust/tasks.md`/`verification.md`.

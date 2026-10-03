@@ -41,6 +41,12 @@ Estas reglas vienen del brief de ingeniería. **No violarlas aunque parezca más
    `propose_*` crea propuesta `pending_confirmation` → usuario confirma ("Sí")
    → `execute_*` valida, ejecuta y audita. Ejemplos:
    `propose_vehicle_maintenance` / `execute_vehicle_maintenance`.
+   **Excepción aprobada (specs/023 T4.7, 2026-10-02):** `analyze_document`/
+   `DocumentService.ingest` siguen siendo automáticos — enviar un adjunto ya
+   es la señal de intención de guardarlo; pedir confirmación añadiría
+   fricción innecesaria para el caso común. A cambio existe
+   `propose_document_delete`/`execute_document_delete` (DESTRUCTIVE,
+   gobernado) para el caso "no quiero esto guardado".
 
 5. **SQL siempre parametrizado.** Solo `sqlalchemy.text()` con bind params.
    Nunca interpolación de strings. Toda query scoped por `user_id`.

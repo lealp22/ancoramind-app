@@ -523,6 +523,8 @@ class InteractionProcessor:
                 chat_id,
                 await self._stored_session_id(chat_id),
             )
+            if self._governed_consent and interaction.telegram_user_id is not None:
+                await self._discard_pending_proposals_for_chat(interaction)
         encrypted = self._payload_cipher.encrypt({"content": handling.reply_text})
         chunks = split_telegram_message(handling.reply_text)
         response = await self._persist_command_reply(
@@ -571,6 +573,34 @@ class InteractionProcessor:
         return await self._deliver_response(
             interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
         )
+
+    async def _discard_pending_proposals_for_chat(
+        self, interaction: TelegramInteraction
+    ) -> None:
+        """Invalidate every pending proposal of this chat on ``/new`` (consent-design).
+
+        ``/new`` does not revive or renew proposals: resetting the conversation
+        must not leave a stale proposal confirmable from a thread the user no
+        longer sees. Best-effort — a failure here must not block the ``/new``
+        reply itself (the window still expires on its own after 15 minutes).
+        """
+        if interaction.chat_id is None or interaction.telegram_user_id is None:
+            return  # pragma: no cover - caller already checked
+        principal = ConsentPrincipal(
+            user_id=str(interaction.telegram_user_id),
+            bot_id=interaction.bot_id,
+            chat_id=interaction.chat_id,
+        )
+        session = await self._session_factory()
+        try:
+            await ActionProposalsRepository(session).discard_pending_for_chat(principal)
+            await session.commit()
+        except Exception:
+            logger.warning(
+                "Failed to discard pending proposals on /new", exc_info=True
+            )
+        finally:
+            await session.close()
 
     async def _handle_consent_input(
         self, interaction: TelegramInteraction, input_text: str

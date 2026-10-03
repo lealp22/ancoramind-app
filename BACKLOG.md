@@ -29,10 +29,10 @@
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.6 hechas, T4.7 decidida, T4.8–T4.9 pendientes; Fases 5–6 pendientes — specs/023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fase 4: T4.1–T4.8 hechas, T4.9 pendiente; Fases 5–6 pendientes — specs/023 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 609 unit + 93 integration — Ruff y `mypy src/` limpios en
+Tests: 622 unit + 94 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -153,8 +153,24 @@ confirmación — era la última excepción a la regla WRITE de AGENTS.md §2.4.
 Sustituida por `propose_note`/`execute_note` con el mismo patrón que el
 resto de tools: proponer no escribe, ejecutar exige confirmación (vía
 `confirm_or_use_confirmed`, igual que T4.5). 32→33 tools registradas.
-609 unit + 93 integration passing. **Pendiente:** T4.8–T4.9 (inventario
-completo de tests de carrera y actualización final de specs/022).
+609 unit + 93 integration passing.
+
+**Fase 4 — T4.7/T4.8 implementadas localmente (2026-10-02):** el hueco real
+de T4.7 (no existía ninguna tool para borrar un documento) se cerró con
+`propose_document_delete`/`execute_document_delete` (DESTRUCTIVE,
+propose/confirm). 33→35 tools registradas; `prompts/skills/documents.md`,
+`README.md`, `docs/architecture.md`, `docs/governance.md` y `AGENTS.md`
+actualizados. T4.8 añadió 8 tests parametrizados que confirman que cada
+`execute_*` (incluyendo las dos tools nuevas) se niega a mutar cuando
+`confirm_or_use_confirmed` devuelve `None`; las ramas de carrera real ya
+estaban cubiertas por T4.1/T4.2 contra PostgreSQL. Al revisar el inventario
+de `consent-design.md` se encontró que **`/new` nunca invalidaba las
+propuestas pendientes del chat**: `discard_pending_for_chat` existía desde
+T4.1 pero `_handle_command` no lo llamaba, dejando una propuesta confirmable
+con «Sí» tras resetear la conversación. Corregido (best-effort, no bloquea
+la respuesta de `/new`) con un test de integración end-to-end nuevo.
+622 unit + 94 integration passing. **Pendiente:** T4.9 (verificación final
+en verde + actualizar specs/022).
 
 **Prioridad P0** junto a BL-39 (fase 4 es su implementación pendiente).
 Ver `specs/023-audit-remediation/`.

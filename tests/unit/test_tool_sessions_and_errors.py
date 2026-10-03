@@ -10,7 +10,7 @@ import pytest
 from agno.run import RunContext
 from agno.tools.function import Function
 
-from src.agent.tools import calendar, maintenance, notes, reminders, todos, vehicles
+from src.agent.tools import calendar, documents, maintenance, notes, reminders, todos, vehicles
 from src.agent.tools.sessions import closes_sessions, track_session
 from src.agent.tools.validation import (
     INTERNAL_ERROR,
@@ -157,6 +157,141 @@ class TestSafeErrorReplies:
 
         assert reply == INVALID_PROPOSAL_DATA
         assert "title" not in reply
+
+
+class TestExecuteWithoutAConfirmedProposal:
+    """specs/023 T4.8: every execute_* must refuse to mutate without a claim.
+
+    ``confirm_or_use_confirmed`` returning ``None`` models not found / already
+    resolved / expired alike (the repository collapses all three to ``None``).
+    Each case asserts the service's mutating method is never awaited.
+    """
+
+    async def test_execute_reminder_without_proposal_does_not_create(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(reminders, "get_session", AsyncMock(return_value=_FakeSession()))
+        monkeypatch.setattr(reminders, "ActionProposalsRepository", lambda _s: actions)
+        monkeypatch.setattr(reminders, "RemindersRepository", lambda _s: object())
+        monkeypatch.setattr(reminders, "ReminderService", lambda *_args: service)
+
+        reply = await reminders.execute_reminder(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.create_reminder.assert_not_awaited()
+
+    async def test_execute_calendar_event_without_proposal_does_not_create(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(calendar, "get_session", AsyncMock(return_value=_FakeSession()))
+        monkeypatch.setattr(calendar, "ActionProposalsRepository", lambda _s: actions)
+        monkeypatch.setattr(calendar, "CalendarRepository", lambda _s: object())
+        monkeypatch.setattr(calendar, "CalendarService", lambda *_args: service)
+
+        reply = await calendar.execute_calendar_event(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.create_event.assert_not_awaited()
+
+    async def test_execute_vehicle_maintenance_without_proposal_does_not_register(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(maintenance, "get_session", AsyncMock(return_value=_FakeSession()))
+        monkeypatch.setattr(maintenance, "ActionProposalsRepository", lambda _s: actions)
+        monkeypatch.setattr(maintenance, "VehiclesRepository", lambda _s: object())
+        monkeypatch.setattr(maintenance, "MaintenanceRepository", lambda _s: object())
+        monkeypatch.setattr(maintenance, "VehicleService", lambda *_args: service)
+
+        reply = await maintenance.execute_vehicle_maintenance(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.register_maintenance.assert_not_awaited()
+
+    async def test_execute_vehicle_without_proposal_does_not_register(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(vehicles, "get_session", AsyncMock(return_value=_FakeSession()))
+        monkeypatch.setattr(vehicles, "ActionProposalsRepository", lambda _s: actions)
+        monkeypatch.setattr(vehicles, "VehiclesRepository", lambda _s: object())
+        monkeypatch.setattr(vehicles, "MaintenanceRepository", lambda _s: object())
+        monkeypatch.setattr(vehicles, "VehicleService", lambda *_args: service)
+
+        reply = await vehicles.execute_vehicle(_run_context(), PROPOSAL_ID)
+
+        assert "NO la inventes" in reply
+        service.register_vehicle.assert_not_awaited()
+
+    async def test_execute_todo_list_without_proposal_does_not_mutate(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(todos, "_get_actions_repo", AsyncMock(return_value=actions))
+        monkeypatch.setattr(todos, "_get_todos_service", AsyncMock(return_value=service))
+
+        reply = await todos.execute_todo_list(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.create_list.assert_not_awaited()
+        service.rename_list.assert_not_awaited()
+        service.delete_list.assert_not_awaited()
+
+    async def test_execute_todo_item_without_proposal_does_not_mutate(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(todos, "_get_actions_repo", AsyncMock(return_value=actions))
+        monkeypatch.setattr(todos, "_get_todos_service", AsyncMock(return_value=service))
+
+        reply = await todos.execute_todo_item(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.add_item.assert_not_awaited()
+        service.update_item.assert_not_awaited()
+        service.set_item_status.assert_not_awaited()
+        service.move_item.assert_not_awaited()
+        service.delete_item.assert_not_awaited()
+
+    async def test_execute_note_without_proposal_does_not_write(self, monkeypatch) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(notes, "_get_actions_repo", AsyncMock(return_value=actions))
+        monkeypatch.setattr(notes, "_get_notes_service", AsyncMock(return_value=service))
+
+        reply = await notes.execute_note(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.remember.assert_not_awaited()
+
+    async def test_execute_document_delete_without_proposal_does_not_delete(
+        self, monkeypatch
+    ) -> None:
+        actions = AsyncMock()
+        actions.confirm_or_use_confirmed.return_value = None
+        service = AsyncMock()
+        monkeypatch.setattr(documents, "_get_actions_repo", AsyncMock(return_value=actions))
+        monkeypatch.setattr(documents, "_get_document_service", AsyncMock(return_value=service))
+
+        reply = await documents.execute_document_delete(_run_context(), PROPOSAL_ID)
+
+        assert "no está pendiente" in reply
+        service.delete_document.assert_not_awaited()
 
 
 class TestUuidValidation:

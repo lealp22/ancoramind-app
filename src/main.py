@@ -95,12 +95,25 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
 
         from src.agent.tools.documents import (
             analyze_document,
+            execute_document_delete,
             get_document,
+            propose_document_delete,
             search_documents,
         )
 
-        tools.extend([search_documents, get_document, analyze_document])
-        logger.info("Document tools registered: search_documents, get_document, analyze_document")
+        tools.extend(
+            [
+                search_documents,
+                get_document,
+                analyze_document,
+                propose_document_delete,
+                execute_document_delete,
+            ]
+        )
+        logger.info(
+            "Document tools registered: search_documents, get_document, analyze_document, "
+            "propose_document_delete, execute_document_delete"
+        )
 
         from src.agent.tools.maintenance import (
             execute_vehicle_maintenance,

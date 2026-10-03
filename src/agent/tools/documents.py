@@ -20,7 +20,9 @@ from src.agent.tools.untrusted_results import (
     bounded_text,
     render_retrieved_records,
 )
+from src.agent.tools.validation import internal_error_reply, invalid_proposal_reply, parse_uuid
 from src.domain.documents.service import DocumentService
+from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
 from src.repositories.documents import DocumentsRepository
 from src.security.user_context import UserContext
@@ -63,6 +65,12 @@ async def _get_document_service() -> DocumentService:
             standalone_llm_access=standalone_llm_access,
         ),
     )
+
+
+async def _get_actions_repo() -> ActionProposalsRepository:
+    session = track_session(await get_session())
+    return ActionProposalsRepository(session)
+
 
 
 @closes_sessions
@@ -263,3 +271,71 @@ async def analyze_document(
         results.append("\n".join(lines))
 
     return "\n\n".join(results)
+
+
+@closes_sessions
+async def propose_document_delete(run_context: RunContext, document_id: str) -> str:
+    """PROPOSE deleting a stored document and its extraction — requires confirmation.
+
+    Use when the user wants to remove a document they previously sent:
+    - "Borra la factura del taller"
+    - "Elimina ese documento, no quiero que lo guardes"
+
+    Args:
+        run_context: Injected by Agno.
+        document_id: The document UUID (from search_documents/get_document results).
+    """
+    user_ctx = UserContext.from_run_context(run_context)
+    parsed_id = parse_uuid(document_id, "documento")
+    if isinstance(parsed_id, str):
+        return parsed_id
+
+    service = await _get_document_service()
+    result = await service.get_document(user_ctx, parsed_id)
+    if not result:
+        return f"No se encontró el documento `{document_id}`."
+
+    filename, _ = bounded_text(result.document.original_filename, MAX_FILENAME_CHARS)
+    actions_repo = await _get_actions_repo()
+    proposal = await actions_repo.create(
+        user_id=user_ctx.user_id,
+        tool_name="delete_document",
+        payload={"document_id": str(parsed_id)},
+    )
+    return (
+        f"🗑️ **Propuesta de borrado** (`{proposal['id']}`)\n"
+        f"   Documento: {filename}\n"
+        "\n¿Confirmas que lo elimine? Esta acción no se puede deshacer."
+    )
+
+
+@closes_sessions
+async def execute_document_delete(run_context: RunContext, proposal_id: str) -> str:
+    """Execute a confirmed document-delete proposal.
+
+    Only call after the user explicitly confirmed ('Sí').
+
+    Args:
+        run_context: Injected by Agno.
+        proposal_id: Proposal ID from propose_document_delete.
+    """
+    user_ctx = UserContext.from_run_context(run_context)
+    actions_repo = await _get_actions_repo()
+    proposal = await actions_repo.confirm_or_use_confirmed(user_ctx.user_id, proposal_id)
+    if not proposal:
+        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
+
+    payload = proposal["payload"]
+    service = await _get_document_service()
+    try:
+        document_id = UUID(payload["document_id"])
+        deleted = await service.delete_document(user_ctx, document_id)
+        if not deleted:
+            return f"No se encontró el documento `{payload['document_id']}`."
+        await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
+        return f"✅ Documento eliminado (`{payload['document_id']}`)."
+    except (KeyError, TypeError, ValueError) as e:
+        return invalid_proposal_reply("execute_document_delete", e)
+    except Exception as e:
+        return internal_error_reply("execute_document_delete", e)
+
