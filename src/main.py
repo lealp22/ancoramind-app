@@ -147,8 +147,10 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         )
         from src.agent.tools.reminders import (
             execute_reminder,
+            execute_reminder_snooze,
             list_reminders,
             propose_reminder,
+            propose_reminder_snooze,
         )
 
         tools.extend(
@@ -156,6 +158,8 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
                 list_reminders,
                 propose_reminder,
                 execute_reminder,
+                propose_reminder_snooze,
+                execute_reminder_snooze,
                 check_calendar,
                 propose_calendar_event,
                 execute_calendar_event,
@@ -163,7 +167,8 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         )
         logger.info(
             "Reminder + Calendar tools registered: list/propose/execute_reminder, "
-            "check_calendar, propose/execute_calendar_event"
+            "propose/execute_reminder_snooze, check_calendar, "
+            "propose/execute_calendar_event"
         )
 
         from src.agent.tools.todos import (

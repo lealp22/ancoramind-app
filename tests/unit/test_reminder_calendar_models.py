@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from src.domain.calendar.models import CalendarEvent, CalendarEventCreate
 from src.domain.reminders.models import Reminder, ReminderCreate
+from src.domain.shared.recurrence import RecurrenceFrequency, RecurrenceRule
 
 
 class TestReminderCreate:
@@ -37,6 +38,27 @@ class TestReminder:
                      created_at=datetime(2026, 8, 24, tzinfo=UTC))
         assert r.status == "pending"
         assert r.user_id == "u1"
+        assert r.recurrence_rule is None
+        assert r.fired_at is None
+
+    def test_recurrence_rule_accepted_as_dict(self):
+        """JSONB columns come back as a plain dict — Pydantic parses it directly."""
+        r = Reminder(id=uuid4(), user_id="u1", title="t", description=None,
+                     trigger_at=datetime(2026, 8, 28, tzinfo=UTC),
+                     status="pending", source_document_id=None, source_action_id=None,
+                     created_at=datetime(2026, 8, 24, tzinfo=UTC),
+                     recurrence_rule={"frequency": "yearly", "interval": 1, "until": None})
+        assert r.recurrence_rule == RecurrenceRule(frequency=RecurrenceFrequency.YEARLY)
+
+
+class TestReminderCreateRecurrence:
+    def test_recurrence_rule_optional(self):
+        rc = ReminderCreate(
+            title="Cumpleaños", trigger_at=datetime(2026, 5, 10, tzinfo=UTC),
+            recurrence_rule=RecurrenceRule(frequency=RecurrenceFrequency.YEARLY),
+        )
+        assert rc.recurrence_rule is not None
+        assert rc.recurrence_rule.frequency == RecurrenceFrequency.YEARLY
 
 
 class TestCalendarEventCreate:
@@ -64,3 +86,14 @@ class TestCalendarEvent:
                           source_document_id=None,
                           created_at=datetime(2026, 8, 24, tzinfo=UTC))
         assert e.provider_event_id == "noop:test"
+        assert e.recurrence_rule is None
+
+    def test_recurrence_rule_accepted_as_dict(self):
+        e = CalendarEvent(id=uuid4(), user_id="u1", title="Cumpleaños",
+                          description=None, location=None,
+                          start_at=datetime(2026, 3, 15, tzinfo=UTC),
+                          end_at=None, provider_event_id="noop:test",
+                          source_document_id=None,
+                          created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                          recurrence_rule={"frequency": "yearly", "interval": 1, "until": None})
+        assert e.recurrence_rule == RecurrenceRule(frequency=RecurrenceFrequency.YEARLY)

@@ -30,9 +30,10 @@
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
+| BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 643 unit + 94 integration — Ruff y `mypy src/` limpios en
+Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -942,6 +943,30 @@ un cliente de referencia sin Telegram completa conversación, documento,
 consulta READ y propuesta/confirmación WRITE; duplicados ejecutan el Agent como
 máximo una vez; otro usuario no puede leer estado, respuesta, adjuntos ni
 propuestas; tests contract/unit/integration y E2E sobre Railway.
+
+### BL-41 · Recurrencia en calendario/recordatorios + snooze 🔶 implementado localmente — specs/024
+
+Hoy `calendar_events` y `reminders` solo soportan ocurrencias únicas: no existe
+"cada año", "cada semana" ni "cada mes", y un evento de calendario nunca
+dispara un aviso de Telegram (solo lo hacen los recordatorios, totalmente
+desacoplados hoy). Añadir recurrencia simple (frecuencia + intervalo + fin
+opcional, sin RRULE) a ambos dominios: en calendario mediante **expansión
+virtual** en lectura (`check_calendar`), sin materializar ocurrencias futuras
+ni worker nuevo; en recordatorios insertando una fila `pending` nueva tras
+cada disparo exitoso (manteniendo la fila `fired` como auditoría permanente),
+con purga automática de `fired` con más de 90 días como housekeeping del
+propio worker. `propose_calendar_event`/`execute_calendar_event` ganan
+parámetros opcionales para vincular, en la misma propuesta, un recordatorio
+recurrente al evento (resuelve el caso "cumpleaños que avisa cada año" en un
+solo paso). Nuevo par gobernado `propose_reminder_snooze`/
+`execute_reminder_snooze` para posponer un recordatorio ya disparado (1–72h),
+independiente de su recurrencia. **Prioridad P2.**
+
+**Estado:** implementado localmente — 684 unit + 94 integration tests verdes,
+Ruff y `mypy src/` limpios; migración `0007_recurrence_snooze` aplicada.
+Pendiente con el propietario: validación E2E real por Telegram (ver
+`specs/024-recurring-events-reminders/verification.md`). **Criterio de
+cierre:** ver `specs/024-recurring-events-reminders/spec.md` §Success Criteria.
 
 ## P3 — Calidad del agente
 

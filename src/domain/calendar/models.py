@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.domain.shared.recurrence import RecurrenceRule
+
 
 class CalendarEventCreate(BaseModel):
     """Input for creating a calendar event."""
@@ -17,6 +19,7 @@ class CalendarEventCreate(BaseModel):
     description: str | None = None
     location: str | None = None
     source_document_id: UUID | None = None
+    recurrence_rule: RecurrenceRule | None = None
 
     @field_validator("start_at", "end_at")
     @classmethod
@@ -49,5 +52,6 @@ class CalendarEvent(BaseModel):
     provider_event_id: str | None
     source_document_id: UUID | None
     created_at: datetime
+    recurrence_rule: RecurrenceRule | None = None
 
     model_config = {"from_attributes": True}

@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.domain.shared.recurrence import RecurrenceRule
+
 
 class ReminderCreate(BaseModel):
     """Input for creating a reminder."""
@@ -16,6 +18,8 @@ class ReminderCreate(BaseModel):
     trigger_at: datetime
     source_document_id: UUID | None = None
     source_action_id: UUID | None = None
+    recurrence_rule: RecurrenceRule | None = None
+    recurrence_parent_id: UUID | None = None
 
     @field_validator("trigger_at")
     @classmethod
@@ -47,5 +51,8 @@ class Reminder(BaseModel):
     source_document_id: UUID | None
     source_action_id: UUID | None
     created_at: datetime
+    recurrence_rule: RecurrenceRule | None = None
+    recurrence_parent_id: UUID | None = None
+    fired_at: datetime | None = None
 
     model_config = {"from_attributes": True}

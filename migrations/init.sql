@@ -109,10 +109,14 @@ CREATE TABLE IF NOT EXISTS ancora.reminders (
     status VARCHAR(31) NOT NULL DEFAULT 'pending',
     source_document_id UUID REFERENCES ancora.documents(id) ON DELETE SET NULL,
     source_action_id UUID REFERENCES ancora.action_proposals(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    recurrence_rule JSONB,
+    recurrence_parent_id UUID REFERENCES ancora.reminders(id) ON DELETE SET NULL,
+    fired_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_reminders_user_status ON ancora.reminders(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_reminders_trigger_at ON ancora.reminders(trigger_at);
+CREATE INDEX IF NOT EXISTS idx_reminders_fired_at ON ancora.reminders(fired_at) WHERE status = 'fired';
 
 -- Calendar events (M5)
 CREATE TABLE IF NOT EXISTS ancora.calendar_events (
@@ -125,9 +129,11 @@ CREATE TABLE IF NOT EXISTS ancora.calendar_events (
     end_at TIMESTAMPTZ,
     provider_event_id VARCHAR(255),
     source_document_id UUID REFERENCES ancora.documents(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    recurrence_rule JSONB
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_user_start ON ancora.calendar_events(user_id, start_at);
+CREATE INDEX IF NOT EXISTS idx_calendar_recurrence ON ancora.calendar_events(user_id) WHERE recurrence_rule IS NOT NULL;
 
 -- Todo lists (BL-21)
 CREATE TABLE IF NOT EXISTS ancora.todo_lists (

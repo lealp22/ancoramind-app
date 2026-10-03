@@ -15,8 +15,9 @@ recordatorios y eventos, con trazabilidad completa.
 - **Canal:** Telegram (solo private chats)
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
-- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO. 643 unit
-  tests + 94 integration tests; los integration requieren PostgreSQL/Docker
+- **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO +
+  recurrencia/snooze (BL-41/specs/024). 684 unit tests + 94 integration tests;
+  los integration requieren PostgreSQL/Docker
   (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios; ambos son
   gates globales en CI.
 
@@ -141,7 +142,10 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             implementar — BL-38), 022-llm-input-trust (primer
                             incremento local — BL-39),
                             023-audit-remediation (Fases 1–5 implementadas
-                            localmente; Fase 6 en curso — BL-40)
+                            localmente; Fase 6 en curso — BL-40),
+                            024-recurring-events-reminders (eventos y
+                            recordatorios recurrentes + snooze — en curso,
+                            BL-41)
 tests/unit/              ← 643 tests
 tests/integration/        ← 94 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
