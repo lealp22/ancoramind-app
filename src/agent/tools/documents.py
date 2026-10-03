@@ -11,7 +11,12 @@ from uuid import UUID
 from agno.media import File, Image
 from agno.run import RunContext
 
-from src.agent.document_vision import DocumentVisionPreparationError, prepare_visual_pages
+from src.agent.document_vision import (
+    DocumentVisionPreparationError,
+    extract_pdf_text_markdown,
+    has_extractable_text,
+    prepare_visual_pages,
+)
 from src.agent.tools.sessions import closes_sessions, track_session
 from src.agent.tools.untrusted_results import (
     MAX_FILENAME_CHARS,
@@ -21,6 +26,7 @@ from src.agent.tools.untrusted_results import (
     render_retrieved_records,
 )
 from src.agent.tools.validation import internal_error_reply, invalid_proposal_reply, parse_uuid
+from src.domain.documents.extraction import DocumentVisualPage
 from src.domain.documents.service import DocumentService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -244,20 +250,39 @@ async def analyze_document(
             or "application/octet-stream"
         )
         filename = _media_filename(media, mime_type, index)
-        try:
-            visual_pages = prepare_visual_pages(
-                content,
-                mime_type,
-                max_pdf_pages=settings.document_vision_max_pdf_pages,
-            )
-        except DocumentVisionPreparationError:
-            visual_pages = ()
+        visual_pages: tuple[DocumentVisualPage, ...] = ()
+        extracted_text: str | None = None
+        if mime_type == "application/pdf":
+            try:
+                if has_extractable_text(content):
+                    extracted_text = extract_pdf_text_markdown(
+                        content,
+                        max_pages=settings.document_vision_max_pdf_pages,
+                    )
+                else:
+                    visual_pages = prepare_visual_pages(
+                        content,
+                        mime_type,
+                        max_pdf_pages=settings.document_vision_max_pdf_pages,
+                    )
+            except DocumentVisionPreparationError:
+                visual_pages = ()
+        else:
+            try:
+                visual_pages = prepare_visual_pages(
+                    content,
+                    mime_type,
+                    max_pdf_pages=settings.document_vision_max_pdf_pages,
+                )
+            except DocumentVisionPreparationError:
+                visual_pages = ()
         result = await service.ingest(
             user_ctx,
             content,
             filename,
             mime_type,
             visual_pages=visual_pages,
+            extracted_text=extracted_text,
         )
         ext = result.extraction
 

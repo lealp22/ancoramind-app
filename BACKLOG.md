@@ -27,7 +27,7 @@
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
-| BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 spec redactado con 3 fases; Fase 1 lista para implementar — specs/021 |
+| BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) implementada localmente; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 primer incremento local (frontera de extracción y tools documentales); P0 consentimiento pendiente — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
@@ -559,10 +559,14 @@ publicar/autorizar `ancoramind-vision-r2` con Qwen en Railway, activar la revisi
 runtime, benchmark de precisión/coste/latencia y E2E Telegram con PDF e imagen.
 **Nota triage TODO (2026-09-20):** los PDFs escaneados ya fluyen por la ruta
 visual (PyMuPDF rasteriza páginas con o sin capa de texto — el "fallback OCR"
-propuesto ya está cubierto por diseño). Refinamientos a evaluar en el benchmark:
-detectar capa de texto para preferir extracción textual (más barata) en PDFs
-digitales y reservar visión para escaneados; política explícita para PDFs de
-más de 3 páginas; OCR dedicado solo si la ruta visual no alcanza precisión.
+propuesto ya está cubierto por diseño). **Resuelto (2026-10-03, specs/021 Fase
+1/BL-38):** `analyze_document` ya detecta la capa de texto (`has_extractable_text`)
+y, cuando existe, usa `extract_pdf_text_markdown` (determinista, PyMuPDF/
+pymupdf4llm) en vez de la ruta visual — PDFs digitales ya no pagan una llamada
+de visión. Queda pendiente del benchmark: política explícita para PDFs de más
+de 3 páginas (hoy ambas rutas comparten el mismo límite
+`document_vision_max_pdf_pages`); OCR dedicado solo si la ruta visual no
+alcanza precisión en escaneados.
 
 ### BL-7 · Proveedor de calendario real
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
@@ -851,6 +855,24 @@ refinamiento pendiente de BL-6. Fase 2 (DOCX determinista) queda bloqueada por
 el cierre de BL-35. Fase 3 (export Markdown→PDF) queda bloqueada por una
 decisión de diseño propia (DOCX→PDF vs. HTML→PDF) y por BL-29. Ver
 `specs/021-document-conversion-toolkit/`.
+
+**Fase 1 implementada localmente (2026-10-03):** `extract_pdf_text_markdown`
+(`src/agent/document_vision.py`, PyMuPDF + `pymupdf4llm.to_markdown`, mismo
+límite `document_vision_max_pdf_pages` que la ruta visual — sin introducir un
+tope independiente) se cablea en `analyze_document`
+(`src/agent/tools/documents.py`): un PDF con `has_extractable_text` ya usa la
+ruta determinista y nunca llama a la ruta visual; `DocumentService.ingest`
+acepta `extracted_text` y lo trata como el `text_preview` ya existente para
+`text/*` (mismo acotado `MAX_TEXT_PREVIEW_BYTES`, mismo tratamiento como DATA
+no confiable). Señal metadata-only (`ancora.document.extraction_route` ∈
+{`deterministic`, `visual`, `none`}) añadida al allowlist de
+`src/observability/telemetry.py` y emitida en `DocumentService._extract`
+(T7). `pymupdf4llm>=1.24.0,<2.0.0` añadido a `pyproject.toml` (mismo régimen
+de licencia que `PyMuPDF`, ya aceptado). 9 tests nuevos (693 unit passing),
+Ruff/mypy limpios. **Pendiente:** T8/T9 de `specs/021/tasks.md` marcados
+hechos; falta validar con un PDF real de usuario vía Telegram (bloqueado por
+las restricciones de infraestructura actuales) antes de cerrar el criterio de
+cierre completo de la fase.
 
 ### BL-13 · Memoria personal y consolidación gobernada «Dream»
 Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad

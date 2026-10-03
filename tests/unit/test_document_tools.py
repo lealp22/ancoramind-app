@@ -5,11 +5,32 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import fitz
 from agno.media import File, Image
 from agno.run import RunContext
 
 from src.agent.tools import documents as document_tools
 from src.domain.documents.models import AIExtraction, Document, DocumentWithExtraction
+
+
+def _pdf_with_text(text: str) -> bytes:
+    document = fitz.open()
+    try:
+        document.new_page().insert_text((72, 72), text)
+        return document.tobytes()
+    finally:
+        document.close()
+
+
+def _scanned_pdf() -> bytes:
+    document = fitz.open()
+    try:
+        page = document.new_page()
+        pixmap = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 3, 3), 0)
+        page.insert_image(fitz.Rect(72, 72, 75, 75), stream=pixmap.tobytes("png"))
+        return document.tobytes()
+    finally:
+        document.close()
 
 
 def _run_context() -> RunContext:
@@ -91,6 +112,48 @@ async def test_analyze_document_without_media_does_not_create_service(monkeypatc
 
     assert response == "No se recibió ningún archivo para analizar."
     get_service.assert_not_awaited()
+
+
+async def test_analyze_document_uses_deterministic_text_for_pdf_with_text_layer(monkeypatch):
+    """specs/021 T6: a PDF with a text layer skips visual rendering entirely."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    content = _pdf_with_text("Factura 120 EUR")
+    file = File(content=content, filename="factura.pdf")
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["visual_pages"] == ()
+    assert kwargs["extracted_text"] is not None
+    assert "Factura 120 EUR" in kwargs["extracted_text"]
+
+
+async def test_analyze_document_falls_back_to_visual_for_scanned_pdf(monkeypatch):
+    """A PDF without a text layer keeps using the vision route (no extracted_text)."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    file = File(content=_scanned_pdf(), filename="escaneo.pdf")
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["extracted_text"] is None
+    assert len(kwargs["visual_pages"]) == 1
 
 
 async def test_get_document_service_uses_governed_extraction_port(monkeypatch):

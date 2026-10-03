@@ -16,8 +16,9 @@ recordatorios y eventos, con trazabilidad completa.
 - **Base de datos canónica:** PostgreSQL (schema `ancora`, separado de `agno_runtime`)
 - **Lenguaje:** Python 3.12+
 - **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO +
-  recurrencia/snooze (BL-41/specs/024). 684 unit tests + 94 integration tests;
-  los integration requieren PostgreSQL/Docker
+  recurrencia/snooze (BL-41/specs/024) + extracción determinista de PDF con
+  capa de texto (BL-38 Fase 1/specs/021). 693 unit tests + 94 integration
+  tests; los integration requieren PostgreSQL/Docker
   (se omiten sin esa infraestructura). Ruff y `mypy src/` limpios; ambos son
   gates globales en CI.
 

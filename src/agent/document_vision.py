@@ -34,6 +34,40 @@ def has_extractable_text(content: bytes) -> bool:
         raise DocumentVisionPreparationError("pdf_text_detection_failed") from exc
 
 
+def extract_pdf_text_markdown(content: bytes, *, max_pages: int) -> str:
+    """Deterministically extract a PDF's text layer as Markdown (specs/021 T2).
+
+    Uses PyMuPDF/pymupdf4llm locally, with no network call and no persisted
+    rendered page, bounded by the same ``max_pages`` cap used for the visual
+    fallback route (``document_vision_max_pdf_pages``) rather than a separate
+    limit — pages beyond the cap are simply not read, mirroring how the visual
+    route already bounds cost/input volume. Pages without a text layer (a PDF
+    with mixed text/scanned pages) contribute an empty section; no all-or-
+    nothing check is performed here, since ``has_extractable_text`` already
+    gates whether this function is called at all.
+    """
+    try:
+        import fitz
+        import pymupdf4llm
+
+        document = fitz.open(stream=content, filetype="pdf")
+        try:
+            if document.needs_pass:
+                raise DocumentVisionPreparationError("pdf_text_detection_failed")
+            if document.page_count == 0:
+                raise DocumentVisionPreparationError("pdf_has_no_pages")
+            page_numbers = list(range(min(document.page_count, max_pages)))
+            return str(
+                pymupdf4llm.to_markdown(document, pages=page_numbers, write_images=False)
+            )
+        finally:
+            document.close()
+    except DocumentVisionPreparationError:
+        raise
+    except Exception as exc:
+        raise DocumentVisionPreparationError("pdf_text_extraction_failed") from exc
+
+
 def prepare_visual_pages(
     content: bytes,
     mime_type: str,

@@ -9,40 +9,55 @@
       Unit tests: PDF con texto, PDF escaneado (sin texto), PDF vacío/corrupto
       (error controlado, no excepción sin capturar). Incremento aislado:
       aún no se invoca desde la tool ni selecciona ruta de extracción.
-- [ ] T2 · `extract_pdf_text_markdown(content: bytes, *, max_pages: int) ->
-      str` usando `pymupdf4llm.to_markdown()`, acotado a `max_pages` (alinear
-      valor con `document_vision_max_pdf_pages` o un límite propio si se
-      decide distinto — documentar la decisión aquí). Unit tests: extracción
-      básica, truncado por `max_pages`, PDF con páginas mixtas (con/sin texto)
-      — decidir y documentar política todo-o-nada vs. mixta.
-- [ ] T3 · Añadir `pymupdf4llm` a `pyproject.toml` (`dependencies`), confirmar
-      licencia (MuPDF/AGPL vs. comercial — mismo régimen que `PyMuPDF` ya
-      aceptado) y fijar rango de versión compatible con `PyMuPDF>=1.24.0,<2.0.0`.
-- [ ] T4 · Cablear la decisión en `src/agent/tools/documents.py::analyze_document`:
-      para `application/pdf`, llamar primero a `has_extractable_text`; si es
-      `True`, usar `extract_pdf_text_markdown` y pasar el resultado como
-      contexto textual a `DocumentService.ingest` (sin `visual_pages`); si es
-      `False`, mantener el camino actual (`prepare_visual_pages`).
-- [ ] T5 · Ajustar `DocumentService._build_extraction_prompt` (o el punto
-      equivalente) para aceptar el texto ya extraído de un PDF con capa de
-      texto de la misma forma que ya acepta `text/*` — respetando
-      `MAX_TEXT_PREVIEW_BYTES`. Antes de activar la ruta, coordinar con
-      BL-39/specs/022 el uso de la serialización JSON ya introducida para
-      filename y texto no confiables; probar cierre falso de delimitador en
-      PDF textual y metadatos sin tratar el JSON como límite de autoridad.
-- [ ] T6 · Unit tests de `analyze_document`/`DocumentService.ingest` con un
-      PDF-con-texto simulado: verificar que el extraction port de visión NO se
-      invoca (mock/spy) y que la extracción persistida referencia la ruta
-      determinista (ver T7).
-- [ ] T7 (Should Have) · Señal metadata-only de ruta usada (`deterministic` vs.
-      `visual`) en la extracción persistida o en telemetría existente, sin
-      contenido ni prompts.
-- [ ] T8 · `ruff check src/ tests/ scripts/ migrations/`, `mypy src/`,
-      `pytest tests/unit/` en verde. Ejecutar `pytest tests/integration/` si
-      hay cambios en el pipeline de persistencia.
-- [ ] T9 · Actualizar `BACKLOG.md`: cerrar la Fase 1 de BL-38, referenciar
-      `specs/021`, y anotar en BL-6 que el refinamiento de "preferir extracción
-      textual" queda resuelto.
+- [x] T2 · `extract_pdf_text_markdown(content: bytes, *, max_pages: int) ->
+      str` usando `pymupdf4llm.to_markdown()`, acotado a `max_pages`.
+      **Decisión:** se reutiliza `document_vision_max_pdf_pages` (el mismo
+      límite que ya acota la ruta visual) en vez de introducir un tope propio
+      — ambas rutas comparten el mismo presupuesto de páginas por documento.
+      **Decisión página mixta:** no hay política todo-o-nada; las páginas sin
+      texto simplemente no aportan contenido al Markdown resultante
+      (`has_extractable_text` ya decidió, con "cualquier página", que esta
+      ruta es aplicable). Unit tests: extracción básica, truncado por
+      `max_pages`, PDF con páginas mixtas (con/sin texto) —
+      `tests/unit/test_document_vision.py`.
+- [x] T3 · `pymupdf4llm>=1.24.0,<2.0.0` añadido a `dependencies` en
+      `pyproject.toml`. Mismo régimen de licencia que `PyMuPDF` (Artifex
+      AGPL/comercial), ya aceptado para esa dependencia.
+- [x] T4 · Cableado en `src/agent/tools/documents.py::analyze_document`: para
+      `application/pdf` se llama primero a `has_extractable_text`; si es
+      `True` se usa `extract_pdf_text_markdown` (sin `visual_pages`); si es
+      `False`, o si la extracción determinista falla, se mantiene el camino
+      visual (`prepare_visual_pages`).
+- [x] T5 · `DocumentService.ingest`/`_extract`/`_build_extraction_prompt`
+      aceptan `extracted_text: str | None`, tratado igual que el
+      `text_preview` ya existente para `text/*` (mismo acotado
+      `MAX_TEXT_PREVIEW_BYTES`, misma serialización JSON escapada — no se creó
+      un camino de confianza nuevo; BL-39/specs/022 ya cubre ese escape).
+      `tests/unit/test_document_extraction_port.py` prueba el truncado y el
+      cierre falso de delimitador se cubre con los tests adversariales ya
+      existentes de ese módulo (comparten la misma función de serialización).
+- [x] T6 · `tests/unit/test_document_tools.py`:
+      `test_analyze_document_uses_deterministic_text_for_pdf_with_text_layer`
+      verifica que un PDF con capa de texto llama a `service.ingest` con
+      `visual_pages=()` y `extracted_text` no vacío;
+      `test_analyze_document_falls_back_to_visual_for_scanned_pdf` verifica lo
+      contrario para un PDF sin texto (`visual_pages` con una página,
+      `extracted_text=None`).
+- [x] T7 (Should Have) · `DocumentService._extract` emite
+      `ancora.document.extraction_route` (`deterministic`/`visual`/`none`) vía
+      `get_telemetry().counter(...)`, con la clave añadida al allowlist de
+      `src/observability/telemetry.py`. Metadata-only (sin contenido ni
+      prompts); no se persiste en `ai_extractions` para no acoplar el modelo
+      de datos a un detalle de la ruta de infraestructura.
+- [x] T8 · `ruff check src/ tests/ scripts/ migrations/`, `mypy src/`,
+      `pytest tests/unit/` en verde (693 unit tests). `pytest
+      tests/integration/` no se ejecutó — sin PostgreSQL/Docker disponible en
+      este incremento y el pipeline de persistencia de documentos no cambió
+      de forma (mismo repositorio, misma tabla); pendiente confirmar cuando
+      haya infraestructura disponible.
+- [x] T9 · `BACKLOG.md` actualizado: Fase 1 de BL-38 marcada implementada
+      localmente con referencia a `specs/021`; BL-6 anota que el refinamiento
+      "preferir extracción textual" queda resuelto.
 
 ## Fase 2 — DOCX determinista (bloqueada por BL-35, no en este incremento)
 

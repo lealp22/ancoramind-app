@@ -7,6 +7,7 @@ import pytest
 
 from src.agent.document_vision import (
     DocumentVisionPreparationError,
+    extract_pdf_text_markdown,
     has_extractable_text,
     prepare_visual_pages,
 )
@@ -80,3 +81,35 @@ def test_prepare_visual_pages_passes_through_images() -> None:
 def test_prepare_visual_pages_rejects_invalid_pdf() -> None:
     with pytest.raises(DocumentVisionPreparationError, match="pdf_render_failed"):
         prepare_visual_pages(b"%PDF-not-a-real-document", "application/pdf", max_pdf_pages=3)
+
+
+def test_extract_pdf_text_markdown_returns_text_content() -> None:
+    markdown = extract_pdf_text_markdown(
+        _pdf_with_pages("Texto extraíble"), max_pages=3
+    )
+
+    assert "Texto extraíble" in markdown
+
+
+def test_extract_pdf_text_markdown_truncates_by_max_pages() -> None:
+    content = _pdf_with_pages("Página uno", "Página dos", "Página tres")
+
+    markdown = extract_pdf_text_markdown(content, max_pages=1)
+
+    assert "Página uno" in markdown
+    assert "Página dos" not in markdown
+    assert "Página tres" not in markdown
+
+
+def test_extract_pdf_text_markdown_handles_mixed_text_and_blank_pages() -> None:
+    content = _pdf_with_pages("", "Texto posterior")
+
+    markdown = extract_pdf_text_markdown(content, max_pages=2)
+
+    assert "Texto posterior" in markdown
+
+
+@pytest.mark.parametrize("content", [b"", b"%PDF-not-a-real-document"])
+def test_extract_pdf_text_markdown_rejects_invalid_pdf(content: bytes) -> None:
+    with pytest.raises(DocumentVisionPreparationError, match="^pdf_text_extraction_failed$"):
+        extract_pdf_text_markdown(content, max_pages=3)

@@ -309,6 +309,60 @@ def test_extraction_prompt_bounds_untrusted_filename_and_handles_unicode() -> No
     assert "\u202e" not in prompt  # escaped in the derived representation
 
 
+async def test_extracted_text_prompt_is_treated_as_deterministic_preview() -> None:
+    """specs/021 T5/T6: PDF text layer extraction uses the same preview field."""
+    document = _document()
+    repo = _repo_returning(document)
+    port = _FakeExtractionPort(
+        DocumentExtractionOutcome(
+            extraction=GenericDocumentExtraction(summary="ok"),
+            provider="OpenRouter",
+            model="test/model",
+            status="completed",
+        )
+    )
+    service = _service(port, repo)
+
+    await service.ingest(
+        _user(),
+        b"%PDF-1.4",
+        "factura.pdf",
+        "application/pdf",
+        extracted_text="# Factura\nTaller Central: 120,00 EUR",
+    )
+
+    prompt, _ = port.calls[0]
+    data = json.loads(prompt)
+    assert data["source"]["text_preview"] == "# Factura\nTaller Central: 120,00 EUR"
+    assert data["source"]["visual_pages_attached"] is False
+    # The vision port must not have received any visual page for this route.
+    assert port.calls[0][1] is GenericDocumentExtraction
+
+
+async def test_extracted_text_truncates_at_max_preview_bytes() -> None:
+    document = _document()
+    repo = _repo_returning(document)
+    port = _FakeExtractionPort(
+        DocumentExtractionOutcome(
+            extraction=GenericDocumentExtraction(summary="ok"),
+            provider="OpenRouter",
+            model="test/model",
+            status="completed",
+        )
+    )
+    service = _service(port, repo)
+    big_text = "x" * (DocumentService.MAX_TEXT_PREVIEW_BYTES + 500)
+
+    await service.ingest(
+        _user(), b"%PDF-1.4", "grande.pdf", "application/pdf", extracted_text=big_text
+    )
+
+    prompt, _ = port.calls[0]
+    assert len(json.loads(prompt)["source"]["text_preview"]) == (
+        DocumentService.MAX_TEXT_PREVIEW_BYTES
+    )
+
+
 async def test_visual_extraction_prompt_marks_pages_as_attached() -> None:
     doc = _document()
     repo = _repo_returning(doc)

@@ -18,6 +18,7 @@ from src.domain.documents.models import (
     DocumentWithExtraction,
 )
 from src.domain.documents.schemas import GenericDocumentExtraction
+from src.observability.telemetry import get_telemetry
 from src.repositories.documents import DocumentsRepository
 from src.security.user_context import UserContext
 from src.storage.base import DocumentStorage
@@ -51,11 +52,17 @@ class DocumentService:
         filename: str,
         mime_type: str,
         visual_pages: tuple[DocumentVisualPage, ...] = (),
+        extracted_text: str | None = None,
     ) -> DocumentWithExtraction:
         """Full document pipeline: store → register → extract.
 
         All steps are automatic per Architecture §17:
         receive, store, register metadata, analyze, save extraction.
+
+        ``extracted_text`` carries Markdown deterministically extracted from a
+        PDF's own text layer (specs/021 T2) by the infrastructure layer. It is
+        untrusted document content, handled the same way as the ``text/*``
+        preview below — bounded and serialized as data, never as instructions.
 
         Returns:
             Document with its AI extraction.
@@ -75,7 +82,7 @@ class DocumentService:
         )
 
         # 3. AI extraction (for text-based documents)
-        extraction = await self._extract(doc, content, visual_pages)
+        extraction = await self._extract(doc, content, visual_pages, extracted_text)
 
         return DocumentWithExtraction(document=doc, extraction=extraction)
 
@@ -84,14 +91,28 @@ class DocumentService:
         doc: Document,
         content: bytes,
         visual_pages: tuple[DocumentVisualPage, ...],
+        extracted_text: str | None = None,
     ) -> AIExtraction | None:
         """Run AI extraction through the governed port.
 
         Visual pages are transient input from the infrastructure layer. They are
         never persisted in the extraction audit or exported to observability.
         """
+        if visual_pages:
+            extraction_route = "visual"
+        elif extracted_text:
+            extraction_route = "deterministic"
+        else:
+            extraction_route = "none"
+        get_telemetry().counter(
+            "ancora.document.extraction_route",
+            attributes={"ancora.document.extraction_route": extraction_route},
+        )
         prompt = self._build_extraction_prompt(
-            doc, content, visual_pages_attached=bool(visual_pages)
+            doc,
+            content,
+            visual_pages_attached=bool(visual_pages),
+            extracted_text=extracted_text,
         )
         if visual_pages:
             outcome = await self._extraction_port.extract(
@@ -175,7 +196,11 @@ class DocumentService:
 
     @staticmethod
     def _build_extraction_prompt(
-        doc: Document, content: bytes, *, visual_pages_attached: bool = False
+        doc: Document,
+        content: bytes,
+        *,
+        visual_pages_attached: bool = False,
+        extracted_text: str | None = None,
     ) -> str:
         """Serialize bounded, untrusted document metadata and preview as data.
 
@@ -184,7 +209,13 @@ class DocumentService:
         the model must still be treated as untrusted for authorization.
         """
         text_preview = ""
-        if doc.mime_type.startswith("text/") or doc.mime_type in {
+        if extracted_text is not None:
+            # Deterministically extracted PDF text (specs/021 T2): same
+            # untrusted-preview treatment as text/* content below.
+            text_preview = extracted_text.encode("utf-8")[
+                : DocumentService.MAX_TEXT_PREVIEW_BYTES
+            ].decode("utf-8", errors="replace")
+        elif doc.mime_type.startswith("text/") or doc.mime_type in {
             "application/json",
         }:
             text_preview = content[: DocumentService.MAX_TEXT_PREVIEW_BYTES].decode(
