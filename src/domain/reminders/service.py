@@ -15,7 +15,7 @@ from src.security.user_context import UserContext
 class SnoozeRequest(BaseModel):
     """Validated bounds for a reminder snooze (specs/024)."""
 
-    hours: int = Field(ge=1, le=72)
+    minutes: int = Field(ge=5, le=10_080)
 
 
 class ReminderService:
@@ -64,9 +64,9 @@ class ReminderService:
         return await self._repo.list_by_user(user_context.user_id, status)
 
     async def snooze_reminder(
-        self, user_context: UserContext, original_id: UUID, hours: int, proposal_id: UUID
+        self, user_context: UserContext, original_id: UUID, minutes: int, proposal_id: UUID
     ) -> Reminder | None:
-        """Postpone a reminder: create a one-off copy N hours from now.
+        """Postpone a reminder: create a one-off copy N minutes from now.
 
         Independent of any recurrence the original has — the snoozed copy
         never recurs itself (specs/024). Not restricted to already-``fired``
@@ -74,9 +74,9 @@ class ReminderService:
         Returns ``None`` if ``original_id`` doesn't exist or isn't owned by
         this user — the tool layer turns that into a user-facing message.
         """
-        SnoozeRequest(hours=hours)  # raises ValueError if out of [1, 72]
+        SnoozeRequest(minutes=minutes)  # raises ValueError if out of [5, 10_080]
         original = await self._repo.get_by_id(user_context.user_id, original_id)
         if original is None:
             return None
-        trigger_at = datetime.now(tz=UTC) + timedelta(hours=hours)
+        trigger_at = datetime.now(tz=UTC) + timedelta(minutes=minutes)
         return await self._repo.create_snoozed(original, trigger_at, proposal_id)

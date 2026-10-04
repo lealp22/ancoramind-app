@@ -32,11 +32,12 @@ class TestReminderTimezoneRoundTrip:
     async def test_naive_summer_input_persists_utc_and_displays_local(self, monkeypatch):
         """17:00 naive (Europe/Madrid, summer/UTC+2) -> persisted 15:00Z -> shown 17:00."""
         captured: dict[str, object] = {}
+        reminder_id = uuid4()
 
         async def fake_create(user_id, data):
             captured["trigger_at"] = data.trigger_at
             return Reminder(
-                id=uuid4(), user_id=user_id, title=data.title, description=data.description,
+                id=reminder_id, user_id=user_id, title=data.title, description=data.description,
                 trigger_at=data.trigger_at, status="pending",
                 source_document_id=data.source_document_id,
                 source_action_id=data.source_action_id, created_at=datetime.now(tz=UTC),
@@ -67,6 +68,8 @@ class TestReminderTimezoneRoundTrip:
         # Displayed back to the user, it reads as what they originally typed.
         assert "17:00" in reply
         assert "15:00" not in reply
+        assert "ID:" not in reply
+        assert str(reminder_id) not in reply
 
     async def test_naive_dst_gap_rejected_before_persisting(self, monkeypatch):
         """2026-03-29 02:30 doesn't exist in Europe/Madrid (spring-forward gap)."""

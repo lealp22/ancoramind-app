@@ -142,13 +142,22 @@ class TestExecuteCalendarEventCreatesLinkedReminder:
 
 
 class TestReminderSnoozeTools:
-    async def test_propose_snooze_rejects_out_of_bounds_hours(self, monkeypatch):
+    async def test_propose_snooze_rejects_duration_shorter_than_five_minutes(self, monkeypatch):
         actions = AsyncMock()
         monkeypatch.setattr(reminders, "_get_actions_repo", AsyncMock(return_value=actions))
 
-        reply = await reminders.propose_reminder_snooze(_run_context(), str(uuid4()), 100)
+        reply = await reminders.propose_reminder_snooze(_run_context(), str(uuid4()), 4)
 
-        assert "entre 1 y 72" in reply
+        assert "entre 5 minutos y 7 días" in reply
+        actions.create.assert_not_awaited()
+
+    async def test_propose_snooze_rejects_duration_longer_than_seven_days(self, monkeypatch):
+        actions = AsyncMock()
+        monkeypatch.setattr(reminders, "_get_actions_repo", AsyncMock(return_value=actions))
+
+        reply = await reminders.propose_reminder_snooze(_run_context(), str(uuid4()), 10_081)
+
+        assert "entre 5 minutos y 7 días" in reply
         actions.create.assert_not_awaited()
 
     async def test_propose_snooze_creates_proposal(self, monkeypatch):
@@ -157,12 +166,18 @@ class TestReminderSnoozeTools:
         monkeypatch.setattr(reminders, "_get_actions_repo", AsyncMock(return_value=actions))
         reminder_id = str(uuid4())
 
-        reply = await reminders.propose_reminder_snooze(_run_context(), reminder_id, 3)
+        reply = await reminders.propose_reminder_snooze(_run_context(), reminder_id, 20)
 
         assert "aplazamiento" in reply.lower()
+        assert "20 min" in reply
         payload = actions.create.call_args.kwargs["payload"]
-        assert payload == {"reminder_id": reminder_id, "hours": 3}
+        assert payload == {"reminder_id": reminder_id, "minutes": 20}
         assert actions.create.call_args.kwargs["tool_name"] == "snooze_reminder"
+
+    def test_snooze_duration_uses_natural_compact_format(self):
+        assert reminders._format_snooze_duration(20) == "20 min"
+        assert reminders._format_snooze_duration(60) == "1 h"
+        assert reminders._format_snooze_duration(90) == "1 h 30 min"
 
     async def test_execute_snooze_creates_followup_reminder(self, monkeypatch):
         snoozed = Reminder(
@@ -174,7 +189,7 @@ class TestReminderSnoozeTools:
         service.snooze_reminder.return_value = snoozed
         actions = AsyncMock()
         actions.confirm_or_use_confirmed.return_value = {
-            "id": PROPOSAL_ID, "payload": {"reminder_id": str(uuid4()), "hours": 3},
+            "id": PROPOSAL_ID, "payload": {"reminder_id": str(uuid4()), "minutes": 20},
         }
         monkeypatch.setattr(reminders, "_get_reminder_service", AsyncMock(return_value=service))
         monkeypatch.setattr(reminders, "_get_actions_repo", AsyncMock(return_value=actions))
@@ -183,6 +198,7 @@ class TestReminderSnoozeTools:
 
         assert "aplazado" in reply.lower()
         actions.mark_executed.assert_awaited_once()
+        assert service.snooze_reminder.call_args.kwargs["minutes"] == 20
 
     async def test_execute_snooze_not_found_returns_message_without_marking_executed(
         self, monkeypatch
@@ -191,7 +207,7 @@ class TestReminderSnoozeTools:
         service.snooze_reminder.return_value = None
         actions = AsyncMock()
         actions.confirm_or_use_confirmed.return_value = {
-            "id": PROPOSAL_ID, "payload": {"reminder_id": str(uuid4()), "hours": 3},
+            "id": PROPOSAL_ID, "payload": {"reminder_id": str(uuid4()), "minutes": 20},
         }
         monkeypatch.setattr(reminders, "_get_reminder_service", AsyncMock(return_value=service))
         monkeypatch.setattr(reminders, "_get_actions_repo", AsyncMock(return_value=actions))
@@ -213,7 +229,7 @@ class TestReminderSnoozeTools:
         actions = AsyncMock()
         actions.confirm_or_use_confirmed.return_value = {
             "id": PROPOSAL_ID,
-            "payload": {"reminder_id": OTHER_USER_REMINDER_ID, "hours": 3},
+            "payload": {"reminder_id": OTHER_USER_REMINDER_ID, "minutes": 20},
         }
         monkeypatch.setattr(reminders, "_get_reminder_service", AsyncMock(return_value=service))
         monkeypatch.setattr(reminders, "_get_actions_repo", AsyncMock(return_value=actions))

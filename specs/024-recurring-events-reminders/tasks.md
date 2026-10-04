@@ -71,8 +71,8 @@
       (`occurrences_in_range` + `model_copy`), combina y ordena con las no
       recurrentes.
 - [x] `ReminderService.create_reminder`: parámetro `recurrence_rule` opcional.
-- [x] `ReminderService.snooze_reminder(user_context, original_id, hours, proposal_id) -> Reminder | None`
-      — valida propiedad vía `get_by_id` + `UserContext`, valida `1<=hours<=72`
+- [x] `ReminderService.snooze_reminder(user_context, original_id, minutes, proposal_id) -> Reminder | None`
+      — valida propiedad vía `get_by_id` + `UserContext`, valida `5<=minutes<=10080`
       vía `SnoozeRequest(BaseModel)`, sin restricción por `status`. Devuelve
       `None` si no existe/no es del usuario (convención ya usada en
       `domain/vehicles` — se descarta una excepción `NotFound` nueva).
@@ -111,8 +111,8 @@
       de fallo parcial (evento creado, recordatorio no) sin ocultarlo.
 - [x] `src/agent/tools/reminders.py`: `propose_reminder`/`execute_reminder`
       ganan los mismos 3 parámetros de recurrencia. Nuevo par
-      `propose_reminder_snooze`/`execute_reminder_snooze` (valida 1–72h,
-      payload `{reminder_id, hours}`, gobernado vía `ActionProposal` legacy).
+      `propose_reminder_snooze`/`execute_reminder_snooze` (valida 5 min–7 días,
+      payload `{reminder_id, minutes}`, gobernado vía `ActionProposal` legacy).
       `list_reminders` ahora muestra el ID de cada recordatorio (necesario
       para que el flujo de snooze sea usable) y un marcador 🔁 si recurre.
 - [x] Tests de tools: nuevo `test_calendar_reminder_recurrence_tools.py`

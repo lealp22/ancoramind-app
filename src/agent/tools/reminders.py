@@ -195,8 +195,7 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
         local_trigger = to_local_display(reminder.trigger_at, resolve_user_timezone(user_ctx))
         return (
             f"✅ **Recordatorio creado**: {reminder.title}\n"
-            f"   Cuándo: {local_trigger.strftime('%Y-%m-%d %H:%M')}\n"
-            f"   ID: `{reminder.id}`"
+            f"   Cuándo: {local_trigger.strftime('%Y-%m-%d %H:%M')}"
         )
     except (KeyError, TypeError, ValueError) as e:
         return invalid_proposal_reply("execute_reminder", e)
@@ -204,15 +203,25 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
         return internal_error_reply("execute_reminder", e)
 
 
+def _format_snooze_duration(minutes: int) -> str:
+    """Render a validated snooze duration compactly for a confirmation reply."""
+    hours, remaining_minutes = divmod(minutes, 60)
+    if hours == 0:
+        return f"{minutes} min"
+    if remaining_minutes == 0:
+        return f"{hours} h"
+    return f"{hours} h {remaining_minutes} min"
+
+
 @closes_sessions
-async def propose_reminder_snooze(run_context: RunContext, reminder_id: str, hours: int) -> str:
+async def propose_reminder_snooze(run_context: RunContext, reminder_id: str, minutes: int) -> str:
     """PROPOSE snoozing a reminder — requires user confirmation.
 
     Use when the user wants to be reminded again later about something,
     typically right after seeing it in list_reminders (e.g. a reminder that
     just fired):
-    - "Recuérdamelo dentro de 2 horas"
-    - "Avísame otra vez en 3 horas"
+    - "Recuérdamelo dentro de 20 minutos"
+    - "Avísame otra vez en 1 hora y media"
     - "Posponlo 1 hora"
 
     This is independent of any recurrence the reminder has (e.g. snoozing a
@@ -222,25 +231,25 @@ async def propose_reminder_snooze(run_context: RunContext, reminder_id: str, hou
     Args:
         run_context: Injected by Agno.
         reminder_id: ID of the reminder to snooze (from list_reminders).
-        hours: How many hours from now to re-notify (1-72).
+        minutes: How many minutes from now to re-notify (5-10,080).
     """
     user_ctx = UserContext.from_run_context(run_context)
     rid = parse_uuid(reminder_id, "recordatorio")
     if isinstance(rid, str):
         return rid
-    if not (1 <= hours <= 72):
-        return "El número de horas debe estar entre 1 y 72."
+    if not (5 <= minutes <= 10_080):
+        return "El aplazamiento debe estar entre 5 minutos y 7 días."
 
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.create(
         user_id=user_ctx.user_id,
         tool_name="snooze_reminder",
-        payload={"reminder_id": str(rid), "hours": hours},
+        payload={"reminder_id": str(rid), "minutes": minutes},
     )
     return (
         f"⏰ **Propuesta de aplazamiento** (`{proposal['id']}`)\n"
         f"   Recordatorio: `{rid}`\n"
-        f"   Repetir en: {hours}h\n\n"
+        f"   Repetir en: {_format_snooze_duration(minutes)}\n\n"
         "¿Confirmas posponer este recordatorio?"
     )
 
@@ -267,7 +276,7 @@ async def execute_reminder_snooze(run_context: RunContext, proposal_id: str) -> 
         snoozed = await service.snooze_reminder(
             user_context=user_ctx,
             original_id=UUID(payload["reminder_id"]),
-            hours=int(payload["hours"]),
+            minutes=int(payload["minutes"]),
             proposal_id=UUID(proposal_id),
         )
         if snoozed is None:
@@ -276,8 +285,7 @@ async def execute_reminder_snooze(run_context: RunContext, proposal_id: str) -> 
         local_trigger = to_local_display(snoozed.trigger_at, resolve_user_timezone(user_ctx))
         return (
             f"✅ **Recordatorio aplazado**: {snoozed.title}\n"
-            f"   Próximo aviso: {local_trigger.strftime('%Y-%m-%d %H:%M')}\n"
-            f"   ID: `{snoozed.id}`"
+            f"   Próximo aviso: {local_trigger.strftime('%Y-%m-%d %H:%M')}"
         )
     except (KeyError, TypeError, ValueError) as e:
         return invalid_proposal_reply("execute_reminder_snooze", e)

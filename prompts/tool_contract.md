@@ -53,7 +53,7 @@ what happened; don't invent structure that isn't there. There are two shapes:
 every "not found"/error reply) — relay it to the user as-is (bold title,
 aligned data, moderate emoji), never as JSON:
 
-- **Found/success** — e.g. `"✅ **Recordatorio creado**: ...\n   Cuándo: ...\n   ID: \`...\`"`.
+- **Found/success** — e.g. `"✅ **Recordatorio creado**: ...\n   Cuándo: ..."`.
   Relay it; don't restate the data from memory.
 - **Not found** — e.g. `"No se encontró la propuesta \`...\` o ya no está pendiente."`,
   `"No tienes recordatorios."` Tell the user plainly.

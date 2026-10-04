@@ -1,6 +1,6 @@
 """Unit tests for Reminder and Calendar services (mocked repos)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -92,7 +92,9 @@ class TestSnoozeReminder:
         service = ReminderService(repo)
         proposal_id = uuid4()
 
-        result = await service.snooze_reminder(user_ctx, original.id, 3, proposal_id)
+        before = datetime.now(tz=UTC)
+        result = await service.snooze_reminder(user_ctx, original.id, 20, proposal_id)
+        after = datetime.now(tz=UTC)
 
         assert result == snoozed
         repo.get_by_id.assert_awaited_once_with("test-user", original.id)
@@ -100,22 +102,23 @@ class TestSnoozeReminder:
         call = repo.create_snoozed.call_args[0]
         assert call[0] == original
         assert call[2] == proposal_id
+        assert before + timedelta(minutes=20) <= call[1] <= after + timedelta(minutes=20)
 
     async def test_snooze_not_found_returns_none(self, user_ctx):
         repo = AsyncMock()
         repo.get_by_id.return_value = None
         service = ReminderService(repo)
 
-        result = await service.snooze_reminder(user_ctx, uuid4(), 3, uuid4())
+        result = await service.snooze_reminder(user_ctx, uuid4(), 20, uuid4())
         assert result is None
         repo.create_snoozed.assert_not_awaited()
 
-    async def test_snooze_hours_out_of_bounds_rejected(self, user_ctx):
+    async def test_snooze_minutes_out_of_bounds_rejected(self, user_ctx):
         repo = AsyncMock()
         service = ReminderService(repo)
 
-        with pytest.raises(ValueError, match="hours"):
-            await service.snooze_reminder(user_ctx, uuid4(), 100, uuid4())
+        with pytest.raises(ValueError, match="minutes"):
+            await service.snooze_reminder(user_ctx, uuid4(), 4, uuid4())
         repo.get_by_id.assert_not_awaited()
 
 

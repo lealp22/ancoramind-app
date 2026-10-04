@@ -1012,7 +1012,7 @@ propio worker. `propose_calendar_event`/`execute_calendar_event` ganan
 parámetros opcionales para vincular, en la misma propuesta, un recordatorio
 recurrente al evento (resuelve el caso "cumpleaños que avisa cada año" en un
 solo paso). Nuevo par gobernado `propose_reminder_snooze`/
-`execute_reminder_snooze` para posponer un recordatorio ya disparado (1–72h),
+  `execute_reminder_snooze` para posponer un recordatorio ya disparado (5 min–7 días),
 independiente de su recurrencia. **Prioridad P2.**
 
 **Estado:** implementado localmente — 684 unit + 94 integration tests verdes,

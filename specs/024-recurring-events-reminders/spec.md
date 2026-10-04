@@ -42,7 +42,7 @@ specs/010/ADR-003 — es un concepto nuevo.
   `fired_at` de más de 90 días — housekeeping de sistema, sin propuesta de
   usuario.
 - Nuevo par gobernado `propose_reminder_snooze`/`execute_reminder_snooze`:
-  crea una fila `pending` nueva con `trigger_at = ahora + N horas` (1–72h),
+  crea una fila `pending` nueva con `trigger_at = ahora + N minutos` (5 min–7 días),
   sin recurrencia propia, enlazada por `recurrence_parent_id` a la raíz.
 - `propose_calendar_event`/`execute_calendar_event` ganan parámetros
   opcionales de recurrencia + `with_reminder`/`reminder_lead_minutes` para
@@ -107,9 +107,9 @@ Disparo recordatorio recurrente (RemindersWorker.run_once):
   tras el ciclo: repo.delete_old_fired(before=now-90d)  [housekeeping, sin propuesta]
 
 Snooze (propose/execute_reminder_snooze):
-  propose: valida 1<=hours<=72, ActionProposal payload={reminder_id, hours}
+  propose: valida 5<=minutes<=10080, ActionProposal payload={reminder_id, minutes}
   execute: ReminderService.snooze_reminder -> nueva fila pending,
-           trigger_at=now+hours, recurrence_rule=None, recurrence_parent_id=raíz
+           trigger_at=now+minutes, recurrence_rule=None, recurrence_parent_id=raíz
 ```
 
 - **Gobernanza:** avanzar a la siguiente ocurrencia y la purga por retención
@@ -138,7 +138,7 @@ Snooze (propose/execute_reminder_snooze):
    correcto y `recurrence_parent_id` apuntando a la raíz; si la siguiente
    ocurrencia supera `until`, no se crea nada.
 4. `propose_reminder_snooze`/`execute_reminder_snooze` confirmado crea una
-   fila `pending` en `ahora + N horas`, sin recurrencia propia.
+   fila `pending` en `ahora + N minutos`, sin recurrencia propia.
 5. Tras 90 días desde `fired_at`, una fila `fired` deja de existir en el
    siguiente ciclo del worker; filas `fired` más recientes no se tocan.
 6. Suite `pytest tests/unit/` verde, `ruff check` y `mypy src/` limpios

@@ -40,20 +40,20 @@ with `with_reminder=True` instead — see the calendar skill.
 ## Snoozing
 
 When a reminder has already fired and the user wants to be reminded again
-later the same day (e.g. "recuérdamelo en 2 horas", "avísame otra vez en 3
-horas"), this is a **different** operation from recurrence — it never
+later (e.g. "recuérdamelo en 20 minutos", "avísame otra vez en 2 horas"),
+this is a **different** operation from recurrence — it never
 changes when the reminder's own cadence fires next (snoozing a yearly
 birthday reminder a few hours does not move next year's occurrence).
 
 1. If you don't already know the reminder's ID from context, call
    `list_reminders` (optionally `status="fired"`) to find it
 2. Call `propose_reminder_snooze` with that `reminder_id` and the number of
-   hours (1-72)
+   minutes (5-10,080; up to 7 days)
 3. Wait for explicit confirmation
 4. Call `execute_reminder_snooze` with the exact proposal ID
 
 Examples:
-- "Recuérdamelo dentro de 2 horas"
+- "Recuérdamelo dentro de 20 minutos"
 - "Posponlo 1 hora"
 
 ## Confirmation Required
