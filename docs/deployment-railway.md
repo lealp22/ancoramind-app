@@ -239,7 +239,9 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    DATABASE_URL=${{litellm-db.DATABASE_URL}}
    LITELLM_MASTER_KEY=<sk-master-aleatorio>
    LITELLM_SALT_KEY=<sk-salt-aleatorio-no-rotables>
-   OPENROUTER_API_KEY=<clave-real-openrouter>
+    # Upstream único para aliases conversacionales y
+    # ancoramind-embeddings-r1 (openrouter/openai/text-embedding-3-small).
+    OPENROUTER_API_KEY=<clave-real-openrouter>
    NO_DOCS=True
    NO_REDOC=True
    NO_OPENAPI=True
@@ -256,7 +258,7 @@ crea dos servicios nuevos y tiene coste; ejecútalo solo con aprobación explíc
    ```
 
    `/docs`, `/redoc` y `/openapi.json` deben devolver 404.
-5. Crea la virtual key exclusiva de AncoraMind (restringida a los tres aliases,
+5. Crea la virtual key exclusiva de AncoraMind (restringida a los aliases base,
    con límites RPM/TPM/max-parallel T12):
 
    ```powershell

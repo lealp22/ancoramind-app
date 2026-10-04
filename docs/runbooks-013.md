@@ -100,7 +100,8 @@ retries, aliases base). Para cambiarlos:
 
 No editar `LITELLM_MASTER_KEY`, `LITELLM_SALT_KEY`, `DATABASE_URL`,
 `OPENROUTER_API_KEY` ni la virtual key de AncoraMind como parte de un cambio de
-modelo. Las credenciales se rotan mediante §9.4.
+modelo. Las rutas base, incluido `ancoramind-embeddings-r1`, consumen OpenRouter;
+las credenciales se rotan mediante §9.4.
 
 **Importante:** nunca escribir settings (`general_settings`, `router_settings`,
 `litellm_settings`) por API ni Admin UI. LiteLLM los persiste en

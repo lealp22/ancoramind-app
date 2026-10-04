@@ -49,6 +49,18 @@ def test_gateway_route_capacity_limits_are_present_per_alias() -> None:
         assert entry["model_info"]["tpm"] > 0
 
 
+def test_embedding_base_alias_uses_openrouter_with_the_fixed_vector_contract() -> None:
+    entries = _gateway_config()["model_list"]
+    embedding = next(
+        entry for entry in entries if entry["model_name"] == "ancoramind-embeddings-r1"
+    )
+
+    assert embedding["litellm_params"] == {
+        "model": "openrouter/openai/text-embedding-3-small",
+        "api_key": "os.environ/OPENROUTER_API_KEY",
+    }
+
+
 def test_gateway_config_contains_no_secrets() -> None:
     raw = (GATEWAY_DIR / "litellm-config.yaml").read_text(encoding="utf-8")
 

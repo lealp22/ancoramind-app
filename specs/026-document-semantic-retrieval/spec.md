@@ -21,7 +21,9 @@ tenant.
    persiste texto completo ni previsualizaciones transitorias del PDF.
 3. La generación inicial usa 1536 dimensiones y `text-embedding-3-small` en
    desarrollo directo. Con Gateway, usa la ruta lógica
-   `ancoramind-embeddings` → alias versionado `ancoramind-embeddings-r1`.
+   `ancoramind-embeddings` → alias versionado `ancoramind-embeddings-r1`, que
+   resuelve a `openrouter/openai/text-embedding-3-small`. Así el modelo físico,
+   gasto y límites quedan centralizados con las demás rutas OpenRouter.
 4. Cambiar de modelo o dimensión no modifica filas existentes: una nueva
    combinación `embedding_model` + `embedding_dimensions` crea/actualiza su
    propia versión del fragmento. La reindexación es explícita y posterior.

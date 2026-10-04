@@ -40,8 +40,12 @@ model_list:
       tpm: 250000
   - model_name: ancoramind-embeddings-r1
     litellm_params:
-      model: openai/text-embedding-3-small
-      api_key: os.environ/OPENAI_API_KEY
+      # Keep embeddings with the same OpenRouter upstream used by conversational
+      # aliases so Gateway spend, limits and provider operations stay centralised.
+      # The physical OpenAI model and its fixed 1536-dimensional vector contract
+      # remain unchanged.
+      model: openrouter/openai/text-embedding-3-small
+      api_key: os.environ/OPENROUTER_API_KEY
     model_info:
       rpm: 60
       tpm: 250000
