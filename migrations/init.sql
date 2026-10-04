@@ -108,15 +108,22 @@ CREATE TABLE IF NOT EXISTS ancora.vehicle_maintenance (
     mileage_km INT,
     description VARCHAR(2000) NOT NULL,
     workshop VARCHAR(200),
-    cost VARCHAR(50),
+    cost_amount NUMERIC(14,2),
+    cost_currency CHAR(3),
     work_performed JSONB NOT NULL DEFAULT '[]',
     notes TEXT,
     source_document_id UUID REFERENCES ancora.documents(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    source_action_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT ck_vehicle_maintenance_cost_pair CHECK ((cost_amount IS NULL) = (cost_currency IS NULL)),
+    CONSTRAINT ck_vehicle_maintenance_cost_amount_nonnegative CHECK (cost_amount IS NULL OR cost_amount >= 0),
+    CONSTRAINT ck_vehicle_maintenance_cost_currency_iso CHECK (cost_currency IS NULL OR cost_currency ~ '^[A-Z]{3}$')
 );
 CREATE INDEX IF NOT EXISTS idx_maint_vehicle_id ON ancora.vehicle_maintenance(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_maint_user_id ON ancora.vehicle_maintenance(user_id);
 CREATE INDEX IF NOT EXISTS idx_maint_date ON ancora.vehicle_maintenance(date DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vehicle_maintenance_source_action
+ON ancora.vehicle_maintenance(source_action_id) WHERE source_action_id IS NOT NULL;
 
 -- Action proposals (M4 — governance)
 CREATE TABLE IF NOT EXISTS ancora.action_proposals (
@@ -131,6 +138,18 @@ CREATE TABLE IF NOT EXISTS ancora.action_proposals (
     executed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_proposals_user_status ON ancora.action_proposals(user_id, status);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_namespace n ON n.oid = c.connamespace
+        WHERE n.nspname = 'ancora' AND c.conname = 'fk_vehicle_maintenance_source_action'
+    ) THEN
+        ALTER TABLE ancora.vehicle_maintenance
+            ADD CONSTRAINT fk_vehicle_maintenance_source_action
+            FOREIGN KEY (source_action_id) REFERENCES ancora.action_proposals(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 -- Reminders (M5)
 CREATE TABLE IF NOT EXISTS ancora.reminders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

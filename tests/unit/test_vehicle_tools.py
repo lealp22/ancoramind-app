@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -54,10 +55,12 @@ def _maintenance(**overrides: object) -> VehicleMaintenance:
         "mileage_km": 85000,
         "description": "Cambio de aceite",
         "workshop": "Taller Central",
-        "cost": "120,00 €",
+        "cost_amount": Decimal("120.00"),
+        "cost_currency": "EUR",
         "work_performed": ["aceite", "filtro"],
         "notes": None,
         "source_document_id": None,
+        "source_action_id": None,
         "created_at": datetime.now(tz=UTC),
     }
     data.update(overrides)

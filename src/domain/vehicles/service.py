@@ -5,6 +5,7 @@ Framework-independent. Handles resolution, history, and governance.
 
 import re
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from src.domain.vehicles.models import (
@@ -163,10 +164,14 @@ class VehicleService:
         description: str,
         mileage_km: int | None = None,
         workshop: str | None = None,
-        cost: str | None = None,
+        cost_amount: Decimal | None = None,
+        cost_currency: str | None = None,
         work_performed: list[str] | None = None,
         notes: str | None = None,
         source_document_id: UUID | None = None,
+        source_action_id: UUID | None = None,
+        *,
+        commit: bool = True,
     ) -> VehicleMaintenance:
         """Register a maintenance event for a vehicle.
 
@@ -178,9 +183,11 @@ class VehicleService:
             mileage_km=mileage_km,
             description=description,
             workshop=workshop,
-            cost=cost,
+            cost_amount=cost_amount,
+            cost_currency=cost_currency,
             work_performed=work_performed or [],
             notes=notes,
             source_document_id=source_document_id,
+            source_action_id=source_action_id,
         )
-        return await self._maintenance.create(user_context.user_id, data)
+        return await self._maintenance.create(user_context.user_id, data, commit=commit)

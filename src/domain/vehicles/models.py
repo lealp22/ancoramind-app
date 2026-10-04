@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -59,12 +61,23 @@ class VehicleMaintenanceCreate(BaseModel):
     mileage_km: int | None = Field(default=None, ge=0)
     description: str = Field(..., min_length=1, max_length=2000)
     workshop: str | None = None
-    cost: str | None = None
+    cost_amount: Decimal | None = Field(default=None, max_digits=14, decimal_places=2, ge=0)
+    cost_currency: str | None = Field(default=None, min_length=3, max_length=3)
     work_performed: list[str] = Field(default_factory=list)
     notes: str | None = None
     source_document_id: UUID | None = Field(
         default=None, description="Source document if from invoice"
     )
+    source_action_id: UUID | None = Field(
+        default=None, description="Action proposal that created this record"
+    )
+
+    def model_post_init(self, __context: object) -> None:
+        """Require amount and ISO currency together for every new record."""
+        if (self.cost_amount is None) != (self.cost_currency is None):
+            raise ValueError("cost_amount and cost_currency must be provided together")
+        if self.cost_currency is not None and not re.fullmatch(r"[A-Z]{3}", self.cost_currency):
+            raise ValueError("cost_currency must be a three-letter uppercase ISO 4217 code")
 
 
 class VehicleMaintenance(BaseModel):
@@ -77,10 +90,12 @@ class VehicleMaintenance(BaseModel):
     mileage_km: int | None
     description: str
     workshop: str | None
-    cost: str | None
+    cost_amount: Decimal | None
+    cost_currency: str | None
     work_performed: list[str]
     notes: str | None
     source_document_id: UUID | None
+    source_action_id: UUID | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

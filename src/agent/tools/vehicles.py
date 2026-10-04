@@ -101,10 +101,9 @@ def _maintenance_record(m: VehicleMaintenance) -> dict[str, object]:
         workshop, workshop_truncated = bounded_text(m.workshop, MAX_TITLE_CHARS)
         record["workshop"] = workshop
         record["workshop_truncated"] = workshop_truncated
-    if m.cost:
-        cost, cost_truncated = bounded_text(m.cost, MAX_TITLE_CHARS)
-        record["cost"] = cost
-        record["cost_truncated"] = cost_truncated
+    if m.cost_amount is not None and m.cost_currency is not None:
+        record["cost_amount"] = str(m.cost_amount)
+        record["cost_currency"] = m.cost_currency
     if m.work_performed:
         work_performed, work_performed_truncated = bounded_text(
             ", ".join(m.work_performed), MAX_SUMMARY_CHARS
