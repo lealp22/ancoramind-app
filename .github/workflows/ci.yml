@@ -76,7 +76,7 @@ jobs:
       # with the pinned contrib image before rollout. Dummy Grafana values
       # only — this job never contacts Grafana Cloud.
       - name: Build Collector image (observability/Dockerfile)
-        run: docker build -f observability/Dockerfile -t ancoramind-otel-collector:ci .
+        run: docker build -f observability/Dockerfile -t ancoramind-otel-collector:ci observability/
 
       - name: Validate Collector config
         run: >
