@@ -734,6 +734,14 @@ capa de infraestructura, datos devueltos = DATA no confiable, sin contenido
 personal en logs/OTel, coste/uso auditables y presupuesto del run aplicado
 (hooks de budget ya existentes la cortan igual que cualquier tool).
 
+**Fase 1 implementada localmente (2026-10-04, specs/025):** Tavily directo tras
+un puerto de dominio, habilitación explícita (`WEB_SEARCH_ENABLED=false` por
+defecto), consulta pública minimizada, `basic`, máximo 5 resultados, sin
+`include_answer` ni contenido bruto, caché sólo en memoria y envoltorio
+`untrusted_data`. No persiste consultas/resultados y rechaza patrones básicos de
+datos personales/sensibles. La Fase 2 (spike OpenRouter/LiteLLM) queda diferida
+y documentada en `specs/025-web-search/spec.md`.
+
 **Opciones a evaluar en el spec:** API de búsqueda (Brave/Serper/Tavily…) con
 clave por secretos + síntesis por el propio modelo, o un modelo con búsqueda
 nativa vía OpenRouter si existe y permite el Gateway. El resultado debe incluir

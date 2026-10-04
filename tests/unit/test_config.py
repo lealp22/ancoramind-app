@@ -29,6 +29,8 @@ class TestSettings:
         monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_ENABLED", raising=False)
         monkeypatch.delenv("RUNTIME_CONFIG_ADMIN_TOKEN", raising=False)
         monkeypatch.delenv("RUNTIME_CONFIG_BOOTSTRAP_DEFAULT_ROUTE", raising=False)
+        monkeypatch.delenv("WEB_SEARCH_ENABLED", raising=False)
+        monkeypatch.delenv("TAVILY_API_KEY", raising=False)
         # The other defaults are asserted in an explicit development
         # environment; the safe APP_ENV default itself is covered by
         # test_app_env_defaults_to_production (specs/023 T2).
@@ -53,6 +55,9 @@ class TestSettings:
         assert settings.runtime_config_admin_enabled is False
         assert settings.runtime_config_admin_token == ""
         assert settings.runtime_config_bootstrap_default_route == "ancoramind-default"
+        assert settings.web_search_enabled is False
+        assert settings.tavily_api_key == ""
+        assert settings.web_search_max_results == 5
         assert settings.app_debug is False
         assert settings.observability_json_logs is True
         assert settings.otel_exporter_otlp_endpoint == ""
@@ -145,6 +150,28 @@ class TestSettings:
         assert settings.runtime_config_admin_enabled is True
         assert settings.runtime_config_admin_token == "admin-secret"
         assert settings.runtime_config_bootstrap_default_route == "ancoramind-fast"
+
+    def test_web_search_requires_tavily_secret_when_enabled(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_ENABLED", "true")
+        monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+
+        with pytest.raises(ValidationError, match="TAVILY_API_KEY"):
+            Settings(_env_file=None)
+
+    def test_web_search_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_ENABLED", "true")
+        monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
+        monkeypatch.setenv("WEB_SEARCH_TIMEOUT_SECONDS", "4.5")
+        monkeypatch.setenv("WEB_SEARCH_MAX_RESULTS", "3")
+        monkeypatch.setenv("WEB_SEARCH_CACHE_TTL_SECONDS", "10")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.web_search_enabled is True
+        assert settings.tavily_api_key == "tvly-test"
+        assert settings.web_search_timeout_seconds == 4.5
+        assert settings.web_search_max_results == 3
+        assert settings.web_search_cache_ttl_seconds == 10
 
     def test_app_env_defaults_to_production(self, monkeypatch):
         """specs/023 T2: with APP_ENV absent, the app runs in its safe mode

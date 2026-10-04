@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     /, /health, /info, /docs, /redoc. Railway secret only; required
     whenever APP_ENV != "development" (specs/023 T1)."""
 
+    # ── Governed public web search (BL-30 / specs-025) ─────────────
+    web_search_enabled: bool = False
+    """Enable the bounded Tavily-only Phase 1 public web-search tool."""
+    tavily_api_key: str = ""
+    """Tavily secret held only in environment configuration; never log it."""
+    web_search_timeout_seconds: float = Field(default=8.0, gt=0, le=30)
+    web_search_max_results: int = Field(default=5, ge=1, le=5)
+    web_search_cache_ttl_seconds: int = Field(default=300, ge=0, le=3600)
+
     # ── ngrok ─────────────────────────────────────────
     ngrok_url: str = ""
 
@@ -190,6 +199,13 @@ class Settings(BaseSettings):
             raise ValueError("LITELLM_PROXY_ENABLED requires: " + ", ".join(missing))
         if not self.litellm_proxy_default_route.strip():
             raise ValueError("LITELLM_PROXY_DEFAULT_ROUTE must not be blank")
+        return self
+
+    @model_validator(mode="after")
+    def validate_web_search_settings(self) -> "Settings":
+        """Never enable an external search capability without its secret."""
+        if self.web_search_enabled and not self.tavily_api_key.strip():
+            raise ValueError("WEB_SEARCH_ENABLED requires TAVILY_API_KEY")
         return self
 
     @model_validator(mode="after")

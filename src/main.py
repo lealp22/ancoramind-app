@@ -70,8 +70,18 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
     """
     tools: list[Any] = []
 
+    if settings.web_search_enabled:
+        from src.agent.tools.web_search import configure_web_search, search_web
+
+        configure_web_search(settings)
+        tools.append(search_web)
+        logger.info("Governed public web-search tool registered: search_web (provider=tavily)")
+
     if not settings.ancora_database_url:
-        logger.info("ANCORA_DATABASE_URL not set — domain tools skipped (notes, vehicles, etc.)")
+        logger.info(
+            "ANCORA_DATABASE_URL not set — database domain tools skipped "
+            "(notes, vehicles, etc.)"
+        )
         return tools
 
     try:

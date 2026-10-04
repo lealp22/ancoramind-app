@@ -47,8 +47,8 @@ class TestAssembleInstructions:
         instructions = assemble_instructions()
         assert isinstance(instructions, list)
         # identity + soul + tool_contract + telegram + documents + vehicles
-        # + calendar + todos
-        assert len(instructions) == 8
+        # + calendar + todos + web search
+        assert len(instructions) == 9
         assert all(isinstance(item, str) for item in instructions)
 
     def test_vehicle_skill_loaded(self):
@@ -90,6 +90,11 @@ class TestAssembleInstructions:
         until now — regression guard."""
         instructions = assemble_instructions()
         assert any("Skill — Calendar" in block for block in instructions)
+
+    def test_web_search_skill_loaded(self):
+        """The web-search policy must be visible to the conversational Agent."""
+        instructions = assemble_instructions()
+        assert any("Búsqueda web pública" in block for block in instructions)
 
     def test_document_extraction_skill_not_in_main_agent_instructions(self):
         """document_extraction.md is loaded by the separate extraction call
