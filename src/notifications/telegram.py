@@ -13,8 +13,10 @@ import httpx
 
 from src.domain.actions.presentation import ConsentButton
 from src.domain.interactions.processor import TelegramSendError
+from src.domain.preferences.timezone import resolve_user_timezone, to_local_display
 from src.domain.reminders.models import Reminder
 from src.notifications.markup import MAX_MESSAGE_CHARS, markdown_to_telegram_html
+from src.security.user_context import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +46,19 @@ def format_reminder_message(reminder: Reminder, now: datetime | None = None) -> 
     """Render the outbound reminder text.
 
     Plain text on purpose: no parse_mode, since title/description are
-    untrusted DATA (AGENTS.md §2.8) that could break Markdown rendering.
+    untrusted DATA (AGENTS.md §2.8) that could break Markdown rendering. The
+    persisted trigger is canonical UTC, but users must see their resolved local
+    time, matching proposal, confirmation, and list displays.
     """
     now = now or datetime.now(tz=UTC)
     lines = [f"⏰ Recordatorio: {reminder.title}"]
     if reminder.description:
         lines.append(reminder.description)
-    trigger = reminder.trigger_at.strftime("%d/%m/%Y %H:%M")
+    user_context = UserContext(user_id=reminder.user_id)
+    trigger = to_local_display(
+        reminder.trigger_at,
+        resolve_user_timezone(user_context),
+    ).strftime("%d/%m/%Y %H:%M")
     lines.append(f"Programado para: {trigger}")
     try:
         delay = (now - reminder.trigger_at).total_seconds()

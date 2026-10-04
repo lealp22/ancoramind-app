@@ -36,6 +36,16 @@ def _reminder(
 
 
 class TestFormatReminderMessage:
+    def test_displays_scheduled_time_in_resolved_user_timezone(self) -> None:
+        """A canonical UTC trigger is shown in the same local time as confirmation."""
+        reminder = _reminder()
+        reminder.trigger_at = datetime(2026, 10, 4, 19, 59, tzinfo=UTC)
+
+        text = format_reminder_message(reminder, now=datetime(2026, 10, 4, 19, 59, tzinfo=UTC))
+
+        assert "Programado para: 04/10/2026 21:59" in text
+        assert "Programado para: 04/10/2026 19:59" not in text
+
     def test_includes_title_description_and_scheduled_date(self) -> None:
         reminder = _reminder(title="Renovar seguro", description="Llamar a la correduría")
         text = format_reminder_message(reminder)

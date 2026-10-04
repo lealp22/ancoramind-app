@@ -69,9 +69,14 @@ class RemindersWorker:
                 if delivered:
                     await repo.mark_fired(reminder.id, reminder.user_id)
                     fired += 1
+                    delivered_at = datetime.now(tz=UTC)
                     logger.info(
-                        "Reminder fired: %s (user %s, due %s)",
-                        reminder.id, reminder.user_id, reminder.trigger_at.isoformat(),
+                        "Reminder delivered (reminder_id=%s, trigger_at_utc=%s, "
+                        "delivered_at_utc=%s, delay_seconds=%.3f)",
+                        reminder.id,
+                        reminder.trigger_at.isoformat(),
+                        delivered_at.isoformat(),
+                        max(0.0, (delivered_at - reminder.trigger_at).total_seconds()),
                     )
                     if reminder.recurrence_rule is not None:
                         await self._advance_recurrence(repo, reminder)
