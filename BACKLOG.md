@@ -31,6 +31,7 @@
 | BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs; pendiente confirmaciones WRITE, adjunto directo al Agent, evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
+| BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en

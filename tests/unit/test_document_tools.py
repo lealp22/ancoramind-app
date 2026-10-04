@@ -82,6 +82,27 @@ async def test_analyze_document_receives_telegram_photo(monkeypatch):
     assert response == "✅ Documento recibido y archivado correctamente."
 
 
+async def test_search_documents_semantically_wraps_results_as_untrusted_data(monkeypatch):
+    document = _ingest_result("contrato-murcia.pdf", "application/pdf", 10).document
+    service = AsyncMock()
+    from src.domain.documents.models import SemanticDocumentMatch
+
+    service.search_documents_semantically.return_value = [
+        SemanticDocumentMatch(document=document, distance=0.12)
+    ]
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+
+    response = await document_tools.search_documents_semantically(_run_context(), "contrato Murcia")
+
+    assert '"trust":"untrusted_data"' in response
+    assert '"source":"search_documents_semantically"' in response
+    assert "contrato-murcia.pdf" in response
+
+
 async def test_analyze_document_receives_telegram_file_and_sanitizes_name(
     monkeypatch,
 ):

@@ -24,9 +24,10 @@ Usar **Supabase** como proveedor de infraestructura gestionada:
    apuntan al **session pooler** de Supabase (IPv4, modo sesión).
 2. **Storage de ficheros** — bucket privado `ancora-documents` (límite 20 MB)
    accedido con la Service Role Key **solo desde el servidor**.
-3. **pgvector** — la extensión `vector` 0.8.2 está **disponible pero NO
-   instalada**. Su activación se decide cuando BL-6 aporte contenido real de
-   documentos; hasta entonces solo diseño.
+3. **pgvector** — la extensión `vector` se activa mediante la migración
+   `0008_document_semantic_retrieval` para BL-42/specs/026. El índice sigue en
+   PostgreSQL junto a `ancora.documents`, conservando migraciones, aislamiento
+   por usuario y cascada de borrado; no se incorpora una base vectorial externa.
 
 ## Consecuencias
 

@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     """AncoraMind-only LiteLLM virtual key; Railway secret and never a runtime revision."""
     litellm_proxy_default_route: str = "ancoramind-default-r1"
     """Versioned LiteLLM alias used by the transitional AgentOS singleton."""
+    document_embedding_model: str = "text-embedding-3-small"
+    """Physical embedding model for direct/local development only."""
+    document_embedding_base_url: str | None = None
+    document_embedding_dimensions: int = Field(default=1536, ge=1536, le=1536)
+    """Fixed pgvector dimension; changing it requires a deliberate reindex migration."""
+    document_embedding_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
 
     # ── Telegram ──────────────────────────────────────
     telegram_token: str = ""

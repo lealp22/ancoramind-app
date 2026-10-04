@@ -4,7 +4,11 @@ from uuid import uuid4
 
 import pytest
 
-from src.domain.documents.models import AIExtractionCreate, DocumentCreate
+from src.domain.documents.models import (
+    AIExtractionCreate,
+    DocumentCreate,
+    DocumentSearchChunkUpsert,
+)
 from src.repositories.documents import DocumentsRepository
 
 pytestmark = pytest.mark.integration
@@ -89,3 +93,49 @@ async def test_get_with_extraction_of_missing_document(session, user_a):
 
     assert await repo.get_by_id(user_a, uuid4()) is None
     assert await repo.get_document_with_extraction(user_a, uuid4()) is None
+
+
+async def test_semantic_search_is_user_scoped_idempotent_and_cascades(session, user_a, user_b):
+    repo = DocumentsRepository(session)
+    own = await repo.create(user_a, _document("contrato-murcia.pdf"))
+    other = await repo.create(user_b, _document("contrato-privado.pdf"))
+    vector = (0.1,) * 1536
+
+    own_chunk = DocumentSearchChunkUpsert(
+        document_id=own.id,
+        user_id=user_a,
+        content_hash="a" * 64,
+        index_text='{"filename":"contrato-murcia.pdf"}',
+        embedding=vector,
+        embedding_provider="test",
+        embedding_model="test-embedding-r1",
+        embedding_dimensions=1536,
+        status="completed",
+    )
+    await repo.upsert_search_chunk(own_chunk)
+    await repo.upsert_search_chunk(own_chunk.model_copy(update={"content_hash": "b" * 64}))
+    await repo.upsert_search_chunk(
+        own_chunk.model_copy(update={"document_id": other.id, "user_id": user_b})
+    )
+
+    own_matches = await repo.search_semantically(
+        user_id=user_a,
+        embedding=vector,
+        embedding_model="test-embedding-r1",
+        embedding_dimensions=1536,
+    )
+    assert [match.document.id for match in own_matches] == [own.id]
+    assert await repo.search_semantically(
+        user_id=user_b,
+        embedding=vector,
+        embedding_model="test-embedding-r1",
+        embedding_dimensions=1536,
+    ) == [own_matches[0].model_copy(update={"document": other})]
+
+    assert await repo.delete(user_a, own.id) is True
+    assert await repo.search_semantically(
+        user_id=user_a,
+        embedding=vector,
+        embedding_model="test-embedding-r1",
+        embedding_dimensions=1536,
+    ) == []

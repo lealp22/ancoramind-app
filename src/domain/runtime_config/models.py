@@ -29,7 +29,9 @@ class LogicalRoute(RuntimeConfigModel):
     """A portable logical route resolved to a versioned Gateway alias."""
 
     effective_gateway_route: str = Field(min_length=4, max_length=63)
-    capabilities: frozenset[Literal["text", "vision", "tool_calling", "structured_output"]]
+    capabilities: frozenset[
+        Literal["text", "vision", "tool_calling", "structured_output", "embeddings"]
+    ]
 
     @field_validator("effective_gateway_route")
     @classmethod
@@ -311,6 +313,10 @@ def bootstrap_runtime_configuration(
         "ancoramind-vision": {
             "effective_gateway_route": "ancoramind-vision-r1",
             "capabilities": ["text", "vision", "tool_calling", "structured_output"],
+        },
+        "ancoramind-embeddings": {
+            "effective_gateway_route": "ancoramind-embeddings-r1",
+            "capabilities": ["embeddings"],
         },
     }
     return RuntimeConfiguration.model_validate(

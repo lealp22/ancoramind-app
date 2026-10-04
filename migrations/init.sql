@@ -15,6 +15,7 @@ GRANT CREATE ON SCHEMA ancora TO ancora;
 
 -- Alembic is the canonical migration history. This file mirrors Alembic head
 -- for fresh/local bootstrap and remains idempotent.
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ── AncoraMind Domain Tables ──────────────────────
 
@@ -54,6 +55,37 @@ CREATE TABLE IF NOT EXISTS ancora.ai_extractions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_extractions_doc_id ON ancora.ai_extractions(document_id);
+
+-- Semantic retrieval index (specs/026). Index text is bounded structured
+-- metadata only in the first increment; original document content stays in
+-- the storage backend and is never sent to telemetry.
+CREATE TABLE IF NOT EXISTS ancora.document_search_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID NOT NULL REFERENCES ancora.documents(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,
+    extraction_id UUID REFERENCES ancora.ai_extractions(id) ON DELETE SET NULL,
+    chunk_index INT NOT NULL DEFAULT 0,
+    content_hash VARCHAR(64) NOT NULL,
+    index_text TEXT NOT NULL,
+    embedding vector(1536),
+    embedding_provider VARCHAR(63),
+    embedding_model VARCHAR(255) NOT NULL,
+    embedding_dimensions INT NOT NULL DEFAULT 1536,
+    status VARCHAR(31) NOT NULL DEFAULT 'pending',
+    error_class VARCHAR(127),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_document_search_chunk_version
+        UNIQUE (document_id, chunk_index, embedding_model, embedding_dimensions),
+    CONSTRAINT chk_document_search_chunk_status
+        CHECK (status IN ('pending', 'completed', 'failed'))
+);
+CREATE INDEX IF NOT EXISTS idx_document_search_chunks_user_model_status
+    ON ancora.document_search_chunks(user_id, embedding_model, embedding_dimensions)
+    WHERE status = 'completed';
+CREATE INDEX IF NOT EXISTS idx_document_search_chunks_embedding_cosine
+    ON ancora.document_search_chunks USING hnsw (embedding vector_cosine_ops)
+    WHERE status = 'completed' AND embedding IS NOT NULL;
 -- Vehicles (M4)
 CREATE TABLE IF NOT EXISTS ancora.vehicles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

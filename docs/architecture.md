@@ -160,7 +160,7 @@ flowchart TB
 |---|---|---|
 | **Runtime agentic** | Agno + AgentOS | Infraestructura reemplazable |
 | **Lenguaje** | Python 3.12+ | |
-| **Base de datos canónica** | PostgreSQL | Schemas separados: `agno_runtime` / `ancora` |
+| **Base de datos canónica** | PostgreSQL + pgvector | Schemas separados: `agno_runtime` / `ancora`; retrieval documental en el schema canónico |
 | **Almacenamiento documental** | Filesystem local (POC), S3/MinIO/R2 (prod) | Abstracción `DocumentStorage` |
 | **Canal** | Telegram (private chats only) | Gestionado por AgentOS |
 | **LLM** | Rutas lógicas + LiteLLM Proxy (target specs/013) | OpenRouter upstream; config runtime versionada |
@@ -188,6 +188,7 @@ PostgreSQL
       ├── channel_accounts
       ├── documents
       ├── ai_extractions
+       ├── document_search_chunks
       ├── action_proposals
       ├── action_executions
       ├── vehicles

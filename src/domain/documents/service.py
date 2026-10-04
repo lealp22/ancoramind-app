@@ -7,15 +7,21 @@ Extraction inference goes through the domain-owned ``DocumentExtractionPort``
 
 import json
 import logging
+from hashlib import sha256
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from src.domain.documents.embeddings import DocumentEmbeddingPort
 from src.domain.documents.extraction import DocumentExtractionPort, DocumentVisualPage
 from src.domain.documents.models import (
     AIExtraction,
     AIExtractionCreate,
     Document,
     DocumentCreate,
+    DocumentSearchChunkUpsert,
     DocumentWithExtraction,
+    SemanticDocumentMatch,
 )
 from src.domain.documents.schemas import GenericDocumentExtraction
 from src.observability.telemetry import get_telemetry
@@ -32,16 +38,20 @@ class DocumentService:
     EXTRACTION_PROMPT_VERSION = "1.2"
     EXTRACTION_SCHEMA_VERSION = "1.1"
     MAX_TEXT_PREVIEW_BYTES = 5000
+    MAX_INDEX_TEXT_CHARS = 6000
+    INDEX_TEXT_VERSION = "1"
 
     def __init__(
         self,
         repository: DocumentsRepository,
         storage: DocumentStorage,
         extraction_port: DocumentExtractionPort,
+        embedding_port: DocumentEmbeddingPort | None = None,
     ) -> None:
         self._repo = repository
         self._storage = storage
         self._extraction_port = extraction_port
+        self._embedding_port = embedding_port
 
     # ── Pipeline ────────────────────────────────────────
 
@@ -83,6 +93,7 @@ class DocumentService:
 
         # 3. AI extraction (for text-based documents)
         extraction = await self._extract(doc, content, visual_pages, extracted_text)
+        await self._index_for_semantic_retrieval(doc, extraction)
 
         return DocumentWithExtraction(document=doc, extraction=extraction)
 
@@ -178,6 +189,106 @@ class DocumentService:
             user_id=user_context.user_id,
             query=query,
         )
+
+    async def search_documents_semantically(
+        self,
+        user_context: UserContext,
+        query: str,
+        limit: int = 10,
+    ) -> list[SemanticDocumentMatch]:
+        """Find the user's completed semantic-index entries for a natural-language query."""
+        if self._embedding_port is None or not query.strip():
+            return []
+        outcome = await self._embedding_port.embed(query[:self.MAX_INDEX_TEXT_CHARS])
+        if outcome.status != "completed" or outcome.embedding is None:
+            logger.warning(
+                "Semantic document query embedding failed (status=%s, error_class=%s)",
+                outcome.status,
+                outcome.error_class,
+            )
+            return []
+        return await self._repo.search_semantically(
+            user_id=user_context.user_id,
+            embedding=outcome.embedding,
+            embedding_model=outcome.model,
+            embedding_dimensions=len(outcome.embedding),
+            limit=max(1, min(limit, 20)),
+        )
+
+    async def _index_for_semantic_retrieval(
+        self,
+        document: Document,
+        extraction: AIExtraction | None,
+    ) -> None:
+        """Best-effort indexing: archival success never depends on embeddings."""
+        if self._embedding_port is None:
+            return
+        index_text = self._build_index_text(document, extraction)
+        outcome = await self._embedding_port.embed(index_text)
+        status = "completed" if outcome.status == "completed" and outcome.embedding else "failed"
+        try:
+            await self._repo.upsert_search_chunk(
+                DocumentSearchChunkUpsert(
+                    document_id=document.id,
+                    user_id=document.user_id,
+                    extraction_id=extraction.id if extraction else None,
+                    content_hash=sha256(index_text.encode("utf-8")).hexdigest(),
+                    index_text=index_text,
+                    embedding=outcome.embedding if status == "completed" else None,
+                    embedding_provider=outcome.provider or None,
+                    embedding_model=outcome.model or "unavailable",
+                    embedding_dimensions=len(outcome.embedding) if outcome.embedding else 1536,
+                    status=status,
+                    error_class=outcome.error_class,
+                )
+            )
+        except SQLAlchemyError:
+            logger.warning("Document semantic-index persistence failed", exc_info=True)
+            get_telemetry().counter(
+                "ancora.document.semantic_index",
+                attributes={"ancora.document.index_status": "persistence_failed"},
+            )
+            return
+        get_telemetry().counter(
+            "ancora.document.semantic_index",
+            attributes={"ancora.document.index_status": status},
+        )
+
+    @classmethod
+    def _build_index_text(cls, document: Document, extraction: AIExtraction | None) -> str:
+        """Build bounded deterministic embedding input from untrusted metadata as data."""
+        source: dict[str, object] = {
+            "index_version": cls.INDEX_TEXT_VERSION,
+            "filename": document.original_filename[:255],
+            "mime_type": document.mime_type[:127],
+        }
+        if extraction is not None:
+            fields: dict[str, object] = {}
+            for key in ("document_type", "title", "summary", "entities", "dates", "amounts"):
+                value = extraction.extraction.get(key)
+                if value is not None:
+                    fields[key] = cls._bounded_index_value(value)
+            if fields:
+                source["extraction"] = fields
+        return json.dumps(source, ensure_ascii=False, sort_keys=True)[: cls.MAX_INDEX_TEXT_CHARS]
+
+    @classmethod
+    def _bounded_index_value(cls, value: object, *, depth: int = 0) -> object:
+        """Preserve only bounded JSON-like untrusted data for retrieval indexing."""
+        if depth >= 3:
+            return "[truncated]"
+        if isinstance(value, str):
+            return value[:1000]
+        if isinstance(value, (int, float, bool)) or value is None:
+            return value
+        if isinstance(value, list):
+            return [cls._bounded_index_value(item, depth=depth + 1) for item in value[:20]]
+        if isinstance(value, dict):
+            return {
+                str(key)[:80]: cls._bounded_index_value(item, depth=depth + 1)
+                for key, item in list(value.items())[:20]
+            }
+        return str(value)[:1000]
 
     async def delete_document(
         self,

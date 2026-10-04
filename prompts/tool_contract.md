@@ -66,7 +66,7 @@ There is no `status` field in this shape — don't ask a tool for one, don't
 claim one in your own output, and don't parse this reply as JSON.
 
 **2. Retrieved-data envelope** — every read/search tool (`search_documents`,
-`get_document`, `search_notes`, `find_vehicle`, `get_vehicle_summary`,
+`search_documents_semantically`, `get_document`, `search_notes`, `find_vehicle`, `get_vehicle_summary`,
 `get_vehicle_maintenance_history`, `search_web`, and future read tools) that found at
 least one result starts its reply with the line `"Datos recuperados:"`
 followed by one JSON object

@@ -28,6 +28,7 @@ def test_gateway_exposes_exactly_the_versioned_ancoramind_aliases() -> None:
         "ancoramind-default-r1",
         "ancoramind-fast-r1",
         "ancoramind-vision-r1",
+        "ancoramind-embeddings-r1",
     ]
 
 

@@ -38,7 +38,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.domain.runtime_config.models import GATEWAY_ROUTE_PATTERN  # noqa: E402
 
-ALIASES = ["ancoramind-default-r1", "ancoramind-fast-r1", "ancoramind-vision-r1"]
+ALIASES = [
+    "ancoramind-default-r1",
+    "ancoramind-fast-r1",
+    "ancoramind-vision-r1",
+    "ancoramind-embeddings-r1",
+]
 
 DEFAULT_KEY_RPM = 60
 DEFAULT_KEY_TPM = 250_000

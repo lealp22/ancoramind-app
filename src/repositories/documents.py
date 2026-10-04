@@ -12,7 +12,9 @@ from src.domain.documents.models import (
     AIExtractionCreate,
     Document,
     DocumentCreate,
+    DocumentSearchChunkUpsert,
     DocumentWithExtraction,
+    SemanticDocumentMatch,
 )
 
 
@@ -112,6 +114,106 @@ class DocumentsRepository:
         result = await self._session.execute(stmt, {"id": document_id, "user_id": user_id})
         await self._session.commit()
         return result.fetchone() is not None
+
+    # ── Semantic retrieval ──────────────────────────────
+
+    async def upsert_search_chunk(self, data: DocumentSearchChunkUpsert) -> None:
+        """Persist an idempotent vector index row without exposing its text in logs."""
+        await self._session.execute(
+            text("""
+                INSERT INTO ancora.document_search_chunks (
+                    document_id, user_id, extraction_id, chunk_index, content_hash,
+                    index_text, embedding, embedding_provider, embedding_model,
+                    embedding_dimensions, status, error_class, updated_at
+                ) VALUES (
+                    :document_id, :user_id, :extraction_id, :chunk_index, :content_hash,
+                    :index_text, CAST(:embedding AS vector), :embedding_provider, :embedding_model,
+                    :embedding_dimensions, :status, :error_class, :now
+                )
+                ON CONFLICT (document_id, chunk_index, embedding_model, embedding_dimensions)
+                DO UPDATE SET
+                    extraction_id = EXCLUDED.extraction_id,
+                    content_hash = EXCLUDED.content_hash,
+                    index_text = EXCLUDED.index_text,
+                    embedding = EXCLUDED.embedding,
+                    embedding_provider = EXCLUDED.embedding_provider,
+                    status = EXCLUDED.status,
+                    error_class = EXCLUDED.error_class,
+                    updated_at = EXCLUDED.updated_at
+            """),
+            {
+                "document_id": data.document_id,
+                "user_id": data.user_id,
+                "extraction_id": data.extraction_id,
+                "chunk_index": data.chunk_index,
+                "content_hash": data.content_hash,
+                "index_text": data.index_text,
+                "embedding": _vector_literal(data.embedding),
+                "embedding_provider": data.embedding_provider,
+                "embedding_model": data.embedding_model,
+                "embedding_dimensions": data.embedding_dimensions,
+                "status": data.status,
+                "error_class": data.error_class,
+                "now": datetime.now(tz=UTC),
+            },
+        )
+        await self._session.commit()
+
+    async def search_semantically(
+        self,
+        *,
+        user_id: str,
+        embedding: tuple[float, ...],
+        embedding_model: str,
+        embedding_dimensions: int,
+        limit: int = 10,
+    ) -> list[SemanticDocumentMatch]:
+        """Search completed index rows by cosine distance, strictly user-scoped."""
+        result = await self._session.execute(
+            text("""
+                SELECT * FROM (
+                    SELECT DISTINCT ON (d.id)
+                    d.id, d.user_id, d.storage_key, d.original_filename,
+                    d.mime_type, d.size_bytes, d.created_at,
+                    c.embedding <=> CAST(:embedding AS vector) AS distance
+                    FROM ancora.document_search_chunks c
+                    JOIN ancora.documents d ON d.id = c.document_id
+                    WHERE c.user_id = :user_id
+                      AND d.user_id = :user_id
+                      AND c.status = 'completed'
+                      AND c.embedding IS NOT NULL
+                      AND c.embedding_model = :embedding_model
+                      AND c.embedding_dimensions = :embedding_dimensions
+                    ORDER BY d.id, c.embedding <=> CAST(:embedding AS vector), d.created_at DESC
+                ) matches
+                ORDER BY distance ASC, created_at DESC
+                LIMIT :limit
+            """),
+            {
+                "user_id": user_id,
+                "embedding": _vector_literal(embedding),
+                "embedding_model": embedding_model,
+                "embedding_dimensions": embedding_dimensions,
+                "limit": max(1, min(limit, 20)),
+            },
+        )
+        rows = result.fetchall()
+        matches = [
+            SemanticDocumentMatch(
+                document=Document(
+                    id=row.id,
+                    user_id=row.user_id,
+                    storage_key=row.storage_key,
+                    original_filename=row.original_filename,
+                    mime_type=row.mime_type,
+                    size_bytes=row.size_bytes,
+                    created_at=row.created_at,
+                ),
+                distance=float(row.distance),
+            )
+            for row in rows
+        ]
+        return matches
 # ── AI Extractions ────────────────────────────────────
 
     async def create_extraction(self, data: AIExtractionCreate) -> AIExtraction:
@@ -171,3 +273,10 @@ class DocumentsRepository:
             return None
         extraction = await self.get_latest_extraction(document_id)
         return DocumentWithExtraction(document=doc, extraction=extraction)
+
+
+def _vector_literal(embedding: tuple[float, ...] | None) -> str | None:
+    """Return a pgvector input value for a bound SQL parameter, never SQL text."""
+    if embedding is None:
+        return None
+    return "[" + ",".join(format(value, ".9g") for value in embedding) + "]"

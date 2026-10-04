@@ -105,11 +105,13 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             get_document,
             propose_document_delete,
             search_documents,
+            search_documents_semantically,
         )
 
         tools.extend(
             [
                 search_documents,
+                search_documents_semantically,
                 get_document,
                 analyze_document,
                 propose_document_delete,
@@ -117,7 +119,8 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             ]
         )
         logger.info(
-            "Document tools registered: search_documents, get_document, analyze_document, "
+            "Document tools registered: search_documents, search_documents_semantically, "
+            "get_document, analyze_document, "
             "propose_document_delete, execute_document_delete"
         )
 

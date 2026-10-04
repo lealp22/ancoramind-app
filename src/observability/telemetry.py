@@ -64,6 +64,7 @@ SPAN_ATTRIBUTE_ALLOWLIST = frozenset(
         "ancora.tool.name",
         "ancora.tool.outcome",
         "ancora.document.extraction_route",
+        "ancora.document.index_status",
         "ancora.health.component",
         "ancora.health.status",
         "ancora.circuit.state",

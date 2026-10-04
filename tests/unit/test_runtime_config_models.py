@@ -43,6 +43,7 @@ def test_bootstrap_keeps_the_guaranteed_base_alias_until_runtime_activation() ->
     assert config.routing.routes["ancoramind-default"].effective_gateway_route == (
         "ancoramind-default-r1"
     )
+    assert config.routing.routes["ancoramind-embeddings"].capabilities == {"embeddings"}
 
 
 def test_gpt_6_luna_runtime_candidate_is_valid() -> None:

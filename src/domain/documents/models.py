@@ -63,3 +63,27 @@ class DocumentWithExtraction(BaseModel):
 
     document: Document
     extraction: AIExtraction | None
+
+
+class DocumentSearchChunkUpsert(BaseModel):
+    """One bounded semantic-retrieval representation for a document."""
+
+    document_id: UUID
+    user_id: str
+    extraction_id: UUID | None = None
+    chunk_index: int = 0
+    content_hash: str
+    index_text: str
+    embedding: tuple[float, ...] | None = None
+    embedding_provider: str | None = None
+    embedding_model: str
+    embedding_dimensions: int
+    status: str
+    error_class: str | None = None
+
+
+class SemanticDocumentMatch(BaseModel):
+    """A user-scoped document selected by vector similarity."""
+
+    document: Document
+    distance: float
