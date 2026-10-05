@@ -135,7 +135,7 @@ def _parse_args() -> argparse.Namespace:
 
     issue_parser = subcommands.add_parser("issue", help="Issue a one-time-display invitation code")
     issue_parser.add_argument("--max-uses", type=int, default=1, choices=range(1, 101))
-    issue_parser.add_argument("--expires-in-minutes", type=int, default=60, choices=range(5, 10081))
+    issue_parser.add_argument("--expires-in-minutes", type=int, default=60, choices=range(5, 43201))
     issue_parser.add_argument("--reason", required=True, help="Auditable issuance reason")
 
     for command, help_text in (

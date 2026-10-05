@@ -85,7 +85,10 @@ class PairingInvitationCreate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     max_uses: int = Field(default=1, ge=1, le=100)
-    expires_in_minutes: int = Field(default=60, ge=5, le=10080)
+    expires_in_minutes: int = Field(default=60, ge=5, le=43200)
+    """Up to 30 days. A long-lived code enlarges the leak window if the raw
+    code is captured before redemption; prefer a low max_uses alongside a
+    long expiry."""
     reason: str = Field(min_length=1, max_length=2000)
 
     @field_validator("reason")
