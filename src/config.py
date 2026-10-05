@@ -80,6 +80,20 @@ class Settings(BaseSettings):
     """Enable private-chat `/pair <code>` redemption and durable authorization admission."""
     telegram_pairing_code_pepper: str = ""
     """Secret HMAC pepper for invitation codes; never persist or log the raw code."""
+
+    # ── Admin dashboard (BL-43 / specs-027) ──────────
+    admin_dashboard_enabled: bool = False
+    """Expose the operator web dashboard at /admin/dashboard; disabled by default."""
+    admin_dashboard_token: str = ""
+    """Bearer token for the dashboard's own API, separate from
+    RUNTIME_CONFIG_ADMIN_TOKEN so a browser-exposed secret never carries the
+    CLI's runtime-config credential. Railway secret only."""
+    admin_link_grafana_url: str = ""
+    admin_link_railway_url: str = ""
+    admin_link_supabase_url: str = ""
+    admin_link_openrouter_url: str = ""
+    admin_link_litellm_url: str = ""
+    """Plain operator-facing links shown on the dashboard; empty hides the row."""
     app_env: str = "production"
     """Deployment environment. Defaults to the safe value (specs/023 T2):
     local development must opt in explicitly with APP_ENV=development, which

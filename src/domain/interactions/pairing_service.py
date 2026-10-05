@@ -65,6 +65,10 @@ class TelegramPairingService:
         """Return the bounded pending queue for an authenticated operator."""
         return await self._repository.list_pending_requests(limit)
 
+    async def list_invitations(self, limit: int = 100) -> list[PairingInvitation]:
+        """Return the most recent invitations for an authenticated operator."""
+        return await self._repository.list_invitations(limit)
+
     async def reject_request(
         self,
         request_id: str,

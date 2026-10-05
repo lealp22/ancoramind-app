@@ -123,6 +123,18 @@ async def test_issue_invitation_persists_only_the_keyed_hash() -> None:
     assert issued.code not in repository.create_invitation.await_args.kwargs["code_hash"]
 
 
+async def test_list_invitations_delegates_to_the_repository() -> None:
+    repository = AsyncMock(spec=TelegramPairingRepository)
+    invitation = _invitation()
+    repository.list_invitations.return_value = [invitation]
+    service = TelegramPairingService(repository, code_pepper="pairing-pepper")
+
+    invitations = await service.list_invitations(limit=10)
+
+    assert invitations == [invitation]
+    repository.list_invitations.assert_awaited_once_with(10)
+
+
 async def test_redeem_hashes_the_code_and_does_not_authorize_the_user() -> None:
     repository = AsyncMock(spec=TelegramPairingRepository)
     repository.redeem_invitation.return_value = PairingRedemption(

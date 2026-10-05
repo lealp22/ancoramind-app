@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AncoraMind — Admin</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --ok: #4ade80;
+    --degraded: #fbbf24;
+    --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  h2 { font-size: 1rem; margin: 0 0 10px; color: var(--accent); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    max-width: 1200px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+  input, textarea {
+    width: 100%;
+    background: #0b1220;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+  textarea { min-height: 110px; font-family: ui-monospace, Consolas, monospace; }
+  button {
+    margin-top: 10px;
+    margin-right: 6px;
+    background: var(--accent);
+    color: #0b1220;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  button.secondary { background: var(--border); color: var(--text); }
+  pre {
+    background: #0b1220;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 0.78rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 8px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 0.72rem; }
+  .badge.healthy { background: var(--ok); color: #0b1220; }
+  .badge.degraded { background: var(--degraded); color: #0b1220; }
+  .badge.disabled, .badge.unknown { background: var(--muted); color: #0b1220; }
+  a { color: var(--accent); }
+  .hint { color: var(--muted); font-size: 0.78rem; }
+  #login-panel.hidden, #app.hidden { display: none; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+</style>
+</head>
+<body>
+
+<h1>AncoraMind — Panel de administración</h1>
+
+<div class="panel" id="login-panel" style="max-width:420px;">
+  <h2>Acceso</h2>
+  <label for="token">ADMIN_DASHBOARD_TOKEN</label>
+  <input id="token" type="password" autocomplete="off" />
+  <label for="actor">Actor (tu nombre, para auditoría)</label>
+  <input id="actor" type="text" autocomplete="off" />
+  <button onclick="login()">Entrar</button>
+  <p class="hint">El token sólo se guarda en este navegador (sessionStorage), nunca se envía a nada que no sea este backend, y se borra automáticamente tras 30 minutos sin actividad o al cerrar la pestaña.</p>
+  <pre id="login-error" style="display:none;"></pre>
+</div>
+
+<div id="app" class="hidden">
+  <button class="secondary" onclick="logout()" style="margin-bottom:12px;">Cerrar sesión</button>
+  <div class="grid">
+
+    <div class="panel">
+      <h2>Invitaciones (pairing)</h2>
+      <div class="row">
+        <div><label>Usos máximos</label><input id="inv-max-uses" type="number" value="1" min="1" max="100" /></div>
+        <div><label>Caduca en (min)</label><input id="inv-expires" type="number" value="60" min="5" max="10080" /></div>
+      </div>
+      <label>Motivo</label>
+      <input id="inv-reason" type="text" placeholder="p.ej. evaluador beta Jesús" />
+      <button onclick="createInvitation()">Crear invitación</button>
+      <button class="secondary" onclick="loadInvitations()">Refrescar lista</button>
+      <pre id="inv-result" style="display:none;"></pre>
+      <table id="inv-table"><thead>
+        <tr><th>Estado</th><th>Usos</th><th>Caduca</th><th>Creada por</th><th>Motivo</th></tr>
+      </thead><tbody></tbody></table>
+    </div>
+
+    <div class="panel">
+      <h2>Runtime config</h2>
+      <div id="rc-status" class="hint">(sin cargar)</div>
+      <button class="secondary" onclick="loadRuntimeStatus()">Refrescar status</button>
+      <label>Configuración (JSON)</label>
+      <textarea id="rc-config" placeholder='{"schema_version": 1, ...}'></textarea>
+      <label>Motivo</label>
+      <input id="rc-reason" type="text" />
+      <div>
+        <button onclick="validateRuntimeConfig()">Validar</button>
+        <button onclick="createRuntimeRevision()">Crear revisión</button>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div><label>Revisión destino</label><input id="rc-revision" type="number" min="1" /></div>
+        <div><label>Revisión activa esperada</label><input id="rc-expected" type="number" min="1" /></div>
+      </div>
+      <div>
+        <button onclick="activateRuntimeRevision()">Activar</button>
+        <button class="secondary" onclick="rollbackRuntimeRevision()">Rollback</button>
+      </div>
+      <pre id="rc-result" style="display:none;"></pre>
+    </div>
+
+    <div class="panel">
+      <h2>Salud</h2>
+      <button class="secondary" onclick="loadHealth()">Refrescar</button>
+      <table id="health-table"><tbody></tbody></table>
+      <pre id="health-raw" style="display:none;"></pre>
+    </div>
+
+    <div class="panel">
+      <h2>Enlaces</h2>
+      <button class="secondary" onclick="loadLinks()">Refrescar</button>
+      <table id="links-table"><tbody></tbody></table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// El token sólo vive en sessionStorage (texto plano, como cualquier bearer de
+// este backend) mientras dure la pestaña. Este temporizador no busca
+// interrumpir el uso normal (30 min es holgado para una sesión de trabajo
+// activa) — su único objetivo es acotar cuánto tiempo seguiría siendo
+// utilizable el token si alguien lo robara (XSS, devtools dejadas abiertas,
+// pestaña olvidada en una máquina compartida) sin que haga falta detectar
+// el robo para que deje de servir.
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+let lastActivityAt = Date.now();
+let idleCheckTimer = null;
+
+const authHeaders = () => ({
+  "Authorization": "Bearer " + sessionStorage.getItem("admin_token"),
+  "X-Ancora-Admin-Actor": sessionStorage.getItem("admin_actor") || "",
+  "Content-Type": "application/json",
+});
+
+function login() {
+  const token = document.getElementById("token").value.trim();
+  const actor = document.getElementById("actor").value.trim();
+  if (!token || !actor) {
+    showLoginError("Token y actor son obligatorios.");
+    return;
+  }
+  sessionStorage.setItem("admin_token", token);
+  sessionStorage.setItem("admin_actor", actor);
+  enterApp();
+}
+
+function logout(reason) {
+  sessionStorage.removeItem("admin_token");
+  sessionStorage.removeItem("admin_actor");
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("login-panel").classList.remove("hidden");
+  stopIdleWatch();
+  if (reason) showLoginError(reason);
+}
+
+function markActivity() {
+  lastActivityAt = Date.now();
+}
+
+function startIdleWatch() {
+  markActivity();
+  ["mousemove", "mousedown", "keydown", "scroll", "touchstart"].forEach((event) =>
+    document.addEventListener(event, markActivity, { passive: true })
+  );
+  idleCheckTimer = setInterval(() => {
+    if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS) {
+      logout("Sesión cerrada por inactividad. Vuelve a introducir el token.");
+    }
+  }, 30 * 1000);
+}
+
+function stopIdleWatch() {
+  if (idleCheckTimer) {
+    clearInterval(idleCheckTimer);
+    idleCheckTimer = null;
+  }
+}
+
+function showLoginError(message) {
+  const el = document.getElementById("login-error");
+  el.textContent = message;
+  el.style.display = "block";
+}
+
+function enterApp() {
+  document.getElementById("login-panel").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  startIdleWatch();
+  loadInvitations();
+  loadRuntimeStatus();
+  loadHealth();
+  loadLinks();
+}
+
+async function apiGet(path) {
+  const res = await fetch(path, { headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(JSON.stringify(body));
+  return body;
+}
+
+async function apiSend(method, path, payload) {
+  const res = await fetch(path, { method, headers: authHeaders(), body: JSON.stringify(payload || {}) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(JSON.stringify(body));
+  return body;
+}
+
+function showPre(id, data) {
+  const el = document.getElementById(id);
+  el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  el.style.display = "block";
+}
+
+async function loadInvitations() {
+  try {
+    const data = await apiGet("/admin/dashboard/api/invitations");
+    const tbody = document.querySelector("#inv-table tbody");
+    tbody.innerHTML = "";
+    for (const inv of data.invitations) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${inv.status}</td><td>${inv.use_count}/${inv.max_uses}</td>` +
+        `<td>${new Date(inv.expires_at).toLocaleString()}</td>` +
+        `<td>${inv.created_by}</td><td>${inv.reason}</td>`;
+      tbody.appendChild(tr);
+    }
+  } catch (err) { showPre("inv-result", String(err)); }
+}
+
+async function createInvitation() {
+  try {
+    const payload = {
+      max_uses: parseInt(document.getElementById("inv-max-uses").value, 10),
+      expires_in_minutes: parseInt(document.getElementById("inv-expires").value, 10),
+      reason: document.getElementById("inv-reason").value,
+    };
+    const result = await apiSend("POST", "/admin/dashboard/api/invitations", payload);
+    showPre("inv-result", "Código (sólo se muestra una vez): " + result.code);
+    loadInvitations();
+  } catch (err) { showPre("inv-result", String(err)); }
+}
+
+async function loadRuntimeStatus() {
+  try {
+    const data = await apiGet("/admin/dashboard/api/runtime-config/status");
+    document.getElementById("rc-status").textContent =
+      `Revisión activa: ${data.active_revision} | fuente: ${data.source} | ruta por defecto: ${data.default_route} | BD disponible: ${data.database_available}`;
+    if (!document.getElementById("rc-expected").value) {
+      document.getElementById("rc-expected").value = data.active_revision;
+    }
+  } catch (err) { showPre("rc-result", String(err)); }
+}
+
+function runtimeConfigPayload() {
+  return JSON.parse(document.getElementById("rc-config").value || "{}");
+}
+
+async function validateRuntimeConfig() {
+  try {
+    const result = await apiSend("POST", "/admin/dashboard/api/runtime-config/validate", { config: runtimeConfigPayload() });
+    showPre("rc-result", result);
+  } catch (err) { showPre("rc-result", String(err)); }
+}
+
+async function createRuntimeRevision() {
+  try {
+    const result = await apiSend("POST", "/admin/dashboard/api/runtime-config/revisions", {
+      config: runtimeConfigPayload(),
+      reason: document.getElementById("rc-reason").value,
+    });
+    showPre("rc-result", result);
+  } catch (err) { showPre("rc-result", String(err)); }
+}
+
+async function activateRuntimeRevision() {
+  try {
+    const revision = parseInt(document.getElementById("rc-revision").value, 10);
+    const expected = parseInt(document.getElementById("rc-expected").value, 10);
+    const result = await apiSend("POST", `/admin/dashboard/api/runtime-config/revisions/${revision}/activate`, {
+      expected_current_revision: expected,
+      reason: document.getElementById("rc-reason").value,
+    });
+    showPre("rc-result", result);
+    loadRuntimeStatus();
+  } catch (err) { showPre("rc-result", String(err)); }
+}
+
+async function rollbackRuntimeRevision() {
+  try {
+    const revision = parseInt(document.getElementById("rc-revision").value, 10);
+    const expected = parseInt(document.getElementById("rc-expected").value, 10);
+    const result = await apiSend("POST", "/admin/dashboard/api/runtime-config/rollback", {
+      revision, expected_current_revision: expected,
+      reason: document.getElementById("rc-reason").value,
+    });
+    showPre("rc-result", result);
+    loadRuntimeStatus();
+  } catch (err) { showPre("rc-result", String(err)); }
+}
+
+async function loadHealth() {
+  try {
+    const res = await fetch("/health/readiness");
+    const data = await res.json();
+    const tbody = document.querySelector("#health-table tbody");
+    tbody.innerHTML = "";
+    for (const [name, info] of Object.entries(data.components || {})) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${name}</td><td><span class="badge ${info.status}">${info.status}</span></td>`;
+      tbody.appendChild(tr);
+    }
+    showPre("health-raw", data);
+  } catch (err) { showPre("health-raw", String(err)); }
+}
+
+async function loadLinks() {
+  try {
+    const data = await apiGet("/admin/dashboard/api/links");
+    const tbody = document.querySelector("#links-table tbody");
+    tbody.innerHTML = "";
+    for (const link of data.links) {
+      const badge = link.health_status
+        ? `<span class="badge ${link.health_status}">${link.health_status}</span>`
+        : "";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><a href="${link.url}" target="_blank" rel="noopener">${link.name}</a></td><td>${badge}</td>`;
+      tbody.appendChild(tr);
+    }
+  } catch (err) { console.error(err); }
+}
+
+if (sessionStorage.getItem("admin_token")) {
+  enterApp();
+}
+</script>
+</body>
+</html>

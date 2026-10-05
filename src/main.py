@@ -23,6 +23,10 @@ from agno.os.interfaces.telegram import Telegram
 from agno.os.settings import AgnoAPISettings
 from fastapi import FastAPI
 
+from src.agent.admin_dashboard import (
+    install_admin_dashboard,
+    validate_admin_dashboard_settings,
+)
 from src.agent.agent_os_rest_guard import install_agent_os_rest_guard
 from src.agent.ancora_agent import (
     create_ancora_agent,
@@ -279,6 +283,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     validate_telegram_admission_settings(settings)
     validate_runtime_config_admin_settings(settings)
     validate_telegram_pairing_admin_settings(settings)
+    validate_admin_dashboard_settings(settings)
     runtime_config_manager = create_runtime_config_manager(settings, get_session)
     health_registry = HealthRegistry()
     health_registry.set_component("app", "healthy")
@@ -321,6 +326,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         settings.telegram_admission_enabled
         or settings.runtime_config_admin_enabled
         or settings.telegram_pairing_admin_enabled
+        or settings.admin_dashboard_enabled
     ):
         base_app = FastAPI()
     if settings.telegram_admission_enabled:
@@ -335,6 +341,16 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         assert base_app is not None
         install_telegram_pairing_admin_api(base_app, settings, get_session)
         logger.info("Governed Telegram pairing admin API enabled at /admin/telegram-pairing")
+    if settings.admin_dashboard_enabled:
+        assert base_app is not None
+        install_admin_dashboard(
+            base_app,
+            settings,
+            get_session,
+            health_registry=health_registry,
+            runtime_config_manager=runtime_config_manager,
+        )
+        logger.info("Operator admin dashboard enabled at /admin/dashboard")
 
     agent_os = AgentOS(
         agents=[ancora_agent],

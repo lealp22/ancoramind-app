@@ -32,6 +32,8 @@
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
+| BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
+| BL-44 Parada de emergencia manual para Agent/LLM | 🔶 pendiente de diseño (surgió al definir BL-43; requiere revisar la matriz A–Y de specs/013 antes de tocar LLMAccess) |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en
@@ -1216,6 +1218,46 @@ matrícula formateada y OpenRouter streaming listos. **Pendiente/pausado:**
 re-test Telegram de documento y búsqueda para cerrar T7, bloqueado hasta
 resolver BL-18 (alternativa autorizada a ngrok). pgvector: disponible (0.8.2),
 NO instalado — diseño solo hasta BL-6.
+
+---
+
+### BL-43 · Pantalla de administración centralizada 🔶 implementado localmente — specs/027
+
+AncoraMind depende hoy de varias piezas externas (Railway, Supabase,
+OpenRouter, LiteLLM Gateway, Grafana) además de dos superficies HTTP de
+administración propias — `/admin/runtime-config/*` (BL-23/specs/013) y
+`/admin/telegram-pairing/*` (BL-24/specs/017) — operadas sólo desde dos
+scripts CLI. Se añade `GET /admin/dashboard`: una página HTML autocontenida
+(sin build, sin dependencias nuevas) con cuatro paneles — invitaciones de
+pairing, runtime-config (status/validar/crear revisión/activar/rollback, con
+paridad completa frente al CLI), salud (`GET /health/readiness` tal cual) y
+enlaces centralizados a las plataformas externas (estáticos salvo Supabase y
+LiteLLM Gateway, que reutilizan el estado ya calculado por `HealthRegistry`).
+Gateada por `ADMIN_DASHBOARD_TOKEN`, un secreto nuevo y propio — distinto de
+`RUNTIME_CONFIG_ADMIN_TOKEN` — porque el dashboard vive en un navegador (más
+expuesto que una terminal); su backend llama directamente a
+`TelegramPairingService` y al `RuntimeConfigManager` ya existente, sin
+reenviar peticiones HTTP a los admin API existentes. Los CLIs
+(`scripts/runtime_config.py`, `scripts/telegram_pairing.py`) siguen
+funcionando sin cambios; conviven con el dashboard como dos fachadas sobre el
+mismo dominio.
+**Criterio de cierre:** validado a mano en Railway con las variables
+`ADMIN_DASHBOARD_*` configuradas (ver specs/027/verification.md y
+`docs/runbooks-027-admin-dashboard.md`).
+
+### BL-44 · Parada de emergencia manual para Agent/LLM 🔶 pendiente de diseño
+
+Hoy sólo existe un hard-stop **automático** al 90% del gasto
+(`CostGovernanceConfig.hard_stop_threshold_pct`) — nada que el propietario
+pueda accionar a mano si la aplicación falla de forma general o el gasto se
+dispara de otra manera no cubierta por ese umbral. Surgió al definir BL-43,
+que deliberadamente lo deja fuera de alcance: construir un interruptor real
+significa tocar la ruta crítica de `LLMAccess`/`GovernedModel` que specs/013
+somete a su matriz de aceptación A–Y, y merece su propio spec en vez de
+mezclarse con una pantalla nueva. Diseñar: una señal durable (fuera del
+esquema versionado de `RuntimeConfiguration`) que `LLMAccess` compruebe antes
+de cada llamada al Gateway, y un panel nuevo en el dashboard de BL-43 una vez
+diseñada.
 
 ---
 

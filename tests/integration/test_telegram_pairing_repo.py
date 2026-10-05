@@ -105,6 +105,19 @@ async def test_expired_or_invalid_code_creates_no_request(session: AsyncSession)
     assert total.total == 0
 
 
+async def test_list_invitations_returns_newest_first_without_the_code_hash(
+    session: AsyncSession,
+) -> None:
+    await _create_invitation(session, code="older-code")
+    newer = await _create_invitation(session, code="newer-code")
+    repository = TelegramPairingRepository(session)
+
+    invitations = await repository.list_invitations(limit=10)
+
+    assert invitations[0].id == newer.id
+    assert all(not hasattr(item, "code_hash") for item in invitations)
+
+
 async def test_concurrent_redemption_consumes_one_capacity_unit(session: AsyncSession) -> None:
     await _create_invitation(session, code="race-code")
     code_hash = hash_pairing_code("race-code", PEPPER)

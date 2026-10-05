@@ -196,6 +196,23 @@ class TelegramPairingRepository:
         )
         return [self._request_from_row(row) for row in result.fetchall()]
 
+    async def list_invitations(self, limit: int = 100) -> list[PairingInvitation]:
+        """Return the most recent invitations, newest first; never the raw code."""
+        result = await self._session.execute(
+            text("""
+                SELECT id, status, max_uses, use_count, expires_at, created_by,
+                    reason, created_at, revoked_by, revoked_reason, revoked_at
+                FROM ancora.telegram_pairing_invitations
+                ORDER BY created_at DESC, id DESC
+                LIMIT :limit
+            """),
+            {"limit": limit},
+        )
+        return [
+            PairingInvitation.model_validate(row, from_attributes=True)
+            for row in result.fetchall()
+        ]
+
     async def reject_request(
         self,
         request_id: UUID,
