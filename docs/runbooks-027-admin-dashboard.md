@@ -77,10 +77,15 @@ dominio/puerto sin TLS.
 - **Invitaciones** — crea (`issue_invitation`) y lista (`list_invitations`)
   invitaciones de pairing (BL-24). El código generado se muestra **una sola
   vez**: cópialo y entrégalo por un canal privado aprobado antes de refrescar
-  o cerrar sesión; no quedará recuperable después. El resto de operaciones de
-  pairing (aprobar/rechazar solicitud, revocar invitación/autorización) sigue
-  siendo exclusivo de `scripts/telegram_pairing.py` — este incremento no las
-  añadió al dashboard.
+  o cerrar sesión; no quedará recuperable después. La casilla "Auto-aprobar"
+  concede acceso en el mismo paso en que la persona canjea el código
+  (`/pair <código>`), sin que tengas que aprobar la solicitud después — útil
+  si no vas a estar disponible, pero el código pasa a ser el único factor de
+  confianza: combínalo con un "usos máximos" ajustado al número exacto de
+  personas (ver `docs/runbooks-017-telegram-pairing.md` §1). El resto de
+  operaciones de pairing (aprobar/rechazar solicitud, revocar
+  invitación/autorización) sigue siendo exclusivo de
+  `scripts/telegram_pairing.py` — este incremento no las añadió al dashboard.
 - **Runtime config** — paridad completa con `scripts/runtime_config.py`:
   status, validar (pega el JSON completo en el `<textarea>`, igual que
   `--config archivo.json`), crear revisión, activar y rollback por número de

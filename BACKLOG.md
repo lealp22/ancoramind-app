@@ -453,6 +453,24 @@ local:** `scripts/telegram_pairing.py` opera la API administrativa protegida
 E2E controlado. Aún no se ha registrado/modificado un webhook ni contactado una
 cuenta Telegram: esas acciones requieren aprobación explícita.
 
+**Actualización 2026-10-05 (T5, incremento sobre BL-43):** con un solo
+operador, exigir siempre una segunda aprobación manual tras el canje era un
+punto único de disponibilidad (si el operador está incomunicado, nadie puede
+empezar a usar AncoraMind aunque la invitación ya se haya compartido por un
+canal de confianza). Se añade `auto_approve` como flag **opt-in** por
+invitación (`false` por defecto, migración `0010_pairing_auto_approve`): si se
+activa al emitir, el canje (`/pair <código>`) crea la autorización activa en
+el mismo paso atómico que hoy crea la solicitud `pending`, sin segunda
+intervención — el invariante "invitación ≠ autorización" sigue siendo la
+regla por defecto, `auto_approve` es la única excepción, explícita y
+auditable (queda registrado qué operador la activó y con qué motivo, igual
+que una aprobación manual). Expuesto en los tres puntos de entrada: CLI
+(`--auto-approve`), admin API (`CreateInvitationRequest.auto_approve`) y el
+dashboard de BL-43 (checkbox con aviso del trade-off: el código pasa a ser el
+único factor de confianza, combinarlo con un `max_uses` ajustado). Tests:
+2 nuevos de integración (atomicidad de la autorización, E2E de admission con
+la respuesta de outbox diferenciada) + unitarios de servicio/admin API/CLI.
+
 ---
 
 ## P1 — Cerrar el MVP (validación)

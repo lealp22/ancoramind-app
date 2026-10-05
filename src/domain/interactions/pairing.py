@@ -30,6 +30,7 @@ class PairingRedemptionStatus(StrEnum):
     """Deterministic outcomes consumed later by the pre-Agent `/pair` command."""
 
     PENDING = "pending"
+    AUTO_APPROVED = "auto_approved"
     ALREADY_PENDING = "already_pending"
     ALREADY_DECIDED = "already_decided"
     INVALID = "invalid"
@@ -54,6 +55,7 @@ class PairingInvitation(BaseModel):
     revoked_by: str | None = None
     revoked_reason: str | None = None
     revoked_at: datetime | None = None
+    auto_approve: bool = False
 
 
 class PairingRequest(BaseModel):
@@ -90,6 +92,10 @@ class PairingInvitationCreate(BaseModel):
     code is captured before redemption; prefer a low max_uses alongside a
     long expiry."""
     reason: str = Field(min_length=1, max_length=2000)
+    auto_approve: bool = False
+    """Opt-in only. Grants the authorization at redemption time instead of
+    leaving a pending request for operator review — the invitation code
+    becomes the sole trust factor, so pair it with a tight max_uses."""
 
     @field_validator("reason")
     @classmethod

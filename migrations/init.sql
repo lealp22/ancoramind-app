@@ -262,7 +262,8 @@ CREATE TABLE IF NOT EXISTS ancora.telegram_pairing_invitations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_by VARCHAR(255),
     revoked_reason TEXT,
-    revoked_at TIMESTAMPTZ
+    revoked_at TIMESTAMPTZ,
+    auto_approve BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS idx_pairing_invitations_active_expiry
     ON ancora.telegram_pairing_invitations(expires_at)

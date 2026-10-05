@@ -78,7 +78,8 @@ class TelegramPairingRepository:
 
             invitation_result = await self._session.execute(
                 text("""
-                    SELECT id, status, max_uses, use_count, expires_at
+                    SELECT id, status, max_uses, use_count, expires_at,
+                        auto_approve, created_by, reason
                     FROM ancora.telegram_pairing_invitations
                     WHERE code_hash = :code_hash
                     FOR UPDATE
@@ -143,23 +144,67 @@ class TelegramPairingRepository:
                 await self._session.commit()
                 return PairingRedemption(status=PairingRedemptionStatus.INVALID)
 
-            created = await self._session.execute(
-                text("""
-                    INSERT INTO ancora.telegram_pairing_requests (
-                        invitation_id, telegram_user_id, status, requested_at
-                    ) VALUES (:invitation_id, :telegram_user_id, 'pending', :now)
-                    RETURNING id, invitation_id, telegram_user_id, status, requested_at,
-                        decided_by, decision_reason, decided_at
-                """),
-                {
-                    "invitation_id": invitation.id,
-                    "telegram_user_id": telegram_user_id,
-                    "now": now,
-                },
-            )
+            if invitation.auto_approve:
+                created = await self._session.execute(
+                    text("""
+                        INSERT INTO ancora.telegram_pairing_requests (
+                            invitation_id, telegram_user_id, status, requested_at,
+                            decided_by, decision_reason, decided_at
+                        ) VALUES (
+                            :invitation_id, :telegram_user_id, 'approved', :now,
+                            :decided_by, :decision_reason, :now
+                        )
+                        RETURNING id, invitation_id, telegram_user_id, status, requested_at,
+                            decided_by, decision_reason, decided_at
+                    """),
+                    {
+                        "invitation_id": invitation.id,
+                        "telegram_user_id": telegram_user_id,
+                        "now": now,
+                        "decided_by": invitation.created_by,
+                        "decision_reason": invitation.reason,
+                    },
+                )
+            else:
+                created = await self._session.execute(
+                    text("""
+                        INSERT INTO ancora.telegram_pairing_requests (
+                            invitation_id, telegram_user_id, status, requested_at
+                        ) VALUES (:invitation_id, :telegram_user_id, 'pending', :now)
+                        RETURNING id, invitation_id, telegram_user_id, status, requested_at,
+                            decided_by, decision_reason, decided_at
+                    """),
+                    {
+                        "invitation_id": invitation.id,
+                        "telegram_user_id": telegram_user_id,
+                        "now": now,
+                    },
+                )
             row = created.fetchone()
             if row is None:  # pragma: no cover - INSERT RETURNING always yields a row
                 raise RuntimeError("Pairing redemption insert did not return a row")
+            if invitation.auto_approve:
+                await self._session.execute(
+                    text("""
+                        INSERT INTO ancora.telegram_pairing_authorizations (
+                            telegram_user_id, request_id, status, authorized_by, reason,
+                            authorized_at
+                        ) VALUES (:telegram_user_id, :request_id, 'active', :actor, :reason, :now)
+                        ON CONFLICT (telegram_user_id) DO UPDATE
+                        SET request_id = EXCLUDED.request_id,
+                            status = 'active',
+                            authorized_by = EXCLUDED.authorized_by,
+                            reason = EXCLUDED.reason, authorized_at = EXCLUDED.authorized_at,
+                            revoked_by = NULL, revoked_reason = NULL, revoked_at = NULL
+                    """),
+                    {
+                        "telegram_user_id": telegram_user_id,
+                        "request_id": row.id,
+                        "actor": invitation.created_by,
+                        "reason": invitation.reason,
+                        "now": now,
+                    },
+                )
             await self._session.execute(
                 text("""
                     UPDATE ancora.telegram_pairing_invitations
@@ -177,7 +222,11 @@ class TelegramPairingRepository:
             await self._session.rollback()
             raise
         return PairingRedemption(
-            status=PairingRedemptionStatus.PENDING,
+            status=(
+                PairingRedemptionStatus.AUTO_APPROVED
+                if invitation.auto_approve
+                else PairingRedemptionStatus.PENDING
+            ),
             request=self._request_from_row(row),
         )
 
@@ -201,7 +250,7 @@ class TelegramPairingRepository:
         result = await self._session.execute(
             text("""
                 SELECT id, status, max_uses, use_count, expires_at, created_by,
-                    reason, created_at, revoked_by, revoked_reason, revoked_at
+                    reason, created_at, revoked_by, revoked_reason, revoked_at, auto_approve
                 FROM ancora.telegram_pairing_invitations
                 ORDER BY created_at DESC, id DESC
                 LIMIT :limit
@@ -249,6 +298,7 @@ class TelegramPairingRepository:
         expires_at: datetime,
         created_by: str,
         reason: str,
+        auto_approve: bool = False,
     ) -> PairingInvitation:
         now = datetime.now(tz=UTC)
         try:
@@ -256,13 +306,14 @@ class TelegramPairingRepository:
                 text("""
                     INSERT INTO ancora.telegram_pairing_invitations (
                         code_hash, status, max_uses, use_count, expires_at, created_by,
-                        reason, created_at
+                        reason, created_at, auto_approve
                     ) VALUES (
-                        :code_hash, 'active', :max_uses, 0, :expires_at, :created_by, :reason, :now
+                        :code_hash, 'active', :max_uses, 0, :expires_at, :created_by, :reason, :now,
+                        :auto_approve
                     )
                     RETURNING id, status, max_uses, use_count, expires_at, created_by,
                         reason, created_at,
-                        revoked_by, revoked_reason, revoked_at
+                        revoked_by, revoked_reason, revoked_at, auto_approve
                 """),
                 {
                     "code_hash": code_hash,
@@ -271,6 +322,7 @@ class TelegramPairingRepository:
                     "created_by": created_by,
                     "reason": reason,
                     "now": now,
+                    "auto_approve": auto_approve,
                 },
             )
             row = result.fetchone()
@@ -299,7 +351,7 @@ class TelegramPairingRepository:
                     WHERE id = :id AND status = 'active'
                     RETURNING id, status, max_uses, use_count, expires_at, created_by,
                         reason, created_at,
-                        revoked_by, revoked_reason, revoked_at
+                        revoked_by, revoked_reason, revoked_at, auto_approve
                 """),
                 {"id": invitation_id, "actor": actor, "reason": reason, "now": now},
             )

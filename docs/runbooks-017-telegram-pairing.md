@@ -8,7 +8,12 @@
 ## 1. Invariantes operativos
 
 - La invitación es una credencial de onboarding, **no** autorización: sólo una
-  solicitud aprobada crea una autorización durable activa.
+  solicitud aprobada crea una autorización durable activa. La única excepción
+  es `--auto-approve` (opt-in explícito al emitir, §3): ahí el canje aprueba y
+  autoriza en el mismo paso, sin segunda revisión. Úsalo sólo cuando ya
+  confías en quién va a canjear ese código concreto (canal privado conocido),
+  y combínalo con un `--max-uses` ajustado al número exacto de personas — el
+  código pasa a ser el único factor de confianza.
 - Comparte el código una sola vez y únicamente por un canal privado aprobado. No
   lo copies en tickets, capturas, logs, OTel, terminal compartida ni chats.
 - Las mutaciones exigen `Authorization: Bearer`, actor y motivo. Usa un actor
@@ -80,7 +85,20 @@ python scripts/telegram_pairing.py issue --base-url $baseUrl `
   --expires-in-minutes 60 --max-uses 1 --reason 'E2E evaluator cohort'
 ```
 
-Después del `/pair` privado, aprueba o rechaza por el UUID de solicitud listado:
+**`--auto-approve`** (opcional): añade este flag para que el canje autorice
+de inmediato, sin que tengas que aprobar la solicitud después. Pensado para
+cuando no vas a estar disponible para revisar manualmente — por ejemplo,
+antes de estar incomunicado una semana — y ya confías en quién recibirá ese
+código concreto:
+
+```powershell
+python scripts/telegram_pairing.py issue --base-url $baseUrl `
+  --expires-in-minutes 10080 --max-uses 1 --auto-approve `
+  --reason 'colega de confianza, invitación 1:1, operador no disponible esta semana'
+```
+
+Después del `/pair` privado de una invitación **sin** `--auto-approve`,
+aprueba o rechaza por el UUID de solicitud listado:
 
 ```powershell
 python scripts/telegram_pairing.py approve --base-url $baseUrl `
@@ -151,3 +169,4 @@ código efímero: no redirigir stdout a archivos, CI o herramientas de transcrip
 | `/pair` devuelve respuesta no enumerante | Comportamiento esperado para código inválido, expirado, agotado o revocado; no revelar cuál fue el motivo. |
 | Usuario aprobado sigue rechazado | Revisar la solicitud/autorización y el `telegram_user_id` observado; nunca añadir el usuario temporalmente a la allowlist para saltar pairing. |
 | Revocación no parece aplicar | Verificar que el mensaje es un update nuevo y que no se trata de un duplicado; no reiniciar como solución. |
+| Alguien tiene acceso sin que lo hayas aprobado tú | Comportamiento esperado si la invitación se emitió con `--auto-approve`; revisa `list-pending` (no aparecerá, ya está `approved`) y, si procede, revoca la autorización con `revoke-authorization`. |

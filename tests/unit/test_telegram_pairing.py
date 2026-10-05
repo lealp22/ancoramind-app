@@ -123,6 +123,21 @@ async def test_issue_invitation_persists_only_the_keyed_hash() -> None:
     assert issued.code not in repository.create_invitation.await_args.kwargs["code_hash"]
 
 
+async def test_issue_invitation_forwards_auto_approve_opt_in() -> None:
+    repository = AsyncMock(spec=TelegramPairingRepository)
+    repository.create_invitation.return_value = _invitation().model_copy(
+        update={"auto_approve": True}
+    )
+    service = TelegramPairingService(repository, code_pepper="pairing-pepper")
+
+    await service.issue_invitation(
+        PairingInvitationCreate(reason="trusted colleague", auto_approve=True),
+        actor="operator",
+    )
+
+    assert repository.create_invitation.await_args.kwargs["auto_approve"] is True
+
+
 async def test_list_invitations_delegates_to_the_repository() -> None:
     repository = AsyncMock(spec=TelegramPairingRepository)
     invitation = _invitation()
@@ -176,6 +191,31 @@ async def test_admin_issue_returns_code_once_and_requires_bearer_and_actor() -> 
     assert "code_hash" not in response.json()["invitation"]
     assert service.issue_invitation.await_args.kwargs["actor"] == "operator"
     session.close.assert_awaited_once()
+
+
+async def test_admin_issue_accepts_the_auto_approve_opt_in() -> None:
+    app = FastAPI()
+    session = AsyncMock(spec=AsyncSession)
+    session_factory = AsyncMock(return_value=session)
+    service = AsyncMock()
+    service.issue_invitation.return_value = IssuedPairingInvitation(
+        invitation=_invitation().model_copy(update={"auto_approve": True}),
+        code="one-time-code-with-sufficient-length",
+    )
+    install_telegram_pairing_admin_api(
+        app, _settings(), session_factory, service_factory=lambda _: service
+    )
+
+    response = await _post(
+        app,
+        "/admin/telegram-pairing/invitations",
+        {"reason": "trusted colleague", "auto_approve": True},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["invitation"]["auto_approve"] is True
+    issued_invitation = service.issue_invitation.await_args.args[0]
+    assert issued_invitation.auto_approve is True
 
 
 async def test_admin_approval_and_revocation_use_protected_operator_api() -> None:

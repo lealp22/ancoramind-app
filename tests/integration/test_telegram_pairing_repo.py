@@ -32,6 +32,7 @@ async def _create_invitation(
     code: str,
     max_uses: int = 1,
     expires_at: datetime | None = None,
+    auto_approve: bool = False,
 ):
     return await TelegramPairingRepository(session).create_invitation(
         code_hash=hash_pairing_code(code, PEPPER),
@@ -39,6 +40,7 @@ async def _create_invitation(
         expires_at=expires_at or datetime.now(tz=UTC) + timedelta(hours=1),
         created_by="integration-operator",
         reason="integration test",
+        auto_approve=auto_approve,
     )
 
 
@@ -103,6 +105,40 @@ async def test_expired_or_invalid_code_creates_no_request(session: AsyncSession)
     assert invalid.status is PairingRedemptionStatus.INVALID
     total = (await session.execute(PAIRING_REQUEST_COUNT_SQL)).one()
     assert total.total == 0
+
+
+async def test_auto_approve_invitation_grants_authorization_atomically_on_redemption(
+    session: AsyncSession,
+) -> None:
+    await _create_invitation(session, code="auto-approve-code", auto_approve=True)
+    repository = TelegramPairingRepository(session)
+
+    redemption = await repository.redeem_invitation(
+        code_hash=hash_pairing_code("auto-approve-code", PEPPER), telegram_user_id=81
+    )
+
+    assert redemption.status is PairingRedemptionStatus.AUTO_APPROVED
+    assert redemption.request is not None
+    assert redemption.request.status is PairingRequestStatus.APPROVED
+    assert redemption.request.decided_by == "integration-operator"
+    assert redemption.request.decision_reason == "integration test"
+    assert await repository.has_active_authorization(81) is True
+    pending_count = (await session.execute(PAIRING_REQUEST_COUNT_SQL)).one()
+    assert pending_count.total == 1
+
+
+async def test_non_auto_approve_invitation_still_requires_explicit_approval(
+    session: AsyncSession,
+) -> None:
+    await _create_invitation(session, code="reviewed-code", auto_approve=False)
+    repository = TelegramPairingRepository(session)
+
+    redemption = await repository.redeem_invitation(
+        code_hash=hash_pairing_code("reviewed-code", PEPPER), telegram_user_id=82
+    )
+
+    assert redemption.status is PairingRedemptionStatus.PENDING
+    assert await repository.has_active_authorization(82) is False
 
 
 async def test_list_invitations_returns_newest_first_without_the_code_hash(

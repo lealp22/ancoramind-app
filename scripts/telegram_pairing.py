@@ -96,6 +96,7 @@ def build_operation(args: argparse.Namespace) -> tuple[str, str, dict[str, Any] 
                 "max_uses": int(args.max_uses),
                 "expires_in_minutes": int(args.expires_in_minutes),
                 "reason": str(args.reason),
+                "auto_approve": bool(args.auto_approve),
             },
             True,
         )
@@ -137,6 +138,15 @@ def _parse_args() -> argparse.Namespace:
     issue_parser.add_argument("--max-uses", type=int, default=1, choices=range(1, 101))
     issue_parser.add_argument("--expires-in-minutes", type=int, default=60, choices=range(5, 43201))
     issue_parser.add_argument("--reason", required=True, help="Auditable issuance reason")
+    issue_parser.add_argument(
+        "--auto-approve",
+        action="store_true",
+        help=(
+            "Grant the authorization immediately on redemption, skipping operator "
+            "review. The code becomes the sole trust factor: pair with a tight "
+            "--max-uses."
+        ),
+    )
 
     for command, help_text in (
         ("approve", "Approve a pending pairing request"),

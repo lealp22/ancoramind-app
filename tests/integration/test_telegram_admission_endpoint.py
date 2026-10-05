@@ -17,7 +17,7 @@ from src.config import Settings
 from src.domain.interactions.pairing import hash_pairing_code
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
-from src.domain.interactions.service import PAIRING_PENDING_REPLY
+from src.domain.interactions.service import PAIRING_AUTO_APPROVED_REPLY, PAIRING_PENDING_REPLY
 from src.repositories.database import get_session
 from src.repositories.pairing import TelegramPairingRepository
 
@@ -109,13 +109,16 @@ class _Sender:
         return None
 
 
-async def _create_pairing_invitation(session: AsyncSession, code: str) -> object:
+async def _create_pairing_invitation(
+    session: AsyncSession, code: str, *, auto_approve: bool = False
+) -> object:
     return await TelegramPairingRepository(session).create_invitation(
         code_hash=hash_pairing_code(code, "pairing-pepper"),
         max_uses=1,
         expires_at=datetime.now(tz=UTC) + timedelta(hours=1),
         created_by="integration-operator",
         reason="controlled evaluator",
+        auto_approve=auto_approve,
     )
 
 
@@ -332,6 +335,46 @@ async def test_private_pairing_uses_outbox_without_agent_or_raw_code_persistence
     assert await processor.run_once() == 1
     assert runner.calls == []
     assert sender.calls == [(333, PAIRING_PENDING_REPLY)]
+
+
+async def test_auto_approve_pairing_admits_the_next_message_without_operator_review(
+    session: AsyncSession,
+) -> None:
+    code = "auto-approve-code-with-at-least-twenty"
+    await _create_pairing_invitation(session, code, auto_approve=True)
+    settings = _settings(
+        telegram_pairing_enabled=True,
+        telegram_pairing_code_pepper="pairing-pepper",
+    )
+    app = _app(settings)
+
+    pair_response = await _post(
+        app,
+        _update(601, user_id=1601, text_value=f"/pair {code}"),
+    )
+    assert pair_response.status_code == 200
+    assert pair_response.json()["status"] == "response_ready"
+
+    runner = _Runner()
+    sender = _Sender()
+    processor = InteractionProcessor(
+        session_factory=get_session,
+        payload_cipher=TelegramPayloadCipher(
+            settings.telegram_payload_encryption_key,
+            settings.telegram_payload_key_version,
+        ),
+        agent_runner=runner,
+        sender=sender,
+    )
+    assert await processor.run_once() == 1
+    assert runner.calls == []
+    assert sender.calls == [(333, PAIRING_AUTO_APPROVED_REPLY)]
+
+    pairing = TelegramPairingRepository(session)
+    assert await pairing.has_active_authorization(1601) is True
+
+    admitted = await _post(app, _update(602, user_id=1601, text_value="hola"))
+    assert admitted.json()["status"] == "accepted"
 
 
 async def test_pairing_is_private_only_and_duplicate_update_has_one_request_and_response(

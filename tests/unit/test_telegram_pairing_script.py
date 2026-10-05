@@ -24,6 +24,7 @@ def test_issue_builds_auditable_payload_without_a_raw_code_argument() -> None:
             max_uses=2,
             expires_in_minutes=90,
             reason="controlled evaluator cohort",
+            auto_approve=False,
         )
     )
 
@@ -34,9 +35,24 @@ def test_issue_builds_auditable_payload_without_a_raw_code_argument() -> None:
             "max_uses": 2,
             "expires_in_minutes": 90,
             "reason": "controlled evaluator cohort",
+            "auto_approve": False,
         },
         True,
     )
+
+
+def test_issue_can_opt_into_auto_approve() -> None:
+    operation = build_operation(
+        argparse.Namespace(
+            command="issue",
+            max_uses=1,
+            expires_in_minutes=60,
+            reason="trusted colleague",
+            auto_approve=True,
+        )
+    )
+
+    assert operation[2]["auto_approve"] is True
 
 
 @pytest.mark.parametrize(
@@ -133,6 +149,7 @@ def test_main_issue_requires_actor_before_making_a_request(
             max_uses=1,
             expires_in_minutes=60,
             reason="controlled evaluator",
+            auto_approve=False,
             base_url="https://example.test",
         ),
     )
@@ -167,6 +184,7 @@ def test_main_preserves_one_time_issue_response_and_returns_failure_for_http_err
             max_uses=1,
             expires_in_minutes=60,
             reason="controlled evaluator",
+            auto_approve=False,
             base_url="https://example.test",
         ),
     )

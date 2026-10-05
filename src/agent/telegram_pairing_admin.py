@@ -30,6 +30,9 @@ class CreateInvitationRequest(PairingAdminModel):
     code is captured before redemption; prefer a low max_uses alongside a
     long expiry."""
     reason: str = Field(min_length=1, max_length=2000)
+    auto_approve: bool = False
+    """Opt-in only. Grants the authorization at redemption time instead of
+    leaving a pending request for operator review."""
 
 
 class DecisionRequest(PairingAdminModel):

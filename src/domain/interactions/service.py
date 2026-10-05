@@ -26,6 +26,7 @@ from src.repositories.pairing import TelegramPairingRepository
 PAIRING_PENDING_REPLY = (
     "✅ Solicitud de acceso recibida. Un operador la revisará antes de activar el acceso."
 )
+PAIRING_AUTO_APPROVED_REPLY = "✅ Acceso concedido. Ya puedes escribir con normalidad."
 PAIRING_UNAVAILABLE_REPLY = (
     "No se pudo procesar la solicitud de acceso. Verifica el código y solicita ayuda al operador."
 )
@@ -121,7 +122,9 @@ class TelegramInteractionService:
                 telegram_user_id=normalized.telegram_user_id,
             )
             pairing_reply = (
-                PAIRING_PENDING_REPLY
+                PAIRING_AUTO_APPROVED_REPLY
+                if redemption.status is PairingRedemptionStatus.AUTO_APPROVED
+                else PAIRING_PENDING_REPLY
                 if redemption.status
                 in {PairingRedemptionStatus.PENDING, PairingRedemptionStatus.ALREADY_PENDING}
                 else PAIRING_UNAVAILABLE_REPLY

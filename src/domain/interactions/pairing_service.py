@@ -37,6 +37,7 @@ class TelegramPairingService:
             expires_at=invitation_expiry(invitation.expires_in_minutes),
             created_by=actor,
             reason=invitation.reason,
+            auto_approve=invitation.auto_approve,
         )
         return IssuedPairingInvitation(invitation=persisted, code=code)
 
