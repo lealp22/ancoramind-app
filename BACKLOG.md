@@ -615,7 +615,47 @@ alcanza precisión en escaneados.
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
 
-### BL-26 · Notas de voz entrantes y transcripción gobernada (STT)
+### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 implementación parcial — specs/028
+**Incremento inspector/T5/T6:** decoder real validado en Docker (12 tests),
+consentimiento vocal con ejecutor transaccional solo para notas y adaptador STT
+privado probado con HTTP simulado. Restan executors demás capabilities,
+compatibilidad Gateway/upstream, concurrencia adversarial completa y E2E.
+Voz sigue OFF; no publicación de alias ni inferencia real.
+
+**Actualización 2026-10-06 — ejecutores y compatibilidad offline:** ejecutor
+determinista compartido por voz/texto/botones para notas, vehículos/mantenimiento,
+TODOs, recordatorios/snooze, calendario canónico con recordatorio y borrado
+documental. Mutaciones locales y auditoría comparten transacción; borrado externo
+persiste intención antes del efecto y nunca se reintenta automáticamente.
+Pruebas adversariales incluyen concurrencia, aislamiento, hash/procedencia,
+caducidad, generación y rollback. Imagen LiteLLM fijada validada con endpoint
+HTTP real y upstream local simulado, sin red externa ni credenciales. OpenRouter
+documenta STT multipart; la ruta compatible se configura con `openai/` y api_base
+OpenRouter, no se presume soporte del adaptador nativo `openrouter/` para STT.
+Pendientes alias/tarifa reales, prueba autorizada upstream, benchmark y piloto.
+**Actualización 2026-10-06:** alcance acordado: notas de voz originales de hasta
+**5 minutos**, respuesta textual y «Sí»/«No» por voz como alternativa de
+consentimiento determinista, sin exigir teclear ni botones. El coste por nota
+se deriva de duración y tarifa versionada (incluido redondeo/mínimo); no se pide
+un presupuesto USD STT manual adicional, pero se conservan límites de gasto
+agregado y presupuesto de interacción. `specs/028-telegram-voice-stt/` define
+contratos, fases y matriz V01–V36; **runtime y aceptación voz pendientes**.
+T2 implementado localmente en `src/domain/speech/`: límites puros, facturación
+Decimal exacta, puertos STT/inspector y parser vocal Sí/No independiente; sin
+conectar Telegram, proveedor ni claims. Inspección FFmpeg/ffprobe candidata,
+sin binarios instalados ni validación de audio físico aún.
+T3 implementado y validado localmente en PostgreSQL (2026-10-06): tabla de preparación
+exclusiva sin audio, intención/reserva STT durable, transcripción cifrada,
+recuperación sin replay y limpieza terminal/expiración; migración 0011 e init.sql.
+T4 integrado con inspector/STT simulados: normalización voice, descarga streaming
+acotada, preparación exclusiva con bloqueo PostgreSQL, snapshot/budget compartido
+y recovery/purge en lifecycle incluso voz OFF. Validación 2026-10-06: 887 unit y
+117 integration verdes; Ruff/mypy limpios. Pendientes inspector físico/temporales
+reales, T5 consentimiento y T6 proveedor. Bootstrap no permite activar voz sin
+adaptadores físicos; no hay STT fake en producción.
+Dependencia para E2E de confirmación/ejecución: conectar `_execute_claimed()`
+(BL-40/specs/023) y habilitar consentimiento gobernado sin bypass legacy.
+
 Permitir que una nota de voz de Telegram se procese como un mensaje conversacional:
 descargar el audio autorizado por Telegram, transcribirlo y pasar **solo el texto
 resultante** al mismo flujo de admission/processor/Agent que usa un mensaje escrito.

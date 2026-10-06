@@ -58,20 +58,17 @@ class GovernedInteractionRunner:
         self._factory = factory
         self._spend_reader = spend_reader
 
-    async def run(
+    async def prepare_execution_context(
         self,
-        input_text: str,
         *,
-        user_id: str,
         session_id: str,
         run_id: str,
         correlation_id: UUID,
         telegram_update_id: int,
         telegram_message_id: int | None = None,
-        media: tuple[ResolvedTelegramMedia, ...] = (),
         provenance: InteractionProvenance | None = None,
-    ) -> str:
-        """Execute one governed non-streaming run with trusted identity.
+    ) -> ExecutionContext:
+        """Capture config, check spend and build the shared preparation/Agent context.
 
         ``provenance`` is resolved by the processor from the admitted
         interaction; ``propose_*`` tools read it from the bound context.
@@ -101,6 +98,40 @@ class GovernedInteractionRunner:
             traceparent=generate_traceparent(),
             provenance=provenance,
         )
+        return context
+
+    async def run(
+        self,
+        input_text: str,
+        *,
+        user_id: str,
+        session_id: str,
+        run_id: str,
+        correlation_id: UUID,
+        telegram_update_id: int,
+        telegram_message_id: int | None = None,
+        media: tuple[ResolvedTelegramMedia, ...] = (),
+        provenance: InteractionProvenance | None = None,
+        execution_context: ExecutionContext | None = None,
+    ) -> str:
+        context = execution_context or await self.prepare_execution_context(
+            session_id=session_id,
+            run_id=run_id,
+            correlation_id=correlation_id,
+            telegram_update_id=telegram_update_id,
+            telegram_message_id=telegram_message_id,
+            provenance=provenance,
+        )
+        if (
+            context.correlation_id != correlation_id
+            or context.agno_run_id != run_id
+            or context.agno_session_id != session_id
+            or context.telegram_update_id != telegram_update_id
+            or context.telegram_message_id != telegram_message_id
+            or context.provenance != provenance
+        ):
+            raise GovernanceViolationError("prepared execution identity mismatch")
+        context.budget.ensure_alive()
         with execution_context_scope(context):
             observability = context.config.config.observability
             attributes = telemetry_attributes_from_execution_context(context)

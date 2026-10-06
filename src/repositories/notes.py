@@ -17,7 +17,7 @@ class NotesRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def create(self, user_id: str, data: NoteCreate) -> Note:
+    async def create(self, user_id: str, data: NoteCreate, *, commit: bool = True) -> Note:
         """Create a new note for the given user.
 
         Args:
@@ -41,7 +41,8 @@ class NotesRepository:
         row = result.fetchone()
         if row is None:
             raise RuntimeError("Note insert did not return a row")
-        await self._session.commit()
+        if commit:
+            await self._session.commit()
         return Note(
             id=row.id,
             user_id=row.user_id,

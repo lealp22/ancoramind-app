@@ -36,6 +36,8 @@ class TelegramMediaResolver:
 
     async def resolve(self, attachment: TelegramAttachment) -> ResolvedTelegramMedia:
         """Download and validate one attachment without persisting its raw bytes."""
+        if attachment.kind == "voice":
+            raise AttachmentResolutionError("voice_requires_speech_dispatcher")
         if attachment.size_bytes is not None and attachment.size_bytes > self._max_bytes:
             raise AttachmentResolutionError("attachment_too_large")
 
@@ -69,6 +71,38 @@ class TelegramMediaResolver:
             mime_type=mime_type,
             is_image=mime_type.startswith("image/"),
         )
+
+    async def resolve_voice(self, attachment: TelegramAttachment, *, max_bytes: int) -> bytes:
+        """Bound raw streaming bytes, including when Content-Length is absent/false."""
+        if attachment.kind != "voice" or max_bytes <= 0:
+            raise AttachmentResolutionError("voice_origin_not_allowed")
+        if attachment.size_bytes is not None and attachment.size_bytes > max_bytes:
+            raise AttachmentResolutionError("voice_too_large")
+        info = await self._get_file_info(attachment.file_id)
+        path = info.get("file_path")
+        if not isinstance(path, str) or not _safe_file_path(path):
+            raise AttachmentResolutionError("telegram_file_path_invalid")
+        size = info.get("file_size")
+        if isinstance(size, int) and size > max_bytes:
+            raise AttachmentResolutionError("voice_too_large")
+        content = bytearray()
+        try:
+            async with self._client.stream(
+                "GET", f"{_API_BASE}/file/bot{self._token}/{path}"
+            ) as response:
+                if response.status_code != 200:
+                    raise AttachmentResolutionError("telegram_attachment_download_rejected")
+                async for chunk in response.aiter_raw():
+                    if len(content) + len(chunk) > max_bytes:
+                        raise AttachmentResolutionError("voice_too_large")
+                    content.extend(chunk)
+            if not content:
+                raise AttachmentResolutionError("voice_empty_or_invalid")
+            return bytes(content)
+        except httpx.HTTPError:
+            raise AttachmentResolutionError("telegram_attachment_download_failed") from None
+        finally:
+            content.clear()
 
     async def close(self) -> None:
         """Close only an internally-owned HTTP client."""

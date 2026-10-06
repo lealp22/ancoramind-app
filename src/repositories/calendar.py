@@ -12,8 +12,9 @@ from src.domain.shared.recurrence import rule_to_jsonb_param
 class CalendarRepository:
     """Repository for calendar events in ancora schema."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, auto_commit: bool = True):
         self._session = session
+        self._auto_commit = auto_commit
 
     async def create(
         self, user_id: str, data: CalendarEventCreate, provider_event_id: str | None
@@ -26,21 +27,29 @@ class CalendarRepository:
             VALUES (:uid,:title,:desc,:loc,:start,:end,:peid,:src,:now,CAST(:rec AS jsonb))
             RETURNING *
         """)
-        r = await self._session.execute(stmt, {
-            "uid": user_id, "title": data.title, "desc": data.description,
-            "loc": data.location, "start": data.start_at, "end": data.end_at,
-            "peid": provider_event_id, "src": data.source_document_id, "now": now,
-            "rec": rule_to_jsonb_param(data.recurrence_rule),
-        })
+        r = await self._session.execute(
+            stmt,
+            {
+                "uid": user_id,
+                "title": data.title,
+                "desc": data.description,
+                "loc": data.location,
+                "start": data.start_at,
+                "end": data.end_at,
+                "peid": provider_event_id,
+                "src": data.source_document_id,
+                "now": now,
+                "rec": rule_to_jsonb_param(data.recurrence_rule),
+            },
+        )
         row = r.fetchone()
         if row is None:
             raise RuntimeError("Calendar event insert did not return a row")
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_event(row)
 
-    async def list_range(
-        self, user_id: str, start: datetime, end: datetime
-    ) -> list[CalendarEvent]:
+    async def list_range(self, user_id: str, start: datetime, end: datetime) -> list[CalendarEvent]:
         """Rows in [start, end], plus every recurring anchor regardless of its
         own start_at — the service expands recurrence and applies the final
         range filter, since a recurring anchor's original start_at may be in
@@ -59,8 +68,15 @@ class CalendarRepository:
 
 def _row_to_event(row: Row[tuple[object, ...]]) -> CalendarEvent:
     return CalendarEvent(
-        id=row.id, user_id=row.user_id, title=row.title, description=row.description,
-        location=row.location, start_at=row.start_at, end_at=row.end_at,
-        provider_event_id=row.provider_event_id, source_document_id=row.source_document_id,
-        created_at=row.created_at, recurrence_rule=row.recurrence_rule,
+        id=row.id,
+        user_id=row.user_id,
+        title=row.title,
+        description=row.description,
+        location=row.location,
+        start_at=row.start_at,
+        end_at=row.end_at,
+        provider_event_id=row.provider_event_id,
+        source_document_id=row.source_document_id,
+        created_at=row.created_at,
+        recurrence_rule=row.recurrence_rule,
     )

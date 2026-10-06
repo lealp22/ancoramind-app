@@ -134,6 +134,26 @@ async def test_runner_binds_context_metadata_and_returns_text() -> None:
     assert factory.created_contexts == [context]
 
 
+async def test_prepared_context_preserves_snapshot_and_consumed_stt_budget() -> None:
+    runner, factory = _runner()
+    correlation_id = uuid4()
+    context = await runner.prepare_execution_context(
+        session_id="voice", run_id="run", correlation_id=correlation_id, telegram_update_id=5
+    )
+    context.budget.reserve_model_call()
+    await runner.run(
+        "transcript",
+        user_id="88",
+        session_id="voice",
+        run_id="run",
+        correlation_id=correlation_id,
+        telegram_update_id=5,
+        execution_context=context,
+    )
+    assert factory.created_contexts[0] is context
+    assert factory.created_contexts[0].budget.model_calls == 1
+
+
 async def test_runner_scope_is_released_after_run() -> None:
     runner, _ = _runner()
 
@@ -211,7 +231,6 @@ async def test_runner_rejects_non_text_content_with_media() -> None:
                 ),
             ),
         )
-
 
 
 async def test_runner_rejects_non_text_content() -> None:

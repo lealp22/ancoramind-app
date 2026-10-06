@@ -11,6 +11,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from src.domain.speech.policy import SpeechBillingPolicy
+
 SENSITIVE_CONFIG_KEY_PATTERN = re.compile(
     r"^(?:(?:[a-z0-9]+[_-])?(?:api[_-]?key|token|secret|password|credential|private[_-]?key))$",
     re.IGNORECASE,
@@ -30,7 +32,9 @@ class LogicalRoute(RuntimeConfigModel):
 
     effective_gateway_route: str = Field(min_length=4, max_length=63)
     capabilities: frozenset[
-        Literal["text", "vision", "tool_calling", "structured_output", "embeddings"]
+        Literal[
+            "text", "vision", "tool_calling", "structured_output", "embeddings", "transcription"
+        ]
     ]
 
     @field_validator("effective_gateway_route")
@@ -212,6 +216,13 @@ class CostGovernanceConfig(RuntimeConfigModel):
         return self
 
 
+class SpeechRoutingConfig(RuntimeConfigModel):
+    """Optional duration tariff and logical route captured in every run snapshot."""
+
+    logical_route: str = Field(min_length=3, max_length=63)
+    billing: SpeechBillingPolicy
+
+
 class RuntimeConfiguration(RuntimeConfigModel):
     """Portable, secret-free configuration held in immutable DB revisions."""
 
@@ -224,9 +235,20 @@ class RuntimeConfiguration(RuntimeConfigModel):
     observability: ObservabilityConfig
     pricing: PricingConfig | None = None
     cost_governance: CostGovernanceConfig | None = None
+    speech: SpeechRoutingConfig | None = None
 
     @model_validator(mode="after")
     def validate_runtime_limits(self) -> RuntimeConfiguration:
+        if self.speech is not None:
+            route = self.routing.routes.get(self.speech.logical_route)
+            if route is None or "transcription" not in route.capabilities:
+                raise ValueError("speech requires a transcription-capable logical route")
+            if self.speech.billing.rate_usd_per_second > 0 and (
+                self.cost_governance is None
+                or self.cost_governance.daily_budget_usd is None
+                or self.cost_governance.monthly_budget_usd is None
+            ):
+                raise ValueError("paid speech requires aggregate cost governance")
         if self.gateway.request_timeout_seconds > self.execution_budget.max_runtime_seconds:
             raise ValueError("gateway timeout cannot exceed total runtime budget")
         if self.concurrency.global_ > self.concurrency.pending_global:
@@ -367,8 +389,13 @@ def bootstrap_runtime_configuration(
 
 def canonical_config_json(config: RuntimeConfiguration) -> str:
     """Serialize a config deterministically for its immutable SHA-256 checksum."""
+    payload = config.model_dump(mode="json", by_alias=True)
+    # Old persisted revisions must retain their checksums after this additive
+    # schema extension. Do not retroactively serialize a missing optional block.
+    if config.speech is None:
+        payload.pop("speech", None)
     return json.dumps(
-        config.model_dump(mode="json", by_alias=True),
+        payload,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),

@@ -580,6 +580,14 @@ def _consent_processor(
         return cast(AsyncSession, session)
 
     monkeypatch.setattr(processor_module, "ActionProposalsRepository", lambda _: actions_repo)
+    executor = AsyncMock()
+
+    async def execute(proposal, *, user_id):
+        assert user_id == "5"
+        return f"✅ Confirmado y ejecutado ({proposal.id})."
+
+    executor.execute.side_effect = execute
+    monkeypatch.setattr(processor_module, "ProposalExecutor", lambda *args, **kwargs: executor)
     return InteractionProcessor(
         session_factory=session_factory,
         payload_cipher=TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1),
@@ -596,9 +604,7 @@ class TestConsentInput:
         processor = _consent_processor(monkeypatch, AsyncMock())
         assert await processor._handle_consent_input(_interaction(), "hola, qué tal") is None
 
-    async def test_bare_si_with_no_pending_proposals(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_bare_si_with_no_pending_proposals(self, monkeypatch: pytest.MonkeyPatch) -> None:
         actions = AsyncMock()
         actions.list_confirmable.return_value = []
         processor = _consent_processor(monkeypatch, actions)
@@ -645,9 +651,7 @@ class TestConsentInput:
         assert str(proposal_id) in reply
         actions.claim_confirmation.assert_awaited_once()
 
-    async def test_si_with_uuid_claims_that_proposal(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_si_with_uuid_claims_that_proposal(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from src.domain.actions.models import ClaimedProposal, ConsentClaimResult
 
         proposal_id = uuid4()
@@ -743,4 +747,3 @@ class TestConsentInput:
             assert await processor._handle_consent_input(_interaction(), raw) is None
         actions.claim_confirmation.assert_not_awaited()
         actions.discard_proposal.assert_not_awaited()
-

@@ -21,8 +21,9 @@ from src.domain.documents.models import (
 class DocumentsRepository:
     """Repository for documents and AI extractions in ancora schema."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, auto_commit: bool = True):
         self._session = session
+        self._auto_commit = auto_commit
 
     # ── Documents ─────────────────────────────────────────
 
@@ -35,18 +36,22 @@ class DocumentsRepository:
             VALUES (:user_id, :storage_key, :filename, :mime, :size, :now)
             RETURNING id, user_id, storage_key, original_filename, mime_type, size_bytes, created_at
         """)
-        result = await self._session.execute(stmt, {
-            "user_id": user_id,
-            "storage_key": data.storage_key,
-            "filename": data.original_filename,
-            "mime": data.mime_type,
-            "size": data.size_bytes,
-            "now": now,
-        })
+        result = await self._session.execute(
+            stmt,
+            {
+                "user_id": user_id,
+                "storage_key": data.storage_key,
+                "filename": data.original_filename,
+                "mime": data.mime_type,
+                "size": data.size_bytes,
+                "now": now,
+            },
+        )
         row = result.fetchone()
         if row is None:
             raise RuntimeError("Document insert did not return a row")
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return Document(
             id=row.id,
             user_id=row.user_id,
@@ -70,9 +75,13 @@ class DocumentsRepository:
         if not row:
             return None
         return Document(
-            id=row.id, user_id=row.user_id, storage_key=row.storage_key,
-            original_filename=row.original_filename, mime_type=row.mime_type,
-            size_bytes=row.size_bytes, created_at=row.created_at,
+            id=row.id,
+            user_id=row.user_id,
+            storage_key=row.storage_key,
+            original_filename=row.original_filename,
+            mime_type=row.mime_type,
+            size_bytes=row.size_bytes,
+            created_at=row.created_at,
         )
 
     async def search(
@@ -101,9 +110,13 @@ class DocumentsRepository:
         result = await self._session.execute(stmt, params)
         return [
             Document(
-                id=row.id, user_id=row.user_id, storage_key=row.storage_key,
-                original_filename=row.original_filename, mime_type=row.mime_type,
-                size_bytes=row.size_bytes, created_at=row.created_at,
+                id=row.id,
+                user_id=row.user_id,
+                storage_key=row.storage_key,
+                original_filename=row.original_filename,
+                mime_type=row.mime_type,
+                size_bytes=row.size_bytes,
+                created_at=row.created_at,
             )
             for row in result.fetchall()
         ]
@@ -112,7 +125,8 @@ class DocumentsRepository:
         """Delete a document record (user-scoped). Returns True if deleted."""
         stmt = text("DELETE FROM ancora.documents WHERE id=:id AND user_id=:user_id RETURNING id")
         result = await self._session.execute(stmt, {"id": document_id, "user_id": user_id})
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return result.fetchone() is not None
 
     # ── Semantic retrieval ──────────────────────────────
@@ -157,7 +171,8 @@ class DocumentsRepository:
                 "now": datetime.now(tz=UTC),
             },
         )
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
 
     async def search_semantically(
         self,
@@ -214,7 +229,8 @@ class DocumentsRepository:
             for row in rows
         ]
         return matches
-# ── AI Extractions ────────────────────────────────────
+
+    # ── AI Extractions ────────────────────────────────────
 
     async def create_extraction(self, data: AIExtractionCreate) -> AIExtraction:
         """Store an AI extraction result."""
@@ -228,21 +244,34 @@ class DocumentsRepository:
             RETURNING id, document_id, provider, model, prompt_version,
                       schema_version, extraction, confidence, created_at
         """)
-        result = await self._session.execute(stmt, {
-            "doc_id": data.document_id, "prov": data.provider,
-            "model": data.model, "pv": data.prompt_version,
-            "sv": data.schema_version, "extraction": json.dumps(data.extraction),
-            "conf": confidence, "now": now,
-        })
+        result = await self._session.execute(
+            stmt,
+            {
+                "doc_id": data.document_id,
+                "prov": data.provider,
+                "model": data.model,
+                "pv": data.prompt_version,
+                "sv": data.schema_version,
+                "extraction": json.dumps(data.extraction),
+                "conf": confidence,
+                "now": now,
+            },
+        )
         row = result.fetchone()
         if row is None:
             raise RuntimeError("AI extraction insert did not return a row")
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return AIExtraction(
-            id=row.id, document_id=data.document_id, provider=row.provider,
-            model=row.model, prompt_version=row.prompt_version,
-            schema_version=row.schema_version, extraction=row.extraction,
-            confidence=row.confidence, created_at=row.created_at,
+            id=row.id,
+            document_id=data.document_id,
+            provider=row.provider,
+            model=row.model,
+            prompt_version=row.prompt_version,
+            schema_version=row.schema_version,
+            extraction=row.extraction,
+            confidence=row.confidence,
+            created_at=row.created_at,
         )
 
     async def get_latest_extraction(self, document_id: UUID) -> AIExtraction | None:
@@ -258,10 +287,15 @@ class DocumentsRepository:
         if not row:
             return None
         return AIExtraction(
-            id=row.id, document_id=row.document_id, provider=row.provider,
-            model=row.model, prompt_version=row.prompt_version,
-            schema_version=row.schema_version, extraction=row.extraction,
-            confidence=row.confidence, created_at=row.created_at,
+            id=row.id,
+            document_id=row.document_id,
+            provider=row.provider,
+            model=row.model,
+            prompt_version=row.prompt_version,
+            schema_version=row.schema_version,
+            extraction=row.extraction,
+            confidence=row.confidence,
+            created_at=row.created_at,
         )
 
     async def get_document_with_extraction(

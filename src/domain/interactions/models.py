@@ -184,6 +184,7 @@ class NormalizedTelegramUpdate(BaseModel):
     chat_type: str | None = None
     text: str | None = None
     attachments: tuple[TelegramAttachment, ...] = ()
+    voice_message_kind: str | None = None
 
 
 def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdate:
@@ -224,6 +225,23 @@ def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdat
                 else None,
                 text=text if isinstance(text, str) else None,
                 attachments=_normalize_attachments(message_data),
+                voice_message_kind=(
+                    "edited"
+                    if update_type != "message"
+                    else "forwarded"
+                    if any(
+                        key in message_data
+                        for key in ("forward_origin", "forward_from", "forward_date")
+                    )
+                    else "mixed"
+                    if any(
+                        key in message_data
+                        for key in ("text", "caption", "document", "photo", "audio")
+                    )
+                    else "original"
+                )
+                if "voice" in message_data
+                else None,
             )
 
     return NormalizedTelegramUpdate(update_id=update_id, update_type="unsupported")
@@ -235,6 +253,23 @@ def _integer_or_none(value: object) -> int | None:
 
 def _normalize_attachments(message: dict[str, Any]) -> tuple[TelegramAttachment, ...]:
     """Keep one bounded attachment reference; Telegram photos have many sizes."""
+    voice = message.get("voice")
+    if "voice" in message and (
+        not isinstance(voice, dict) or not isinstance(voice.get("file_id"), str)
+    ):
+        raise ValueError("invalid Telegram voice reference")
+    if isinstance(voice, dict) and isinstance(voice.get("file_id"), str):
+        return (
+            TelegramAttachment(
+                kind="voice",
+                file_id=voice["file_id"],
+                duration_seconds=_integer_or_none(voice.get("duration")),
+                size_bytes=_integer_or_none(voice.get("file_size")),
+                mime_type=voice.get("mime_type")
+                if isinstance(voice.get("mime_type"), str)
+                else None,
+            ),
+        )
     photos = message.get("photo")
     if isinstance(photos, list):
         for photo in reversed(photos):

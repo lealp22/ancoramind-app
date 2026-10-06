@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     telegram_admission_pending_global: int = Field(default=20, ge=1)
     telegram_admission_queued_per_chat: int = Field(default=5, ge=1)
     telegram_processor_enabled: bool = False
+    telegram_voice_enabled: bool = False
+    """Voice rollout gate; requires FFmpeg, private Gateway and versioned speech config."""
+    telegram_voice_timeout_seconds: float = Field(default=60.0, gt=0, le=120)
     """Start the T5 processor; requires the same trusted admission prerequisites."""
     telegram_processor_poll_interval_seconds: float = Field(default=1.0, gt=0)
     telegram_processor_global_concurrency: int = Field(default=2, ge=1, le=20)

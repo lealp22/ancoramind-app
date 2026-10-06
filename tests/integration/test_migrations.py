@@ -226,6 +226,8 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     assert _current_revision(migration_database) == HEAD_REVISION
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES | PAIRING_TABLES
+    assert "voice_preparations" in _tables(migration_database)
+    assert "transcript_ciphertext" in _columns(migration_database, "voice_preparations")
     assert {
         "source_interaction_id",
         "idempotency_key",
@@ -248,6 +250,7 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
+    assert "voice_preparations" not in _tables(migration_database)
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
     assert _note_count(migration_database, "preserved through downgrade") == 1
 

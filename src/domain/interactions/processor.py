@@ -9,11 +9,12 @@ import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.actions.executor import ProposalExecutor
 from src.domain.actions.models import ConsentClaimResult, ConsentPrincipal, ConsentRejection
 from src.domain.actions.presentation import (
     ConsentAction,
@@ -46,7 +47,14 @@ from src.domain.interactions.models import (
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.llm_access.cost_governance import CostGovernanceError
-from src.domain.llm_access.models import ExecutionBudgetExceededError, InteractionProvenance
+from src.domain.llm_access.models import (
+    ExecutionBudgetExceededError,
+    ExecutionContext,
+    InteractionProvenance,
+)
+from src.domain.speech.consent import parse_voice_consent_intent
+from src.domain.speech.models import VoiceReference
+from src.domain.speech.service import VoicePreparationError, VoicePreparationService
 from src.observability import get_telemetry, log_context_scope
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.interactions import TelegramInteractionsRepository
@@ -69,6 +77,7 @@ class InteractionAgentRunner(Protocol):
         telegram_message_id: int | None = None,
         media: tuple[ResolvedTelegramMedia, ...] = (),
         provenance: InteractionProvenance | None = None,
+        execution_context: ExecutionContext | None = None,
     ) -> str: ...
 
 
@@ -123,6 +132,9 @@ class InteractionProcessor:
         on_cycle: Callable[[int], None] | None = None,
         on_interaction_completed: Callable[[], None] | None = None,
         governed_consent: bool = False,
+        voice_enabled: bool = False,
+        voice_preparation: VoicePreparationService | None = None,
+        voice_maintenance: Callable[[], Awaitable[int]] | None = None,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -136,12 +148,19 @@ class InteractionProcessor:
         self._on_cycle = on_cycle
         self._on_interaction_completed = on_interaction_completed
         self._governed_consent = governed_consent
+        self._voice_enabled = voice_enabled
+        self._voice_preparation = voice_preparation
+        self._voice_maintenance = voice_maintenance
         """specs/023 T4.3-T4.4: off by default; when off, behaviour is unchanged."""
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
 
     async def recover_once(self) -> int:
         """Mark states that may already have side effects as ambiguous after restart."""
+        if self._voice_preparation is not None:
+            await self._voice_preparation.maintain()
+        elif self._voice_maintenance is not None:
+            await self._voice_maintenance()
         session = await self._session_factory()
         try:
             repository = TelegramInteractionsRepository(session)
@@ -151,6 +170,10 @@ class InteractionProcessor:
 
     async def run_once(self) -> int:
         """Recover deterministic work ordered by chat, with bounded parallel chats."""
+        if self._voice_preparation is not None:
+            await self._voice_preparation.maintain()
+        elif self._voice_maintenance is not None:
+            await self._voice_maintenance()
         session = await self._session_factory()
         try:
             interactions = await TelegramInteractionsRepository(session).list_recoverable_work(
@@ -215,7 +238,13 @@ class InteractionProcessor:
                 return await self._deliver_response(interaction)
         return False
 
-    async def _run_agent(self, interaction: TelegramInteraction) -> bool:
+    async def _run_agent(
+        self,
+        interaction: TelegramInteraction,
+        *,
+        voice_text: str | None = None,
+        prepared_context: ExecutionContext | None = None,
+    ) -> bool:
         if interaction.chat_id is None or interaction.telegram_user_id is None:
             await self._mark_terminal(
                 interaction.id,
@@ -237,9 +266,14 @@ class InteractionProcessor:
             payload = self._payload_cipher.decrypt(interaction.payload_ciphertext)
             input_text = payload.get("text")
             attachments = tuple(
-                TelegramAttachment.model_validate(item)
-                for item in payload.get("attachments", [])
+                TelegramAttachment.model_validate(item) for item in payload.get("attachments", [])
             )
+            voices = tuple(item for item in attachments if item.kind == "voice")
+            if voices and voice_text is None:
+                return await self._prepare_voice(interaction, voices[0], payload)
+            if voice_text is not None:
+                input_text = voice_text
+                attachments = ()
             if (not isinstance(input_text, str) or not input_text.strip()) and attachments:
                 input_text = (
                     "He adjuntado un documento. Archívalo y analízalo usando analyze_document."
@@ -255,21 +289,25 @@ class InteractionProcessor:
             )
             return True
 
-        run_id = str(uuid4())
-        if self._governed_consent:
+        run_id = prepared_context.agno_run_id if prepared_context else str(uuid4())
+        if self._governed_consent and voice_text is None:
             consent_reply = await self._handle_consent_input(interaction, input_text)
             if consent_reply is not None:
                 return await self._reply_deterministically(interaction, consent_reply)
         command = (
             parse_telegram_command(input_text, bot_username=self._bot_username)
-            if not attachments
+            if not attachments and voice_text is None
             else None
         )
         if command is not None:
             # BL-28: commands are control input, never model input.
             return await self._handle_command(interaction, command)
 
-        session_id = await self._conversation_session_id(interaction.chat_id)
+        session_id = (
+            prepared_context.agno_session_id
+            if prepared_context
+            else await self._conversation_session_id(interaction.chat_id)
+        )
         claimed = await self._claim_agent(interaction.id, run_id, session_id)
         if claimed is None:
             return False
@@ -311,6 +349,7 @@ class InteractionProcessor:
                     telegram_message_id=interaction.telegram_message_id,
                     media=media,
                     provenance=self._provenance(interaction),
+                    **({"execution_context": prepared_context} if prepared_context else {}),
                 )
                 if not content.strip():
                     await self._mark_terminal(
@@ -400,6 +439,83 @@ class InteractionProcessor:
         response_ready = interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
         return await self._deliver_response(response_ready)
 
+    async def _prepare_voice(
+        self,
+        interaction: TelegramInteraction,
+        attachment: TelegramAttachment,
+        payload: dict[str, Any],
+    ) -> bool:
+        service = self._voice_preparation
+        if not self._voice_enabled or service is None:
+            return await self._reply_deterministically(
+                interaction,
+                "Las notas de voz todavía no están habilitadas. Puedes escribir tu mensaje.",
+            )
+        try:
+            if interaction.chat_id is None or attachment.duration_seconds is None:
+                raise VoicePreparationError("voice_empty_or_invalid")
+            if (
+                interaction.update_type != "message"
+                or payload.get("voice_message_kind") != "original"
+                or payload.get("text")
+                or len(payload.get("attachments", [])) != 1
+            ):
+                raise VoicePreparationError("voice_origin_not_allowed")
+            reference = VoiceReference(
+                file_id=attachment.file_id,
+                duration_seconds=attachment.duration_seconds,
+                size_bytes=attachment.size_bytes,
+                mime_type=attachment.mime_type,
+            )
+            if reference.duration_seconds > service.policy.max_duration_seconds:
+                raise VoicePreparationError("voice_duration_exceeded")
+            service.policy.validate_download_size(reference.size_bytes or 0)
+            async with service.exclusive(interaction.id) as acquired:
+                if not acquired:
+                    return False
+                prepare_context = getattr(self._agent_runner, "prepare_execution_context", None)
+                if prepare_context is None:
+                    raise VoicePreparationError("stt_route_unavailable")
+                context = await prepare_context(
+                    session_id=await self._conversation_session_id(interaction.chat_id),
+                    run_id=str(uuid4()),
+                    correlation_id=interaction.correlation_id,
+                    telegram_update_id=interaction.telegram_update_id,
+                    telegram_message_id=interaction.telegram_message_id,
+                    provenance=self._provenance(interaction),
+                )
+                text = await service.prepare(interaction, attachment, context=context)
+                if text is None:
+                    return False
+                if parse_voice_consent_intent(text) is not None:
+                    reply = await self._handle_voice_consent(
+                        interaction, text, context.agno_session_id
+                    )
+                    return await self._reply_deterministically(interaction, reply)
+                return await self._run_agent(interaction, voice_text=text, prepared_context=context)
+        except asyncio.CancelledError:
+            await self._mark_terminal(
+                interaction.id,
+                InteractionStatus.FAILED_AMBIGUOUS,
+                error_class="VoicePreparationError",
+                error_detail_code="voice_cancelled",
+            )
+            raise
+        except Exception as exc:
+            ambiguous = isinstance(exc, VoicePreparationError) and exc.ambiguous
+            code = (
+                exc.code if isinstance(exc, VoicePreparationError) else "voice_preparation_failed"
+            )
+            await self._mark_terminal(
+                interaction.id,
+                InteractionStatus.FAILED_AMBIGUOUS
+                if ambiguous
+                else InteractionStatus.FAILED_CONTROLLED,
+                error_class="VoicePreparationError",
+                error_detail_code=code,
+            )
+            return True
+
     def _provenance(self, interaction: TelegramInteraction) -> InteractionProvenance | None:
         """Trusted origin for ``propose_*`` tools; ``None`` while the rollout is off."""
         if not self._governed_consent or interaction.chat_id is None:
@@ -410,9 +526,7 @@ class InteractionProcessor:
             chat_id=interaction.chat_id,
         )
 
-    async def _append_proposal_blocks(
-        self, interaction: TelegramInteraction, content: str
-    ) -> str:
+    async def _append_proposal_blocks(self, interaction: TelegramInteraction, content: str) -> str:
         """Append a fixed, Core-rendered block per proposal this run created.
 
         The block is generated from the stored payload, never from the
@@ -574,9 +688,7 @@ class InteractionProcessor:
             interaction.model_copy(update={"status": InteractionStatus.RESPONSE_READY})
         )
 
-    async def _discard_pending_proposals_for_chat(
-        self, interaction: TelegramInteraction
-    ) -> None:
+    async def _discard_pending_proposals_for_chat(self, interaction: TelegramInteraction) -> None:
         """Invalidate every pending proposal of this chat on ``/new`` (consent-design).
 
         ``/new`` does not revive or renew proposals: resetting the conversation
@@ -596,9 +708,7 @@ class InteractionProcessor:
             await ActionProposalsRepository(session).discard_pending_for_chat(principal)
             await session.commit()
         except Exception:
-            logger.warning(
-                "Failed to discard pending proposals on /new", exc_info=True
-            )
+            logger.warning("Failed to discard pending proposals on /new", exc_info=True)
         finally:
             await session.close()
 
@@ -659,7 +769,7 @@ class InteractionProcessor:
             await session.close()
         if not result.ok:
             return self._consent_rejection_reply(result.rejection)
-        return await self._execute_claimed(result)
+        return await self._execute_claimed(result, user_id=principal.user_id)
 
     async def _claim_and_report(
         self,
@@ -678,7 +788,7 @@ class InteractionProcessor:
             await session.close()
         if not result.ok:
             return self._consent_rejection_reply(result.rejection)
-        return await self._execute_claimed(result)
+        return await self._execute_claimed(result, user_id=principal.user_id)
 
     async def _resolve_bare_confirmation(
         self, interaction: TelegramInteraction, principal: ConsentPrincipal
@@ -705,7 +815,7 @@ class InteractionProcessor:
             return f"Tienes varias propuestas pendientes. Responde «Sí <ID>»:\n{ids}"
         if not result.ok:
             return self._consent_rejection_reply(result.rejection)
-        return await self._execute_claimed(result)
+        return await self._execute_claimed(result, user_id=principal.user_id)
 
     @staticmethod
     def _consent_rejection_reply(rejection: ConsentRejection | None) -> str:
@@ -717,16 +827,89 @@ class InteractionProcessor:
             return "Ya has confirmado otra propuesta con este mensaje."
         return "Esa propuesta ya no está pendiente de confirmación."
 
-    async def _execute_claimed(self, result: ConsentClaimResult) -> str:
-        """Placeholder until T4.5 wires a ProposalExecutor port.
+    async def _handle_voice_consent(
+        self, interaction: TelegramInteraction, text: str, session_id: str
+    ) -> str:
+        from src.domain.actions.executor import ProposalExecutor
+        from src.domain.speech.consent import VoiceConsentIntent
+        from src.repositories.voice_preparations import VoicePreparationsRepository
 
-        The claim already committed ``confirmed`` durably; execution itself
-        is deliberately out of scope here.
-        """
-        assert result.claimed is not None  # narrowed by callers checking result.ok
-        return (
-            "✅ Confirmado. La ejecución automática se activará próximamente "
-            f"(propuesta `{result.claimed.id}`)."
+        if (
+            not self._governed_consent
+            or interaction.telegram_user_id is None
+            or interaction.chat_id is None
+            or parse_voice_consent_intent(text) is None
+        ):
+            return (
+                "La confirmación por voz aún no está habilitada. "
+                "No se ha ejecutado ninguna operación."
+            )
+        # Check the ORIGINAL encrypted payload as well as the transcript from the
+        # owner-controlled preparation. Neither free text nor history can consent.
+        session = await self._session_factory()
+        try:
+            preparation = await VoicePreparationsRepository(session).get(
+                interaction.id, interaction.telegram_user_id
+            )
+            if preparation is None or preparation.transcript_ciphertext is None:
+                return "No pude verificar la confirmación de voz."
+            from src.domain.speech.preparation import SpeechTranscriptCipher
+
+            transcript = SpeechTranscriptCipher(self._payload_cipher).decrypt(
+                preparation.transcript_ciphertext
+            )
+            original = self._payload_cipher.decrypt(interaction.payload_ciphertext or b"")
+            if (
+                transcript.text != text
+                or transcript.call_id != preparation.call_id
+                or original.get("voice_message_kind") != "original"
+                or original.get("text")
+                or len(original.get("attachments", [])) != 1
+                or original["attachments"][0].get("kind") != "voice"
+            ):
+                return "No pude verificar la confirmación de voz."
+            principal = ConsentPrincipal(
+                user_id=str(interaction.telegram_user_id),
+                bot_id=interaction.bot_id,
+                chat_id=interaction.chat_id,
+            )
+            result, code = await ActionProposalsRepository(session).resolve_voice_consent(
+                principal=principal,
+                interaction_id=interaction.id,
+                session_id=session_id,
+                discard=parse_voice_consent_intent(text) is VoiceConsentIntent.DISCARD,
+                supported_tools=ProposalExecutor.SUPPORTED,
+            )
+            await session.commit()
+        finally:
+            await session.close()
+        if code == "voice_executor_unavailable":
+            return (
+                "Esta operación todavía no tiene ejecutor determinista. "
+                "La propuesta sigue pendiente."
+            )
+        if result is None:
+            return (
+                "No hay una única propuesta vigente presentada antes de esta nota de voz. "
+                "No se ha ejecutado ninguna operación."
+            )
+        if not result.ok:
+            return self._consent_rejection_reply(result.rejection)
+        if parse_voice_consent_intent(text) is VoiceConsentIntent.DISCARD:
+            return "❌ Propuesta descartada."
+        return await self._execute_claimed(result, user_id=principal.user_id)
+
+    async def _execute_claimed(self, result: ConsentClaimResult, *, user_id: str) -> str:
+        """Execute a Core-verified claim identically for voice, text and buttons."""
+        assert result.claimed is not None
+        storage = None
+        if result.claimed.tool_name == "delete_document":
+            from src.config import Settings
+            from src.storage.factory import create_storage
+
+            storage = create_storage(Settings())
+        return await ProposalExecutor(self._session_factory, storage=storage).execute(
+            result.claimed, user_id=user_id
         )
 
     async def _stored_session_id(self, chat_id: int) -> str | None:

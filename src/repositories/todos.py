@@ -27,8 +27,9 @@ from src.domain.todos.models import (
 class TodosRepository:
     """Repository for todo lists and items in the ancora schema."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, auto_commit: bool = True):
         self._session = session
+        self._auto_commit = auto_commit
 
     # ── Lists ──────────────────────────────────────────────
 
@@ -39,11 +40,10 @@ class TodosRepository:
             VALUES (:uid, :name, :now, :now)
             RETURNING id, user_id, name, created_at, updated_at
         """)
-        result = await self._session.execute(
-            stmt, {"uid": user_id, "name": data.name, "now": now}
-        )
+        result = await self._session.execute(stmt, {"uid": user_id, "name": data.name, "now": now})
         row = result.fetchone()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_list(row)
 
     async def list_lists(self, user_id: str) -> list[TodoList]:
@@ -80,7 +80,8 @@ class TodosRepository:
             stmt, {"name": data.name, "now": now, "id": list_id, "uid": user_id}
         )
         row = result.fetchone()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_list(row) if row else None
 
     async def delete_list(self, user_id: str, list_id: UUID) -> bool:
@@ -89,7 +90,8 @@ class TodosRepository:
             WHERE id = :id AND user_id = :uid
         """)
         result = await self._session.execute(stmt, {"id": list_id, "uid": user_id})
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         count = getattr(result, "rowcount", 0) or 0
         return bool(count > 0)
 
@@ -120,15 +122,20 @@ class TodosRepository:
         result = await self._session.execute(
             stmt,
             {
-                "insert_lid": list_id, "insert_uid": user_id,
-                "filter_lid": list_id, "filter_uid": user_id,
+                "insert_lid": list_id,
+                "insert_uid": user_id,
+                "filter_lid": list_id,
+                "filter_uid": user_id,
                 "title": data.title,
-                "desc": data.description, "priority": data.priority,
-                "due": data.due_date, "now": now,
+                "desc": data.description,
+                "priority": data.priority,
+                "due": data.due_date,
+                "now": now,
             },
         )
         row = result.fetchone()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_item(row) if row else None
 
     async def list_items(
@@ -198,12 +205,11 @@ class TodosRepository:
         )
         result = await self._session.execute(stmt, params)
         row = result.fetchone()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_item(row) if row else None
 
-    async def set_item_status(
-        self, user_id: str, item_id: UUID, status: str
-    ) -> TodoItem | None:
+    async def set_item_status(self, user_id: str, item_id: UUID, status: str) -> TodoItem | None:
         stmt = text("""
             UPDATE ancora.todo_items
             SET status = :status, updated_at = :now
@@ -213,16 +219,14 @@ class TodosRepository:
         """)
         result = await self._session.execute(
             stmt,
-            {"status": status, "now": datetime.now(tz=UTC),
-             "id": item_id, "uid": user_id},
+            {"status": status, "now": datetime.now(tz=UTC), "id": item_id, "uid": user_id},
         )
         row = result.fetchone()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_item(row) if row else None
 
-    async def move_item(
-        self, user_id: str, item_id: UUID, target_list_id: UUID
-    ) -> TodoItem | None:
+    async def move_item(self, user_id: str, item_id: UUID, target_list_id: UUID) -> TodoItem | None:
         """Move an item to another list of the same user (appended at the end)."""
         target = await self.get_list(user_id, target_list_id)
         if target is None:
@@ -243,20 +247,18 @@ class TodosRepository:
             FROM ancora.todo_items
             WHERE list_id = :lid AND user_id = :uid
         """)
-        pos_result = await self._session.execute(
-            pos_stmt, {"lid": target_list_id, "uid": user_id}
-        )
+        pos_result = await self._session.execute(pos_stmt, {"lid": target_list_id, "uid": user_id})
         pos_row = pos_result.fetchone()
         if pos_row is None:
             return None
         next_pos = pos_row.next_pos
         result = await self._session.execute(
             stmt,
-            {"lid": target_list_id, "pos": next_pos, "now": now,
-             "id": item_id, "uid": user_id},
+            {"lid": target_list_id, "pos": next_pos, "now": now, "id": item_id, "uid": user_id},
         )
         row = result.fetchone()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_item(row) if row else None
 
     async def delete_item(self, user_id: str, item_id: UUID) -> bool:
@@ -265,23 +267,33 @@ class TodosRepository:
             WHERE id = :id AND user_id = :uid
         """)
         result = await self._session.execute(stmt, {"id": item_id, "uid": user_id})
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         count = getattr(result, "rowcount", 0) or 0
         return bool(count > 0)
 
 
 def _row_to_list(row: Any) -> TodoList:
     return TodoList(
-        id=row.id, user_id=row.user_id, name=row.name,
-        created_at=row.created_at, updated_at=row.updated_at,
+        id=row.id,
+        user_id=row.user_id,
+        name=row.name,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
 def _row_to_item(row: Any) -> TodoItem:
     return TodoItem(
-        id=row.id, list_id=row.list_id, user_id=row.user_id,
-        title=row.title, description=row.description, status=row.status,
-        priority=row.priority, due_date=row.due_date, position=row.position,
-        created_at=row.created_at, updated_at=row.updated_at,
+        id=row.id,
+        list_id=row.list_id,
+        user_id=row.user_id,
+        title=row.title,
+        description=row.description,
+        status=row.status,
+        priority=row.priority,
+        due_date=row.due_date,
+        position=row.position,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
-

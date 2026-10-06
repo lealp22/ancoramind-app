@@ -435,7 +435,11 @@ async def test_governed_consent_button_claims_the_proposal_it_presented(
             {"id": runner.proposal_id},
         )
     ).scalar_one()
-    assert status == "confirmed"
+    assert status == "executed"
     confirm_reply = sender.calls[-1][1]
-    assert str(runner.proposal_id) in confirm_reply
+    assert "✅" in confirm_reply
+    assert (
+        await session.scalar(text("SELECT count(*) FROM ancora.reminders WHERE user_id='88'"))
+        == 1
+    )
 
