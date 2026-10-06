@@ -615,7 +615,17 @@ alcanza precisión en escaneados.
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
 
-### BL-26 · Notas de voz entrantes y transcripción gobernada (STT)
+### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 diseño en curso — specs/028
+**Actualización 2026-10-06:** alcance acordado: notas de voz originales de hasta
+**5 minutos**, respuesta textual y «Sí»/«No» por voz como alternativa de
+consentimiento determinista, sin exigir teclear ni botones. El coste por nota
+se deriva de duración y tarifa versionada (incluido redondeo/mínimo); no se pide
+un presupuesto USD STT manual adicional, pero se conservan límites de gasto
+agregado y presupuesto de interacción. `specs/028-telegram-voice-stt/` define
+contratos propuestos, fases y matriz V01–V36; **runtime y aceptación voz pendientes**.
+Dependencia para E2E de confirmación/ejecución: conectar `_execute_claimed()`
+(BL-40/specs/023) y habilitar consentimiento gobernado sin bypass legacy.
+
 Permitir que una nota de voz de Telegram se procese como un mensaje conversacional:
 descargar el audio autorizado por Telegram, transcribirlo y pasar **solo el texto
 resultante** al mismo flujo de admission/processor/Agent que usa un mensaje escrito.
