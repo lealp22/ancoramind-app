@@ -540,6 +540,20 @@ no forma parte de esta fase.
       reproducible en `main` antes de esta fase, no relacionado). `pytest
       tests/integration/` (PostgreSQL vía Docker) → 94 passed.
 
+**Nota (2026-10-06, fuera de esta fase):** el fallo de
+`test_telegram_admission_wiring.py` señalado arriba (T5.6) por falta de
+`TELEGRAM_TOKEN` ya no es reproducible — el entorno de verificación lo
+exporta. En su lugar se encontró y corrigió un fallo distinto y real en el
+mismo archivo: sus dos factorías `Settings(...)` no pasaban `_env_file=None`
+(patrón ya establecido en `test_config.py`), así que un `.env`/entorno local
+con `ADMIN_DASHBOARD_ENABLED=true` (BL-43/specs-027) filtraba rutas
+`/admin/dashboard/*` reales a la aserción de lista exacta de rutas del test,
+rompiéndolo. Corregido añadiendo `_env_file=None` +
+`runtime_config_admin_enabled=False`/`telegram_pairing_admin_enabled=False`/
+`admin_dashboard_enabled=False` explícitos en ambas factorías. `pytest
+tests/unit/` → 770 passed; `ruff check src/ tests/ scripts/ migrations/` y
+`mypy src/` (126 ficheros) limpios.
+
 **Criterio de cierre:** un recordatorio o evento creado con una hora local
 dicha por el usuario se dispara/consulta en esa misma hora local, con
 pruebas que cubren al menos un cambio de horario de verano/invierno.

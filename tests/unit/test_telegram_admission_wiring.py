@@ -20,6 +20,10 @@ def _settings() -> Settings:
         telegram_payload_encryption_key="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         allowed_telegram_user_ids="999",
         app_env="development",
+        runtime_config_admin_enabled=False,
+        telegram_pairing_admin_enabled=False,
+        admin_dashboard_enabled=False,
+        _env_file=None,
     )
 
 
@@ -77,6 +81,7 @@ def test_create_app_installs_rest_guard_when_security_key_configured(
             allowed_telegram_user_ids="999",
             app_env="production",
             agent_os_security_key="railway-only-secret",
+            _env_file=None,
         )
 
     class FakeAgentOS:
