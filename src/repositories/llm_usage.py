@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,6 +102,26 @@ class LlmUsageRepository:
             await self._session.rollback()
             raise
 
+    async def finish_speech_call(
+        self, interaction_id: UUID, call_id: UUID, *, status: str, latency_ms: int
+    ) -> None:
+        """Settle an existing intent without incrementing interaction counters twice."""
+        await self._session.execute(
+            text("""
+            UPDATE ancora.llm_usage_events SET status = :status, latency_ms = :latency,
+                error_class = CASE WHEN :status = 'completed' THEN NULL
+                    ELSE 'SpeechGatewayError' END
+            WHERE interaction_id = :interaction AND llm_call_id = :call AND status = 'started'
+        """),
+            {
+                "interaction": interaction_id,
+                "call": call_id,
+                "status": status,
+                "latency": latency_ms,
+            },
+        )
+        await self._session.commit()
+
     async def summarize_spend(self, *, now: datetime | None = None) -> SpendSummary:
         """Aggregate the AncoraMind spend log for cost governance (T12).
 
@@ -122,7 +143,16 @@ class LlmUsageRepository:
                                 FILTER (WHERE created_at >= :day_start),
                             0
                         ) AS today_usd
-                    FROM ancora.llm_usage_events
+                    FROM (
+                        SELECT logical_route, actual_cost, estimated_cost, created_at
+                        FROM ancora.llm_usage_events
+                        UNION ALL
+                        SELECT logical_route, actual_cost, estimated_cost, claimed_at AS created_at
+                        FROM ancora.voice_preparations v
+                        WHERE call_id IS NOT NULL AND NOT EXISTS (
+                            SELECT 1 FROM ancora.llm_usage_events e WHERE e.llm_call_id = v.call_id
+                        )
+                    ) AS spend
                     WHERE created_at >= :month_start
                     GROUP BY logical_route
                 """),

@@ -32,20 +32,31 @@
   prolongar plazo existente. SQL parametrizado; repr sin ciphertext.
 - [x] Ejecutar pruebas PostgreSQL/migraciones: 13 pasan; suite integration completa
   109 pasa. T3 validado a nivel persistencia, sin afirmar E2E STT/Agent operativo.
-- [ ] Integrar recovery/purge con lifecycle en T4, identificando dueño muerto;
+- [x] Integrar recovery/purge con lifecycle en T4, identificando dueño muerto;
   metadata-only/limpieza de temporales reales V31 se verifican al añadir inspector.
 
 ## T4 — Canal y processor con STT fake
 
-- [ ] Normalización voice/procedencia, flag OFF, límites y descarga streaming.
-- [ ] Separar voz de documentos y de agent_started; timeout operacional explícito.
-- [ ] Captura snapshot/contexto antes de STT y continuidad reservas con Agent.
-- [ ] U/I V01–V10, V15, V32 con red/proveedor mockeados.
+- [x] Normalización voice/procedencia, flag OFF, límites y descarga streaming.
+- [x] Separar voz de documentos y de agent_started; timeout propuesto 60 s,
+  configurable hasta 120 s y limitado por el presupuesto de ejecución compartido.
+- [x] Captura snapshot/contexto antes de STT y continuidad reservas con Agent.
+- [x] U/I de canal, streaming, preparación, duplicados, cancelación y regresión.
+  Inspección/STT son simulados: no afirmar cobertura física completa V01–V10/V31.
+- [x] Inspector/decoder físico y pruebas reales/temporales: 12 pasan en Docker.
+
+Recovery adquiere bloqueo transaccional PostgreSQL en sesión dedicada; mientras
+el worker mantiene su conexión, otra instancia no cierra su preparación. El
+bloqueo se conserva hasta completar el flujo/claim del Agent; muerte de conexión
+permite cierre sin replay. Purge también funciona con voz OFF desde lifecycle.
+El bootstrap rechaza VOICE_ENABLED=true hasta disponer de adaptadores físicos;
+no existe fake STT en producción. Sí/No vocal se responde sin Agent ni ejecución
+hasta T5; comandos/callbacks transcritos nunca se interpretan como control.
 
 ## T5 — Consentimiento y ejecución
 
-- [ ] Resolver Sí/No antes de Agent; sin callback/comando sintético como control.
-- [ ] Evidencia original/current, entrega antes de accepted_at, caducidad/generación.
+- [x] Resolver Sí/No antes de Agent; sin callback/comando sintético como control.
+- [x] Evidencia original/current, entrega antes de accepted_at, caducidad/generación.
 - [ ] Claims/descartes condicionales y concurrencia (V20–V30).
 - [ ] Cerrar executor pendiente en BL-40/specs/023; sin bypass legacy. Documentar
   diagnóstico del flag/botones por separado; voz no exige que aparezcan botones.
@@ -53,9 +64,14 @@
 ## T6 — Acceso STT gobernado físico
 
 - [ ] Verificar docs/compatibilidad actuales del Gateway y proveedor antes de elegir.
-- [ ] Config versionada backward-compatible; tarifa/política por duración/alias nuevo.
+- [x] Config versionada backward-compatible; tarifa/política por duración/alias nuevo.
 - [ ] Petición STT, reservas/gasto agregado, ledger, auditoría errores (V11–V16/V19).
-- [ ] Un intento end-to-end, sin fallback directo. Tests sin credenciales/inferencia.
+- [x] Adaptador single-attempt sin fallback directo; tests HTTP sin inferencia.
+
+T5/T6 son incrementos parciales: ejecutor transaccional solo para remember_note;
+otros se rechazan antes de consumir consentimiento. Falta concurrencia adversarial
+completa y verificar imagen fijada Gateway/upstream STT, alias y tarifa reales.
+Inspector limpia temporales en success/error/cancel; SIGKILL requiere tmpfs efímero.
 
 ## T7 — Validación y piloto (requiere autorización de inferencia/despliegue)
 

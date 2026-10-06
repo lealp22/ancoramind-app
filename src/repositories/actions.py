@@ -85,13 +85,20 @@ class ActionProposalsRepository:
                     :hash,:source_interaction,:bot_id,:chat_id)
             RETURNING id,user_id,tool_name,status,payload,source_document_id,created_at
         """)
-        result = await self._session.execute(stmt, {
-            "uid": user_id, "tool": tool_name, "payload": json.dumps(normalized),
-            "src": source_document_id, "now": now,
-            "hash": payload_hash(tool_name, normalized),
-            "source_interaction": source_interaction_id,
-            "bot_id": bot_id, "chat_id": chat_id,
-        })
+        result = await self._session.execute(
+            stmt,
+            {
+                "uid": user_id,
+                "tool": tool_name,
+                "payload": json.dumps(normalized),
+                "src": source_document_id,
+                "now": now,
+                "hash": payload_hash(tool_name, normalized),
+                "source_interaction": source_interaction_id,
+                "bot_id": bot_id,
+                "chat_id": chat_id,
+            },
+        )
         row = result.fetchone()
         if row is None:
             raise RuntimeError("Action proposal insert did not return a row")
@@ -102,9 +109,7 @@ class ActionProposalsRepository:
             "tool_name": row.tool_name,
             "status": row.status,
             "payload": row.payload,
-            "source_document_id": (
-                str(row.source_document_id) if row.source_document_id else None
-            ),
+            "source_document_id": (str(row.source_document_id) if row.source_document_id else None),
             "created_at": row.created_at.isoformat(),
         }
 
@@ -125,9 +130,7 @@ class ActionProposalsRepository:
             "tool_name": row.tool_name,
             "status": row.status,
             "payload": row.payload,
-            "source_document_id": (
-                str(row.source_document_id) if row.source_document_id else None
-            ),
+            "source_document_id": (str(row.source_document_id) if row.source_document_id else None),
         }
 
     async def confirm(self, user_id: str, proposal_id: str) -> ProposalRecord | None:
@@ -288,6 +291,96 @@ class ActionProposalsRepository:
             {"id": row.id, "tool_name": row.tool_name, "payload": row.payload}
             for row in result.fetchall()
         ]
+
+    async def resolve_voice_consent(
+        self,
+        *,
+        principal: ConsentPrincipal,
+        interaction_id: UUID,
+        session_id: str,
+        discard: bool,
+        supported_tools: frozenset[str],
+    ) -> tuple[ConsentClaimResult | None, str | None]:
+        """Single-use vocal consent with original admission/presentation evidence.
+
+        Lock the admitted interaction then eligible proposals. Compare presentation
+        against admission time, not STT completion; constrain source generation.
+        Re-read the durable payload/transcript rather than trusting a text argument.
+        """
+        current = (
+            (
+                await self._session.execute(
+                    text("""
+            SELECT i.status, i.bot_id, i.chat_id, i.telegram_user_id, i.update_type,
+                   i.accepted_at, i.payload_ciphertext, i.payload_key_version,
+                   v.status AS voice_status, v.transcript_ciphertext,
+                   v.transcript_key_version, v.transcript_expires_at > now() AS transcript_current
+            FROM ancora.telegram_interactions i
+            JOIN ancora.voice_preparations v ON v.interaction_id = i.id
+                AND v.user_id = i.telegram_user_id
+            WHERE i.id = :interaction AND i.telegram_user_id = :user_id
+            FOR UPDATE OF i
+        """),
+                    {"interaction": interaction_id, "user_id": int(principal.user_id)},
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if (
+            current is None
+            or current["status"] != "accepted"
+            or current["voice_status"] != "transcribed"
+            or not current["transcript_current"]
+            or current["update_type"] != "message"
+            or current["bot_id"] != principal.bot_id
+            or current["chat_id"] != principal.chat_id
+        ):
+            return None, "voice_evidence_invalid"
+        if await self._interaction_already_used(interaction_id):
+            return None, "voice_already_used"
+        rows = (
+            (
+                await self._session.execute(
+                    text("""
+            SELECT p.id, p.tool_name FROM ancora.action_proposals p
+            JOIN ancora.telegram_interactions source ON source.id = p.source_interaction_id
+            WHERE p.user_id = :uid AND p.bot_id = :bot AND p.chat_id = :chat
+              AND p.status = 'pending_confirmation' AND p.presented_at IS NOT NULL
+              AND p.presented_at <= :accepted AND p.expires_at > now()
+              AND source.agno_session_id = :generation
+            ORDER BY p.id FOR UPDATE OF p
+        """),
+                    {
+                        "uid": principal.user_id,
+                        "bot": principal.bot_id,
+                        "chat": principal.chat_id,
+                        "accepted": current["accepted_at"],
+                        "generation": session_id,
+                    },
+                )
+            )
+            .mappings()
+            .all()
+        )
+        if len(rows) != 1:
+            return None, "voice_no_unique_proposal"
+        if not discard and rows[0]["tool_name"] not in supported_tools:
+            return None, "voice_executor_unavailable"
+        result = await self.claim_confirmation(
+            rows[0]["id"], principal=principal, confirming_interaction_id=interaction_id
+        )
+        if result.ok and discard:
+            await self._session.execute(
+                text("""
+                UPDATE ancora.action_proposals SET status = 'discarded', completed_at = now(),
+                    failure_reason = 'user_declined_voice'
+                WHERE id = :id AND user_id = :uid AND status = 'confirmed'
+                  AND confirming_interaction_id = :interaction
+            """),
+                {"id": rows[0]["id"], "uid": principal.user_id, "interaction": interaction_id},
+            )
+        return result, None
 
     async def claim_confirmation(
         self,

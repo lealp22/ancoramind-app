@@ -18,6 +18,35 @@ class VoicePreparationsRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    @staticmethod
+    def _lock_key(interaction_id: UUID) -> int:
+        # Signed 64-bit advisory key; collisions only serialize unrelated work.
+        value = interaction_id.int & ((1 << 64) - 1)
+        return value - (1 << 64) if value >= (1 << 63) else value
+
+    async def try_preparation_lock(self, interaction_id: UUID) -> bool:
+        """Transaction-scoped lock on a DEDICATED session, never committed by writes.
+
+        The caller holds this transaction throughout preparation. Another process
+        can recover the owner only after PostgreSQL releases its dead connection.
+        """
+        result = await self._session.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"),
+            {"key": self._lock_key(interaction_id)},
+        )
+        return bool(result.scalar_one())
+
+    async def maintenance_scopes(self) -> list[tuple[UUID, int, UUID]]:
+        """Metadata discovery only; all subsequent recovery/purge writes are scoped."""
+        result = await self._session.execute(
+            text("""
+            SELECT interaction_id, user_id, owner_token FROM ancora.voice_preparations
+            WHERE status IN ('preparing', 'downloaded', 'transcribing', 'transcribed')
+               OR transcript_ciphertext IS NOT NULL
+        """)
+        )
+        return [(row[0], row[1], row[2]) for row in result.fetchall()]
+
     async def _write(self, query: str, params: dict[str, object]) -> VoicePreparation | None:
         try:
             # All preparation writes use the same parent-first lock order as

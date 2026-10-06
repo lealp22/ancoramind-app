@@ -97,3 +97,62 @@ o producción. Esta evidencia sustituye la limitación de DB no disponible arrib
 No hizo falta corregir código. T3 validado como persistencia aislada; todavía no
 prueba STT/Agent E2E, muerte automática de propietarios, purge periódico ni
 temporales reales. Integración processor/lifecycle permanece pendiente de T4.
+
+## T4 — canal y processor con STT simulado (2026-10-06)
+
+- Normalización voice original/forwarded/edited/mixed; metadata cifrada, sin audio
+  durable ni fallback de voz malformada al flujo documental.
+- Descarga streaming con límite efectivo incluso sin Content-Length. Dispatcher
+  rechaza duración >300 s, tamaño >10 MiB y origen no permitido antes de STT.
+- Preparación con call_id persistido antes del envío y resultado cifrado vinculado.
+  Contexto/snapshot/budget compartidos con Agent; STT reserva un slot y estimación
+  derivada. Agent no reinicia el presupuesto.
+- Bloqueo transaccional PostgreSQL en sesión dedicada a lo largo del flujo;
+  recovery respeta workers activos. Conexión liberada permite cierre del dueño
+  abandonado sin replay. Recovery/purge conectados al lifecycle incluso voz OFF.
+- PostgreSQL: flujo con inspector/STT/Agent sintéticos, duplicados/concurrencia,
+  limpieza terminal, cancelación, timeout, resultado inválido/call_id distinto y
+  error proveedor sin replay. No datos/servicios de producción modificados.
+- `pytest tests/unit/ -q`: **887 passed**, 15.18 s.
+- `pytest tests/integration/ -q`: **117 passed**, 56.44 s, sin skips.
+- Ruff global, mypy (134 source files), diff check limpios.
+
+Limitaciones: sin inferencia/red real ni ledger físico de uso/inspector FFmpeg.
+No se crean temporales en este incremento: no se demuestra limpieza del futuro
+decoder ni borrado seguro de bytes inmutables en RAM. Bytes se liberan al terminar
+el scope, no se escriben a almacenamiento. Limpiar transcripción de preparación
+no elimina el turno textual que Agent persista en historial normal, ni datos
+canónicos solicitados.
+
+Flag OFF; bootstrap falla cerrado si se activa sin adaptadores físicos. Sí/No
+vocal responde sin Agent/ejecutor hasta T5. Comandos/callback_data transcritos
+son texto no confiable, no eventos de control. Timeout propuesto 60 s (máximo
+120 y plazo compartido), pendiente benchmark/aprobación. Inspector físico y V31
+real siguen pendientes en T4; ver incremento posterior abajo.
+
+## Inspector físico y primer incremento T5/T6 (2026-10-06)
+
+- FFmpeg/ffprobe en Dockerfile. 12 tests reales pasan en Docker con audio
+  sintético: truncado/CRC/formato/streams/chained/duración, cleanup, timeout,
+  cancelación, subprocess y output acotado. FFmpeg toleraba un OGG truncado:
+  añadido validador de estructura single-stream/BOS/EOS antes de decodificar.
+- Windows: 895 unit passed, 12 skipped sin binarios; esos 12 pasan en Docker.
+  PostgreSQL: 124 passed. Ruff, mypy y diff check limpios.
+- Sí/No vocal usa evidencia original cifrada/transcripción vigente, presentación
+  anterior a admisión, TTL y generación; nunca Agent. Nota y auditoría se ejecutan
+  transaccionalmente. Otros executors siguen pendientes; rechazan antes de consumir
+  confirmación. Tests incluyen múltiples propuestas, entrega posterior, expiry y
+  cambio de generación. T5 no cerrado para todas las capabilities/V20–V30.
+- Adaptador multipart STT single-attempt Gateway privado: intención durable
+  fail-closed antes de envío, resultado acotado, auditoría metadata-only. Config
+  opcional speech conserva checksums de revisiones antiguas. Gasto agregado incluye
+  reservas sin ledger y evita double count. Actual cost desconocido, no inventado.
+- Docs primarias: docs.litellm.ai/docs/audio_transcription y
+  openrouter.ai/blog/tutorials/transcription-on-openrouter/. Endpoint multipart
+  documentado por LiteLLM; la lista STT no incluye OpenRouter. Compatibilidad con
+  la imagen fijada y controles upstream no demostrados: T6 no cerrado E2E.
+- Audio temporal privado eliminado en success/error/cancelación. No borrado seguro
+  ni garantía frente a SIGKILL/host crash: producción requiere tmpfs efímero y
+  revisión de retención Gateway/upstream. Historial textual sigue política normal.
+- Sin inferencia real, activación de flags, publicación de aliases o despliegue.
+  Pendientes executors restantes, validación Gateway, benchmark y piloto T7.

@@ -18,11 +18,12 @@ class TelegramAttachment(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    kind: Literal["photo", "document"]
+    kind: Literal["photo", "document", "voice"]
     file_id: str = Field(min_length=1, max_length=255)
     filename: str | None = Field(default=None, max_length=255)
     mime_type: str | None = Field(default=None, max_length=127)
-    size_bytes: int | None = Field(default=None, ge=0, le=20 * 1024 * 1024)
+    size_bytes: int | None = Field(default=None, ge=0)
+    duration_seconds: int | None = Field(default=None, ge=0, strict=True)
 
 
 @dataclass(frozen=True)

@@ -615,7 +615,12 @@ alcanza precisión en escaneados.
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
 
-### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 diseño en curso — specs/028
+### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 implementación parcial — specs/028
+**Incremento inspector/T5/T6:** decoder real validado en Docker (12 tests),
+consentimiento vocal con ejecutor transaccional solo para notas y adaptador STT
+privado probado con HTTP simulado. Restan executors demás capabilities,
+compatibilidad Gateway/upstream, concurrencia adversarial completa y E2E.
+Voz sigue OFF; no publicación de alias ni inferencia real.
 **Actualización 2026-10-06:** alcance acordado: notas de voz originales de hasta
 **5 minutos**, respuesta textual y «Sí»/«No» por voz como alternativa de
 consentimiento determinista, sin exigir teclear ni botones. El coste por nota
@@ -630,8 +635,12 @@ sin binarios instalados ni validación de audio físico aún.
 T3 implementado y validado localmente en PostgreSQL (2026-10-06): tabla de preparación
 exclusiva sin audio, intención/reserva STT durable, transcripción cifrada,
 recuperación sin replay y limpieza terminal/expiración; migración 0011 e init.sql.
-No conectado aún al processor ni lifecycle; 13 tests T3/migraciones pasan,
-109 integration y 868 unit tests verdes; Ruff y mypy limpios. Pendiente T4.
+T4 integrado con inspector/STT simulados: normalización voice, descarga streaming
+acotada, preparación exclusiva con bloqueo PostgreSQL, snapshot/budget compartido
+y recovery/purge en lifecycle incluso voz OFF. Validación 2026-10-06: 887 unit y
+117 integration verdes; Ruff/mypy limpios. Pendientes inspector físico/temporales
+reales, T5 consentimiento y T6 proveedor. Bootstrap no permite activar voz sin
+adaptadores físicos; no hay STT fake en producción.
 Dependencia para E2E de confirmación/ejecución: conectar `_execute_claimed()`
 (BL-40/specs/023) y habilitar consentimiento gobernado sin bypass legacy.
 

@@ -18,6 +18,8 @@ class NotesService:
         self,
         user_context: UserContext,
         content: str,
+        *,
+        commit: bool = True,
     ) -> Note:
         """Store a personal note in canonical memory.
 
@@ -29,10 +31,9 @@ class NotesService:
             The created Note.
         """
         data = NoteCreate(content=content)
-        return await self._repo.create(
-            user_id=user_context.user_id,
-            data=data,
-        )
+        if commit:
+            return await self._repo.create(user_id=user_context.user_id, data=data)
+        return await self._repo.create(user_id=user_context.user_id, data=data, commit=False)
 
     async def search(
         self,

@@ -23,7 +23,12 @@ de inspección/conversión documentada en `inspection-design.md`, no instalada.
 
 Puerto conceptual:
 
-`SpeechToTextPort.transcribe(audio: ValidatedVoiceAudio, *, execution_context: ExecutionContext) -> SpeechToTextResult`
+`SpeechToTextPort.transcribe(audio: ValidatedVoiceAudio, *, execution_context: ExecutionContext, call_id: UUID) -> SpeechToTextResult`
+
+T4 asigna y persiste call_id antes del envío; el adaptador debe devolver el mismo
+identificador. STT y Agent comparten el contexto/snapshot y presupuesto mutable,
+sin reiniciar contadores ni plazo. El adaptador físico no debe reservar dos veces
+la misma llamada ya reservada por el orquestador.
 
 - `SpeechToTextResult`: texto (`repr=False`, no vacío, longitud máxima validada),
   duración procesada, idioma opcional, referencias de uso/llamada. No extrae

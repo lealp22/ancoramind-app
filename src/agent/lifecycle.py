@@ -28,6 +28,7 @@ from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
 from src.domain.reminders.worker import RemindersWorker
 from src.domain.runtime_config.service import RuntimeConfigManager
+from src.domain.speech.service import maintain_voice_preparations
 from src.notifications.telegram import TelegramNotifier
 from src.observability.telemetry import shutdown_observability
 from src.repositories.database import get_session
@@ -141,6 +142,8 @@ def install_interaction_processor_lifespan(
         logger.info("Telegram interaction processor skipped — durable admission is disabled")
         return False
     validate_telegram_admission_settings(settings)
+    if settings.telegram_voice_enabled and not settings.litellm_proxy_enabled:
+        raise ValueError("TELEGRAM_VOICE_ENABLED requires the private Gateway")
 
     previous_lifespan = app.router.lifespan_context
     payload_cipher = TelegramPayloadCipher(
@@ -169,6 +172,26 @@ def install_interaction_processor_lifespan(
         async with previous_lifespan(application) as state:
             notifier = TelegramNotifier(settings.telegram_token)
             media_resolver = TelegramMediaResolver(settings)
+            voice_preparation = None
+            if settings.telegram_voice_enabled:
+                from src.agent.speech_access import GovernedSpeechAccess
+                from src.agent.voice_inspector import FFmpegVoiceInspector
+                from src.domain.speech.service import VoicePreparationService
+
+                if runtime_config_manager.snapshot().config.speech is None:
+                    raise ValueError(
+                        "TELEGRAM_VOICE_ENABLED requires versioned speech configuration"
+                    )
+                voice_preparation = VoicePreparationService(
+                    session_factory=get_session,
+                    cipher=payload_cipher,
+                    inspector=FFmpegVoiceInspector(),
+                    stt=GovernedSpeechAccess(settings, get_session),
+                    download=lambda attachment: media_resolver.resolve_voice(
+                        attachment, max_bytes=10 * 1024 * 1024
+                    ),
+                    timeout_seconds=settings.telegram_voice_timeout_seconds,
+                )
             processor = InteractionProcessor(
                 session_factory=get_session,
                 payload_cipher=payload_cipher,
@@ -177,6 +200,9 @@ def install_interaction_processor_lifespan(
                 media_resolver=media_resolver,
                 global_concurrency=settings.telegram_processor_global_concurrency,
                 governed_consent=settings.governed_consent_enabled,
+                voice_enabled=settings.telegram_voice_enabled,
+                voice_preparation=voice_preparation,
+                voice_maintenance=lambda: maintain_voice_preparations(get_session),
                 on_cycle=(lambda _: health_registry.heartbeat("interaction_processor"))
                 if health_registry is not None
                 else None,
