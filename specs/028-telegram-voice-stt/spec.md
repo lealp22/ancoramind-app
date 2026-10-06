@@ -1,7 +1,7 @@
 # Spec: 028 — Notas de voz Telegram y STT gobernado
 
 > **Backlog:** BL-26
-> **Status:** alcance acordado; contratos y aceptación definidos; runtime pendiente
+> **Status:** T2 implementado localmente (políticas/contratos/tests); runtime pendiente
 > **Fecha:** 2026-10-06
 > **Target:** nota de voz privada autorizada → STT gobernado → solicitud o
 > consentimiento determinista → respuesta textual, sin duplicar efectos.

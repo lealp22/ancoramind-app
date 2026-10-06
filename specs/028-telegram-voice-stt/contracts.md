@@ -1,6 +1,7 @@
 # Contratos propuestos — specs/028
 
-> Diseño, 2026-10-06. Estos nombres/campos NO son APIs implementadas.
+> T2, 2026-10-06: modelos/puertos/políticas puros implementados en
+> `src/domain/speech/`; infraestructura, evidencia durable y wiring pendientes.
 > Usar Pydantic v2/modelos inmutables y Protocol; domain sin Agno/SDKs físicos.
 
 ## Entrada y preparación
@@ -16,7 +17,7 @@ Metadata ausente de tamaño/MIME no implica rechazo automático: validar bytes.
 Duración declarada ausente/no válida rechaza la referencia; duración real mayor
 que límite rechaza antes de STT. No fiarse de extensión ni de MIME arbitrario.
 Parser/decoder determinista acotado, sin ejecutar archivos; dependencia concreta
-de inspección/conversión por seleccionar en T2, no introducirla por anticipado.
+de inspección/conversión documentada en `inspection-design.md`, no instalada.
 
 ## STT gobernado
 

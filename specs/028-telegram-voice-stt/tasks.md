@@ -10,19 +10,30 @@
 - [ ] Aprobar límites operativos propuestos (10 MiB), inspector/decoder y timeout
   en T2; no asumir que el benchmark o proveedor ya están seleccionados.
 
-## T2 — Contratos ejecutables y política pura (siguiente incremento)
+## T2 — Contratos ejecutables y política pura (implementado localmente)
 
-- [ ] Modelos/Protocol domain/STT sin SDKs físicos; cálculo Decimal de facturación.
-- [ ] Tests U V03–V08, V11–V13, V22–V23; parser Sí/No y procedencia diferenciada.
-- [ ] Seleccionar inspección determinista de OGG/Opus acotada; documentar dependencia
-  sólo tras verificar necesidad/compatibilidad con Windows/Python 3.12 y deploy.
-- [ ] No habilitar normalización voz en producción antes del flujo seguro completo.
+- [x] Modelos/Protocol en `src/domain/speech/`, sin SDKs físicos; cálculo Decimal
+  con redondeo racional exacto, independiente de precisión Decimal ambiental.
+- [x] Tests de contratos/política U V03–V08 (parciales, sin decoder/stream real),
+  V11–V13, V22–V23; parser vocal independiente y procedencia diferenciada.
+- [x] Seleccionar `ffprobe`/FFmpeg como candidato de inspección física; ver
+  `inspection-design.md`. Sin binario disponible ni nueva dependencia instalada:
+  verificación real Windows/container y decoder quedan pendientes de T4.
+- [x] No habilitar normalización voz ni modificar consentimiento escrito/runtime.
 
 ## T3 — Persistencia y preparación exclusiva
 
-- [ ] Diseño final de subestados/tabla y uso STT; migración + init.sql + tests V33.
-- [ ] Claim preparación/transiciones/resultado cifrado/recover sin replay (V17–V19).
-- [ ] Retención equivalente al payload, limpieza de temporales y metadata-only V31.
+- [x] Tabla `voice_preparations`, metadata/reserva/intención STT durable; migración
+  0011 + init.sql equivalente + tests fresh/upgrade/downgrade validados en PostgreSQL.
+- [x] Claim preparación/transiciones/resultado cifrado/recover sin replay;
+  tests PostgreSQL de persistencia/concurrencia/recuperación validados (2026-10-06).
+- [x] Sin columna audio; cifrado/transcripción con expiración <=24 h, limpieza
+  terminal por trigger y purge explícito user-scoped. Ambiguos <=7 días y sin
+  prolongar plazo existente. SQL parametrizado; repr sin ciphertext.
+- [x] Ejecutar pruebas PostgreSQL/migraciones: 13 pasan; suite integration completa
+  109 pasa. T3 validado a nivel persistencia, sin afirmar E2E STT/Agent operativo.
+- [ ] Integrar recovery/purge con lifecycle en T4, identificando dueño muerto;
+  metadata-only/limpieza de temporales reales V31 se verifican al añadir inspector.
 
 ## T4 — Canal y processor con STT fake
 

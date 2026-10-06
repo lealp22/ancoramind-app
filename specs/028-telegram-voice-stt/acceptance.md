@@ -1,6 +1,8 @@
 # Pruebas de aceptación — specs/028
 
-> Todas las filas son requisitos pendientes, no evidencia de voz implementada.
+> T2 ejecuta contratos/políticas de V03–V08 parcialmente y V11–V13/V22–V23.
+> Decoder, streaming, efectos/runtime y restantes filas siguen pendientes; ver
+> `verification.md`. No es evidencia de voz operativa.
 > U = unit sin red; I = integration PostgreSQL; E = E2E/piloto autorizado.
 > STT real sólo en E; mocks en U/I. Tests deben verificar efectos y llamadas,
 > no únicamente respuestas. Fixtures sintéticas, ningún audio personal en Git.

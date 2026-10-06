@@ -622,7 +622,16 @@ consentimiento determinista, sin exigir teclear ni botones. El coste por nota
 se deriva de duración y tarifa versionada (incluido redondeo/mínimo); no se pide
 un presupuesto USD STT manual adicional, pero se conservan límites de gasto
 agregado y presupuesto de interacción. `specs/028-telegram-voice-stt/` define
-contratos propuestos, fases y matriz V01–V36; **runtime y aceptación voz pendientes**.
+contratos, fases y matriz V01–V36; **runtime y aceptación voz pendientes**.
+T2 implementado localmente en `src/domain/speech/`: límites puros, facturación
+Decimal exacta, puertos STT/inspector y parser vocal Sí/No independiente; sin
+conectar Telegram, proveedor ni claims. Inspección FFmpeg/ffprobe candidata,
+sin binarios instalados ni validación de audio físico aún.
+T3 implementado y validado localmente en PostgreSQL (2026-10-06): tabla de preparación
+exclusiva sin audio, intención/reserva STT durable, transcripción cifrada,
+recuperación sin replay y limpieza terminal/expiración; migración 0011 e init.sql.
+No conectado aún al processor ni lifecycle; 13 tests T3/migraciones pasan,
+109 integration y 868 unit tests verdes; Ruff y mypy limpios. Pendiente T4.
 Dependencia para E2E de confirmación/ejecución: conectar `_execute_claimed()`
 (BL-40/specs/023) y habilitar consentimiento gobernado sin bypass legacy.
 
