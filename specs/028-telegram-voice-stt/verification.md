@@ -1,3 +1,33 @@
+# Incremento ejecutores y compatibilidad offline — 2026-10-06
+
+- Validación final: 895 unit tests pasan, 12 físicos omitidos en Windows (FFmpeg
+  no disponible); 138 integration tests pasan contra PostgreSQL. Ruff global,
+  mypy (138 módulos), compileall y diff-check limpios. Los 12 físicos no se
+  reejecutaron en este incremento; evidencia Docker anterior sigue separada.
+- `ProposalExecutor` revalida payload/hash, identidad, documento de origen y claim
+  durable bajo bloqueo. Capabilities canónicas comparten transacción con auditoría;
+  repos conservan auto-commit por defecto para no alterar llamadas existentes.
+- Calendario usa exclusivamente Noop actual; no se añade proveedor externo.
+- Borrado documental confirma intención durable antes de borrar storage. Error
+  externo es ambiguo; estado executing tras caída requiere reconciliación humana,
+  no replay. Una cancelación no autoriza un nuevo intento.
+- Voz/texto/botones comparten ejecutor; pruebas de parser inyectan ejecutor fake,
+  pruebas PostgreSQL ejercitan ejecutor real y rollback de evento/recordatorio.
+- Adversariales: payload alterado, claim forjado, usuario/chat/bot distintos,
+  transcripción vencida, call_id cambiado, origen reenviado, texto distinto,
+  concurrencia de ejecutores y propuesta/lista ajena.
+- Smoke Docker sin red (`--network none`) sobre digest del Gateway:
+  `a3715fa7ad8387941ab697259bd2881d68931657247a41984f90fae6d11c62bf`.
+  Endpoint proxy `/v1/audio/transcriptions`, alias versionado, ruta OpenAI compatible
+  hacia upstream local que representa `/api/v1/audio/transcriptions`: PASS,
+  archivo/modelo correctos, una llamada upstream. Audio sintético marcador, no
+  benchmark acústico. Script reproducible `scripts/verify_stt_gateway.py`.
+- Documentación oficial consultada: OpenRouter blog
+  `https://openrouter.ai/blog/tutorials/transcription-on-openrouter/` y modelo
+  `https://openrouter.ai/openai/whisper-large-v3/api`; el endpoint acepta multipart
+  OpenAI-compatible. No demuestra disponibilidad/tarifa/permisos reales ni soporte
+  STT del adaptador nativo LiteLLM openrouter. No hay cambio de alias en producción.
+
 # Verificación — specs/028
 
 ## Incremento de diseño (2026-10-06)

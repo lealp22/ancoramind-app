@@ -13,8 +13,9 @@ from src.domain.shared.recurrence import RecurrenceRule, rule_to_jsonb_param
 class RemindersRepository:
     """Repository for reminders in ancora schema."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, auto_commit: bool = True):
         self._session = session
+        self._auto_commit = auto_commit
 
     async def create(self, user_id: str, data: ReminderCreate) -> Reminder:
         now = datetime.now(tz=UTC)
@@ -26,17 +27,25 @@ class RemindersRepository:
                     CAST(:rec AS jsonb),:parent)
             RETURNING *
         """)
-        r = await self._session.execute(stmt, {
-            "uid": user_id, "title": data.title, "desc": data.description,
-            "trigger": data.trigger_at, "src_doc": data.source_document_id,
-            "src_action": data.source_action_id, "now": now,
-            "rec": rule_to_jsonb_param(data.recurrence_rule),
-            "parent": data.recurrence_parent_id,
-        })
+        r = await self._session.execute(
+            stmt,
+            {
+                "uid": user_id,
+                "title": data.title,
+                "desc": data.description,
+                "trigger": data.trigger_at,
+                "src_doc": data.source_document_id,
+                "src_action": data.source_action_id,
+                "now": now,
+                "rec": rule_to_jsonb_param(data.recurrence_rule),
+                "parent": data.recurrence_parent_id,
+            },
+        )
         row = r.fetchone()
         if row is None:
             raise RuntimeError("Reminder insert did not return a row")
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return _row_to_reminder(row)
 
     async def list_by_user(self, user_id: str, status: str | None = None) -> list[Reminder]:
@@ -84,15 +93,12 @@ class RemindersRepository:
             WHERE id=:id AND user_id=:uid AND status='pending'
             RETURNING id
         """)
-        r = await self._session.execute(
-            stmt, {"id": reminder_id, "uid": user_id, "now": now}
-        )
-        await self._session.commit()
+        r = await self._session.execute(stmt, {"id": reminder_id, "uid": user_id, "now": now})
+        if self._auto_commit:
+            await self._session.commit()
         return r.fetchone() is not None
 
-    async def create_next_occurrence(
-        self, fired: Reminder, next_trigger_at: datetime
-    ) -> Reminder:
+    async def create_next_occurrence(self, fired: Reminder, next_trigger_at: datetime) -> Reminder:
         """Insert the next pending occurrence of a recurring reminder.
 
         Called by the worker after ``fired`` was successfully delivered and
@@ -103,7 +109,9 @@ class RemindersRepository:
         flat however long the chain gets.
         """
         return await self._insert_followup(
-            fired, next_trigger_at, recurrence_rule=fired.recurrence_rule,
+            fired,
+            next_trigger_at,
+            recurrence_rule=fired.recurrence_rule,
             source_action_id=fired.source_action_id,
         )
 
@@ -118,7 +126,10 @@ class RemindersRepository:
         not the original creation proposal.
         """
         return await self._insert_followup(
-            original, trigger_at, recurrence_rule=None, source_action_id=source_action_id,
+            original,
+            trigger_at,
+            recurrence_rule=None,
+            source_action_id=source_action_id,
         )
 
     async def _insert_followup(
@@ -130,9 +141,13 @@ class RemindersRepository:
     ) -> Reminder:
         parent_id = origin.recurrence_parent_id or origin.id
         data = ReminderCreate(
-            title=origin.title, description=origin.description, trigger_at=trigger_at,
-            source_document_id=origin.source_document_id, source_action_id=source_action_id,
-            recurrence_rule=recurrence_rule, recurrence_parent_id=parent_id,
+            title=origin.title,
+            description=origin.description,
+            trigger_at=trigger_at,
+            source_document_id=origin.source_document_id,
+            source_action_id=source_action_id,
+            recurrence_rule=recurrence_rule,
+            recurrence_parent_id=parent_id,
         )
         return await self.create(origin.user_id, data)
 
@@ -153,15 +168,23 @@ class RemindersRepository:
         """)
         r = await self._session.execute(stmt, {"before": before})
         deleted = r.fetchall()
-        await self._session.commit()
+        if self._auto_commit:
+            await self._session.commit()
         return len(deleted)
 
 
 def _row_to_reminder(row: Row[tuple[object, ...]]) -> Reminder:
     return Reminder(
-        id=row.id, user_id=row.user_id, title=row.title, description=row.description,
-        trigger_at=row.trigger_at, status=row.status,
-        source_document_id=row.source_document_id, source_action_id=row.source_action_id,
-        created_at=row.created_at, recurrence_rule=row.recurrence_rule,
-        recurrence_parent_id=row.recurrence_parent_id, fired_at=row.fired_at,
+        id=row.id,
+        user_id=row.user_id,
+        title=row.title,
+        description=row.description,
+        trigger_at=row.trigger_at,
+        status=row.status,
+        source_document_id=row.source_document_id,
+        source_action_id=row.source_action_id,
+        created_at=row.created_at,
+        recurrence_rule=row.recurrence_rule,
+        recurrence_parent_id=row.recurrence_parent_id,
+        fired_at=row.fired_at,
     )

@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.actions.executor import ProposalExecutor
 from src.domain.actions.models import ConsentClaimResult, ConsentPrincipal, ConsentRejection
 from src.domain.actions.presentation import (
     ConsentAction,
@@ -768,7 +769,7 @@ class InteractionProcessor:
             await session.close()
         if not result.ok:
             return self._consent_rejection_reply(result.rejection)
-        return await self._execute_claimed(result)
+        return await self._execute_claimed(result, user_id=principal.user_id)
 
     async def _claim_and_report(
         self,
@@ -787,7 +788,7 @@ class InteractionProcessor:
             await session.close()
         if not result.ok:
             return self._consent_rejection_reply(result.rejection)
-        return await self._execute_claimed(result)
+        return await self._execute_claimed(result, user_id=principal.user_id)
 
     async def _resolve_bare_confirmation(
         self, interaction: TelegramInteraction, principal: ConsentPrincipal
@@ -814,7 +815,7 @@ class InteractionProcessor:
             return f"Tienes varias propuestas pendientes. Responde «Sí <ID>»:\n{ids}"
         if not result.ok:
             return self._consent_rejection_reply(result.rejection)
-        return await self._execute_claimed(result)
+        return await self._execute_claimed(result, user_id=principal.user_id)
 
     @staticmethod
     def _consent_rejection_reply(rejection: ConsentRejection | None) -> str:
@@ -837,6 +838,7 @@ class InteractionProcessor:
             not self._governed_consent
             or interaction.telegram_user_id is None
             or interaction.chat_id is None
+            or parse_voice_consent_intent(text) is None
         ):
             return (
                 "La confirmación por voz aún no está habilitada. "
@@ -895,21 +897,19 @@ class InteractionProcessor:
             return self._consent_rejection_reply(result.rejection)
         if parse_voice_consent_intent(text) is VoiceConsentIntent.DISCARD:
             return "❌ Propuesta descartada."
+        return await self._execute_claimed(result, user_id=principal.user_id)
+
+    async def _execute_claimed(self, result: ConsentClaimResult, *, user_id: str) -> str:
+        """Execute a Core-verified claim identically for voice, text and buttons."""
         assert result.claimed is not None
-        return await ProposalExecutor(self._session_factory).execute(
-            result.claimed, user_id=principal.user_id
-        )
+        storage = None
+        if result.claimed.tool_name == "delete_document":
+            from src.config import Settings
+            from src.storage.factory import create_storage
 
-    async def _execute_claimed(self, result: ConsentClaimResult) -> str:
-        """Placeholder until T4.5 wires a ProposalExecutor port.
-
-        The claim already committed ``confirmed`` durably; execution itself
-        is deliberately out of scope here.
-        """
-        assert result.claimed is not None  # narrowed by callers checking result.ok
-        return (
-            "✅ Confirmado. La ejecución automática se activará próximamente "
-            f"(propuesta `{result.claimed.id}`)."
+            storage = create_storage(Settings())
+        return await ProposalExecutor(self._session_factory, storage=storage).execute(
+            result.claimed, user_id=user_id
         )
 
     async def _stored_session_id(self, chat_id: int) -> str | None:

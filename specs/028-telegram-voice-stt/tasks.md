@@ -68,9 +68,13 @@ hasta T5; comandos/callbacks transcritos nunca se interpretan como control.
 - [ ] Petición STT, reservas/gasto agregado, ledger, auditoría errores (V11–V16/V19).
 - [x] Adaptador single-attempt sin fallback directo; tests HTTP sin inferencia.
 
-T5/T6 son incrementos parciales: ejecutor transaccional solo para remember_note;
-otros se rechazan antes de consumir consentimiento. Falta concurrencia adversarial
-completa y verificar imagen fijada Gateway/upstream STT, alias y tarifa reales.
+T5: ejecutores deterministas para capacidades canónicas existentes y borrado
+documental, compartidos por voz/texto/botones; integración/adversariales en
+`test_proposal_executor.py`. No proveedor externo de calendario: solo Noop actual.
+T6: imagen fijada validada offline mediante `scripts/verify_stt_gateway.py`,
+endpoint real del proxy y upstream simulado con un único envío. Config compatible
+`openai/<model-id>` + api_base OpenRouter; falta verificar upstream autorizado,
+alias y tarifa reales. No dar por cerrado benchmark/piloto ni toda la matriz V.
 Inspector limpia temporales en success/error/cancel; SIGKILL requiere tmpfs efímero.
 
 ## T7 — Validación y piloto (requiere autorización de inferencia/despliegue)

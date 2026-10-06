@@ -621,6 +621,18 @@ consentimiento vocal con ejecutor transaccional solo para notas y adaptador STT
 privado probado con HTTP simulado. Restan executors demás capabilities,
 compatibilidad Gateway/upstream, concurrencia adversarial completa y E2E.
 Voz sigue OFF; no publicación de alias ni inferencia real.
+
+**Actualización 2026-10-06 — ejecutores y compatibilidad offline:** ejecutor
+determinista compartido por voz/texto/botones para notas, vehículos/mantenimiento,
+TODOs, recordatorios/snooze, calendario canónico con recordatorio y borrado
+documental. Mutaciones locales y auditoría comparten transacción; borrado externo
+persiste intención antes del efecto y nunca se reintenta automáticamente.
+Pruebas adversariales incluyen concurrencia, aislamiento, hash/procedencia,
+caducidad, generación y rollback. Imagen LiteLLM fijada validada con endpoint
+HTTP real y upstream local simulado, sin red externa ni credenciales. OpenRouter
+documenta STT multipart; la ruta compatible se configura con `openai/` y api_base
+OpenRouter, no se presume soporte del adaptador nativo `openrouter/` para STT.
+Pendientes alias/tarifa reales, prueba autorizada upstream, benchmark y piloto.
 **Actualización 2026-10-06:** alcance acordado: notas de voz originales de hasta
 **5 minutos**, respuesta textual y «Sí»/«No» por voz como alternativa de
 consentimiento determinista, sin exigir teclear ni botones. El coste por nota
