@@ -1,3 +1,19 @@
+# Preflight y preparación smoke — 2026-10-07
+
+- Catálogo público consultado sin clave/audio: tres candidatos Whisper disponibles;
+  datos y limitaciones en `preflight-smoke.md`. No inferencia ni cambios remotos.
+- `scripts/stt_catalog_preflight.py` reproduce la consulta pública sin secretos.
+- Smoke opt-in preparado con tarifa/aceptaciones/límites explícitos, Gateway
+  loopback, PostgreSQL aislado, preparación exclusiva e intención/ledger reales.
+  No publica aliases ni activa config; no Agent/Telegram. Prueba real omitida.
+- Regresión del smoke con HTTP/inspector simulados y PostgreSQL detectó parámetro
+  asyncpg ambiguo en finish_speech_call; corregido con CAST explícito VARCHAR.
+- Validación: 910 unit passed, 12 físicos skipped sin FFmpeg en Windows;
+  139 integration passed, 1 smoke live skipped por falta de autorización.
+  Ruff global, mypy (138 módulos) y diff-check limpios.
+- Privacidad/minimum/quantum/coste real siguen pendientes; documentación STT
+  no aplica controles de proveedor/data_collection por petición. No afirmar ZDR.
+
 # Incremento ejecutores y compatibilidad offline — 2026-10-06
 
 - Validación final: 895 unit tests pasan, 12 físicos omitidos en Windows (FFmpeg

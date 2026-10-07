@@ -109,7 +109,7 @@ class LlmUsageRepository:
         await self._session.execute(
             text("""
             UPDATE ancora.llm_usage_events SET status = :status, latency_ms = :latency,
-                error_class = CASE WHEN :status = 'completed' THEN NULL
+                error_class = CASE WHEN CAST(:status AS VARCHAR) = 'completed' THEN NULL
                     ELSE 'SpeechGatewayError' END
             WHERE interaction_id = :interaction AND llm_call_id = :call AND status = 'started'
         """),
