@@ -60,6 +60,9 @@ from src.repositories.actions import ActionProposalsRepository
 from src.repositories.interactions import TelegramInteractionsRepository
 
 logger = logging.getLogger(__name__)
+VOICE_NOT_UNDERSTOOD_REPLY = (
+    "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
+)
 
 
 class InteractionAgentRunner(Protocol):
@@ -176,11 +179,19 @@ class InteractionProcessor:
             await self._voice_maintenance()
         session = await self._session_factory()
         try:
+            notices = await TelegramInteractionsRepository(session).list_voice_failure_notices(
+                self._batch_size
+            )
             interactions = await TelegramInteractionsRepository(session).list_recoverable_work(
                 self._batch_size
             )
         finally:
             await session.close()
+
+        for interaction in notices:
+            await self._reply_deterministically(
+                interaction, VOICE_NOT_UNDERSTOOD_REPLY, voice_failure_notice=True
+            )
 
         grouped: dict[int, list[TelegramInteraction]] = defaultdict(list)
         for interaction in interactions:
@@ -514,6 +525,12 @@ class InteractionProcessor:
                 error_class="VoicePreparationError",
                 error_detail_code=code,
             )
+            if ambiguous:
+                return await self._reply_deterministically(
+                    interaction,
+                    VOICE_NOT_UNDERSTOOD_REPLY,
+                    voice_failure_notice=True,
+                )
             return True
 
     def _provenance(self, interaction: TelegramInteraction) -> InteractionProvenance | None:
@@ -664,7 +681,11 @@ class InteractionProcessor:
         )
 
     async def _reply_deterministically(
-        self, interaction: TelegramInteraction, reply_text: str
+        self,
+        interaction: TelegramInteraction,
+        reply_text: str,
+        *,
+        voice_failure_notice: bool = False,
     ) -> bool:
         """Answer a confirmation/discard outcome without any Agent execution.
 
@@ -680,6 +701,7 @@ class InteractionProcessor:
             content_key_version=encrypted.key_version,
             content_length=len(reply_text),
             chunk_count=len(chunks),
+            **({"voice_failure_notice": True} if voice_failure_notice else {}),
         )
         if response is None:
             # A concurrent claim already answered this update: never reply twice.
@@ -1107,6 +1129,7 @@ class InteractionProcessor:
         content_key_version: int,
         content_length: int,
         chunk_count: int,
+        voice_failure_notice: bool = False,
     ) -> LogicalResponse | None:
         session = await self._session_factory()
         try:
@@ -1117,6 +1140,7 @@ class InteractionProcessor:
                 content_key_version=content_key_version,
                 content_length=content_length,
                 chunk_count=chunk_count,
+                **({"voice_failure_notice": True} if voice_failure_notice else {}),
             )
         finally:
             await session.close()

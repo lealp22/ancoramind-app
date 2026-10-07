@@ -79,6 +79,11 @@ Inspector limpia temporales en success/error/cancel; SIGKILL requiere tmpfs efí
 
 ## T7 — Validación y piloto (requiere autorización de inferencia/despliegue)
 
+- [x] Autorización ampliada del propietario para audio personal/Telegram/producción
+  MVP (2026-10-07); supersede alcance de privacidad inicial, no gates técnicos.
+- [ ] Validar en PostgreSQL aviso durable ante fallo STT ambiguo y completar aviso
+  tras recuperación si el proceso cae antes de persistir outbox; nunca retranscribir.
+
 - [x] Registrar autorización explícita del propietario (2026-10-07) para un
   smoke con voz artificial vía OpenRouter y aceptación de privacidad acotada.
   Sin audio personal/Telegram/producción; gates públicos en `preflight-smoke.md`.

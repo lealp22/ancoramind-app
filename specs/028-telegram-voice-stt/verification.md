@@ -1,5 +1,17 @@
 # Preflight y preparación smoke — 2026-10-07
 
+## Ampliación de autorización y aviso STT ambiguo
+
+- Propietario amplía aceptación OpenRouter a audio personal, Telegram y producción
+  MVP; registrado en preflight/backlog/tasks sin activar flags ni desplegar.
+- Processor persiste fallo ambiguo y entrega aviso determinista mediante outbox
+  condicional, sin Agent ni retranscripción. Restricción de claim de aviso:
+  VoicePreparationError y agent_started_at NULL; diagnóstico STT se conserva.
+- 910 unit passed, 12 físicos skipped; Ruff/mypy/diff-check limpios.
+  15 integration de voz omitidos: Docker daemon no disponible en esta ejecución.
+  No afirmar validación PostgreSQL del nuevo claim. Aviso tras caída previa a
+  outbox sigue pendiente; recovery no reejecuta STT.
+
 - Catálogo público consultado sin clave/audio: tres candidatos Whisper disponibles;
   datos y limitaciones en `preflight-smoke.md`. No inferencia ni cambios remotos.
 - `scripts/stt_catalog_preflight.py` reproduce la consulta pública sin secretos.
@@ -202,3 +214,14 @@ real siguen pendientes en T4; ver incremento posterior abajo.
   revisión de retención Gateway/upstream. Historial textual sigue política normal.
 - Sin inferencia real, activación de flags, publicación de aliases o despliegue.
   Pendientes executors restantes, validación Gateway, benchmark y piloto T7.
+
+## 2026-10-07 — UX, recuperación y preflight actualizado
+
+- Aviso amable: «No he podido entender el audio. Por favor, envía tus indicaciones de nuevo.»
+- Recuperación de aviso ausente tras reinicio, sin STT/Agent; regresión PostgreSQL de entrega única.
+- Checklist de seguridad/privacidad pública: docs/production-security-privacy.md; no acredita cumplimiento.
+- 910 unit tests pasan (12 físicos omitidos Windows), 140 integration pasan (1 smoke real omitido), 12 inspector físicos pasan en Docker. Ruff y mypy limpios.
+- Docker disponible tras iniciar Desktop. Consulta autenticada read-only OpenRouter /key: HTTP 200 y cr?dito disponible; secretos no impresos.
+- Cat?logo: turbo prompt 0.00000333, large-v3 0.0000075, whisper-1 0.0001. Documentaci?n confirma familia por segundo; m?nimos/redondeos no verificados.
+- No inferencia ni alias publicado: Gateway/clave local no configurados, audio sint?tico hablado y tarifa aprobada todav?a pendientes.
+- git diff --check global informa whitespace en TODO.md ajeno a esta tarea; no se modifica.

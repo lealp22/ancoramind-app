@@ -119,6 +119,7 @@ async def test_stt_failure_never_starts_agent(ambiguous):
     )
     processor._conversation_session_id = AsyncMock(return_value="session")
     processor._mark_terminal = AsyncMock()
+    processor._reply_deterministically = AsyncMock(return_value=True)
     normalized = normalize_telegram_update(update())
     await processor._prepare_voice(
         _interaction(), normalized.attachments[0], normalized.model_dump(mode="json")
@@ -127,6 +128,14 @@ async def test_stt_failure_never_starts_agent(ambiguous):
         "failed_ambiguous" if ambiguous else "failed_controlled"
     )
     processor._agent_runner.run.assert_not_awaited()
+    service.prepare.assert_awaited_once()
+    if ambiguous:
+        processor._reply_deterministically.assert_awaited_once()
+        assert processor._reply_deterministically.call_args.args[1] == (
+            "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
+        )
+    else:
+        processor._reply_deterministically.assert_not_awaited()
 
 
 async def test_stream_download_checks_actual_bytes_and_closes():

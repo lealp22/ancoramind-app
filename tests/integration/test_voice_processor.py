@@ -281,8 +281,38 @@ async def test_stt_errors_after_send_are_ambiguous_and_never_replayed(session, f
         .mappings()
         .one()
     )
-    assert stored["status"] == "failed_ambiguous"
+    assert stored["status"] == "completed"
+    processor._sender.send_text.assert_awaited_once()
+    assert "No he podido entender el audio" in processor._sender.send_text.call_args.args[1]
     assert stored["error_detail_code"] in {"stt_failed", "stt_result_invalid", "stt_timeout"}
+
+
+async def test_restart_delivers_only_missing_voice_notice(session):
+    _, service, stt, processor, interaction, agent_factory = await setup(session)
+    await session.execute(
+        text(
+            "UPDATE ancora.telegram_interactions SET status = 'failed_ambiguous', "
+            "error_class = 'VoicePreparationRecovery' WHERE id = :id"
+        ),
+        {"id": interaction.id},
+    )
+    await session.commit()
+    service.maintain = AsyncMock()
+    assert await processor.run_once() == 0
+    assert await processor.run_once() == 0
+    stt.transcribe.assert_not_awaited()
+    assert not agent_factory.agent.calls
+    processor._sender.send_text.assert_awaited_once()
+    assert processor._sender.send_text.call_args.args[1] == (
+        "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
+    )
+    assert (
+        await session.scalar(
+            text("SELECT count(*) FROM ancora.logical_responses WHERE interaction_id = :id"),
+            {"id": interaction.id},
+        )
+        == 1
+    )
 
 
 async def test_two_processors_cannot_transcribe_same_voice(session):

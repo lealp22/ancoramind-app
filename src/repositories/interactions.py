@@ -608,10 +608,12 @@ class TelegramInteractionsRepository:
         content_key_version: int,
         content_length: int,
         chunk_count: int,
+        voice_failure_notice: bool = False,
     ) -> LogicalResponse | None:
         """Persist a deterministic command reply before any Telegram side effect.
 
-        The transition is gated on ``accepted``, so a replayed update can never
+        The transition is gated on ``accepted`` (or an explicitly requested
+        pre-Agent ambiguous voice failure notice), so a replayed update can never
         be answered twice. Nothing external happens before the commit: unlike an
         Agent run, a crash here leaves plain accepted work that the next cycle
         re-derives deterministically, never an ambiguous effect.
@@ -625,12 +627,21 @@ class TelegramInteractionsRepository:
                         agno_session_id = COALESCE(:agno_session_id, agno_session_id),
                         response_ready_at = :now,
                         updated_at = :now
-                    WHERE id = :id AND status = 'accepted'
+                    WHERE id = :id AND NOT EXISTS (
+                        SELECT 1 FROM ancora.logical_responses WHERE interaction_id = :id
+                    ) AND (
+                        status = 'accepted' OR (
+                            :voice_failure_notice AND status = 'failed_ambiguous'
+                            AND error_class IN ('VoicePreparationError', 'VoicePreparationRecovery')
+                            AND agent_started_at IS NULL
+                        )
+                    )
                     RETURNING id
                 """),
                 {
                     "id": interaction_id,
                     "agno_session_id": agno_session_id,
+                    "voice_failure_notice": voice_failure_notice,
                     "now": now,
                 },
             )
@@ -678,6 +689,23 @@ class TelegramInteractionsRepository:
             await self._session.rollback()
             raise
         return response
+
+    async def list_voice_failure_notices(self, limit: int = 20) -> list[TelegramInteraction]:
+        """Only notification recovery, never resurrect STT or an Agent run."""
+        rows = (
+            await self._session.execute(
+                text("""
+            SELECT i.* FROM ancora.telegram_interactions i
+            WHERE i.status = 'failed_ambiguous' AND i.agent_started_at IS NULL
+              AND i.error_class IN ('VoicePreparationError', 'VoicePreparationRecovery')
+              AND NOT EXISTS (SELECT 1 FROM ancora.logical_responses r
+                              WHERE r.interaction_id = i.id)
+            ORDER BY i.received_at LIMIT :limit
+        """),
+                {"limit": limit},
+            )
+        ).fetchall()
+        return [self._interaction_from_row(row) for row in rows]
 
     async def claim_delivery_start(self, interaction_id: UUID) -> LogicalResponse | None:
         """Claim a response-ready outbox once before external Telegram delivery."""

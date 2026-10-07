@@ -616,6 +616,11 @@ Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
 
 ### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 implementación parcial — specs/028
+**Autorización ampliada (2026-10-07, prevalece):** propietario acepta las
+limitaciones OpenRouter también para audio personal, Telegram y producción MVP.
+Activación supeditada a validación técnica; voz sigue OFF. Fallo STT ambiguo
+debe informar que no se entiende el audio sin reintentos ni Agent. Revisiones
+de privacidad antes de apertura pública conservadas en `preflight-smoke.md`.
 **Decisión MVP y autorización (2026-10-07):** mantener OpenRouter; propietario
 acepta proveedor no fijo/retención cero no garantizada para UNA prueba con voz
 artificial y sin datos personales. No habilita audio personal, Telegram ni

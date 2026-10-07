@@ -1,5 +1,38 @@
 # Preflight y smoke gobernado — 2026-10-07
 
+## Avance técnico: Gateway aislado y audio artificial
+
+2026-10-07: `scripts/stt_gateway_preflight.py` ejecutado contra la imagen fijada.
+Gateway dedicado en loopback 4001, DB efímera distinta de desarrollo/producción,
+clave temporal de 30 minutos restringida a `ancoramind-stt-smoke-r1` y presupuesto
+Gateway de 0.01 USD. `/v1/models` devuelve solo ese alias; petición multipart al
+alias `not-authorized` rechazada. Ninguna petición al alias autorizado ni inferencia.
+El proyecto y DB efímera se destruyen al terminar; la clave no se imprime/persiste.
+
+Audio generado localmente con System.Speech (voz de síntesis instalada, no
+grabación/clonación), convertido con FFmpeg Docker a mono OGG/Opus: duración
+ffprobe 11.479167 s, 94762 bytes. Ficheros transitorios fuera del repositorio,
+borrados después del preflight. Generar otro cuando el smoke esté desbloqueado.
+
+GET público de endpoints turbo devuelve DeepInfra 0.00000333 USD/s y Groq
+0.0000111111111111 USD/s. La tarifa mínima del catálogo NO es una cota de todos
+los proveedores. Sin proveedor fijable por petición no activar esa tarifa como
+garantía máxima. Mínimo/quantum/contraste de factura siguen pendientes; no poner
+`ANCORA_STT_SMOKE_TARIFF_VERIFIED=1` por conveniencia.
+`whisper-1` figura con un endpoint OpenAI y 0.0001 USD/s; su ficha documenta
+facturación al segundo más cercano, pero no prueba un mínimo cero ni que el
+conjunto de proveedores permanezca fijo.
+
+Fuentes consultadas: catálogo `/api/v1/models/.../endpoints`, ficha oficial
+https://openrouter.ai/openai/whisper-1 y tutorial STT. Para desbloquear la puerta
+actual se requiere confirmar mínimo/quantum efectivos con OpenRouter, o diseñar
+una autorización explícita de ensayo bajo incertidumbre de facturación con cota
+externa real. El límite de virtual key por sí solo no garantiza el coste upstream.
+No falsear el gate de tarifa existente. Smoke real aún no ejecutado.
+
+RGPD/GDPR europeo y AI Act están identificados explícitamente en
+`docs/production-security-privacy.md`; aceptación MVP ≠ cumplimiento legal.
+
 ## Evidencia pública (sin inferencia)
 
 GET público `/api/v1/models?output_modalities=transcription`, sin clave ni audio,
@@ -25,7 +58,7 @@ Fuentes primarias revisadas:
 - https://openrouter.ai/docs/guides/privacy/data-collection
 - https://openrouter.ai/api/v1/models?output_modalities=transcription
 
-## Privacidad: riesgo aceptado solo para smoke artificial — 2026-10-07
+## Privacidad: aceptación ampliada para el MVP — 2026-10-07
 
 El endpoint documenta balanceo entre proveedores; no aplica controles `order`,
 `only`, `allow_fallbacks`, `data_collection` ni `sort` por petición. No afirmar
@@ -66,8 +99,28 @@ Los flags de opt-in siguen OFF hasta satisfacer esos requisitos operativos.
 - Validar privacidad de audio y transcripción en toda la cadena, coste real,
   controles de gasto, temporales efímeros, logs metadata-only y benchmark/piloto.
 
-Estos puntos quedan como gates futuros, no bloquean por sí solos el ensayo
-artificial autorizado ni implican aprobación de OpenRouter para audio personal.
+### Ampliación posterior del propietario (prevalece sobre el alcance anterior)
+
+> Autorizo también la habilitación de audio personal, Telegram y producción.
+> Lo comentado aplica para todo el contexto de AncoraMind. Ante resultado ambiguo
+> se debe indicar al usuario que no se puede entender el audio (sin reintentos).
+
+Se acepta para el MVP la misma limitación de proveedor no fijo y retención cero
+no garantizada, incluyendo audio personal y canal Telegram en producción.
+La autorización inicial se conserva arriba como historia, no como restricción
+vigente. No es una garantía de privacidad ni aprobación en nombre de terceros.
+Antes de una apertura pública se mantienen las revisiones descritas arriba.
+
+Autorización de alcance no equivale a activación técnica: tarifa, permisos,
+Gateway, smoke, controles y piloto deben validarse antes de activar voz.
+No se han cambiado flags ni desplegado por registrar esta decisión.
+El smoke preparado sigue usando únicamente audio artificial.
+
+Ante fallo STT ambiguo: respuesta determinista «No he podido entender el audio.
+Por favor, envía tus indicaciones de nuevo.» Sin Agent, mutación ni retranscripción.
+La notificación usa el outbox durable y no autoriza reintentar un envío ambiguo.
+Si el proceso cae antes de persistir el aviso, la recuperación continúa cerrando
+sin replay; entrega del aviso tras ese reinicio aún requiere implementación.
 
 ## Smoke preparado, desactivado por defecto
 
@@ -128,3 +181,7 @@ no prueba criptográfica de consentimiento ni inspección de configuración upst
   externamente aprobada si se necesita trazabilidad histórica del ensayo.
 - Segundo audio de 5 minutos requiere nueva autorización. Calidad/negaciones,
   consentimiento vocal, errores adversariales reales y piloto quedan en T7.
+
+## Referencia de seguridad para apertura p?blica
+
+Ver docs/production-security-privacy.md: GDPR/AI Act, ZDR, proveedores, derechos, DPIA, retenci?n e incidentes; checklist de evidencia pendiente, no certificaci?n.

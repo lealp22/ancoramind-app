@@ -1,5 +1,9 @@
 # Seguridad frente a prompt injection y contenido no confiable
 
+Para privacidad, GDPR/AI Act, ZDR y gates de apertura pública ver
+`docs/production-security-privacy.md`. Este documento se centra en contenido
+no confiable y no constituye una evaluación completa de producción.
+
 > Análisis inicial — 2026-09-29. BL-39 en curso (`specs/022-llm-input-trust/`):
 > primer incremento local aplicado; el P0 de consentimiento sigue pendiente.
 > No acredita explotación ni sustituye una auditoría de seguridad.
