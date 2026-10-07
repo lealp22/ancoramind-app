@@ -14,3 +14,24 @@ Responde de forma exhaustiva a los siguientes puntos:
 Referencia:
 Base API URL https://api.nextgen-beta.ica.ttt.com/ica/v1
 For CC, use https://api.nextgen-beta.ica.ttt.com/ica
+
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.nextgen-beta.ica.ttt.com/ica",
+    "ANTHROPIC_AUTH_TOKEN": "sk-_xxxx",
+    "ANTHROPIC_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5"
+  },
+  "model": "claude-sonnet-5",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "medium"
+    },
+    "opus": {
+      "effortLevel": "low"
+    },
+    "claude-sonnet-5": {
+      "effortLevel": "medium"
+    }
+  }
+}
