@@ -49,6 +49,7 @@ def _service(port, repo) -> DocumentService:
 
 def _repo_returning(document: Document) -> AsyncMock:
     repo = AsyncMock(spec=DocumentsRepository)
+    repo.get_by_content_hash.return_value = None
     repo.create.return_value = document
     repo.create_extraction.return_value = AIExtraction(
         id=uuid4(),

@@ -1,8 +1,10 @@
 """Integration tests for DocumentsRepository against real PostgreSQL (specs/009)."""
 
+from hashlib import sha256
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from src.domain.documents.models import (
     AIExtractionCreate,
@@ -14,12 +16,13 @@ from src.repositories.documents import DocumentsRepository
 pytestmark = pytest.mark.integration
 
 
-def _document(filename: str = "factura-taller.pdf") -> DocumentCreate:
+def _document(filename: str = "factura-taller.pdf", content: bytes | None = None) -> DocumentCreate:
     return DocumentCreate(
         storage_key=f"2026/09/{filename}",
         original_filename=filename,
         mime_type="application/pdf",
         size_bytes=2048,
+        content_hash=sha256(content if content is not None else filename.encode()).hexdigest(),
     )
 
 
@@ -139,3 +142,81 @@ async def test_semantic_search_is_user_scoped_idempotent_and_cascades(session, u
         embedding_model="test-embedding-r1",
         embedding_dimensions=1536,
     ) == []
+
+
+async def test_get_by_content_hash_returns_existing_within_user(session, user_a):
+    repo = DocumentsRepository(session)
+    content_hash = sha256(b"same bytes twice").hexdigest()
+    created = await repo.create(
+        user_a,
+        DocumentCreate(
+            storage_key="2026/09/original.pdf",
+            original_filename="original.pdf",
+            mime_type="application/pdf",
+            size_bytes=10,
+            content_hash=content_hash,
+        ),
+    )
+
+    found = await repo.get_by_content_hash(user_a, content_hash)
+    assert found is not None
+    assert found.id == created.id
+
+    assert await repo.get_by_content_hash(user_a, sha256(b"never stored").hexdigest()) is None
+
+
+async def test_duplicate_content_hash_rejected_by_unique_index(session, user_a):
+    repo = DocumentsRepository(session)
+    content_hash = sha256(b"duplicate upload").hexdigest()
+    await repo.create(
+        user_a,
+        DocumentCreate(
+            storage_key="2026/09/first.pdf",
+            original_filename="first.pdf",
+            mime_type="application/pdf",
+            size_bytes=10,
+            content_hash=content_hash,
+        ),
+    )
+
+    with pytest.raises(IntegrityError):
+        await repo.create(
+            user_a,
+            DocumentCreate(
+                storage_key="2026/09/second.pdf",
+                original_filename="second.pdf",
+                mime_type="application/pdf",
+                size_bytes=10,
+                content_hash=content_hash,
+            ),
+        )
+
+
+async def test_same_content_hash_different_users_both_stored(session, user_a, user_b):
+    repo = DocumentsRepository(session)
+    content_hash = sha256(b"shared file content").hexdigest()
+
+    own = await repo.create(
+        user_a,
+        DocumentCreate(
+            storage_key="2026/09/shared-a.pdf",
+            original_filename="shared-a.pdf",
+            mime_type="application/pdf",
+            size_bytes=10,
+            content_hash=content_hash,
+        ),
+    )
+    other = await repo.create(
+        user_b,
+        DocumentCreate(
+            storage_key="2026/09/shared-b.pdf",
+            original_filename="shared-b.pdf",
+            mime_type="application/pdf",
+            size_bytes=10,
+            content_hash=content_hash,
+        ),
+    )
+
+    assert own.id != other.id
+    assert (await repo.get_by_content_hash(user_a, content_hash)).id == own.id
+    assert (await repo.get_by_content_hash(user_b, content_hash)).id == other.id

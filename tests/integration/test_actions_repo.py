@@ -77,6 +77,7 @@ async def test_source_document_set_null_on_document_delete(session, user_a):
             original_filename="itv.pdf",
             mime_type="application/pdf",
             size_bytes=512,
+            content_hash="d" * 64,
         ),
     )
     proposal = await actions.create(

@@ -75,8 +75,21 @@ class DocumentService:
         preview below — bounded and serialized as data, never as instructions.
 
         Returns:
-            Document with its AI extraction.
+            Document with its AI extraction. If the same user already uploaded
+            this exact content, the existing document and extraction are
+            returned without storing or extracting again (BL-31).
         """
+        content_hash = sha256(content).hexdigest()
+        existing = await self._repo.get_by_content_hash(
+            user_id=user_context.user_id, content_hash=content_hash
+        )
+        if existing is not None:
+            reused = await self._repo.get_document_with_extraction(
+                user_id=user_context.user_id, document_id=existing.id
+            )
+            if reused is not None:
+                return reused
+
         # 1. Store original
         stored = await self._storage.store(content, filename, mime_type)
 
@@ -88,6 +101,7 @@ class DocumentService:
                 original_filename=stored.original_filename,
                 mime_type=stored.mime_type,
                 size_bytes=stored.size_bytes,
+                content_hash=content_hash,
             ),
         )
 

@@ -206,6 +206,7 @@ async def test_document_external_intent_is_durable_and_never_replayed(session, f
             original_filename="test.txt",
             mime_type="text/plain",
             size_bytes=2,
+            content_hash="e" * 64,
         ),
     )
     proposal = await claimed(session, "delete_document", {"document_id": str(doc.id)})

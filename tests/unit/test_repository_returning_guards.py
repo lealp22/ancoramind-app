@@ -64,6 +64,7 @@ def _session_without_returning_row() -> AsyncSession:
                     original_filename="document.pdf",
                     mime_type="application/pdf",
                     size_bytes=1,
+                    content_hash="f" * 64,
                 ),
             ),
             "Document insert did not return a row",

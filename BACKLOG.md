@@ -31,6 +31,7 @@
 | BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs; pendiente confirmaciones WRITE, adjunto directo al Agent, evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
+| BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 pendiente de diseño (surgió al definir BL-43; requiere revisar la matriz A–Y de specs/013 antes de tocar LLMAccess) |
@@ -816,20 +817,27 @@ y registrar metadata de proveedor/coste sin query ni contenido. **Prioridad P2**
 (valor alto de UX, no bloquea MVP). Al añadir capability: seguir
 `docs/adding-tools.md` + skill prompt + tests/evals de prompt injection web.
 
-### BL-31 · Deduplicación de documentos por hash de contenido
-Comprobado que no existe: `storage_key` es UUID aleatorio (local y Supabase) y
-`ancora.documents` no guarda hash — el mismo fichero enviado dos veces se
-almacena, procesa y cobra dos veces. Propuesta: columnas `content_sha256
-CHAR(64)` + índice `(user_id, content_sha256)` en `documents` (migración
-Alembic aditiva + `init.sql`); calcular SHA-256 en `DocumentService.ingest`
-antes de almacenar; si existe fila vigente del mismo usuario, reutilizar el
-registro existente (no re-almacenar bytes) y decidir política de extracción:
-re-usar la extracción previa y devolver su resumen (recomendado — evita coste
-duplicado) con opción de re-extraer explícita. Mantener el original_filename
-de la última subida si se desea, sin borrar documentos previos (provenance).
-El hash es derivado del contenido, no dato sensible; auditar en
-`ai_extractions` el `document_id` real usado. **Prioridad P2** (ahorro directo
-de coste y ruido canónico; encaja antes del E2E de visión/PDF).
+### ~~BL-31 · Deduplicación de documentos por hash de contenido~~ ✅ implementado localmente — 2026-10-07
+Columna `ancora.documents.content_hash VARCHAR(64)` (nullable, sin backfill)
++ índice único parcial `(user_id, content_hash) WHERE content_hash IS NOT NULL`
+(migración `0012_document_content_hash`, `init.sql` sincronizado).
+`DocumentService.ingest()` calcula SHA-256 de los bytes crudos antes de
+`storage.store()`; si ya existe un documento con ese hash para el mismo
+usuario, se devuelve el documento y su extracción existentes vía
+`get_document_with_extraction()` sin volver a almacenar ni a invocar
+`DocumentExtractionPort` (política "reutilizar extracción" recomendada en el
+diseño original). Sin manejo de carrera explícito: la admisión de Telegram
+(specs/013 T5) ya serializa por chat/usuario antes de llegar al Agent, así
+que dos subidas idénticas del mismo usuario no pueden ejecutar `ingest()` en
+paralelo. Nuevo `DocumentsRepository.get_by_content_hash()`. Tests: 2 unit
+nuevos de servicio (`test_document_service.py`), 3 integration nuevos de
+repositorio (incluida la colisión `IntegrityError` entre dos usuarios con el
+mismo contenido) y `test_migrations.py` actualizado para que la aserción de
+`downgrade -1` desde head apunte a esta migración en vez de a la anterior
+(`voice_preparations`, movida al downgrade más profundo). 909 unit + 141
+integration passing (1 fallo de timing preexistente y no relacionado,
+confirmado en aislamiento), Ruff y `mypy src/` limpios. Desbloquea BL-35 y la
+Fase 2 de BL-38.
 
 ### BL-32 · Acuse de recibo temprano para procesos pesados (fast-ack UX)
 Cuando la respuesta previsible tarde (documento/imagen/PDF), enviar en el
@@ -864,8 +872,8 @@ de DOCX, hojas/celdas relevantes de XLSX y texto/notas de PPTX; después reutili
 el pipeline de almacenamiento, extracción gobernada, provenance y propuestas
 existente. El contenido extraído sigue siendo DATA, nunca instrucciones.
 
-**Dependencia obligatoria:** BL-31 debe estar cerrado antes de activar esta
-capability para evitar almacenamiento y coste duplicados. Aplicar allowlist real
+**Dependencia (resuelta 2026-10-07):** BL-31 (deduplicación por hash) ya está
+implementado localmente — desbloqueada. Aplicar allowlist real
 por firma/MIME además de extensión, límites de bytes, entradas ZIP, ratio de
 compresión, profundidad, nº de hojas/diapositivas/filas/celdas, texto total y
 tiempo; rechazar cifrado/contraseña, macros y formatos legacy binarios inicialmente.
