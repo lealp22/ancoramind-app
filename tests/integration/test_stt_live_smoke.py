@@ -2,12 +2,14 @@
 
 import os
 import time
+from decimal import Decimal
 from uuid import uuid4
 
+import httpx
 import pytest
 from sqlalchemy import text
 
-from scripts.stt_smoke_config import smoke_inputs
+from scripts.stt_smoke_config import smoke_inputs, validate_external_key
 from src.agent.speech_access import GovernedSpeechAccess
 from src.agent.voice_inspector import FFmpegVoiceInspector
 from src.config import Settings
@@ -33,6 +35,22 @@ async def test_live_governed_stt(session):
     key = os.environ.get("ANCORA_STT_SMOKE_VIRTUAL_KEY")
     if not key:
         pytest.fail("stt_smoke_virtual_key_required", pytrace=False)
+    uncertain = os.environ.get("ANCORA_STT_SMOKE_BILLING_UNCERTAINTY_ACCEPTED") == "1"
+    if uncertain:
+        upstream = Settings().openrouter_api_key
+        if not upstream:
+            pytest.fail("stt_smoke_upstream_key_missing", pytrace=False)
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
+            response = await client.get(
+                "https://openrouter.ai/api/v1/key",
+                headers={"Authorization": "Bearer " + upstream},
+            )
+        if response.status_code != 200:
+            pytest.fail("stt_smoke_external_limit_unverified", pytrace=False)
+        validate_external_key(
+            response.json().get("data", {}),
+            Decimal(str(config.cost_governance.external_hard_limit_usd)),
+        )
     # setup creates only encrypted synthetic admission in the isolated test DB.
     factory, service, _, _, interaction, _ = await setup(session)
     evaluate_cost_governance(
@@ -63,6 +81,10 @@ async def test_live_governed_stt(session):
     )
     content = audio_path.read_bytes()
     service._inspector = FFmpegVoiceInspector()
+    if uncertain:
+        inspected = await service._inspector.inspect(content)
+        if inspected.duration_seconds > 15:
+            pytest.fail("stt_smoke_short_audio_required", pytrace=False)
     service._stt = GovernedSpeechAccess(
         Settings(
             _env_file=None,

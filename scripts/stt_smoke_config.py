@@ -1,6 +1,7 @@
 """Validate explicit smoke approval/configuration without network or inference."""
 
 from collections.abc import Mapping
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -18,10 +19,33 @@ def smoke_inputs(env: Mapping[str, str]) -> tuple[Path, str, RuntimeConfiguratio
         "ANCORA_STT_SMOKE_APPROVED",
         "ANCORA_STT_SMOKE_SYNTHETIC",
         "ANCORA_STT_SMOKE_PRIVACY_ACCEPTED",
-        "ANCORA_STT_SMOKE_TARIFF_VERIFIED",
     ):
         if env.get(name) != "1":
             raise ValueError("stt_smoke_approval_required")
+    verified = env.get("ANCORA_STT_SMOKE_TARIFF_VERIFIED") == "1"
+    uncertain = env.get("ANCORA_STT_SMOKE_BILLING_UNCERTAINTY_ACCEPTED") == "1"
+    if verified == uncertain:
+        raise ValueError("stt_smoke_billing_mode_required")
+    if uncertain:
+        if (
+            env.get("ANCORA_STT_SMOKE_MODEL") != "openai/whisper-large-v3-turbo"
+            or env.get("ANCORA_STT_SMOKE_UPSTREAM_KEY_CONFIRMED") != "1"
+            or env.get("ANCORA_STT_SMOKE_TARIFF_VERSION") != "smoke-estimate-unverified-r1"
+        ):
+            raise ValueError("stt_smoke_uncertainty_scope_invalid")
+        # Conservative experimental reserve, NOT provider pricing or guaranteed maximum.
+        try:
+            if (
+                Decimal(env.get("ANCORA_STT_SMOKE_RATE", "0")) != Decimal("0.0001")
+                or Decimal(env.get("ANCORA_STT_SMOKE_QUANTUM", "0")) != 1
+                or Decimal(env.get("ANCORA_STT_SMOKE_MINIMUM", "0")) != 300
+                or not Decimal("0")
+                < Decimal(env.get("ANCORA_STT_SMOKE_EXTERNAL_LIMIT", "0"))
+                <= Decimal("0.05")
+            ):
+                raise ValueError("stt_smoke_conservative_estimate_required")
+        except ArithmeticError:
+            raise ValueError("stt_smoke_conservative_estimate_required") from None
     audio = Path(env.get("ANCORA_STT_SMOKE_AUDIO", ""))
     if not audio.is_absolute() or not audio.is_file():
         raise ValueError("stt_smoke_audio_required")
@@ -78,3 +102,19 @@ def smoke_inputs(env: Mapping[str, str]) -> tuple[Path, str, RuntimeConfiguratio
     payload["execution_budget"]["max_gateway_requests"] = 1
     payload["execution_budget"]["max_gateway_attempts_per_model_call"] = 1
     return audio, gateway, RuntimeConfiguration.model_validate(payload)
+
+
+def validate_external_key(data: Mapping[str, object], external_limit: Decimal) -> None:
+    """Read-only /key evidence, not an assertion that Gateway budgets cap upstream."""
+    try:
+        limit = Decimal(str(data.get("limit")))
+        remaining = Decimal(str(data.get("limit_remaining")))
+    except ArithmeticError:
+        raise ValueError("stt_smoke_external_limit_unverified") from None
+    if (
+        not limit.is_finite()
+        or not remaining.is_finite()
+        or not Decimal("0") < limit <= external_limit
+        or remaining < Decimal("0.03")
+    ):
+        raise ValueError("stt_smoke_external_limit_unverified")

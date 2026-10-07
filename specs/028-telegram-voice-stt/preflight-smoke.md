@@ -1,5 +1,44 @@
 # Preflight y smoke gobernado — 2026-10-07
 
+## Ensayo autorizado bajo incertidumbre de facturación — 2026-10-07
+
+El propietario elige `openai/whisper-large-v3-turbo` y acepta preparar un ensayo
+bajo incertidumbre. Esta modalidad NO declara tarifa verificada y NO modifica
+la configuración de producción. No se ha ejecutado inferencia en esta entrega.
+
+Modalidades mutuamente excluyentes:
+- Tarifa verificada: `ANCORA_STT_SMOKE_TARIFF_VERIFIED=1`, como antes.
+- Ensayo incierto: omitir ese flag y usar
+  `ANCORA_STT_SMOKE_BILLING_UNCERTAINTY_ACCEPTED=1`,
+  `ANCORA_STT_SMOKE_MODEL=openai/whisper-large-v3-turbo`,
+  `ANCORA_STT_SMOKE_UPSTREAM_KEY_CONFIRMED=1`.
+
+Para el ensayo incierto, reserva conservadora fija de **0.03 USD**: tasa
+experimental 0.0001 USD/s, quantum 1 s, mínimo experimental 300 s, versión
+`smoke-estimate-unverified-r1`. Estos parámetros son una reserva operacional,
+NO la tarifa ni el mínimo real del proveedor ni una cota garantizada de factura.
+Audio artificial inspeccionado de máximo 15 s, una llamada Core, ningún retry.
+
+Controles requeridos antes de enviar:
+- Clave OpenRouter dedicada al ensayo con límite real configurado de **0.05 USD**,
+  sin otros consumidores. Confirmar que es la misma clave inyectada en Gateway.
+  El smoke consulta `/api/v1/key` y rechaza límite ausente, no finito o superior
+  al `ANCORA_STT_SMOKE_EXTERNAL_LIMIT=0.05`, o restante inferior a 0.03 USD.
+- Presupuestos Core diario/mensual de 0.05 USD en DB aislada y virtual key Gateway
+  restringida al alias. Cambiar su presupuesto del preflight (0.01 USD) a 0.05
+  USD al preparar el ensayo; no usar clave maestra para transcribir.
+- No atribuir al Gateway una garantía de coste upstream. El límite OpenRouter
+  es control de cuenta; liquidaciones en curso y redondeos pueden afectar el
+  importe final. Revisar uso antes/después sin audio ni texto en evidencia.
+- Comparar ledger estimado y facturación real; `actual_cost` desconocido NO vale
+  cero. La reserva de 0.03 USD no acredita facturación efectiva de 0.03 USD.
+
+La clave previa de uso general con límite 5 USD no satisface este ensayo de
+0.05 USD. No reducirla ni rotarla silenciosamente: preparar una clave dedicada
+en el dashboard y cargarla por canal de secretos, nunca en chat/logs/commits.
+Si no hay clave limitada verificable, la llamada queda bloqueada aunque esté
+aceptada la incertidumbre. El opt-in de ejecución sigue OFF por defecto.
+
 ## Avance técnico: Gateway aislado y audio artificial
 
 2026-10-07: `scripts/stt_gateway_preflight.py` ejecutado contra la imagen fijada.
