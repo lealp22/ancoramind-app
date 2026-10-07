@@ -93,6 +93,7 @@ async def search_documents(run_context: RunContext, query: str | None = None) ->
     Args:
         run_context: Injected by Agno.
         query: Optional search term (matches filename).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     service = await _get_document_service()
@@ -187,6 +188,7 @@ async def get_document(run_context: RunContext, document_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         document_id: The document UUID (from search_documents results).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
 
@@ -263,6 +265,7 @@ async def analyze_document(
         run_context: Injected by Agno.
         images: Telegram photos converted to Agno Image objects (injected).
         files: Telegram documents converted to Agno File objects (injected).
+
     """
     media_items: list[File | Image] = [*(images or []), *(files or [])]
     if not media_items:
@@ -368,6 +371,7 @@ async def propose_document_delete(run_context: RunContext, document_id: str) -> 
     Args:
         run_context: Injected by Agno.
         document_id: The document UUID (from search_documents/get_document results).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     parsed_id = parse_uuid(document_id, "documento")
@@ -402,6 +406,7 @@ async def execute_document_delete(run_context: RunContext, proposal_id: str) -> 
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from propose_document_delete.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()

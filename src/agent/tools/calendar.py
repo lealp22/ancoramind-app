@@ -70,6 +70,7 @@ async def check_calendar(
         run_context: Injected by Agno.
         start: Start datetime ISO 8601 (e.g. '2026-08-24T00:00:00').
         end: Optional end datetime. Defaults to end of the same day.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     tz = resolve_user_timezone(user_ctx)
@@ -177,6 +178,7 @@ async def propose_calendar_event(
             "recuérdame cada año el cumpleaños de mi madre" -> True).
         reminder_lead_minutes: Optional — notify this many minutes before
             start_at instead of exactly at start_at (default 0).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
 
@@ -250,6 +252,7 @@ async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> s
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from propose_calendar_event.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()

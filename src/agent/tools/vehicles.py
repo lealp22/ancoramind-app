@@ -70,6 +70,7 @@ async def find_vehicle(run_context: RunContext, reference: str | None = None) ->
     Args:
         run_context: Injected by Agno.
         reference: Make, model, nickname, or license plate. Omit to list all.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     service = await _get_vehicle_service()
@@ -123,6 +124,7 @@ async def get_vehicle_summary(run_context: RunContext, vehicle_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         vehicle_id: UUID from find_vehicle results.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
 
@@ -173,6 +175,7 @@ async def propose_vehicle(
         nickname: Optional user nickname ("mi coche", "la furgoneta").
         vin: Optional VIN/chassis number.
         source_document_id: Optional source document UUID (e.g. vehicle registration document).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     try:
@@ -239,6 +242,7 @@ async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         proposal_id: The proposal ID from propose_vehicle.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
@@ -288,6 +292,7 @@ async def get_vehicle_maintenance_history(run_context: RunContext, vehicle_id: s
     Args:
         run_context: Injected by Agno.
         vehicle_id: UUID from find_vehicle results.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
 

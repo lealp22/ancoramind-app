@@ -50,6 +50,7 @@ async def propose_note(run_context: RunContext, content: str) -> str:
     Args:
         run_context: Injected by Agno — contains session and user info.
         content: The information to remember.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     if not content or not content.strip():
@@ -77,6 +78,7 @@ async def execute_note(run_context: RunContext, proposal_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from propose_note.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
@@ -115,6 +117,7 @@ async def search_notes(
 
     Returns:
         Formatted list of matching notes, or a message if none found.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     service = await _get_notes_service()

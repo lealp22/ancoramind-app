@@ -1152,7 +1152,7 @@ purga de sesiones en `agno_runtime`. **Criterio de cierre:** tests con historial
 largos, mensajes/tool calls grandes, cambio de modelo/ruta, compactación fallida y
 ausencia de contenido personal en logs/OTel.
 
-### BL-37 · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27)
+### ~~BL-37~~ · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27) ✅ implementado — 2026-10-07
 Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,
 `governed_model.py`, `governed_agent_factory.py`,
 `governed_interaction_runner.py`, tools de `todos`/`notes`/`maintenance`/
@@ -1179,8 +1179,47 @@ payload inválido de fallo de infraestructura en `calendar.py`, `reminders.py`
 y `maintenance.py`) se corrigieron directamente en la misma fecha: se añadió
 `except (KeyError, TypeError, ValueError)` antes del `except Exception`
 genérico, siguiendo el patrón ya existente en `vehicles.py`/`todos.py`.
-**Criterio de cierre:** decidir y, si se aprueba, aplicar `D`/`S` con
-`ruff check` limpio, y `--cov-fail-under` con `pytest tests/unit/` en verde.
+
+**Resuelto (2026-10-07):**
+- **`D` activado solo sobre `src/agent/tools/`** vía un `ruff.toml` anidado
+  en ese directorio (`extend = "../../../pyproject.toml"`,
+  `extend-select = ["D"]`) — el `per-file-ignores` "inverso" sugerido no es
+  viable en Ruff (los ignores de varios patrones que matchean el mismo
+  fichero se unen, nunca se restan; verificado empíricamente). Único hallazgo:
+  38 `D413` (falta línea en blanco tras `Args:`), autocorregido con `--fix`;
+  cero `D1xx` — todas las tools ya tenían docstring.
+- **`S` activado en todo el proyecto** (`select` en `pyproject.toml`).
+  `S101` (`assert`) se ignora globalmente: dispara igual sobre asserts de
+  *type narrowing* bajo `mypy strict` que sobre asserts reales, sin señal
+  útil fuera de contexto. `tests/**` ignora todo `S` (asserts son el propio
+  idioma de pytest; "contraseñas hardcodeadas" son literales de fixture).
+  `scripts/*.py` ignora `S310`/`S603`/`S607`/`S104` (CLIs de operador con
+  HTTP/subprocess deliberado contra URLs/rutas que el propio operador
+  proporciona). `migrations/versions/*.py` ignora `S608` (las migraciones DDL
+  interpolan listas/constantes del propio código, nunca entrada de usuario).
+  4 hallazgos reales corregidos con justificación inline en vez de
+  silenciarlos: `src/agent/server.py` (`S104`, bind `0.0.0.0` fuera de
+  development — lo exige el contenedor de Railway), `src/repositories/
+  todos.py` (`S608` × 2 — los fragmentos de la cláusula dinámica son
+  literales fijos, los valores van siempre por `params`),
+  `src/observability/telemetry.py` (`S110` — el `except: pass` pasa a
+  `logger.debug(...)` sin contenido, igual que el patrón ya usado en la
+  función vecina).
+- **`--cov-fail-under` real en CI.** Cobertura base medida con
+  `pytest tests/unit/ --cov=src` (reproduciendo el entorno de CI): 76%. Los
+  tests de integración cubren una porción distinta (repositorios/DB, ~46%
+  en solitario) así que el umbral no puede ser global vía
+  `pytest.ini_options addopts` sin romper ese job. Se fija
+  `[tool.coverage.report] fail_under = 70` (leído automáticamente por
+  `pytest-cov` vía `coverage.py`) y se añade `--cov=src --cov-report=term-missing`
+  solo al step "Unit tests" de `.github/workflows/ci.yml`; el job
+  `integration` queda sin tocar.
+
+Verificado: `ruff check src/ tests/ scripts/ migrations/` y `mypy src/`
+limpios, 912 unit (76% cobertura, gate en 70% superado) + 141 integration
+passing.
+**Criterio de cierre:** cumplido — `D`/`S` aplicados con `ruff check` limpio,
+`--cov-fail-under` real en el pipeline con `pytest tests/unit/` en verde.
 
 ### BL-8 · Evals agentic 🔶 en curso — specs/014 + 018
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a

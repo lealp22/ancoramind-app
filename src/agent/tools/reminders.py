@@ -49,6 +49,7 @@ async def list_reminders(run_context: RunContext, status: str | None = None) -> 
     Args:
         run_context: Injected by Agno.
         status: Optional filter (pending, fired, dismissed). Defaults to all.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     tz = resolve_user_timezone(user_ctx)
@@ -108,6 +109,7 @@ async def propose_reminder(
         recurrence_interval: Optional — repeat every N units (default 1).
         recurrence_until: Optional ISO 8601 date — last date the
             recurrence applies to (open-ended if omitted).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
 
@@ -166,6 +168,7 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from propose_reminder.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
@@ -232,6 +235,7 @@ async def propose_reminder_snooze(run_context: RunContext, reminder_id: str, min
         run_context: Injected by Agno.
         reminder_id: ID of the reminder to snooze (from list_reminders).
         minutes: How many minutes from now to re-notify (5-10,080).
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     rid = parse_uuid(reminder_id, "recordatorio")
@@ -263,6 +267,7 @@ async def execute_reminder_snooze(run_context: RunContext, proposal_id: str) -> 
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from propose_reminder_snooze.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()

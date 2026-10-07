@@ -47,10 +47,21 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "S"]
+# S101 (assert) fires on mypy-strict type-narrowing asserts in runtime code
+# just as often as on real security-relevant asserts — not a useful signal
+# here. Everything else in S stays enforced project-wide.
+ignore = ["S101"]
 
 [tool.ruff.lint.per-file-ignores]
-"migrations/versions/*.py" = ["E501"]
+# DDL migrations legitimately interpolate code-level constants (enum lists,
+# column names) into long literal SQL strings — never user input.
+"migrations/versions/*.py" = ["E501", "S608"]
+# "Hardcoded secrets" findings here are fixture literals, not real ones.
+"tests/**/*.py" = ["S"]
+# Operator-only CLI tooling: deliberate HTTP/subprocess calls to
+# operator-provided URLs/paths.
+"scripts/*.py" = ["S310", "S603", "S607", "S104"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -63,3 +74,12 @@ testpaths = ["tests"]
 markers = [
     "integration: tests requiring a real PostgreSQL (docker compose — specs/009)",
 ]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+# BL-37: baseline measured on `pytest tests/unit/` (2026-10-07) was 76%.
+# Integration tests cover a different slice (repositories/DB) and are not
+# gated by this threshold — only the unit-test CI step passes --cov.
+fail_under = 70
