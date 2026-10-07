@@ -616,6 +616,12 @@ Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
 tras el Protocol existente. NoopCalendarProvider queda como default para dev.
 
 ### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 implementación parcial — specs/028
+**Decisión MVP y autorización (2026-10-07):** mantener OpenRouter; propietario
+acepta proveedor no fijo/retención cero no garantizada para UNA prueba con voz
+artificial y sin datos personales. No habilita audio personal, Telegram ni
+producción. Tarifa/Gateway/credenciales pendientes; sin inferencia ejecutada.
+Gates de privacidad y alternativas antes de apertura pública documentados en
+`specs/028-telegram-voice-stt/preflight-smoke.md`.
 **Preflight/smoke (2026-10-07):** catálogo público revisado sin inferencia;
 smoke opt-in preparado, probado con HTTP simulado y PostgreSQL real. 910 unit
 passed (12 físicos omitidos), 139 integration passed (1 live smoke omitido).

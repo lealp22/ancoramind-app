@@ -79,6 +79,11 @@ Inspector limpia temporales en success/error/cancel; SIGKILL requiere tmpfs efí
 
 ## T7 — Validación y piloto (requiere autorización de inferencia/despliegue)
 
+- [x] Registrar autorización explícita del propietario (2026-10-07) para un
+  smoke con voz artificial vía OpenRouter y aceptación de privacidad acotada.
+  Sin audio personal/Telegram/producción; gates públicos en `preflight-smoke.md`.
+  No implica ejecución ni tarifa/Gateway/credenciales ya verificados.
+
 Preflight público y smoke opt-in preparados (2026-10-07): ver `preflight-smoke.md`.
 HTTP simulado + ledger/preparación PostgreSQL validados. Privacidad, tarifa final,
 inferencia upstream y coste real aún pendientes; no activar opt-in implícitamente.

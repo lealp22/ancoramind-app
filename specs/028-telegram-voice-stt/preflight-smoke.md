@@ -25,7 +25,7 @@ Fuentes primarias revisadas:
 - https://openrouter.ai/docs/guides/privacy/data-collection
 - https://openrouter.ai/api/v1/models?output_modalities=transcription
 
-## Privacidad: puerta todavía NO superada
+## Privacidad: riesgo aceptado solo para smoke artificial — 2026-10-07
 
 El endpoint documenta balanceo entre proveedores; no aplica controles `order`,
 `only`, `allow_fallbacks`, `data_collection` ni `sort` por petición. No afirmar
@@ -34,9 +34,40 @@ La documentación general de privacidad no demuestra condiciones específicas de
 STT ni de todos sus proveedores. Requiere confirmación oficial de retención,
 entrenamiento/logging y aplicabilidad de políticas de cuenta/BYOK a audio.
 
-Decisión pendiente: aceptar explícitamente esa limitación SOLO para audio
-sintético en smoke, o estudiar proveedor fijo detrás del Gateway con revisión
-de ADR-005. No hay aceptación implícita para audio personal ni para producción.
+El propietario decide mantener OpenRouter para el trabajo del MVP y documentar
+las limitaciones para una futura apertura pública. Esta preferencia de arquitectura
+NO amplía el consentimiento de datos ni autoriza un despliegue.
+
+Autorización explícita recibida el 2026-10-07 en la conversación de trabajo:
+
+> Autorizo una prueba de transcripción mediante OpenRouter con audio generado
+> artificialmente, sin datos personales ni voz de personas reales. Acepto que esta
+> ruta no garantiza proveedor fijo ni retención cero de extremo a extremo. Esta
+> autorización no habilita audio personal, Telegram ni producción.
+
+Alcance: una prueba de transcripción con voz artificial, texto inventado y sin
+clonación de voz. No pedir una nueva aceptación del mismo riesgo para ese smoke.
+No marcarlo como ejecutado: tarifa, mínimos/redondeos, Gateway aislado y
+credenciales deben estar verificados antes de enviar. No hay autorización para
+reintentar resultados ambiguos, un segundo audio de 5 minutos, publicación de
+aliases en producción, activación de flags o tratamiento de mensajes personales.
+Los flags de opt-in siguen OFF hasta satisfacer esos requisitos operativos.
+
+### Puertas antes de una apertura pública
+
+- Revisar retención, entrenamiento, logging, subproveedores y políticas de cuenta
+  específicas de STT; no asumir ZDR a partir de nuestra limpieza local.
+- Evaluar consentimiento/información al usuario y requisitos aplicables de datos,
+  contratos y jurisdicción con asesoramiento adecuado; este documento no es una
+  determinación de cumplimiento legal.
+- Reevaluar OpenRouter frente a proveedor fijo detrás del Gateway (p. ej. OpenAI
+  o Groq con controles verificados) o STT autohospedado; cualquier cambio de ruta
+  seguirá ADR-005 y requerirá evidencia actualizada, no un bypass del dominio.
+- Validar privacidad de audio y transcripción en toda la cadena, coste real,
+  controles de gasto, temporales efímeros, logs metadata-only y benchmark/piloto.
+
+Estos puntos quedan como gates futuros, no bloquean por sí solos el ensayo
+artificial autorizado ni implican aprobación de OpenRouter para audio personal.
 
 ## Smoke preparado, desactivado por defecto
 
