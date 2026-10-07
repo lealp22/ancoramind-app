@@ -28,7 +28,7 @@
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) implementada localmente; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
-| BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs; pendiente confirmaciones WRITE, adjunto directo al Agent, evals reales — specs/022 |
+| BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto directo al Agent framed como DATA; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
 | BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
@@ -260,9 +260,31 @@ desde specs/022; ahora documenta ambas formas de respuesta. **Alcance
 explícitamente fuera de este incremento** (ver `docs/llm-security-hardening.md`
 §3 y `specs/022/tasks.md` T8): las respuestas de confirmación
 `propose_*`/`execute_*` (ecoan contenido en el mismo turno en que el usuario
-lo escribió, riesgo distinto al de datos de terceros recuperados después), el
-adjunto original entregado directamente al Agent principal (no solo su
-extracción) y la ruta AgentOS legada.
+lo escribió, riesgo distinto al de datos de terceros recuperados después).
+
+**Punto 2 implementado localmente (2026-10-07):** los tres huecos que
+quedaban fuera del Punto 1 — adjunto original entregado directamente al
+Agent principal y ruta AgentOS legada — se cierran así:
+(a) `prompts/tool_contract.md` (regla 8) y `prompts/channels/telegram.md`
+(regla 4) ahora dicen explícitamente que una imagen/archivo adjuntado
+directamente a la conversación es DATA, no instrucciones, igual que un
+resultado de tool — necesario porque desde el fix de BL-1 (2026-09-27)
+`GovernedInteractionRunner.run()` pasa `images=`/`files=` crudos a
+`agent.arun()` y el único prompt equivalente (`document_extraction.md`) está
+excluido a propósito de las instrucciones del agente principal; nuevo test
+en `test_instructions.py`. (b) `analyze_document` (`src/agent/tools/
+documents.py`) ya envuelve su resultado con `render_retrieved_records`, igual
+que el resto de tools de lectura, en vez de devolver texto plano sin acotar;
+nuevo record `attachment_error` para adjuntos ilegibles; añadida a la lista
+enumerada de `tool_contract.md`. (c) `src/main.py` ya no registra el interfaz
+nativo `agno.os.interfaces.telegram.Telegram` cuando
+`TELEGRAM_ADMISSION_ENABLED=true` — antes se registraba incondicionalmente,
+dejando compilada una superficie Telegram sin `TelegramMediaResolver`
+(límites de tamaño/MIME/path-safety) ni el pipeline de admisión/consentimiento
+de specs/013/023, aunque la app nunca apuntara su webhook ahí. Sin cambios de
+comportamiento en producción (admisión ya activa) ni en dev local (admisión
+apagada por defecto). 912 unit + 141 integration passing, Ruff y
+`mypy src/` limpios.
 
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 

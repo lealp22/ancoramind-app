@@ -19,6 +19,7 @@ from typing import Any
 os.environ["AGNO_TELEMETRY"] = "false"
 
 from agno.os.app import AgentOS
+from agno.os.interfaces.base import BaseInterface
 from agno.os.interfaces.telegram import Telegram
 from agno.os.settings import AgnoAPISettings
 from fastapi import FastAPI
@@ -352,16 +353,25 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         )
         logger.info("Operator admin dashboard enabled at /admin/dashboard")
 
-    agent_os = AgentOS(
-        agents=[ancora_agent],
-        db=db,
-        interfaces=[
+    # The native Agno Telegram interface skips TelegramMediaResolver's size/MIME/
+    # path-safety checks and the specs/013/023 governed admission + consent
+    # pipeline entirely (BL-39). It only exists as a legacy fallback for when
+    # the governed route is off; the two must never both be reachable.
+    legacy_interfaces: list[BaseInterface] = (
+        []
+        if settings.telegram_admission_enabled
+        else [
             Telegram(
                 agent=ancora_agent,
                 reply_to_mentions_only=bool(allowlist),
                 reply_to_bot_messages=False,
             )
-        ],
+        ]
+    )
+    agent_os = AgentOS(
+        agents=[ancora_agent],
+        db=db,
+        interfaces=legacy_interfaces,
         base_app=base_app,
         on_route_conflict="preserve_base_app",
         tracing=False,

@@ -79,7 +79,10 @@ async def test_analyze_document_receives_telegram_photo(monkeypatch):
     assert args[2].startswith("telegram-media-telegram-photo")
     assert args[2].endswith((".jpg", ".jpeg", ".jpe"))
     assert args[3] == "image/jpeg"
-    assert response == "✅ Documento recibido y archivado correctamente."
+    payload = json.loads(response.split("\n", 1)[1])
+    assert payload["trust"] == "untrusted_data"
+    assert payload["source"] == "analyze_document"
+    assert payload["records"][0]["source"] == "canonical_document"
 
 
 async def test_search_documents_semantically_wraps_results_as_untrusted_data(monkeypatch):
@@ -123,6 +126,28 @@ async def test_analyze_document_receives_telegram_file_and_sanitizes_name(
     assert args[1] == b"%PDF-1.4"
     assert args[2] == "factura.pdf"
     assert args[3] == "application/pdf"
+
+
+async def test_analyze_document_unreadable_attachment_yields_error_record(monkeypatch):
+    service = AsyncMock()
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    image = Image(content=b"", id="telegram-empty")
+
+    response = await document_tools.analyze_document(_run_context(), images=[image])
+
+    payload = json.loads(response.split("\n", 1)[1])
+    assert payload["records"] == [
+        {
+            "source": "attachment_error",
+            "index": 1,
+            "message": "No se pudo leer el adjunto.",
+        }
+    ]
+    service.ingest.assert_not_awaited()
 
 
 async def test_analyze_document_without_media_does_not_create_service(monkeypatch):
@@ -235,7 +260,9 @@ async def test_document_tools_do_not_promote_extracted_action_suggestions(monkey
     assert json.loads(detail.split("\n", 1)[1])["records"][0]["extraction"]["summary"] == (
         "Factura de reparación"
     )
-    assert "Factura de reparación" in analysis
+    assert json.loads(analysis.split("\n", 1)[1])["records"][0]["extraction"]["summary"] == (
+        "Factura de reparación"
+    )
     assert "execute_reminder" not in detail
     assert "execute_reminder" not in analysis
     assert "Acciones sugeridas" not in detail + analysis

@@ -27,6 +27,7 @@ from src.agent.tools.untrusted_results import (
 )
 from src.agent.tools.validation import internal_error_reply, invalid_proposal_reply, parse_uuid
 from src.domain.documents.extraction import DocumentVisualPage
+from src.domain.documents.models import AIExtraction
 from src.domain.documents.service import DocumentService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
@@ -156,6 +157,27 @@ async def search_documents_semantically(run_context: RunContext, query: str) -> 
     return render_retrieved_records("search_documents_semantically", records, len(matches))
 
 
+def _extraction_record(extraction: AIExtraction | None) -> dict[str, object] | None:
+    """Build the bounded, untrusted-data record for an AI extraction, if any."""
+    if not extraction or not extraction.extraction:
+        return None
+    extracted: dict[str, object] = {
+        "source": "ai_extraction_unverified",
+        "confidence": extraction.confidence,
+    }
+    kind = extraction.extraction.get("document_type")
+    if isinstance(kind, str):
+        extracted["document_type"], extracted["document_type_truncated"] = (
+            bounded_text(kind, MAX_FILENAME_CHARS)
+        )
+    summary = extraction.extraction.get("summary")
+    if isinstance(summary, str):
+        extracted["summary"], extracted["summary_truncated"] = bounded_text(
+            summary, MAX_SUMMARY_CHARS
+        )
+    return extracted
+
+
 @closes_sessions
 async def get_document(run_context: RunContext, document_id: str) -> str:
     """Get details about a specific document and its AI extraction.
@@ -189,22 +211,8 @@ async def get_document(run_context: RunContext, document_id: str) -> str:
         "size_bytes": doc.size_bytes,
         "created_at": doc.created_at.isoformat(),
     }
-    ext = result.extraction
-    if ext and ext.extraction:
-        extracted: dict[str, object] = {
-            "source": "ai_extraction_unverified",
-            "confidence": ext.confidence,
-        }
-        kind = ext.extraction.get("document_type")
-        if isinstance(kind, str):
-            extracted["document_type"], extracted["document_type_truncated"] = (
-                bounded_text(kind, MAX_FILENAME_CHARS)
-            )
-        summary = ext.extraction.get("summary")
-        if isinstance(summary, str):
-            extracted["summary"], extracted["summary_truncated"] = bounded_text(
-                summary, MAX_SUMMARY_CHARS
-            )
+    extracted = _extraction_record(result.extraction)
+    if extracted is not None:
         record["extraction"] = extracted
     return render_retrieved_records("get_document", [record], 1)
 
@@ -265,12 +273,18 @@ async def analyze_document(
     user_ctx = UserContext.from_run_context(run_context)
     settings = Settings()
     service = await _get_document_service()
-    results = []
+    records: list[dict[str, object]] = []
 
     for index, media in enumerate(media_items, start=1):
         content = await media.aget_content_bytes()
         if not content:
-            results.append(f"⚠️ No se pudo leer el adjunto {index}.")
+            records.append(
+                {
+                    "source": "attachment_error",
+                    "index": index,
+                    "message": "No se pudo leer el adjunto.",
+                }
+            )
             continue
 
         declared_mime = getattr(media, "mime_type", None)
@@ -321,18 +335,26 @@ async def analyze_document(
             visual_pages=visual_pages,
             extracted_text=extracted_text,
         )
-        ext = result.extraction
+        doc = result.document
+        doc_filename, doc_filename_truncated = bounded_text(
+            doc.original_filename, MAX_FILENAME_CHARS
+        )
+        record: dict[str, object] = {
+            "source": "canonical_document",
+            "id": str(doc.id),
+            "filename": doc_filename,
+            "filename_truncated": doc_filename_truncated,
+            "mime_type": doc.mime_type[:127],
+            "size_bytes": doc.size_bytes,
+        }
+        extracted = _extraction_record(result.extraction)
+        if extracted is not None:
+            record["extraction"] = extracted
+        records.append(record)
 
-        lines = ["✅ Documento recibido y archivado correctamente."]
-        if ext and ext.extraction:
-            e = ext.extraction
-            if e.get("document_type"):
-                lines.append(f"   Tipo: {e['document_type']}")
-            if e.get("summary"):
-                lines.append(f"   {e['summary']}")
-        results.append("\n".join(lines))
-
-    return "\n\n".join(results)
+    return render_retrieved_records(
+        "analyze_document", records[:MAX_RESULT_RECORDS], len(records)
+    )
 
 
 @closes_sessions

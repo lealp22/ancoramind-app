@@ -61,6 +61,49 @@ def test_create_app_preserves_ancoramind_webhook_route_when_admission_enabled(
     assert captured["on_route_conflict"] == "preserve_base_app"
     assert captured["telemetry"] is False
     assert captured["tracing"] is False
+    # BL-39: the ungoverned native Agno Telegram interface must never be
+    # reachable while the governed admission route is active.
+    assert captured["interfaces"] == []
+
+
+def test_create_app_keeps_legacy_telegram_interface_when_admission_disabled(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """BL-39: the legacy interface is only a fallback for admission-off setups."""
+    captured: dict[str, object] = {}
+
+    def disabled_admission_settings() -> Settings:
+        return Settings(
+            telegram_token="123456:token",
+            telegram_admission_enabled=False,
+            app_env="development",
+            runtime_config_admin_enabled=False,
+            telegram_pairing_admin_enabled=False,
+            admin_dashboard_enabled=False,
+            _env_file=None,
+        )
+
+    class FakeAgentOS:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def get_app(self) -> FastAPI:
+            return FastAPI()
+
+    legacy_interface = object()
+    monkeypatch.setattr(main_module, "Settings", disabled_admission_settings)
+    monkeypatch.setattr(main_module, "create_db", lambda **_: object())
+    monkeypatch.setattr(main_module, "create_model_from_settings", lambda _: object())
+    monkeypatch.setattr(main_module, "assemble_instructions", lambda: ["test"])
+    monkeypatch.setattr(main_module, "_init_domain_tools", lambda _: [])
+    monkeypatch.setattr(main_module, "create_ancora_agent", lambda **_: object())
+    monkeypatch.setattr(main_module, "Telegram", lambda **_: legacy_interface)
+    monkeypatch.setattr(main_module, "AgentOS", FakeAgentOS)
+    monkeypatch.setattr(main_module, "_register_reminder_worker", lambda *_: None)
+
+    main_module.create_app()
+
+    assert captured["interfaces"] == [legacy_interface]
 
 
 def test_create_app_installs_rest_guard_when_security_key_configured(

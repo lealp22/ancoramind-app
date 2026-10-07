@@ -96,6 +96,13 @@ class TestAssembleInstructions:
         instructions = assemble_instructions()
         assert any("Búsqueda web pública" in block for block in instructions)
 
+    def test_attachments_are_framed_as_data_not_instructions(self):
+        """BL-39: images/files passed directly to arun() reach the main model
+        without going through a tool's untrusted_results envelope, so the
+        prompt itself must say they are DATA, not instructions."""
+        prompt_text = "\n".join(assemble_instructions())
+        assert "images and files the user attaches directly" in prompt_text
+
     def test_document_extraction_skill_not_in_main_agent_instructions(self):
         """document_extraction.md is loaded by the separate extraction call
         (src/agent/document_extraction.py), not by the main agent (T6.5)."""
