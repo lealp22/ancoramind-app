@@ -1,0 +1,7 @@
+extend = "../../../pyproject.toml"
+
+# BL-37: a tool's docstring is the contract/schema the LLM sees (AGENTS.md
+# §4), so docstring hygiene is enforced here specifically — not project-wide.
+[lint]
+extend-select = ["D"]
+extend-ignore = ["D203", "D213"]

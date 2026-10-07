@@ -28,9 +28,10 @@
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) implementada localmente; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
-| BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs; pendiente confirmaciones WRITE, adjunto directo al Agent, evals reales — specs/022 |
+| BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto directo al Agent framed como DATA; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
+| BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 pendiente de diseño (surgió al definir BL-43; requiere revisar la matriz A–Y de specs/013 antes de tocar LLMAccess) |
@@ -259,9 +260,31 @@ desde specs/022; ahora documenta ambas formas de respuesta. **Alcance
 explícitamente fuera de este incremento** (ver `docs/llm-security-hardening.md`
 §3 y `specs/022/tasks.md` T8): las respuestas de confirmación
 `propose_*`/`execute_*` (ecoan contenido en el mismo turno en que el usuario
-lo escribió, riesgo distinto al de datos de terceros recuperados después), el
-adjunto original entregado directamente al Agent principal (no solo su
-extracción) y la ruta AgentOS legada.
+lo escribió, riesgo distinto al de datos de terceros recuperados después).
+
+**Punto 2 implementado localmente (2026-10-07):** los tres huecos que
+quedaban fuera del Punto 1 — adjunto original entregado directamente al
+Agent principal y ruta AgentOS legada — se cierran así:
+(a) `prompts/tool_contract.md` (regla 8) y `prompts/channels/telegram.md`
+(regla 4) ahora dicen explícitamente que una imagen/archivo adjuntado
+directamente a la conversación es DATA, no instrucciones, igual que un
+resultado de tool — necesario porque desde el fix de BL-1 (2026-09-27)
+`GovernedInteractionRunner.run()` pasa `images=`/`files=` crudos a
+`agent.arun()` y el único prompt equivalente (`document_extraction.md`) está
+excluido a propósito de las instrucciones del agente principal; nuevo test
+en `test_instructions.py`. (b) `analyze_document` (`src/agent/tools/
+documents.py`) ya envuelve su resultado con `render_retrieved_records`, igual
+que el resto de tools de lectura, en vez de devolver texto plano sin acotar;
+nuevo record `attachment_error` para adjuntos ilegibles; añadida a la lista
+enumerada de `tool_contract.md`. (c) `src/main.py` ya no registra el interfaz
+nativo `agno.os.interfaces.telegram.Telegram` cuando
+`TELEGRAM_ADMISSION_ENABLED=true` — antes se registraba incondicionalmente,
+dejando compilada una superficie Telegram sin `TelegramMediaResolver`
+(límites de tamaño/MIME/path-safety) ni el pipeline de admisión/consentimiento
+de specs/013/023, aunque la app nunca apuntara su webhook ahí. Sin cambios de
+comportamiento en producción (admisión ya activa) ni en dev local (admisión
+apagada por defecto). 912 unit + 141 integration passing, Ruff y
+`mypy src/` limpios.
 
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 
@@ -832,20 +855,27 @@ y registrar metadata de proveedor/coste sin query ni contenido. **Prioridad P2**
 (valor alto de UX, no bloquea MVP). Al añadir capability: seguir
 `docs/adding-tools.md` + skill prompt + tests/evals de prompt injection web.
 
-### BL-31 · Deduplicación de documentos por hash de contenido
-Comprobado que no existe: `storage_key` es UUID aleatorio (local y Supabase) y
-`ancora.documents` no guarda hash — el mismo fichero enviado dos veces se
-almacena, procesa y cobra dos veces. Propuesta: columnas `content_sha256
-CHAR(64)` + índice `(user_id, content_sha256)` en `documents` (migración
-Alembic aditiva + `init.sql`); calcular SHA-256 en `DocumentService.ingest`
-antes de almacenar; si existe fila vigente del mismo usuario, reutilizar el
-registro existente (no re-almacenar bytes) y decidir política de extracción:
-re-usar la extracción previa y devolver su resumen (recomendado — evita coste
-duplicado) con opción de re-extraer explícita. Mantener el original_filename
-de la última subida si se desea, sin borrar documentos previos (provenance).
-El hash es derivado del contenido, no dato sensible; auditar en
-`ai_extractions` el `document_id` real usado. **Prioridad P2** (ahorro directo
-de coste y ruido canónico; encaja antes del E2E de visión/PDF).
+### ~~BL-31 · Deduplicación de documentos por hash de contenido~~ ✅ implementado localmente — 2026-10-07
+Columna `ancora.documents.content_hash VARCHAR(64)` (nullable, sin backfill)
++ índice único parcial `(user_id, content_hash) WHERE content_hash IS NOT NULL`
+(migración `0012_document_content_hash`, `init.sql` sincronizado).
+`DocumentService.ingest()` calcula SHA-256 de los bytes crudos antes de
+`storage.store()`; si ya existe un documento con ese hash para el mismo
+usuario, se devuelve el documento y su extracción existentes vía
+`get_document_with_extraction()` sin volver a almacenar ni a invocar
+`DocumentExtractionPort` (política "reutilizar extracción" recomendada en el
+diseño original). Sin manejo de carrera explícito: la admisión de Telegram
+(specs/013 T5) ya serializa por chat/usuario antes de llegar al Agent, así
+que dos subidas idénticas del mismo usuario no pueden ejecutar `ingest()` en
+paralelo. Nuevo `DocumentsRepository.get_by_content_hash()`. Tests: 2 unit
+nuevos de servicio (`test_document_service.py`), 3 integration nuevos de
+repositorio (incluida la colisión `IntegrityError` entre dos usuarios con el
+mismo contenido) y `test_migrations.py` actualizado para que la aserción de
+`downgrade -1` desde head apunte a esta migración en vez de a la anterior
+(`voice_preparations`, movida al downgrade más profundo). 909 unit + 141
+integration passing (1 fallo de timing preexistente y no relacionado,
+confirmado en aislamiento), Ruff y `mypy src/` limpios. Desbloquea BL-35 y la
+Fase 2 de BL-38.
 
 ### BL-32 · Acuse de recibo temprano para procesos pesados (fast-ack UX)
 Cuando la respuesta previsible tarde (documento/imagen/PDF), enviar en el
@@ -880,8 +910,8 @@ de DOCX, hojas/celdas relevantes de XLSX y texto/notas de PPTX; después reutili
 el pipeline de almacenamiento, extracción gobernada, provenance y propuestas
 existente. El contenido extraído sigue siendo DATA, nunca instrucciones.
 
-**Dependencia obligatoria:** BL-31 debe estar cerrado antes de activar esta
-capability para evitar almacenamiento y coste duplicados. Aplicar allowlist real
+**Dependencia (resuelta 2026-10-07):** BL-31 (deduplicación por hash) ya está
+implementado localmente — desbloqueada. Aplicar allowlist real
 por firma/MIME además de extensión, límites de bytes, entradas ZIP, ratio de
 compresión, profundidad, nº de hojas/diapositivas/filas/celdas, texto total y
 tiempo; rechazar cifrado/contraseña, macros y formatos legacy binarios inicialmente.
@@ -1138,7 +1168,7 @@ purga de sesiones en `agno_runtime`. **Criterio de cierre:** tests con historial
 largos, mensajes/tool calls grandes, cambio de modelo/ruta, compactación fallida y
 ausencia de contenido personal en logs/OTel.
 
-### BL-37 · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27)
+### ~~BL-37~~ · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27) ✅ implementado — 2026-10-07
 Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,
 `governed_model.py`, `governed_agent_factory.py`,
 `governed_interaction_runner.py`, tools de `todos`/`notes`/`maintenance`/
@@ -1165,8 +1195,47 @@ payload inválido de fallo de infraestructura en `calendar.py`, `reminders.py`
 y `maintenance.py`) se corrigieron directamente en la misma fecha: se añadió
 `except (KeyError, TypeError, ValueError)` antes del `except Exception`
 genérico, siguiendo el patrón ya existente en `vehicles.py`/`todos.py`.
-**Criterio de cierre:** decidir y, si se aprueba, aplicar `D`/`S` con
-`ruff check` limpio, y `--cov-fail-under` con `pytest tests/unit/` en verde.
+
+**Resuelto (2026-10-07):**
+- **`D` activado solo sobre `src/agent/tools/`** vía un `ruff.toml` anidado
+  en ese directorio (`extend = "../../../pyproject.toml"`,
+  `extend-select = ["D"]`) — el `per-file-ignores` "inverso" sugerido no es
+  viable en Ruff (los ignores de varios patrones que matchean el mismo
+  fichero se unen, nunca se restan; verificado empíricamente). Único hallazgo:
+  38 `D413` (falta línea en blanco tras `Args:`), autocorregido con `--fix`;
+  cero `D1xx` — todas las tools ya tenían docstring.
+- **`S` activado en todo el proyecto** (`select` en `pyproject.toml`).
+  `S101` (`assert`) se ignora globalmente: dispara igual sobre asserts de
+  *type narrowing* bajo `mypy strict` que sobre asserts reales, sin señal
+  útil fuera de contexto. `tests/**` ignora todo `S` (asserts son el propio
+  idioma de pytest; "contraseñas hardcodeadas" son literales de fixture).
+  `scripts/*.py` ignora `S310`/`S603`/`S607`/`S104` (CLIs de operador con
+  HTTP/subprocess deliberado contra URLs/rutas que el propio operador
+  proporciona). `migrations/versions/*.py` ignora `S608` (las migraciones DDL
+  interpolan listas/constantes del propio código, nunca entrada de usuario).
+  4 hallazgos reales corregidos con justificación inline en vez de
+  silenciarlos: `src/agent/server.py` (`S104`, bind `0.0.0.0` fuera de
+  development — lo exige el contenedor de Railway), `src/repositories/
+  todos.py` (`S608` × 2 — los fragmentos de la cláusula dinámica son
+  literales fijos, los valores van siempre por `params`),
+  `src/observability/telemetry.py` (`S110` — el `except: pass` pasa a
+  `logger.debug(...)` sin contenido, igual que el patrón ya usado en la
+  función vecina).
+- **`--cov-fail-under` real en CI.** Cobertura base medida con
+  `pytest tests/unit/ --cov=src` (reproduciendo el entorno de CI): 76%. Los
+  tests de integración cubren una porción distinta (repositorios/DB, ~46%
+  en solitario) así que el umbral no puede ser global vía
+  `pytest.ini_options addopts` sin romper ese job. Se fija
+  `[tool.coverage.report] fail_under = 70` (leído automáticamente por
+  `pytest-cov` vía `coverage.py`) y se añade `--cov=src --cov-report=term-missing`
+  solo al step "Unit tests" de `.github/workflows/ci.yml`; el job
+  `integration` queda sin tocar.
+
+Verificado: `ruff check src/ tests/ scripts/ migrations/` y `mypy src/`
+limpios, 912 unit (76% cobertura, gate en 70% superado) + 141 integration
+passing.
+**Criterio de cierre:** cumplido — `D`/`S` aplicados con `ruff check` limpio,
+`--cov-fail-under` real en el pipeline con `pytest tests/unit/` en verde.
 
 ### BL-8 · Evals agentic 🔶 en curso — specs/014 + 018
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a

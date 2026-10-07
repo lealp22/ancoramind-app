@@ -38,10 +38,14 @@ CREATE TABLE IF NOT EXISTS ancora.documents (
     original_filename TEXT NOT NULL,
     mime_type VARCHAR(127) NOT NULL,
     size_bytes BIGINT NOT NULL,
+    content_hash VARCHAR(64),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_docs_user_id ON ancora.documents(user_id);
 CREATE INDEX IF NOT EXISTS idx_docs_created_at ON ancora.documents(created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_user_content_hash
+    ON ancora.documents(user_id, content_hash)
+    WHERE content_hash IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS ancora.ai_extractions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

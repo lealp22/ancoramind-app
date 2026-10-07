@@ -26,6 +26,7 @@ def get_current_datetime(run_context: RunContext) -> str:
     Returns:
         Both the current UTC datetime and the equivalent local datetime
         (ISO 8601, each with its own timezone offset), one per line.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     tz = resolve_user_timezone(user_ctx)

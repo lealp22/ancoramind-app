@@ -32,9 +32,11 @@ class DocumentsRepository:
         now = datetime.now(tz=UTC)
         stmt = text("""
             INSERT INTO ancora.documents
-                (user_id, storage_key, original_filename, mime_type, size_bytes, created_at)
-            VALUES (:user_id, :storage_key, :filename, :mime, :size, :now)
-            RETURNING id, user_id, storage_key, original_filename, mime_type, size_bytes, created_at
+                (user_id, storage_key, original_filename, mime_type, size_bytes,
+                 content_hash, created_at)
+            VALUES (:user_id, :storage_key, :filename, :mime, :size, :content_hash, :now)
+            RETURNING id, user_id, storage_key, original_filename, mime_type, size_bytes,
+                      content_hash, created_at
         """)
         result = await self._session.execute(
             stmt,
@@ -44,6 +46,7 @@ class DocumentsRepository:
                 "filename": data.original_filename,
                 "mime": data.mime_type,
                 "size": data.size_bytes,
+                "content_hash": data.content_hash,
                 "now": now,
             },
         )
@@ -59,6 +62,7 @@ class DocumentsRepository:
             original_filename=row.original_filename,
             mime_type=row.mime_type,
             size_bytes=row.size_bytes,
+            content_hash=row.content_hash,
             created_at=row.created_at,
         )
 
@@ -66,7 +70,7 @@ class DocumentsRepository:
         """Get a document by ID (user-scoped)."""
         stmt = text("""
             SELECT id, user_id, storage_key, original_filename,
-                   mime_type, size_bytes, created_at
+                   mime_type, size_bytes, content_hash, created_at
             FROM ancora.documents
             WHERE id = :id AND user_id = :user_id
         """)
@@ -81,6 +85,32 @@ class DocumentsRepository:
             original_filename=row.original_filename,
             mime_type=row.mime_type,
             size_bytes=row.size_bytes,
+            content_hash=row.content_hash,
+            created_at=row.created_at,
+        )
+
+    async def get_by_content_hash(self, user_id: str, content_hash: str) -> Document | None:
+        """Get a document by its content hash (user-scoped), for deduplication."""
+        stmt = text("""
+            SELECT id, user_id, storage_key, original_filename,
+                   mime_type, size_bytes, content_hash, created_at
+            FROM ancora.documents
+            WHERE user_id = :user_id AND content_hash = :content_hash
+        """)
+        result = await self._session.execute(
+            stmt, {"user_id": user_id, "content_hash": content_hash}
+        )
+        row = result.fetchone()
+        if not row:
+            return None
+        return Document(
+            id=row.id,
+            user_id=row.user_id,
+            storage_key=row.storage_key,
+            original_filename=row.original_filename,
+            mime_type=row.mime_type,
+            size_bytes=row.size_bytes,
+            content_hash=row.content_hash,
             created_at=row.created_at,
         )
 
@@ -91,7 +121,7 @@ class DocumentsRepository:
         if query:
             stmt = text("""
                 SELECT id, user_id, storage_key, original_filename,
-                       mime_type, size_bytes, created_at
+                       mime_type, size_bytes, content_hash, created_at
                 FROM ancora.documents
                 WHERE user_id = :user_id AND original_filename ILIKE :pattern
                 ORDER BY created_at DESC LIMIT :limit
@@ -100,7 +130,7 @@ class DocumentsRepository:
         else:
             stmt = text("""
                 SELECT id, user_id, storage_key, original_filename,
-                       mime_type, size_bytes, created_at
+                       mime_type, size_bytes, content_hash, created_at
                 FROM ancora.documents
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC LIMIT :limit
@@ -116,6 +146,7 @@ class DocumentsRepository:
                 original_filename=row.original_filename,
                 mime_type=row.mime_type,
                 size_bytes=row.size_bytes,
+                content_hash=row.content_hash,
                 created_at=row.created_at,
             )
             for row in result.fetchall()
@@ -189,7 +220,7 @@ class DocumentsRepository:
                 SELECT * FROM (
                     SELECT DISTINCT ON (d.id)
                     d.id, d.user_id, d.storage_key, d.original_filename,
-                    d.mime_type, d.size_bytes, d.created_at,
+                    d.mime_type, d.size_bytes, d.content_hash, d.created_at,
                     c.embedding <=> CAST(:embedding AS vector) AS distance
                     FROM ancora.document_search_chunks c
                     JOIN ancora.documents d ON d.id = c.document_id
@@ -222,6 +253,7 @@ class DocumentsRepository:
                     original_filename=row.original_filename,
                     mime_type=row.mime_type,
                     size_bytes=row.size_bytes,
+                    content_hash=row.content_hash,
                     created_at=row.created_at,
                 ),
                 distance=float(row.distance),

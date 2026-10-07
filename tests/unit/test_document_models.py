@@ -14,13 +14,15 @@ from src.domain.documents.models import (
 class TestDocumentCreate:
     def test_valid(self):
         dc = DocumentCreate(storage_key="2026/08/abc.pdf", original_filename="factura.pdf",
-                           mime_type="application/pdf", size_bytes=1024)
+                           mime_type="application/pdf", size_bytes=1024,
+                           content_hash="a" * 64)
         assert dc.storage_key == "2026/08/abc.pdf"
         assert dc.original_filename == "factura.pdf"
 
     def test_zero_size_allowed(self):
         dc = DocumentCreate(
-            storage_key="k", original_filename="f", mime_type="text/plain", size_bytes=0
+            storage_key="k", original_filename="f", mime_type="text/plain", size_bytes=0,
+            content_hash="b" * 64,
         )
         assert dc.size_bytes == 0
 
@@ -28,7 +30,7 @@ class TestDocumentCreate:
 class TestDocument:
     def test_from_attributes(self):
         doc = Document(id=uuid4(), user_id="u1", storage_key="k", original_filename="f.pdf",
-                       mime_type="application/pdf", size_bytes=100,
+                       mime_type="application/pdf", size_bytes=100, content_hash="c" * 64,
                        created_at=datetime.now(tz=UTC))
         assert doc.user_id == "u1"
         assert doc.mime_type == "application/pdf"
@@ -47,7 +49,7 @@ class TestAIExtraction:
 class TestDocumentWithExtraction:
     def test_with_extraction(self):
         doc = Document(id=uuid4(), user_id="u1", storage_key="k", original_filename="f.pdf",
-                       mime_type="application/pdf", size_bytes=100,
+                       mime_type="application/pdf", size_bytes=100, content_hash=None,
                        created_at=datetime.now(tz=UTC))
         ext = AIExtraction(id=uuid4(), document_id=doc.id, provider="openai", model="gpt-4o",
                           prompt_version="1.0", schema_version="1.0",
@@ -59,7 +61,7 @@ class TestDocumentWithExtraction:
 
     def test_without_extraction(self):
         doc = Document(id=uuid4(), user_id="u1", storage_key="k", original_filename="f.pdf",
-                       mime_type="application/pdf", size_bytes=100,
+                       mime_type="application/pdf", size_bytes=100, content_hash=None,
                        created_at=datetime.now(tz=UTC))
         dwe = DocumentWithExtraction(document=doc, extraction=None)
         assert dwe.extraction is None

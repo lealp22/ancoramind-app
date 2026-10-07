@@ -55,6 +55,7 @@ async def search_web(run_context: RunContext, query: str) -> str:
     Args:
         run_context: Trusted Agent runtime context, injected automatically.
         query: Minimal public search query. Do not include private context.
+
     """
     try:
         outcome = await _get_service().search(query)

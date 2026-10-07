@@ -157,8 +157,10 @@ class TodosRepository:
         if priority is not None:
             clauses.append("priority = :priority")
             params["priority"] = priority
+        # clauses are fixed literal fragments chosen above, never user input;
+        # all actual values are bound through params.
         stmt = text(
-            "SELECT id, list_id, user_id, title, description, status,"
+            "SELECT id, list_id, user_id, title, description, status,"  # noqa: S608
             " priority, due_date, position, created_at, updated_at"
             " FROM ancora.todo_items"
             f" WHERE {' AND '.join(clauses)}"
@@ -196,9 +198,11 @@ class TodosRepository:
             fields.append("due_date = :due")
             params["due"] = data.due_date
         fields.append("updated_at = :now")
+        # fields are fixed literal fragments chosen above, never user input;
+        # all actual values are bound through params.
         set_clause = ", ".join(fields)
         stmt = text(
-            "UPDATE ancora.todo_items SET " + set_clause + " "
+            "UPDATE ancora.todo_items SET " + set_clause + " "  # noqa: S608
             "WHERE id = :id AND user_id = :uid "
             "RETURNING id, list_id, user_id, title, description, status,"
             " priority, due_date, position, created_at, updated_at"

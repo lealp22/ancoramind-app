@@ -99,6 +99,7 @@ async def list_todo_lists(run_context: RunContext) -> str:
 
     Args:
         run_context: Injected by Agno.
+
     """
     user_context = UserContext.from_run_context(run_context)
     service = await _get_todos_service()
@@ -142,6 +143,7 @@ async def propose_todo_list(run_context: RunContext, name: str) -> str:
     Args:
         run_context: Injected by Agno.
         name: List name (ej. "Trabajo", "Personal", "Compra").
+
     """
     user_context = UserContext.from_run_context(run_context)
     if not name or not name.strip():
@@ -167,6 +169,7 @@ async def execute_todo_list(run_context: RunContext, proposal_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from a propose_todo_list* tool.
+
     """
     user_context = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()
@@ -214,6 +217,7 @@ async def propose_todo_list_rename(run_context: RunContext, list_id: str, name: 
         run_context: Injected by Agno.
         list_id: UUID of the list (from list_todo_lists).
         name: New list name.
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_list_id = _parse_uuid(list_id, "lista")
@@ -251,6 +255,7 @@ async def propose_todo_list_delete(run_context: RunContext, list_id: str) -> str
     Args:
         run_context: Injected by Agno.
         list_id: UUID of the list (from list_todo_lists).
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_list_id = _parse_uuid(list_id, "lista")
@@ -294,6 +299,7 @@ async def list_todo_items(
         list_id: UUID of the list (from list_todo_lists).
         status: Optional filter: pending | done.
         priority: Optional filter: low | normal | high.
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_list_id = _parse_uuid(list_id, "lista")
@@ -336,6 +342,7 @@ async def propose_todo_item(
         description: Optional details.
         priority: Optional: low | normal | high.
         due_date: Optional ISO 8601 datetime (ej. '2026-09-15').
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_list_id = _parse_uuid(list_id, "lista")
@@ -402,6 +409,7 @@ async def propose_todo_item_update(
         description: New description (optional).
         priority: New priority low | normal | high (optional).
         due_date: New due date ISO 8601 (optional).
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_item_id = _parse_uuid(item_id, "tarea")
@@ -451,6 +459,7 @@ async def propose_todo_item_complete(run_context: RunContext, item_id: str) -> s
     Args:
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
+
     """
     return await _propose_todo_item_status(run_context, item_id, "done", "completar")
 
@@ -465,6 +474,7 @@ async def propose_todo_item_reopen(run_context: RunContext, item_id: str) -> str
     Args:
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
+
     """
     return await _propose_todo_item_status(run_context, item_id, "pending", "reabrir")
 
@@ -502,6 +512,7 @@ async def propose_todo_item_move(run_context: RunContext, item_id: str, target_l
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
         target_list_id: UUID of the destination list (from list_todo_lists).
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_item_id = _parse_uuid(item_id, "tarea")
@@ -534,6 +545,7 @@ async def propose_todo_item_delete(run_context: RunContext, item_id: str) -> str
     Args:
         run_context: Injected by Agno.
         item_id: UUID of the item (from list_todo_items).
+
     """
     user_context = UserContext.from_run_context(run_context)
     parsed_item_id = _parse_uuid(item_id, "tarea")
@@ -561,6 +573,7 @@ async def execute_todo_item(run_context: RunContext, proposal_id: str) -> str:
     Args:
         run_context: Injected by Agno.
         proposal_id: Proposal ID from a propose_todo_item* tool.
+
     """
     user_context = UserContext.from_run_context(run_context)
     actions_repo = await _get_actions_repo()

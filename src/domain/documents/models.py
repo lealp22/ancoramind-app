@@ -14,6 +14,8 @@ class DocumentCreate(BaseModel):
     original_filename: str
     mime_type: str
     size_bytes: int
+    content_hash: str
+    """SHA-256 hex digest of the raw content, used for per-user deduplication."""
 
 
 class Document(BaseModel):
@@ -25,6 +27,7 @@ class Document(BaseModel):
     original_filename: str
     mime_type: str
     size_bytes: int
+    content_hash: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -266,7 +266,7 @@ class MetadataTelemetry:
             span.set_attribute("error.type", error_type)
             span.set_status(Status(StatusCode.ERROR))
         except Exception:  # pragma: no cover - no-op span/provider behavior
-            pass
+            logger.debug("Observability span mark_error failed", exc_info=False)
 
 
 _telemetry = MetadataTelemetry(trace.get_tracer(SERVICE), metrics.get_meter(SERVICE))

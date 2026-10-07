@@ -66,6 +66,7 @@ async def propose_vehicle_maintenance(
         work_performed: Optional comma-separated work items.
         notes: Optional notes.
         source_document_id: Optional source document UUID.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     try:
@@ -154,6 +155,7 @@ async def execute_vehicle_maintenance(run_context: RunContext, proposal_id: str)
     Args:
         run_context: Injected by Agno.
         proposal_id: The proposal ID from propose_vehicle_maintenance.
+
     """
     user_ctx = UserContext.from_run_context(run_context)
     session = track_session(await get_session())
