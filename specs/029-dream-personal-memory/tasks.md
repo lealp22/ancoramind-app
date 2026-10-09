@@ -72,20 +72,37 @@
   Ruff/mypy limpios; `DREAM_ENABLED=false` por defecto no cambia el
   comportamiento de arranque de `src.main`.
 
-## T4 — Servicio de promoción
+## T4 — Servicio de promoción ✅ implementado localmente — 2026-10-09
 
-- [ ] `src/domain/dream/service.py::DreamPromotionService` — aplica la
+- [x] `src/domain/dream/service.py::DreamPromotionService` — aplica la
   política de §4.1 de forma pura y testeable (sin I/O), recibe candidatos
   propuestos por el LLM + estado actual de `dream_candidates` del usuario,
   devuelve las mutaciones a aplicar (upsert/supersede/reject).
-- [ ] Validación fail-closed del enum de `category` (schema Pydantic,
+- [x] Validación fail-closed del enum de `category` (schema Pydantic,
   independiente del CHECK de BD de T1 — cinturón y tirantes).
-- [ ] Tests: explícito activa directo; implícito requiere 2 batches;
+- [x] Tests: explícito activa directo; implícito requiere 2 batches;
   corrección explícita supersede; categoría fuera del enum se descarta;
   conflicto con memoria canónica (fuera de alcance de Dream — Dream nunca
   toca tablas canónicas, el test documenta ese límite).
 - **Listo cuando:** cobertura de los 5 casos de arriba en unit tests, sin
   dependencias de infraestructura; Ruff/mypy limpios.
+
+**Evidencia:** `src/domain/dream/{__init__,models,service}.py` +
+`tests/unit/test_dream_promotion_service.py` (11 tests). Además de los 5
+casos pedidos se cubrieron 4 escenarios que la política de §4.1 deja
+implícitos y que convenía fijar en código en vez de dejarlos ambiguos:
+un signal implícito nunca sobrescribe un valor `active` (se rechaza,
+auditado como fila `rejected`, el valor activo gana); reforzar un valor
+`active` ya idéntico no genera escritura (no-op); una señal implícita
+contradictoria antes de alcanzar el umbral reinicia el conteo
+(`ResetCandidate`, no promueve con evidencia mezclada); una señal explícita
+siempre gana aunque exista un `candidate` implícito pendiente para la misma
+clave. También se añadieron dos resguardos defensivos: más de una fila
+existente para el mismo `(category, key)` o más de una propuesta para la
+misma clave en un mismo batch lanzan `ValueError` en vez de elegir un
+ganador en silencio (si ocurre, es una violación de un invariante que debe
+corregirse río arriba, no resolverse aquí). 960 unit tests passing (suite
+completa), Ruff y `mypy src/` limpios.
 
 ## T5 — Tools de usuario (READ/forget)
 
