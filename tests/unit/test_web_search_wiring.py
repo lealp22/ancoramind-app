@@ -7,7 +7,9 @@ from src.main import _init_domain_tools
 
 
 def test_web_search_is_not_registered_when_disabled() -> None:
-    settings = Settings(app_env="development", ancora_database_url="")
+    settings = Settings(
+        _env_file=None, app_env="development", ancora_database_url="", telegram_token=""
+    )
 
     tools = _init_domain_tools(settings)
 
@@ -16,8 +18,10 @@ def test_web_search_is_not_registered_when_disabled() -> None:
 
 def test_web_search_is_registered_without_domain_database_when_enabled() -> None:
     settings = Settings(
+        _env_file=None,
         app_env="development",
         ancora_database_url="",
+        telegram_token="",
         web_search_enabled=True,
         tavily_api_key="tvly-test",
     )

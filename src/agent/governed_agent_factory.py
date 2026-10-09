@@ -8,10 +8,17 @@ from typing import TYPE_CHECKING, Any
 from agno.agent import Agent
 
 from src.agent.tool_budget_hooks import build_budget_tool_hook
+from src.domain.context_policy.service import (
+    available_history_tokens,
+    resolve_history_ceiling,
+)
 from src.domain.llm_access.models import ExecutionContext
+from src.observability.telemetry import get_telemetry
 
 if TYPE_CHECKING:
+    from src.domain.context_policy.models import ContextBudgetConfig
     from src.domain.llm_access.access import LLMAccess
+    from src.domain.runtime_config.models import ExecutionBudgetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +63,18 @@ class GovernedAgentFactory:
         snapshot = execution_context.config
         resolved_route = route_name or snapshot.config.routing.default_route
         model = self._llm_access.model_for(resolved_route, execution_context)
+        route = snapshot.config.routing.routes.get(resolved_route)
+        history_ceiling = resolve_history_ceiling(
+            context_window_tokens=route.context_window_tokens if route else None,
+            execution_budget=snapshot.config.execution_budget,
+            context_budget=snapshot.config.context_budget,
+        )
+        self._emit_context_outcome(
+            context_window_tokens=route.context_window_tokens if route else None,
+            execution_budget=snapshot.config.execution_budget,
+            context_budget=snapshot.config.context_budget,
+            history_ceiling=history_ceiling,
+        )
         return Agent(
             id="ancoramind-governed",
             name="AncoraMind",
@@ -68,8 +87,36 @@ class GovernedAgentFactory:
             tool_hooks=self._tool_hooks or None,
             instructions=self._instructions,
             add_history_to_context=True,
-            num_history_runs=10,
+            num_history_runs=history_ceiling,
             add_datetime_to_context=True,
             markdown=True,
             description=("AncoraMind — tu asistente personal inteligente con memoria operativa."),
+        )
+
+    @staticmethod
+    def _emit_context_outcome(
+        *,
+        context_window_tokens: int | None,
+        execution_budget: ExecutionBudgetConfig,
+        context_budget: ContextBudgetConfig | None,
+        history_ceiling: int,
+    ) -> None:
+        """Metadata-only telemetry for the history ceiling this run got (specs/030 T4).
+
+        No real turn list is read here (§6 of spec.md): the factory only varies
+        the *ceiling* passed to Agno, so the outcome is an approximation —
+        ``fits_entirely`` when the window was generous enough to keep the
+        standard ceiling, ``truncated`` otherwise. ``needs_compaction`` is never
+        emitted from this layer: no ``CompactionPort`` is wired yet (T5), and
+        the policy already degrades that case to ``truncated`` by design.
+        """
+        available = available_history_tokens(
+            context_window_tokens=context_window_tokens,
+            execution_budget=execution_budget,
+            context_budget=context_budget,
+        )
+        outcome = "truncated" if available <= 0 or history_ceiling < 10 else "fits_entirely"
+        get_telemetry().counter(
+            "ancora.context.outcome",
+            attributes={"ancora.context.outcome": outcome},
         )

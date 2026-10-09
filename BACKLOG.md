@@ -31,7 +31,7 @@
 | BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto directo al Agent framed como DATA; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
-| BL-34 Política de contexto por tokens y compactación gobernada | 🔶 diseño abierto (spec + tasks); sin implementación de código — specs/030 |
+| BL-34 Política de contexto por tokens y compactación gobernada | 🔶 implementado localmente (política + wiring en `GovernedAgentFactory`); compactación real diferida — specs/030 |
 | BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
@@ -1371,7 +1371,7 @@ antes de los tests unitarios. El alcance mantiene 105 módulos de `src/` con mod
 estricto; no incluye tests, scripts ni migraciones. La primera ejecución verde de
 GitHub Actions fue confirmada el 2026-09-27.
 
-### BL-34 · Política de contexto por tokens y compactación gobernada 🔶 en curso — specs/030
+### BL-34 · Política de contexto por tokens y compactación gobernada 🔶 implementado localmente, compactación real diferida — specs/030
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota
 turnos, pero no el tamaño real: diez respuestas largas pueden agotar modelos
 pequeños y desperdiciar ventana en modelos grandes. Sustituir el número fijo como
@@ -1395,13 +1395,32 @@ purga de sesiones en `agno_runtime`. **Criterio de cierre:** tests con historial
 largos, mensajes/tool calls grandes, cambio de modelo/ruta, compactación fallida y
 ausencia de contenido personal en logs/OTel.
 
-**Diseño abierto (2026-10-09, specs/030):** spec + tasks completos — política
-pura de estimación de tokens (heurística `len//4`, igual que
-`governed_model.py`), nueva `context_window_tokens` opcional por ruta,
-selección/truncado de historial sin leer la sesión real de Agno (ceiling
-aproximado por tamaño medio de turno) y contrato `CompactionPort` diferido
-(sin generación real todavía). Sin implementación de código aún — ver
-`specs/030-context-window-policy/`.
+**Implementado localmente (2026-10-09, specs/030, T1–T6):** política pura de
+estimación de tokens (heurística `len//4`, igual que `governed_model.py`),
+nueva `context_window_tokens` opcional por ruta y `context_budget` opcional
+en `RuntimeConfiguration` (aditivos, no rompen checksums de revisiones ya
+persistidas), `select_history_window`/`resolve_num_history_runs`/
+`resolve_history_ceiling` sin leer la sesión real de Agno (ceiling aproximado
+por tamaño medio de turno, `[1, 10]`) y contrato `CompactionPort` diferido
+(solo interfaz; sin generación real todavía — `needs_compaction` degrada
+siempre a `truncated` sin compactor configurado). **Cableado:**
+`GovernedAgentFactory.create_for_run()` ya sustituye el `num_history_runs=10`
+fijo por el techo calculado a partir de la ruta/modelo resuelto en el
+snapshot del run; emite `ancora.context.outcome` (metadata-only,
+`fits_entirely`/`truncated`) desde la propia factory. 1084 unit tests, Ruff y
+`mypy src/` (154 ficheros) limpios — todo dominio puro + wiring testeado con
+mocks, sin necesidad de PostgreSQL/Docker.
+
+**Limitaciones conocidas, aceptadas para este incremento (spec.md §8):**
+estimación por heurística de caracteres, no tokenizer real por proveedor; el
+techo no lee el historial real de Agno (aproximación por tamaño medio de
+turno — si el E2E revela desbordes en modelos pequeños, leer la sesión real
+queda como extensión futura); compactación real no implementada (el contrato
+existe, `needs_compaction` nunca se activa de verdad todavía).
+
+**Pendiente separado, fuera de alcance de este spec:** retención/purga de
+sesiones en `agno_runtime` — housekeeping operativo de la tabla de Agno, no
+parte de la política de contexto en sí.
 
 ### ~~BL-37~~ · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27) ✅ implementado — 2026-10-07
 Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,

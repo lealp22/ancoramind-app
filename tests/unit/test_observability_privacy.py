@@ -91,6 +91,14 @@ def test_command_metadata_is_a_bounded_allowlisted_enum() -> None:
     assert filter_telemetry_attributes(attributes, metric=True) == attributes
 
 
+def test_context_outcome_metadata_is_a_bounded_allowlisted_enum() -> None:
+    """specs/030 T4: the history-ceiling outcome is a technical enum, not content."""
+    attributes = {"ancora.context.outcome": "truncated", "ancora.route": "ancoramind-default"}
+
+    assert filter_telemetry_attributes(attributes) == attributes
+    assert filter_telemetry_attributes(attributes, metric=True) == attributes
+
+
 def test_health_metric_attributes_are_bounded_and_content_is_removed() -> None:
     attributes = {
         "ancora.health.component": "reminder_worker",
