@@ -13,8 +13,11 @@ from agno.run import RunContext
 
 from src.agent.document_office import (
     DOCX_MIME_TYPES,
+    XLSX_MIME_TYPES,
     DocxExtractionError,
+    XlsxExtractionError,
     extract_docx_text_markdown,
+    extract_xlsx_text_markdown,
 )
 from src.agent.document_vision import (
     DocumentVisionPreparationError,
@@ -335,6 +338,18 @@ async def analyze_document(
                     max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
                 )
             except DocxExtractionError:
+                extracted_text = None
+        elif mime_type in XLSX_MIME_TYPES:
+            try:
+                extracted_text = extract_xlsx_text_markdown(
+                    content,
+                    max_blocks=settings.document_office_max_blocks,
+                    max_sheets=settings.document_office_max_sheets,
+                    max_cols_per_sheet=settings.document_office_max_cols_per_sheet,
+                    max_zip_entries=settings.document_office_max_zip_entries,
+                    max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+                )
+            except XlsxExtractionError:
                 extracted_text = None
         else:
             try:

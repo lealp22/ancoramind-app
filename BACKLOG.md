@@ -921,7 +921,7 @@ autorización, argumentos/resultados de tools ni convertir un fallo de delivery 
 repetición del Agent. **Prioridad P3** (pulir después del E2E de visión, donde la
 latencia real será medible).
 
-### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 DOCX implementado localmente — 2026-10-09
+### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 DOCX+XLSX implementados localmente — 2026-10-09
 Ampliar Document Memory para recibir formatos ofimáticos habituales sin ejecutar
 macros, relaciones externas, objetos embebidos ni contenido activo. Implementar
 extractores deterministas detrás de un puerto de infraestructura: texto y tablas
@@ -970,6 +970,36 @@ bloques, extracción feliz con heading/tabla; más 2 de integración en
 `test_document_tools.py` — DOCX válido usa la ruta determinista, DOCX roto
 no bloquea el ingest). 982 unit tests (suite completa), Ruff y `mypy src/`
 limpios.
+
+**XLSX implementado localmente (2026-10-09, mismo incremento):**
+`extract_xlsx_text_markdown` en el mismo `src/agent/document_office.py`,
+reutilizando el inspector de ZIP generalizado (`_inspect_office_zip`, ya
+compartido con DOCX) con sus propios códigos de error (`xlsx_malformed`,
+`xlsx_too_many_entries`, `xlsx_zip_bomb_suspected`,
+`xlsx_unsafe_entry_name`, `xlsx_macro_rejected`). Usa `openpyxl`
+(`data_only=True` para leer el valor cacheado de cada fórmula, nunca la
+fórmula en sí; `read_only=True` para transmitir filas en vez de cargar la
+hoja entera, acotando memoria aunque el workbook declare dimensiones
+falsas). Un cifrado/con contraseña no es siquiera un ZIP válido para
+`openpyxl` y cae en `xlsx_malformed` sin trato especial. `.xlsm`
+(macro-habilitado) y el `.xls` legado binario quedan excluidos por
+construcción, igual que `.docm`/`.doc`. Toda fila escaneada —en blanco o
+no— consume el presupuesto compartido de bloques, para que una hoja
+adversarial de filas vacías no itere sin límite; `max_sheets` y
+`max_cols_per_sheet` acotan hojas y columnas. **Hallazgo de seguridad
+propio de XLSX, sin precedente en DOCX:** `openpyxl` advierte en su propia
+documentación que no protege por defecto contra ataques XML de expansión
+de entidades ("billion laughs") y recomienda instalar `defusedxml` — pero
+su integración automática no está confirmada. En vez de añadir una segunda
+dependencia nueva con una integración incierta, `_inspect_office_zip`
+incorpora una guardia propia sin dependencias: rechaza cualquier entrada
+XML del ZIP que declare `<!ENTITY`/`<!DOCTYPE` (el formato OOXML legítimo
+nunca los usa), aplicada también retroactivamente a DOCX. Nueva dependencia
+`openpyxl` (MIT, puro Python). 13 tests nuevos (11 en `test_document_office.py`
+incluida la guardia de entidades XML para ambos formatos; 2 de integración
+en `test_document_tools.py`). 995 unit tests (suite completa), Ruff y
+`mypy src/` limpios. **Pendiente del mismo item:** PPTX, como siguiente
+incremento con el mismo patrón.
 
 ### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 en curso — specs/021
 Existe un servidor MCP externo (`C:\Users\0020572\OneDrive - ViewNext\IA\Research\tools\mcp_doc_to_markdown.py`,

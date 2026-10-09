@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import docx
 import fitz
+import openpyxl
 from agno.media import File, Image
 from agno.run import RunContext
 
@@ -40,6 +41,14 @@ def _docx_with_text(text: str) -> bytes:
     document.add_paragraph(text)
     buffer = io.BytesIO()
     document.save(buffer)
+    return buffer.getvalue()
+
+
+def _xlsx_with_cell(value: str) -> bytes:
+    workbook = openpyxl.Workbook()
+    workbook.active.append([value])
+    buffer = io.BytesIO()
+    workbook.save(buffer)
     return buffer.getvalue()
 
 
@@ -255,6 +264,57 @@ async def test_analyze_document_ingests_malformed_docx_without_extraction(monkey
         content=b"not actually a docx",
         filename="roto.docx",
         mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["extracted_text"] is None
+    service.ingest.assert_awaited_once()
+
+
+async def test_analyze_document_uses_deterministic_text_for_xlsx(monkeypatch):
+    """specs/021 Fase 2 / BL-35: an XLSX is extracted deterministically, never
+    sent through the visual route (which cannot rasterize it anyway)."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    content = _xlsx_with_cell("Resumen gastos Murcia")
+    file = File(
+        content=content,
+        filename="gastos.xlsx",
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["visual_pages"] == ()
+    assert kwargs["extracted_text"] is not None
+    assert "Resumen gastos Murcia" in kwargs["extracted_text"]
+
+
+async def test_analyze_document_ingests_malformed_xlsx_without_extraction(monkeypatch):
+    """A malformed XLSX still gets stored — ingestion is never blocked."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    file = File(
+        content=b"not actually an xlsx",
+        filename="roto.xlsx",
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
     await document_tools.analyze_document(_run_context(), files=[file])
