@@ -148,6 +148,7 @@ SUPABASE_STORAGE_BUCKET=ancora-documents
 MAX_FILE_SIZE_MB=20
 ALLOWED_MIME_TYPES=application/pdf,image/jpeg,image/png
 DOCUMENT_VISION_MAX_PDF_PAGES=3
+DOCUMENT_TEXT_MAX_PDF_PAGES=20
 
 # Reminder worker (BL-5 / ADR-003) — optional; defaults shown work as-is.
 # Auto-gated: needs ANCORA_DATABASE_URL + TELEGRAM_TOKEN (already above).

@@ -35,7 +35,7 @@
 | BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
-| BL-44 Parada de emergencia manual para Agent/LLM | 🔶 pendiente de diseño (surgió al definir BL-43; requiere revisar la matriz A–Y de specs/013 antes de tocar LLMAccess) |
+| BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en
@@ -648,10 +648,15 @@ propuesto ya está cubierto por diseño). **Resuelto (2026-10-03, specs/021 Fase
 1/BL-38):** `analyze_document` ya detecta la capa de texto (`has_extractable_text`)
 y, cuando existe, usa `extract_pdf_text_markdown` (determinista, PyMuPDF/
 pymupdf4llm) en vez de la ruta visual — PDFs digitales ya no pagan una llamada
-de visión. Queda pendiente del benchmark: política explícita para PDFs de más
-de 3 páginas (hoy ambas rutas comparten el mismo límite
-`document_vision_max_pdf_pages`); OCR dedicado solo si la ruta visual no
-alcanza precisión en escaneados.
+de visión. **Resuelto (2026-10-10):** política explícita de páginas para PDFs
+largos — `document_text_max_pdf_pages` (20, sin coste de inferencia) ya es
+independiente de `document_vision_max_pdf_pages` (3, con coste de inferencia
+por página); antes compartían el mismo límite conservador pensado solo para la
+ruta visual. Sigue pendiente, y requiere infraestructura real (no código):
+publicar/autorizar `ancoramind-vision-r2`, el benchmark de precisión/coste/
+latencia y el E2E Telegram con PDF/imagen — OCR dedicado solo si la ruta
+visual no alcanza precisión en escaneados.
+
 
 ### BL-7 · Proveedor de calendario real
 Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
@@ -1132,6 +1137,16 @@ Ruff/mypy limpios. **Pendiente:** T8/T9 de `specs/021/tasks.md` marcados
 hechos; falta validar con un PDF real de usuario vía Telegram (bloqueado por
 las restricciones de infraestructura actuales) antes de cerrar el criterio de
 cierre completo de la fase.
+
+**Límite de páginas desacoplado (2026-10-10, cierra el pendiente de BL-6
+"política explícita para PDFs de más de 3 páginas"):** la ruta determinista
+y la visual compartían `document_vision_max_pdf_pages` (3 por defecto) desde
+la Fase 1. Como `extract_pdf_text_markdown` no tiene coste de inferencia, se
+introduce `document_text_max_pdf_pages` (default 20, independiente) en
+`src/config.py`; `analyze_document` pasa ahora el límite correcto a cada
+ruta. La ruta visual sigue acotada a 3 páginas (coste de inferencia por
+página); un PDF con capa de texto puede leer hasta 20. 4 tests nuevos
+(`test_config.py`, `test_document_tools.py`), Ruff/mypy limpios.
 
 **Fase 2 (DOCX/XLSX/PPTX) implementada localmente — ver BL-35**, que
 terminó cubriendo este punto para los tres formatos ofimáticos, no solo
@@ -1642,19 +1657,48 @@ mismo dominio.
 `ADMIN_DASHBOARD_*` configuradas (ver specs/027/verification.md y
 `docs/runbooks-027-admin-dashboard.md`).
 
-### BL-44 · Parada de emergencia manual para Agent/LLM 🔶 pendiente de diseño
+### BL-44 · Parada de emergencia manual para Agent/LLM 🔶 implementado localmente, persistencia diferida — specs/031
 
-Hoy sólo existe un hard-stop **automático** al 90% del gasto
+Hasta ahora sólo existía un hard-stop **automático** al 90% del gasto
 (`CostGovernanceConfig.hard_stop_threshold_pct`) — nada que el propietario
-pueda accionar a mano si la aplicación falla de forma general o el gasto se
+pudiera accionar a mano si la aplicación falla de forma general o el gasto se
 dispara de otra manera no cubierta por ese umbral. Surgió al definir BL-43,
-que deliberadamente lo deja fuera de alcance: construir un interruptor real
-significa tocar la ruta crítica de `LLMAccess`/`GovernedModel` que specs/013
-somete a su matriz de aceptación A–Y, y merece su propio spec en vez de
-mezclarse con una pantalla nueva. Diseñar: una señal durable (fuera del
-esquema versionado de `RuntimeConfiguration`) que `LLMAccess` compruebe antes
-de cada llamada al Gateway, y un panel nuevo en el dashboard de BL-43 una vez
-diseñada.
+que deliberadamente lo dejó fuera de alcance por tocar la ruta crítica de
+`LLMAccess`/`GovernedModel`.
+
+**Implementado localmente (2026-10-10, specs/031):** `EmergencyStopManager`
+(`src/domain/emergency_stop/`) cachea el estado en memoria del proceso
+(mismo patrón que `RuntimeConfigManager`, cero I/O en el camino de
+inferencia) y se comprueba en **dos puntos**: antes de construir el
+`ExecutionContext` en `GovernedInteractionRunner.prepare_execution_context`
+(barato, evita arrancar el Agent) y, sobre todo, dentro de
+`GovernedModelMixin.ainvoke` — el único punto que intercepta **cada**
+llamada física al Gateway, así que puede interrumpir un run ya en marcha
+atrapado en un bucle de tool calls caro, que el chequeo de nivel-run no
+cubre. `InteractionProcessor` trata `EmergencyStopActiveError` igual que
+`CostGovernanceError` (`FAILED_CONTROLLED`, nunca se reintenta). API admin
+HTTP (`GET/POST /admin/emergency-stop/*`) reutilizando el mismo gate que
+`runtime_config_admin.py` (`RUNTIME_CONFIG_ADMIN_ENABLED`/
+`RUNTIME_CONFIG_ADMIN_TOKEN`, sin secreto nuevo) + CLI
+(`scripts/emergency_stop.py`, mismo esqueleto que `scripts/runtime_config.py`).
+28 tests nuevos, 1104 unit tests (suite completa), Ruff y `mypy src/` (159
+ficheros) limpios.
+
+**Limitaciones conocidas, aceptadas para este incremento (specs/031 §8):**
+
+- **Sin persistencia durable** — sin Postgres/Docker disponibles en esta
+  sesión, el estado vive solo en memoria del proceso: un restart lo borra y
+  vuelve a `active=False`. La tabla Postgres + repositorio real detrás del
+  mismo `EmergencyStopReader` quedan como siguiente incremento explícito
+  (mismo patrón que BL-13/Dream T1).
+- **No cubre la ruta de extracción de documentos** —
+  `src/agent/tools/documents.py::_get_document_service()` construye sus
+  propias instancias de `AgnoLLMAccess` sin acceso al manager singleton; esa
+  inferencia no se detiene con este interruptor todavía.
+- **Panel visual en `/admin/dashboard` diferido** — decisión explícita de
+  este incremento; la API HTTP y el CLI ya permiten operar manualmente.
+- **Sin broadcast multi-instancia** — cada réplica tendría su propio estado
+  en memoria (no es un escenario de despliegue actual conocido).
 
 ---
 

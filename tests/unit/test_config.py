@@ -235,3 +235,30 @@ class TestSettings:
         monkeypatch.setenv("AGNO_DATABASE_URL", db_url)
         settings = Settings(_env_file=None)
         assert settings.db_url == db_url
+
+    def test_document_pdf_page_limits_default_independently(self, monkeypatch):
+        """BL-6/specs/021: the text and vision routes have separate page budgets."""
+        monkeypatch.delenv("DOCUMENT_VISION_MAX_PDF_PAGES", raising=False)
+        monkeypatch.delenv("DOCUMENT_TEXT_MAX_PDF_PAGES", raising=False)
+
+        settings = Settings(_env_file=None)
+
+        assert settings.document_vision_max_pdf_pages == 3
+        assert settings.document_text_max_pdf_pages == 20
+
+    def test_document_text_max_pdf_pages_env_override(self, monkeypatch):
+        monkeypatch.setenv("DOCUMENT_TEXT_MAX_PDF_PAGES", "35")
+        monkeypatch.setenv("DOCUMENT_VISION_MAX_PDF_PAGES", "5")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.document_text_max_pdf_pages == 35
+        assert settings.document_vision_max_pdf_pages == 5
+
+    @pytest.mark.parametrize("value", ["0", "51"])
+    def test_document_text_max_pdf_pages_rejects_out_of_range_values(self, monkeypatch, value):
+        monkeypatch.setenv("DOCUMENT_TEXT_MAX_PDF_PAGES", value)
+
+        with pytest.raises(ValidationError, match="document_text_max_pdf_pages"):
+            Settings(_env_file=None)
+

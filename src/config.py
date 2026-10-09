@@ -149,7 +149,21 @@ class Settings(BaseSettings):
     `.ppt` are deliberately excluded.
     """
     document_vision_max_pdf_pages: int = Field(default=3, ge=1, le=10)
-    """Maximum PDF pages rendered to images for the vision extraction route."""
+    """Maximum PDF pages rendered to images for the vision extraction route.
+
+    Deliberately conservative: each page sent as an image costs a governed
+    LLM inference call (BL-6, ``ancoramind-vision``). Does not apply to the
+    deterministic text route — see ``document_text_max_pdf_pages``.
+    """
+    document_text_max_pdf_pages: int = Field(default=20, ge=1, le=50)
+    """Maximum PDF pages read by the deterministic text extraction route.
+
+    Independent of ``document_vision_max_pdf_pages`` (specs/021/BL-6, pending
+    item resolved): ``extract_pdf_text_markdown`` never calls an LLM, so it
+    can afford a more generous page budget than the vision fallback — same
+    reasoning as the generous ``document_office_max_blocks`` cap for other
+    deterministic extractors.
+    """
     document_office_max_zip_entries: int = Field(default=200, ge=1, le=2000)
     """Max ZIP entries read from a DOCX/XLSX/PPTX before refusing it as suspicious."""
     document_office_max_uncompressed_bytes: int = Field(

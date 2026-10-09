@@ -66,16 +66,21 @@ async def _get_document_service() -> DocumentService:
     """
     from src.agent.document_embeddings import GovernedDocumentEmbeddingAdapter
     from src.agent.document_extraction import AgnoDocumentExtractionAdapter
+    from src.agent.emergency_stop_runtime import get_emergency_stop_manager
     from src.agent.llm_access import AgnoLLMAccess, LlmUsageRecorder
     from src.config import Settings
 
     settings = Settings()
+    stop_reader = get_emergency_stop_manager()
     session = track_session(await get_session())
     llm_access = AgnoLLMAccess(
         settings=settings,
         usage_recorder=LlmUsageRecorder(get_session).record,
+        stop_reader=stop_reader,
     )
-    standalone_llm_access = AgnoLLMAccess(settings=settings, usage_recorder=None)
+    standalone_llm_access = AgnoLLMAccess(
+        settings=settings, usage_recorder=None, stop_reader=stop_reader
+    )
     return DocumentService(
         repository=DocumentsRepository(session),
         storage=_get_storage(),
@@ -322,7 +327,7 @@ async def analyze_document(
                 if has_extractable_text(content):
                     extracted_text = extract_pdf_text_markdown(
                         content,
-                        max_pages=settings.document_vision_max_pdf_pages,
+                        max_pages=settings.document_text_max_pdf_pages,
                     )
                 else:
                     visual_pages = prepare_visual_pages(

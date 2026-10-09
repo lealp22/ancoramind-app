@@ -35,6 +35,7 @@ from src.agent.ancora_agent import (
     create_model_from_settings,
 )
 from src.agent.emergency_stop_admin import install_emergency_stop_admin_api
+from src.agent.emergency_stop_runtime import get_emergency_stop_manager
 from src.agent.health import HealthRegistry, install_health_readiness_endpoint
 from src.agent.instructions import assemble_instructions
 from src.agent.lifecycle import (
@@ -296,7 +297,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     validate_telegram_pairing_admin_settings(settings)
     validate_admin_dashboard_settings(settings)
     runtime_config_manager = create_runtime_config_manager(settings, get_session)
-    emergency_stop_manager = EmergencyStopManager()
+    emergency_stop_manager = get_emergency_stop_manager()
     health_registry = HealthRegistry()
     health_registry.set_component("app", "healthy")
 

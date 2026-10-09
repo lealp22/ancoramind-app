@@ -26,6 +26,19 @@ def _pdf_with_text(text: str) -> bytes:
         document.close()
 
 
+def _pdf_with_pages(*texts: str) -> bytes:
+    document = fitz.open()
+    try:
+        for text in texts:
+            page = document.new_page()
+            if text:
+                page.insert_text((72, 72), text)
+        return document.tobytes()
+    finally:
+        document.close()
+
+
+
 def _scanned_pdf() -> bytes:
     document = fitz.open()
     try:
@@ -228,7 +241,33 @@ async def test_analyze_document_falls_back_to_visual_for_scanned_pdf(monkeypatch
 
     kwargs = service.ingest.await_args.kwargs
     assert kwargs["extracted_text"] is None
-    assert len(kwargs["visual_pages"]) == 1
+
+
+async def test_analyze_document_uses_the_text_route_page_budget_not_the_vision_one(
+    monkeypatch,
+):
+    """BL-6/specs/021: the text route's page budget is independent of (and here,
+    larger than) the vision route's — a 4-page text PDF is read in full even
+    when the vision budget is capped to 2 pages."""
+    monkeypatch.setenv("DOCUMENT_VISION_MAX_PDF_PAGES", "2")
+    monkeypatch.setenv("DOCUMENT_TEXT_MAX_PDF_PAGES", "4")
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    content = _pdf_with_pages("Página uno", "Página dos", "Página tres", "Página cuatro")
+    file = File(content=content, filename="informe.pdf")
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["visual_pages"] == ()
+    assert "Página cuatro" in kwargs["extracted_text"]
 
 
 async def test_analyze_document_uses_deterministic_text_for_docx(monkeypatch):

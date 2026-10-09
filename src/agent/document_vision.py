@@ -38,13 +38,15 @@ def extract_pdf_text_markdown(content: bytes, *, max_pages: int) -> str:
     """Deterministically extract a PDF's text layer as Markdown (specs/021 T2).
 
     Uses PyMuPDF/pymupdf4llm locally, with no network call and no persisted
-    rendered page, bounded by the same ``max_pages`` cap used for the visual
-    fallback route (``document_vision_max_pdf_pages``) rather than a separate
-    limit — pages beyond the cap are simply not read, mirroring how the visual
-    route already bounds cost/input volume. Pages without a text layer (a PDF
-    with mixed text/scanned pages) contribute an empty section; no all-or-
-    nothing check is performed here, since ``has_extractable_text`` already
-    gates whether this function is called at all.
+    rendered page, bounded by ``max_pages`` — the caller passes
+    ``document_text_max_pdf_pages``, a budget independent of the vision
+    route's ``document_vision_max_pdf_pages`` (BL-6: this function has no
+    inference cost, so it can afford a more generous page count than a
+    route that pays for each page as an image). Pages beyond the cap are
+    simply not read. Pages without a text layer (a PDF with mixed
+    text/scanned pages) contribute an empty section; no all-or-nothing check
+    is performed here, since ``has_extractable_text`` already gates whether
+    this function is called at all.
     """
     try:
         import fitz

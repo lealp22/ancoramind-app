@@ -102,7 +102,44 @@ mypy src/
       llega correctamente. Bloqueado por las restricciones de infraestructura
       actuales — pendiente de validación por el propietario.
 
-## Fuera de alcance de esta verificación
+## Incremento — Límite de páginas desacoplado (2026-10-10)
+
+El cierre de T2/T5 (incremento T2-T9) había dejado deliberadamente
+`extract_pdf_text_markdown` acotado al mismo `document_vision_max_pdf_pages`
+que la ruta visual, para no introducir un tope independiente sin necesidad.
+BL-6 seguía anotando como pendiente definir una política de páginas propia
+para la ruta de texto. Se resuelve ahora: nuevo
+`document_text_max_pdf_pages` (default 20, `ge=1, le=50`) en `src/config.py`,
+independiente de `document_vision_max_pdf_pages` (default 3, sin cambios) —
+justificado porque `extract_pdf_text_markdown` no invoca ningún LLM, así que
+no comparte la razón de ser conservador que sí aplica a la ruta visual
+(coste de inferencia por página). `analyze_document`
+(`src/agent/tools/documents.py`) pasa ahora `document_text_max_pdf_pages` a
+la rama determinista; la rama visual sigue usando
+`document_vision_max_pdf_pages` sin cambios.
+
+Validación local:
+
+```text
+python -m pytest tests/unit/test_document_tools.py tests/unit/test_config.py tests/unit/test_document_vision.py -q
+→ 62 passed
+
+python -m pytest tests/unit/ -q
+→ 1114 passed
+
+python -m ruff check src/ tests/ scripts/ migrations/
+→ All checks passed
+
+python -m mypy src/
+→ Success: no issues found in 159 source files
+```
+
+4 tests nuevos: 3 en `test_config.py` (default independiente, override por
+env var, rechazo fuera de rango) y 1 en `test_document_tools.py` (un PDF de
+4 páginas con capa de texto se lee entero con el límite de visión fijado a 2,
+confirmando que cada ruta usa su propio presupuesto).
+
+
 
 - Fase 2 (DOCX determinista) y Fase 3 (Markdown → PDF export) no se verifican
   aquí: dependen de BL-35 y BL-29/decisión de diseño respectivamente, y tienen

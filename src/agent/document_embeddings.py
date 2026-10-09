@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 
 from src.agent.ancora_agent import _litellm_v1_base_url
+from src.agent.emergency_stop_runtime import get_emergency_stop_manager
 from src.config import Settings
 from src.domain.documents.embeddings import DocumentEmbeddingOutcome
 from src.domain.llm_access.context import current_execution_context
@@ -38,6 +39,14 @@ class GovernedDocumentEmbeddingAdapter:
 
     async def embed(self, text: str) -> DocumentEmbeddingOutcome:
         """Return one vector or controlled, content-free failure metadata."""
+        if get_emergency_stop_manager().current().active:
+            return DocumentEmbeddingOutcome(
+                embedding=None,
+                provider="",
+                model="",
+                status="failed",
+                error_class="EmergencyStopActive",
+            )
         try:
             context = current_execution_context()
         except GovernanceViolationError:

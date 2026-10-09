@@ -11,9 +11,12 @@
       aún no se invoca desde la tool ni selecciona ruta de extracción.
 - [x] T2 · `extract_pdf_text_markdown(content: bytes, *, max_pages: int) ->
       str` usando `pymupdf4llm.to_markdown()`, acotado a `max_pages`.
-      **Decisión:** se reutiliza `document_vision_max_pdf_pages` (el mismo
-      límite que ya acota la ruta visual) en vez de introducir un tope propio
-      — ambas rutas comparten el mismo presupuesto de páginas por documento.
+      **Decisión (2026-10-03):** se reutiliza `document_vision_max_pdf_pages`
+      (el mismo límite que ya acota la ruta visual) en vez de introducir un
+      tope propio — ambas rutas comparten el mismo presupuesto de páginas
+      por documento. **Corrección (2026-10-10, BL-6):** se desacopla con
+      `document_text_max_pdf_pages` (default 20) — ver incremento
+      "Límite de páginas desacoplado" en `verification.md`.
       **Decisión página mixta:** no hay política todo-o-nada; las páginas sin
       texto simplemente no aportan contenido al Markdown resultante
       (`has_extractable_text` ya decidió, con "cualquier página", que esta
