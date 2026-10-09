@@ -156,6 +156,10 @@ docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, deployment-railway, runbooks-013
                            (operación specs/013), adding-tools (guía para nuevas
                            tools),
+                           llm-security-hardening (prompt injection/contenido
+                           no confiable — BL-39/specs/022-023),
+                           production-security-privacy (GDPR/AI Act, ZDR,
+                           gates de apertura pública — specs/028),
                            adr/ADR-001-agno-runtime.md,
                            adr/ADR-002-supabase-infrastructure.md,
                            adr/ADR-003-reminder-worker.md,

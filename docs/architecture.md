@@ -226,7 +226,7 @@ Opcionalmente: `messages`, `conversation_links`, `audit_events`.
 | Tipo | Propiedad | Persistencia | Naturaleza |
 |---|---|---|---|
 | **Conversation / Runtime** | Agno | Agno DB | Contexto conversacional inmediato |
-| **Soft Personal** | Agno (futuro) | Memory de Agno | Preferencias, personalización |
+| **Soft Personal** | AncoraMind Core (diseño en specs/029 — BL-13, "Dream") | PostgreSQL (`ancora`) | Preferencias/hábitos consolidados por un proceso incremental, con provenance y estados; nunca es memoria canónica |
 | **Canonical** | AncoraMind Core | PostgreSQL (`ancora`) | Fuente de verdad |
 
 > La memoria canónica tiene prioridad sobre inferencias conversacionales.

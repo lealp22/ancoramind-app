@@ -1011,7 +1011,7 @@ hechos; falta validar con un PDF real de usuario vía Telegram (bloqueado por
 las restricciones de infraestructura actuales) antes de cerrar el criterio de
 cierre completo de la fase.
 
-### BL-13 · Memoria personal y consolidación gobernada «Dream»
+### BL-13 · Memoria personal y consolidación gobernada «Dream» 🔶 diseño completo — specs/029
 Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad
 propia de AncoraMind para aprender preferencias estables, hábitos útiles y estilo
 de interacción (idioma, longitud/tono, formatos, nombres/apodos frecuentes), sin
@@ -1047,6 +1047,30 @@ operativo de BL-23; puede desarrollarse en paralelo a BL-34 una vez fijados sus
 contratos. **Criterio de cierre:** evals de preferencia explícita, repetición,
 contradicción/corrección, prompt injection, dato sensible, borrado y precedencia de
 memoria canónica; E2E que demuestre personalización posterior sin filtrar contenido.
+
+**Diseño completo (2026-10-09, specs/029):** antes de diseñar el modelo de
+datos se encontró un bloqueo real para la premisa "revisar interacciones ya
+finalizadas desde un cursor": `payload_ciphertext` se limpia de forma
+**síncrona** en el mismo commit que marca la interacción `completed`
+(`TelegramInteractionsRepository.finalize_response_delivery`), así que el
+texto de la conversación no sobrevive más que unos segundos en el schema
+`ancora`. El único sitio con el texto en claro es la sesión interna de Agno
+(`agno_runtime`), vedada por AGENTS.md §2.1/§2.7. Decisión aprobada por el
+propietario: AncoraMind captura su propia copia acotada y cifrada del turno
+(`ancora.dream_transcripts`, nuevo punto de escritura en
+`processor.py::_run_agent`, no solo un lector nuevo). `specs/029-dream-
+personal-memory/spec.md` desarrolla el modelo completo (`dream_transcripts`/
+`dream_candidates`/`dream_cursor`/`dream_runs`), el enum cerrado de
+categorías permitidas, la política de promoción explícito/implícito, el
+worker (mismo patrón que el reminder worker) y las tools
+`list_my_preferences`/`propose_preference_forget`/`execute_preference_forget`.
+Limitación conocida y aceptada: el gasto de Dream se audita en
+`dream_runs`, no en `llm_usage_events` (esa tabla exige una
+`telegram_interactions` real), así que no entra en el agregado global de
+`evaluate_cost_governance` por ahora. `docs/architecture.md` §7 actualizado
+para reflejar que la memoria personal es propiedad de AncoraMind Core, no de
+Agno. **Sin implementación todavía** — `tasks.md` desglosa T1–T6 para el
+siguiente incremento.
 
 ### BL-36 · API de aplicación multicanal para clientes web/backend
 Exponer las capacidades conversacionales y operativas de AncoraMind mediante una
