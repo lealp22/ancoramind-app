@@ -116,3 +116,62 @@ versión real de LiteLLM y el Gateway del despliegue:
 
 No sustituir Tavily Fase 1 ni activar una búsqueda nativa por alias hasta que el
 spike satisfaga esos criterios y una decisión posterior actualice esta spec/ADR.
+
+### Revisión documental (2026-10-09) — sin acceso al Gateway/LiteLLM real
+
+Antes de montar el spike contra infraestructura real, se revisó la
+documentación pública actual de OpenRouter y LiteLLM para los 6 criterios de
+arriba. **No sustituye el spike** (ningún criterio se verificó contra el
+Gateway desplegado; esto es solo literatura), pero ya adelanta un hallazgo
+que cambia la recomendación por defecto:
+
+1. **Activación confirmada, tres formas equivalentes:** sufijo `:online` en
+   el nombre del modelo, plugin `web` con parámros (`engine`, `mode`,
+   `max_results` 1–10, `search_prompt`, `include_domains`/`exclude_domains`),
+   o el server tool explícito `openrouter:web_search`. El resultado llega al
+   modelo como anotaciones `url_citation` (OpenAI-compatible) con
+   `url`/`title`/`content` (fragmentos de 2000–4000 caracteres de Exa).
+2. **🔴 Hallazgo que bloquea la adopción tal cual:** no hay ningún parámetro
+   documentado para fijar un **número máximo de búsquedas por petición** —
+   solo `max_results` acota resultados *dentro* de cada búsqueda, no cuántas
+   búsquedas decide hacer el modelo (0..N, confirmado también en la
+   documentación de activación). Esto es incompatible con el modelo de
+   gobernanza actual de AncoraMind: `ExecutionBudget.reserve_model_call()`
+   exige conocer y reservar el coste **antes** de la llamada
+   (`src/domain/llm_access/models.py`); un coste que solo se conoce después
+   de que el modelo decidió cuántas búsquedas hacer (cada una facturada,
+   p. ej. $0.007/búsqueda con Exa) rompe esa invariante de "sin sorpresas de
+   presupuesto a mitad de ejecución" sin un control adicional que hoy no
+   existe en el lado del cliente.
+3. **`engine=auto` vs `native`:** sin garantía documentada de estabilidad
+   por modelo — `auto` cae a Exa si el proveedor no tiene búsqueda nativa,
+   sin lista cerrada de qué modelos la tienen. Confirma el riesgo ya
+   anotado en el criterio 3 original.
+4. **Filtros de dominio sí existen** (`include_domains`/`exclude_domains`),
+   parcialmente cubriendo el criterio 4; privacidad/región y ausencia de
+   contenido personal en telemetría siguen sin poder verificarse sin
+   credenciales reales.
+5. **Coste por motor variado y no uniforme:** Exa $0.007/búsqueda (hasta 10
+   resultados, +$0.001 por extra), Perplexity $0.005, Parallel
+   $0.001–0.005, Firecrawl por créditos propios, más tokens de
+   procesamiento — ninguno de estos aparece reflejado hoy en
+   `SpeechBillingPolicy`-equivalente alguno para búsqueda; haría falta una
+   política de tarifa nueva y versionada antes de poder auditar coste real
+   por `correlation_id` (criterio 2, segunda mitad).
+6. **LiteLLM** tiene seguimiento propio de coste de búsqueda
+   (`usage.prompt_tokens_details.web_search_requests`, `web_search_options`)
+   pero orientado a la tool nativa de proveedores que soporta directamente
+   (OpenAI, etc.); no hay confirmación documental de que ese tracking
+   también capture `plugins`/`:online` reenviado específicamente a través
+   del adaptador `openrouter/` de LiteLLM — sigue siendo una pregunta para
+   el spike real, no resuelta por esta revisión.
+
+**Recomendación (no vinculante, a confirmar en el spike real si se
+retoma):** mantener Tavily (Fase 1) como la única vía de búsqueda web.
+Adoptar el server tool de OpenRouter requeriría primero resolver el punto 2
+— sin un tope duro de número de búsquedas conocido *antes* de la llamada,
+no hay forma limpia de preservar la garantía de presupuesto reservado que
+el resto de capacidades gobernadas de AncoraMind ya cumplen (voz, embeddings,
+extracción documental). Si en el futuro OpenRouter/LiteLLM documentan un
+límite duro de búsquedas por petición, revisar esta sección antes de
+replantear el spike.

@@ -861,6 +861,22 @@ defecto), consulta pública minimizada, `basic`, máximo 5 resultados, sin
 datos personales/sensibles. La Fase 2 (spike OpenRouter/LiteLLM) queda diferida
 y documentada en `specs/025-web-search/spec.md`.
 
+**Revisión documental de Fase 2 (2026-10-09, sin Gateway real — ver
+`specs/025-web-search/spec.md` §"Revisión documental"):** confirmado que
+OpenRouter activa búsqueda nativa vía sufijo `:online`, plugin `web` o el
+server tool `openrouter:web_search`, con filtros de dominio y hasta 10
+resultados por búsqueda. **Hallazgo que bloquea adoptarlo tal cual:** no
+existe ningún parámetro documentado para fijar un número máximo de
+*búsquedas* por petición (solo de resultados por búsqueda) — el modelo
+decide 0..N búsquedas y cada una se factura por separado ($0.007 con Exa,
+variable por motor), coste que solo se conoce **después** de la llamada.
+Esto rompe la invariante de presupuesto pre-reservado que ya cumplen el
+resto de capacidades gobernadas (`ExecutionBudget.reserve_model_call()`
+exige conocer el coste antes de llamar). **Recomendación no vinculante:**
+mantener Tavily como única vía mientras ese límite no exista documentado;
+no se ha tocado código, solo la spec. El spike real contra el Gateway
+desplegado (criterios 1/4/5/6 de la lista original) sigue sin ejecutarse.
+
 **Opciones a evaluar en el spec:** API de búsqueda (Brave/Serper/Tavily…) con
 clave por secretos + síntesis por el propio modelo, o un modelo con búsqueda
 nativa vía OpenRouter si existe y permite el Gateway. El resultado debe incluir
