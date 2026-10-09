@@ -5,6 +5,7 @@ fixture files)."""
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 
 import docx
@@ -395,3 +396,121 @@ def test_pptx_too_many_zip_entries_is_rejected():
 
     with pytest.raises(PptxExtractionError, match="pptx_too_many_entries"):
         _extract_pptx(_pptx_bytes(build), max_zip_entries=10)
+
+
+# ── Adversarial: "archivo renombrado" — a real Office file of one kind,
+# declared/renamed as another (BL-35 pending fixture) ──────────────────────
+
+
+def _real_docx_bytes() -> bytes:
+    def build(document: docx.Document) -> None:
+        document.add_paragraph("contenido docx real")
+
+    return _docx_bytes(build)
+
+
+def _real_xlsx_bytes() -> bytes:
+    def build(workbook: openpyxl.Workbook) -> None:
+        workbook.active.append(["contenido xlsx real"])
+
+    return _xlsx_bytes(build)
+
+
+def _real_pptx_bytes() -> bytes:
+    def build(presentation: Presentation) -> None:
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = "contenido pptx real"
+
+    return _pptx_bytes(build)
+
+
+def test_docx_extractor_rejects_a_renamed_xlsx_file():
+    with pytest.raises(DocxExtractionError, match="docx_malformed"):
+        _extract(_real_xlsx_bytes())
+
+
+def test_docx_extractor_rejects_a_renamed_pptx_file():
+    with pytest.raises(DocxExtractionError, match="docx_malformed"):
+        _extract(_real_pptx_bytes())
+
+
+def test_xlsx_extractor_rejects_a_renamed_docx_file():
+    with pytest.raises(XlsxExtractionError, match="xlsx_malformed"):
+        _extract_xlsx(_real_docx_bytes())
+
+
+def test_xlsx_extractor_rejects_a_renamed_pptx_file():
+    with pytest.raises(XlsxExtractionError, match="xlsx_malformed"):
+        _extract_xlsx(_real_pptx_bytes())
+
+
+def test_pptx_extractor_rejects_a_renamed_docx_file():
+    with pytest.raises(PptxExtractionError, match="pptx_malformed"):
+        _extract_pptx(_real_docx_bytes())
+
+
+def test_pptx_extractor_rejects_a_renamed_xlsx_file():
+    with pytest.raises(PptxExtractionError, match="pptx_malformed"):
+        _extract_pptx(_real_xlsx_bytes())
+
+
+# ── Adversarial: "workbook desmesurado" — a sheet that lies about its
+# dimensions in the XML, independent of its real row count (BL-35 pending
+# fixture; the defense itself — read_only streaming — already existed, this
+# proves it against a crafted lie instead of only trusting the comment) ────
+
+
+def _xlsx_with_lied_dimension(real_rows: int, *, claimed_ref: str) -> bytes:
+    """Build a small, real workbook, then rewrite its sheet XML's declared
+    ``<dimension>`` to a huge range the real content never actually fills."""
+
+    def build(workbook: openpyxl.Workbook) -> None:
+        sheet = workbook.active
+        for i in range(real_rows):
+            sheet.append([f"fila real {i}"])
+
+    content = _xlsx_bytes(build)
+    with zipfile.ZipFile(io.BytesIO(content)) as source:
+        entries = {name: source.read(name) for name in source.namelist()}
+
+    sheet_path = next(
+        name for name in entries if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)
+    )
+    original = entries[sheet_path]
+    assert b"<dimension ref=" in original, "fixture assumption: openpyxl always declares one"
+    lied = re.sub(rb'<dimension ref="[^"]*"', f'<dimension ref="{claimed_ref}"'.encode(), original)
+    assert lied != original
+    entries[sheet_path] = lied
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, data in entries.items():
+            archive.writestr(name, data)
+    return buffer.getvalue()
+
+
+def test_xlsx_with_a_lying_oversized_dimension_still_extracts_only_real_rows():
+    """A1:XFD1048576 is Excel's absolute maximum sheet size — openpyxl's
+    non-streaming reader has historically tried to pre-size for this; the
+    ``read_only=True`` streaming read used here must stay bounded by what is
+    actually present, never by the declared (and here, false) dimension."""
+    content = _xlsx_with_lied_dimension(3, claimed_ref="A1:XFD1048576")
+
+    markdown = _extract_xlsx(content)
+
+    assert "fila real 0" in markdown
+    assert "fila real 2" in markdown
+
+
+def test_xlsx_with_a_lying_dimension_is_still_truncated_by_the_real_shared_budget():
+    """The declared dimension must never substitute for the real row-count
+    budget enforcement — truncation still happens based on rows actually
+    scanned, same as an honest workbook."""
+    content = _xlsx_with_lied_dimension(20, claimed_ref="A1:XFD1048576")
+
+    markdown = _extract_xlsx(content, max_blocks=5)
+
+    assert "fila real 0" in markdown
+    assert "fila real 4" in markdown
+    assert "fila real 10" not in markdown
+    assert "fila real 19" not in markdown

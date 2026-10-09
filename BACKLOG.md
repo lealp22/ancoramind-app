@@ -983,7 +983,7 @@ autorización, argumentos/resultados de tools ni convertir un fallo de delivery 
 repetición del Agent. **Prioridad P3** (pulir después del E2E de visión, donde la
 latencia real será medible).
 
-### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 extractores de los 3 formatos implementados localmente — 2026-10-09
+### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 extractores + fixtures adversariales implementados, falta E2E — 2026-10-10
 Ampliar Document Memory para recibir formatos ofimáticos habituales sin ejecutar
 macros, relaciones externas, objetos embebidos ni contenido activo. Implementar
 extractores deterministas detrás de un puerto de infraestructura: texto y tablas
@@ -1081,13 +1081,28 @@ asumible por ser estándar de facto). Nuevos settings
 `test_document_office.py` + 2 de integración en `test_document_tools.py`).
 1020 unit tests (suite completa), Ruff y `mypy src/` limpios.
 
-Con DOCX+XLSX+PPTX implementados, BL-35 solo tiene pendiente lo que ya era
-explícitamente de infraestructura en su criterio de cierre original: E2E
-Telegram real por formato (bloqueado por BL-18, igual que el resto del
-pipeline documental) y las fixtures maliciosas de "archivo renombrado"/
-"workbook desmesurado" como prueba adversarial dedicada más allá de los
-tests unitarios ya existentes (zip bomb, path traversal, macro y entidades
-XML ya cubiertos para los tres formatos).
+**Fixtures adversariales "archivo renombrado"/"workbook desmesurado"
+implementadas localmente (2026-10-10):** "archivo renombrado" — un DOCX,
+XLSX o PPTX real declarado/renombrado como otro de los tres — se cubre con
+6 tests (las 6 combinaciones cruzadas: cada extractor rechaza el contenido
+real de los otros dos formatos). Ya estaba defendido por el chequeo
+`required_entry` existente (p. ej. un DOCX real no tiene `xl/workbook.xml`
+→ `xlsx_malformed`), pero no había un test dedicado que lo demostrara con
+contenido *realmente válido* de otro formato en vez de un ZIP arbitrario.
+"Workbook desmesurado" — un XLSX cuyo XML de hoja declara un `<dimension
+ref="A1:XFD1048576"/>` (el máximo absoluto de Excel) muy por encima de sus
+filas reales — se cubre con 2 tests que reescriben esa declaración en un
+workbook real por lo demás válido: la extracción solo lee lo que de verdad
+hay (streaming `read_only=True`, ya existente) y el truncado por
+`max_blocks` sigue basándose en filas escaneadas de verdad, nunca en la
+dimensión declarada (que aquí es una mentira deliberada). 8 tests nuevos en
+`test_document_office.py`, 1119 unit tests (suite completa), Ruff y
+`mypy src/` limpios.
+
+Con DOCX+XLSX+PPTX implementados y estas fixtures cubiertas, de BL-35 solo
+queda lo que ya era explícitamente de infraestructura en su criterio de
+cierre original: E2E Telegram real por formato (bloqueado por BL-18, igual
+que el resto del pipeline documental).
 
 ### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 Fases 1–3 implementadas localmente, falta E2E — specs/021
 Existe un servidor MCP externo (`C:\Users\0020572\OneDrive - ViewNext\IA\Research\tools\mcp_doc_to_markdown.py`,
