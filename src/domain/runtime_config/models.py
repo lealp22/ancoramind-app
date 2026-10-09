@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from src.domain.context_policy.models import ContextBudgetConfig
 from src.domain.speech.policy import SpeechBillingPolicy
 
 SENSITIVE_CONFIG_KEY_PATTERN = re.compile(
@@ -36,6 +37,16 @@ class LogicalRoute(RuntimeConfigModel):
             "text", "vision", "tool_calling", "structured_output", "embeddings", "transcription"
         ]
     ]
+    context_window_tokens: int | None = Field(default=None, ge=1024, le=2_000_000)
+    """Governed operating budget for history, NOT the provider's real max window.
+
+    Deliberately conservative (specs/030 §4): callers should not assume this
+    equals the physical model's maximum context. When the alias behind this
+    route changes to a model with a materially smaller real window, an
+    operator must publish a new runtime-config revision with an adjusted
+    value — there is no automatic detection of the provider's real window in
+    this increment (known limitation, spec.md §8).
+    """
 
     @field_validator("effective_gateway_route")
     @classmethod
@@ -236,6 +247,7 @@ class RuntimeConfiguration(RuntimeConfigModel):
     pricing: PricingConfig | None = None
     cost_governance: CostGovernanceConfig | None = None
     speech: SpeechRoutingConfig | None = None
+    context_budget: ContextBudgetConfig | None = None
 
     @model_validator(mode="after")
     def validate_runtime_limits(self) -> RuntimeConfiguration:
@@ -327,14 +339,17 @@ def bootstrap_runtime_configuration(
         "ancoramind-default": {
             "effective_gateway_route": "ancoramind-default-r1",
             "capabilities": ["text", "tool_calling", "structured_output"],
+            "context_window_tokens": 128_000,
         },
         "ancoramind-fast": {
             "effective_gateway_route": "ancoramind-fast-r1",
             "capabilities": ["text", "tool_calling"],
+            "context_window_tokens": 32_000,
         },
         "ancoramind-vision": {
             "effective_gateway_route": "ancoramind-vision-r1",
             "capabilities": ["text", "vision", "tool_calling", "structured_output"],
+            "context_window_tokens": 128_000,
         },
         "ancoramind-embeddings": {
             "effective_gateway_route": "ancoramind-embeddings-r1",
@@ -343,6 +358,7 @@ def bootstrap_runtime_configuration(
         "ancoramind-dream": {
             "effective_gateway_route": "ancoramind-dream-r1",
             "capabilities": ["text", "structured_output"],
+            "context_window_tokens": 128_000,
         },
     }
     return RuntimeConfiguration.model_validate(
@@ -387,6 +403,12 @@ def bootstrap_runtime_configuration(
             },
             "pricing": None,
             "cost_governance": None,
+            "context_budget": {
+                "reserved_for_instructions_tokens": 1000,
+                "reserved_for_current_message_tokens": 2000,
+                "reserved_for_tools_schema_tokens": 1500,
+                "safety_margin_tokens": 500,
+            },
         }
     )
 
@@ -398,6 +420,12 @@ def canonical_config_json(config: RuntimeConfiguration) -> str:
     # schema extension. Do not retroactively serialize a missing optional block.
     if config.speech is None:
         payload.pop("speech", None)
+    if config.context_budget is None:
+        payload.pop("context_budget", None)
+    routes_payload = payload.get("routing", {}).get("routes", {})
+    for route_name, route in config.routing.routes.items():
+        if route.context_window_tokens is None:
+            routes_payload.get(route_name, {}).pop("context_window_tokens", None)
     return json.dumps(
         payload,
         ensure_ascii=False,

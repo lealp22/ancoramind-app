@@ -137,23 +137,51 @@ ganador en silencio (si ocurre, es una violación de un invariante que debe
 corregirse río arriba, no resolverse aquí). 960 unit tests passing (suite
 completa), Ruff y `mypy src/` limpios.
 
-## T5 — Tools de usuario (READ/forget)
+## T5 — Tools de usuario (READ/forget) 🔶 tools implementadas, registro diferido — 2026-10-09
 
-- [ ] `src/agent/tools/dream.py`: `list_my_preferences` (READ, envuelve con
-  `render_retrieved_records`/`untrusted_results` igual que `search_notes`).
-- [ ] `propose_preference_forget` / `execute_preference_forget` (DESTRUCTIVE,
-  patrón estándar; soporta un `candidate_id` o "todas"; soporta fijar el
-  flag de opt-out — ver spec.md §8 para dónde vive esa columna, a decidir
-  aquí).
-- [ ] Registro en `_init_domain_tools()` (`src/main.py`).
-- [ ] `prompts/skills/dream.md` (skill del usuario, distinto del prompt
+- [x] `src/agent/tools/dream.py`: `list_my_preferences` (READ, envuelve con
+  `render_retrieved_records`/`untrusted_results` igual que `search_notes`;
+  solo muestra preferencias `active`, nunca `candidate` tentativas).
+- [x] `propose_preference_forget` / `execute_preference_forget` (DESTRUCTIVE,
+  patrón estándar; soporta un `candidate_id` o "todas"). Añadido
+  `"forget_dream_preference"` a `SUPPORTED_MUTATIONS`
+  (`src/domain/actions/mutations.py`) para que el camino Core
+  (`_execute_claimed`, voz/botón/«Sí» a secas) también pueda ejecutarlo sin
+  pasar por el Agent — igual que el resto de capacidades gobernadas.
+  `src/domain/dream/preferences.py::DreamPreferenceService` +
+  `src/repositories/dream_candidates.py::DreamCandidatesRepository` (olvidar
+  es un *soft delete* a `status='deleted'`, nunca se borra la fila — mismo
+  principio de auditoría que el resto del diseño).
+- [ ] Flag de opt-out durable por usuario (spec.md §8) — no implementado en
+  este incremento; requiere decidir dónde vive la columna junto con T1.
+- [ ] **Registro en `_init_domain_tools()` (`src/main.py`) — diferido
+  deliberadamente.** La tabla `ancora.dream_candidates` no existe todavía
+  (T1 sin migrar); registrar las tools ahora las dejaría activas y
+  fallando contra una tabla inexistente en cuanto el LLM las invocara, no
+  solo "sin implementar". Mismo criterio ya aplicado a la lifecycle wiring
+  de T3. Registrar junto con T1.
+- [x] `prompts/skills/dream.md` (skill del usuario, distinto del prompt
   interno de consolidación de T3) — cuándo usar `list_my_preferences`, cómo
-  responder a "qué sabes de mí"/"olvida que prefiero X".
-- [ ] Tests: patrón de los 8 tests parametrizados de T4.8/BL-40 que
-  confirman que `execute_preference_forget` se niega a mutar sin
-  `confirm_or_use_confirmed`.
+  responder a "qué sabes de mí"/"olvida que prefiero X". **No añadido
+  todavía a `assemble_instructions()`** — se conecta junto con el registro
+  de tools diferido arriba.
+- [x] Tests: `test_dream_candidates_repository.py` (8, sesión mockeada —
+  mismo estilo que `test_repository_returning_guards.py`),
+  `test_dream_preference_service.py` (5, incluida la distinción deliberada
+  `bool False` vs `int 0` para no confundir "no encontrado" con "nada que
+  olvidar"), `test_dream_tools.py` (9, mismo estilo que
+  `test_note_tools.py`/`test_document_tools.py`).
 - **Listo cuando:** tests verdes, Ruff/mypy limpios, tools visibles en
   `docs/architecture.md`/README (tabla de capabilities) tras actualizarla.
+  **Pendiente de infra para cerrar del todo:** el registro en `main.py` y
+  el flag de opt-out, ambos ligados a T1.
+
+**Evidencia:** 22 tests nuevos (8+5+9) sobre lo ya existente. 1012 unit
+tests pasando en los ficheros propios de este incremento (dos fallos
+observados en `test_runtime_config_models.py`/`test_speech_access.py`
+corresponden a cambios sin commitear de otra sesión trabajando en BL-34 en
+paralelo — no relacionados con T5, confirmado excluyendo esos ficheros).
+Ruff y `mypy src/` limpios en todo lo tocado por este incremento.
 
 ## T6 — Sincronización de documentación
 

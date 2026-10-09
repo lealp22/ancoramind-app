@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -239,3 +240,62 @@ def test_tool_repeat_limit_requires_one_initial_successful_execution() -> None:
 
     assert result.valid is False
     assert any("max_same_tool_args_after_success" in error for error in result.errors)
+
+
+def test_bootstrap_sets_context_window_tokens_per_route() -> None:
+    config = bootstrap_runtime_configuration()
+    routes = config.routing.routes
+
+    assert routes["ancoramind-default"].context_window_tokens == 128_000
+    assert routes["ancoramind-fast"].context_window_tokens == 32_000
+    assert routes["ancoramind-vision"].context_window_tokens == 128_000
+    assert routes["ancoramind-dream"].context_window_tokens == 128_000
+    assert routes["ancoramind-embeddings"].context_window_tokens is None
+    assert config.context_budget is not None
+    assert config.context_budget.safety_margin_tokens == 500
+
+
+@pytest.mark.parametrize("value", [1023, 2_000_001])
+def test_logical_route_rejects_context_window_tokens_out_of_range(value: int) -> None:
+    payload = _payload()
+    routing = payload["routing"]
+    assert isinstance(routing, dict)
+    routes = routing["routes"]
+    assert isinstance(routes, dict)
+    default_route = routes["ancoramind-default"]
+    assert isinstance(default_route, dict)
+    default_route["context_window_tokens"] = value
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is False
+
+
+def test_legacy_config_checksum_stays_compatible_without_context_fields() -> None:
+    """Revisions persisted before BL-34 must keep the same checksum (specs/030)."""
+    config = bootstrap_runtime_configuration()
+    payload = config.model_dump(mode="json", by_alias=True)
+    payload.pop("context_budget")
+    payload.pop("speech")
+    for route in payload["routing"]["routes"].values():
+        route.pop("context_window_tokens", None)
+    expected = hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+    config_without_context = config.model_copy(
+        update={
+            "context_budget": None,
+            "routing": config.routing.model_copy(
+                update={
+                    "routes": {
+                        name: route.model_copy(update={"context_window_tokens": None})
+                        for name, route in config.routing.routes.items()
+                    }
+                }
+            ),
+        }
+    )
+
+    assert config_checksum(config_without_context) == expected
+

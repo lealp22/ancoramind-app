@@ -1117,7 +1117,7 @@ hechos; falta validar con un PDF real de usuario vía Telegram (bloqueado por
 las restricciones de infraestructura actuales) antes de cerrar el criterio de
 cierre completo de la fase.
 
-### BL-13 · Memoria personal y consolidación gobernada «Dream» 🔶 diseño completo — specs/029
+### BL-13 · Memoria personal y consolidación gobernada «Dream» 🔶 T3/T4/T5 implementados localmente, T1/T2 pendientes de Postgres — specs/029
 Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad
 propia de AncoraMind para aprender preferencias estables, hábitos útiles y estilo
 de interacción (idioma, longitud/tono, formatos, nombres/apodos frecuentes), sin
@@ -1177,6 +1177,53 @@ Limitación conocida y aceptada: el gasto de Dream se audita en
 para reflejar que la memoria personal es propiedad de AncoraMind Core, no de
 Agno. **Sin implementación todavía** — `tasks.md` desglosa T1–T6 para el
 siguiente incremento.
+
+**T4 implementado localmente (2026-10-09):** `DreamPromotionService`
+(`src/domain/dream/service.py`), lógica de dominio pura sin I/O que aplica
+la política de promoción de spec.md §4.1 y además fija 4 escenarios que la
+política dejaba implícitos: un signal implícito nunca sobrescribe un valor
+`active` (se rechaza, auditado); reforzar un valor `active` ya idéntico no
+genera escritura; una contradicción implícita antes de alcanzar el umbral
+reinicia el conteo; un signal explícito siempre gana aunque exista un
+`candidate` pendiente. 11 tests nuevos.
+
+**T3 (núcleo) implementado localmente (2026-10-09):** `DreamWorker`
+(`src/domain/dream/worker.py`) y `GovernedDreamConsolidationAdapter`
+(`src/agent/dream_access.py`), ambos contra puertos de dominio
+(`src/domain/dream/ports.py`) — el worker nunca depende de SQL concreto, se
+testea con los puertos mockeados. Ruta lógica `ancoramind-dream` añadida a
+`bootstrap_runtime_configuration()`. **Desviación deliberada del patrón de
+`document_extraction.py`/`document_embeddings.py`:** esos adaptadores caen a
+un contexto standalone con config hardcodeada solo como *fallback*
+transicional cuando no hay run gobernado; Dream nunca tiene un run
+gobernado — es su único camino siempre —, así que el adaptador usa
+`RuntimeConfigManager.snapshot()` (la config realmente activada), no el
+bootstrap, para no ignorar en silencio un alias de Gateway publicado.
+10 tests nuevos. **Diferido explícitamente:** la lifecycle wiring en
+`src/agent/lifecycle.py` necesita un `DreamRepositoryPort` concreto sobre
+SQL real (T1/T2) — cablearla contra un stub dejaría `DREAM_ENABLED` sin
+efecto real.
+
+**T5 implementado localmente (2026-10-09):** tools `list_my_preferences`
+(READ) y `propose_preference_forget`/`execute_preference_forget`
+(DESTRUCTIVE, patrón estándar) en `src/agent/tools/dream.py`, con
+`DreamPreferenceService` (`src/domain/dream/preferences.py`) y
+`DreamCandidatesRepository` (`src/repositories/dream_candidates.py`,
+"olvidar" es un *soft delete* a `status='deleted'`, nunca borra la fila).
+Añadido `"forget_dream_preference"` a `SUPPORTED_MUTATIONS`
+(`src/domain/actions/mutations.py`) para que el camino Core
+(`_execute_claimed`, voz/botón/«Sí» a secas) también pueda ejecutarlo.
+`prompts/skills/dream.md` nuevo. 22 tests nuevos. **Diferido
+deliberadamente, igual que T3:** el registro en `_init_domain_tools()`
+(`src/main.py`) — la tabla `ancora.dream_candidates` no existe todavía
+(T1 sin migrar); registrar las tools ahora las dejaría activas y fallando
+contra una tabla inexistente en cuanto el LLM las invocara. También queda
+sin implementar el flag de opt-out durable por usuario (spec.md §8).
+
+De BL-13 solo quedan T1 (migración) y T2 (cablear la captura en
+`processor.py::_run_agent`), ambos genuinamente bloqueados por necesitar
+PostgreSQL real para validar; y la wiring de T3/T5 en `main.py`/
+`lifecycle.py`, que depende de T1/T2.
 
 ### BL-36 · API de aplicación multicanal para clientes web/backend
 Exponer las capacidades conversacionales y operativas de AncoraMind mediante una

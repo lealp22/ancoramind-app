@@ -133,6 +133,12 @@ def test_legacy_config_checksum_stays_compatible():
     config = bootstrap_runtime_configuration()
     payload = config.model_dump(mode="json", by_alias=True)
     payload.pop("speech")
+    # BL-34/specs/030: canonical_config_json omits context_window_tokens for
+    # routes where it is None (ancoramind-embeddings), same additive-field
+    # compatibility rule already applied to "speech".
+    for route in payload["routing"]["routes"].values():
+        if route.get("context_window_tokens") is None:
+            route.pop("context_window_tokens", None)
     expected = hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()

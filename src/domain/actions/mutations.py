@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.actions.models import ClaimedProposal
 from src.domain.calendar.provider import NoopCalendarProvider
 from src.domain.calendar.service import CalendarService
+from src.domain.dream.preferences import DreamPreferenceService
 from src.domain.notes.service import NotesService
 from src.domain.reminders.service import ReminderService
 from src.domain.shared.recurrence import recurrence_rule_from_flat
@@ -17,6 +18,7 @@ from src.domain.todos.service import TodosService
 from src.domain.vehicles.models import VehicleCreate
 from src.domain.vehicles.service import VehicleService
 from src.repositories.calendar import CalendarRepository
+from src.repositories.dream_candidates import DreamCandidatesRepository
 from src.repositories.maintenance import MaintenanceRepository
 from src.repositories.notes import NotesRepository
 from src.repositories.reminders import RemindersRepository
@@ -40,6 +42,7 @@ SUPPORTED_MUTATIONS = frozenset(
         "set_todo_item_status",
         "move_todo_item",
         "delete_todo_item",
+        "forget_dream_preference",
     }
 )
 
@@ -125,6 +128,10 @@ async def apply_mutation(session: AsyncSession, proposal: ClaimedProposal, user_
                     recurrence_rule=rule,
                 )
             result = event
+    elif tool == "forget_dream_preference":
+        preferences = DreamPreferenceService(DreamCandidatesRepository(session, auto_commit=False))
+        candidate_id = p.get("candidate_id")
+        result = await preferences.forget(user, UUID(candidate_id) if candidate_id else None)
     else:
         todos = TodosService(TodosRepository(session, auto_commit=False))
         if tool == "create_todo_list":
