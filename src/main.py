@@ -82,6 +82,12 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         tools.append(search_web)
         logger.info("Governed public web-search tool registered: search_web (provider=tavily)")
 
+    if settings.telegram_token:
+        from src.agent.tools.export import export_document
+
+        tools.append(export_document)
+        logger.info("Document export tool registered: export_document (Markdown -> PDF)")
+
     if not settings.ancora_database_url:
         logger.info(
             "ANCORA_DATABASE_URL not set — database domain tools skipped "

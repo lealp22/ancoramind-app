@@ -164,6 +164,12 @@ class Settings(BaseSettings):
     """Maximum PPTX slides read before truncating output."""
     document_office_max_cols_per_sheet: int = Field(default=50, ge=1, le=500)
     """Maximum columns read per XLSX worksheet row."""
+    document_export_max_markdown_chars: int = Field(default=20_000, ge=1, le=200_000)
+    """Max Markdown input length accepted by export_document (BL-38 Fase 3)."""
+    document_export_max_pages: int = Field(default=20, ge=1, le=100)
+    """Max PDF pages rendered by export_document before truncating output."""
+    document_export_max_pdf_bytes: int = Field(default=5_000_000, ge=1_000, le=50_000_000)
+    """Max rendered PDF size accepted for delivery by export_document."""
 
     user_timezone: str = "Europe/Madrid"
     """IANA timezone used to interpret/display naive datetimes app-wide

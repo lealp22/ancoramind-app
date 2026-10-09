@@ -1043,7 +1043,7 @@ pipeline documental) y las fixtures maliciosas de "archivo renombrado"/
 tests unitarios ya existentes (zip bomb, path traversal, macro y entidades
 XML ya cubiertos para los tres formatos).
 
-### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 en curso — specs/021
+### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 Fases 1–3 implementadas localmente, falta E2E — specs/021
 Existe un servidor MCP externo (`C:\Users\0020572\OneDrive - ViewNext\IA\Research\tools\mcp_doc_to_markdown.py`,
 fuera de este repositorio) con conversores ya probados: PDF con capa de texto y
 DOCX → Markdown (`pymupdf4llm`, `mammoth`/`markdownify` vía `docx_to_md_app.py`),
@@ -1132,6 +1132,40 @@ Ruff/mypy limpios. **Pendiente:** T8/T9 de `specs/021/tasks.md` marcados
 hechos; falta validar con un PDF real de usuario vía Telegram (bloqueado por
 las restricciones de infraestructura actuales) antes de cerrar el criterio de
 cierre completo de la fase.
+
+**Fase 2 (DOCX/XLSX/PPTX) implementada localmente — ver BL-35**, que
+terminó cubriendo este punto para los tres formatos ofimáticos, no solo
+DOCX como anotaba el plan original de aquí.
+
+**Fase 3 implementada localmente (2026-10-09):** export Markdown→PDF, única
+pieza que quedaba de BL-38. Decisión de diseño (punto 3 de arriba):
+**ni DOCX como intermedio ni una librería de PDF nueva** — PyMuPDF (ya
+aprobado, usado en Fase 1/BL-6) renderiza HTML real (headings, listas,
+tablas) a PDF vía su API `Story`/`DocumentWriter`, confirmado empíricamente
+antes de implementar, no solo por documentación. Solo se añade `markdown`
+(BSD-3-Clause, puro Python) para Markdown→HTML — una dependencia nueva en
+vez de las dos que implicaba cualquiera de las dos vías originalmente
+propuestas, y cero dependencias de sistema (nunca wkhtmltopdf/LibreOffice).
+Gobernanza (punto 3, pregunta abierta): **automático, un único tool
+`export_document`, sin `propose_*`/`execute_*`** — misma excepción ya
+aprobada para `analyze_document`: no hay mutación canónica y el fichero
+solo llega al usuario que lo pidió, por el mismo canal donde ya habla.
+Alcance deliberadamente genérico: recibe Markdown ya compuesto por el
+modelo (de una nota/lista que el modelo ya leyó con sus tools de lectura),
+sin lógica de exportación por dominio. Nuevo `TelegramNotifier.
+send_document()` (multipart a `sendDocument`, misma clasificación de
+fallos que `send_text`). **Riesgo de gobernanza documentado, no resuelto:**
+el envío ocurre a mitad del run, fuera del outbox gobernado de specs/013;
+un fallo justo después de un envío correcto podría duplicar el PDF en un
+reintento (nunca una mutación, solo un fichero) — aceptado explícitamente
+con el mismo criterio "best-effort" ya usado para la captura de
+transcripts de Dream (BL-13); integrarlo en el outbox real (BL-32) queda
+como seguimiento. 20 tests nuevos, 1066 unit tests (suite completa), Ruff
+y `mypy src/` limpios. **Pendiente:** E2E real por Telegram, bloqueado por
+BL-18 igual que el resto del pipeline documental.
+
+Con esto, de BL-38 solo queda el E2E real (BL-18) — las tres fases de
+diseño/implementación están completas.
 
 ### BL-13 · Memoria personal y consolidación gobernada «Dream» 🔶 T3/T4/T5 implementados localmente, T1/T2 pendientes de Postgres — specs/029
 Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad

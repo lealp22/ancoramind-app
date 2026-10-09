@@ -219,6 +219,58 @@ class TelegramNotifier:
             )
         return message_id
 
+    async def send_document(
+        self,
+        chat_id: int,
+        content: bytes,
+        filename: str,
+        *,
+        caption: str | None = None,
+    ) -> int:
+        """Upload one file via ``sendDocument``; return Telegram's message ID.
+
+        Same failure classification as ``_send_message``: a transport error
+        or a response with no confirmed ``message_id`` is non-definitive
+        (the caller cannot tell whether Telegram actually received it), a
+        4xx/5xx HTTP rejection is definitive. Never logs or raises the raw
+        response body — only the bounded ``description`` field, same as
+        every other Telegram failure path.
+        """
+        data: dict[str, object] = {"chat_id": chat_id}
+        if caption:
+            data["caption"] = caption
+        try:
+            response = await self._client.post(
+                f"{API_BASE_URL}/bot{self._token}/sendDocument",
+                data=data,
+                files={"document": (filename, content, "application/pdf")},
+            )
+        except httpx.HTTPError as exc:
+            raise TelegramSendError(
+                "Telegram sendDocument transport failure",
+                definitive=False,
+            ) from exc
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        if response.status_code != 200 or not body.get("ok"):
+            description = body.get("description")
+            raise TelegramSendError(
+                f"Telegram sendDocument rejected with HTTP {response.status_code}",
+                definitive=400 <= response.status_code < 500,
+                description=description if isinstance(description, str) else None,
+            )
+        result = body.get("result")
+        message_id = result.get("message_id") if isinstance(result, dict) else None
+        if not isinstance(message_id, int):
+            raise TelegramSendError(
+                "Telegram sendDocument response lacks message_id",
+                definitive=False,
+            )
+        return message_id
+
     async def send_typing(self, chat_id: int) -> None:
         """Refresh Telegram's typing indicator without sending user content."""
         try:

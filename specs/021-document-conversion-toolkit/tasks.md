@@ -85,15 +85,40 @@
       (`test_document_office.py` + 2 en `test_document_tools.py`), 982 unit
       tests (suite completa), Ruff y `mypy src/` limpios.
 
-## Fase 3 — Export Markdown → PDF (bloqueada por decisión de diseño + BL-29)
+## Fase 3 — Export Markdown → PDF ✅ implementado localmente — 2026-10-09
 
-- [ ] T12 · Spec-ear (ampliar este documento o crear uno nuevo) el mecanismo de
-      generación: DOCX (`markdown_docx_converter.py`, ya portable) + conversor
-      DOCX→PDF, vs. HTML→PDF directo. Decidir sin dependencias de sistema
-      pesadas (evitar wkhtmltopdf/LibreOffice como requisito de despliegue en
-      Railway) y documentar la decisión con límites de tamaño/tiempo.
-- [ ] T13 · `propose_export_document`/`execute_export_document` (o justificar
-      READ si se decide sin ActionProposal) siguiendo `docs/adding-tools.md`,
-      entrega vía `sendDocument` de Telegram.
-- [ ] T14 · E2E: exportar una nota o lista TODO real a PDF y recibirla en
-      Telegram; evidencia en `verification.md`.
+- [x] T12 · Decidido **sin DOCX como intermedio y sin librería de PDF
+      nueva**: PyMuPDF (ya aprobado, usado en toda la Fase 1/BL-6) renderiza
+      HTML real — headings, listas, tablas — a PDF vía su API
+      `Story`/`DocumentWriter`, confirmado empíricamente (no solo por
+      documentación) antes de implementar. Solo se añade `markdown`
+      (BSD-3-Clause, puro Python) para el paso Markdown→HTML. Cero
+      dependencias de sistema (nunca wkhtmltopdf/LibreOffice). Límites en
+      `src/config.py`: `document_export_max_markdown_chars` (20000),
+      `document_export_max_pages` (20), `document_export_max_pdf_bytes`
+      (5MB) — igual que el resto de `document_office_*`, trunca en vez de
+      lanzar excepción por tamaño salvo que el resultado final siga
+      excediendo el tope.
+- [x] T13 · **Decidido automático, un único tool `export_document`, sin
+      `propose_*`/`execute_*`** — misma excepción ya aprobada para
+      `analyze_document` (AGENTS.md §2.4): no hay mutación canónica y el
+      fichero solo llega al propio usuario que lo pidió. Alcance
+      deliberadamente genérico: el tool recibe Markdown ya compuesto por el
+      modelo (a partir de notas/listas que el modelo ya leyó con sus tools
+      de lectura), no hay lógica de exportación específica por dominio.
+      Entrega vía `TelegramNotifier.send_document()` (nuevo método, multipart
+      a `sendDocument`, misma clasificación de fallos — transporte
+      ambiguo, 4xx/5xx definitivo — que `_send_message`). **Riesgo de
+      gobernanza documentado, no resuelto:** el envío ocurre a mitad del
+      run, fuera del outbox gobernado de specs/013; un fallo justo después
+      de un envío correcto podría, en un reintento, duplicar el PDF — nunca
+      duplicar una mutación, solo un fichero. Aceptado explícitamente como
+      limitación de este incremento, mismo criterio "best-effort, nunca
+      bloquea la respuesta principal" ya usado para la captura de
+      transcripts de Dream (BL-13). Integrarlo en el outbox real (BL-32)
+      queda como seguimiento, no en este incremento.
+- [ ] T14 · E2E real con Telegram pendiente (bloqueado por BL-18 — mismo
+      criterio que el resto del pipeline documental). 20 tests nuevos
+      (7 `test_document_export.py` + 5 `test_telegram_notifier.py` + 7
+      `test_export_tools.py` + 1 regresión en `test_instructions.py`,
+      1066 unit tests en total), Ruff y `mypy src/` limpios.

@@ -47,8 +47,8 @@ class TestAssembleInstructions:
         instructions = assemble_instructions()
         assert isinstance(instructions, list)
         # identity + soul + tool_contract + telegram + documents + vehicles
-        # + calendar + todos + web search
-        assert len(instructions) == 9
+        # + calendar + todos + web search + export
+        assert len(instructions) == 10
         assert all(isinstance(item, str) for item in instructions)
 
     def test_vehicle_skill_loaded(self):
@@ -95,6 +95,11 @@ class TestAssembleInstructions:
         """The web-search policy must be visible to the conversational Agent."""
         instructions = assemble_instructions()
         assert any("Búsqueda web pública" in block for block in instructions)
+
+    def test_export_skill_loaded(self):
+        """BL-38 Fase 3: the export_document skill must be visible to the Agent."""
+        instructions = assemble_instructions()
+        assert any("Export to PDF" in block for block in instructions)
 
     def test_attachments_are_framed_as_data_not_instructions(self):
         """BL-39: images/files passed directly to arun() reach the main model

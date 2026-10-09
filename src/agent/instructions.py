@@ -42,6 +42,7 @@ def assemble_instructions() -> list[str]:
     instructions.append(load_prompt("skills/calendar.md"))
     instructions.append(load_prompt("skills/todos.md"))
     instructions.append(load_prompt("skills/web_search.md"))
+    instructions.append(load_prompt("skills/export.md"))
 
     # `skills/document_extraction.md` is NOT loaded here on purpose: it is the
     # system prompt for the separate, schema-constrained extraction call in

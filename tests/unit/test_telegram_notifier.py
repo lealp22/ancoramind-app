@@ -230,6 +230,74 @@ class TestTelegramNotifier:
 
         assert exc_info.value.definitive is False
 
+    async def test_send_document_returns_confirmed_message_id(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 99}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        message_id = await notifier.send_document(452022640, b"%PDF-1.4...", "export.pdf")
+
+        assert message_id == 99
+        assert "/bot123456:ABC/sendDocument" in str(requests[0].url)
+        body = requests[0].read()
+        assert b"export.pdf" in body
+        assert b"%PDF-1.4" in body
+
+    async def test_send_document_includes_optional_caption(self) -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 100}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        await notifier.send_document(452022640, b"%PDF", "a.pdf", caption="Tu exportación")
+
+        assert b"Tu exportaci" in requests[0].read()
+
+    async def test_send_document_classifies_4xx_as_definitive_without_leaking_description(
+        self,
+    ) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                400, json={"ok": False, "description": "Bad Request: file too large"}
+            )
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        with pytest.raises(TelegramSendError) as exc_info:
+            await notifier.send_document(452022640, b"%PDF", "a.pdf")
+
+        assert exc_info.value.definitive is True
+        assert exc_info.value.description == "Bad Request: file too large"
+
+    async def test_send_document_classifies_transport_failure_as_ambiguous(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("network down")
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        with pytest.raises(TelegramSendError) as exc_info:
+            await notifier.send_document(452022640, b"%PDF", "a.pdf")
+
+        assert exc_info.value.definitive is False
+
+    async def test_send_document_rejects_response_without_message_id(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"ok": True, "result": {}})
+
+        notifier = TelegramNotifier(token="123456:ABC", client=self._client(handler))
+
+        with pytest.raises(TelegramSendError) as exc_info:
+            await notifier.send_document(452022640, b"%PDF", "a.pdf")
+
+        assert exc_info.value.definitive is False
+
     async def test_close_only_closes_notifier_owned_client(self) -> None:
         external_client = self._client(lambda _: httpx.Response(200, json={"ok": True}))
         external_notifier = TelegramNotifier(token="123456:ABC", client=external_client)
