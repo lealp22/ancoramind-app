@@ -21,6 +21,8 @@ from agno.run import RunContext
 from agno.run.agent import RunOutput
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
+from src.domain.emergency_stop.models import EmergencyStopActiveError
+from src.domain.emergency_stop.ports import EmergencyStopReader
 from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.cost_governance import (
@@ -53,10 +55,12 @@ class GovernedInteractionRunner:
         config_manager: RuntimeConfigManager,
         factory: GovernedAgentFactory,
         spend_reader: LlmSpendReader | None = None,
+        stop_reader: EmergencyStopReader | None = None,
     ):
         self._config_manager = config_manager
         self._factory = factory
         self._spend_reader = spend_reader
+        self._stop_reader = stop_reader
 
     async def prepare_execution_context(
         self,
@@ -73,6 +77,10 @@ class GovernedInteractionRunner:
         ``provenance`` is resolved by the processor from the admitted
         interaction; ``propose_*`` tools read it from the bound context.
         """
+        if self._stop_reader is not None:
+            stop_state = self._stop_reader.current()
+            if stop_state.active:
+                raise EmergencyStopActiveError(stop_state.reason)
         snapshot = self._config_manager.snapshot()
         if snapshot.config.cost_governance is not None:
             if self._spend_reader is None:

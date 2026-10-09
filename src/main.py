@@ -34,6 +34,7 @@ from src.agent.ancora_agent import (
     create_db,
     create_model_from_settings,
 )
+from src.agent.emergency_stop_admin import install_emergency_stop_admin_api
 from src.agent.health import HealthRegistry, install_health_readiness_endpoint
 from src.agent.instructions import assemble_instructions
 from src.agent.lifecycle import (
@@ -60,6 +61,7 @@ from src.agent.telegram_pairing_admin import (
 )
 from src.agent.tools.system import get_current_datetime
 from src.config import Settings
+from src.domain.emergency_stop.service import EmergencyStopManager
 from src.domain.runtime_config.service import RuntimeConfigManager
 from src.observability import configure_observability
 from src.repositories.database import get_session
@@ -258,6 +260,7 @@ def _register_interaction_processor(
     instructions: list[str],
     runtime_config_manager: RuntimeConfigManager,
     health_registry: HealthRegistry,
+    emergency_stop_manager: EmergencyStopManager,
 ) -> None:
     """Install the auto-gated T5+T7 governed processor after the app lifespan."""
     install_interaction_processor_lifespan(
@@ -268,6 +271,7 @@ def _register_interaction_processor(
         instructions=instructions,
         runtime_config_manager=runtime_config_manager,
         health_registry=health_registry,
+        emergency_stop_manager=emergency_stop_manager,
     )
 
 
@@ -292,6 +296,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
     validate_telegram_pairing_admin_settings(settings)
     validate_admin_dashboard_settings(settings)
     runtime_config_manager = create_runtime_config_manager(settings, get_session)
+    emergency_stop_manager = EmergencyStopManager()
     health_registry = HealthRegistry()
     health_registry.set_component("app", "healthy")
 
@@ -344,6 +349,8 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         assert base_app is not None
         install_runtime_config_admin_api(base_app, settings, runtime_config_manager)
         logger.info("Runtime config admin API enabled at /admin/runtime-config")
+        install_emergency_stop_admin_api(base_app, settings, emergency_stop_manager)
+        logger.info("Emergency stop admin API enabled at /admin/emergency-stop")
     if settings.telegram_pairing_admin_enabled:
         assert base_app is not None
         install_telegram_pairing_admin_api(base_app, settings, get_session)
@@ -421,6 +428,7 @@ def create_app() -> tuple[FastAPI, AgentOS]:
         instructions=instructions,
         runtime_config_manager=runtime_config_manager,
         health_registry=health_registry,
+        emergency_stop_manager=emergency_stop_manager,
     )
     install_observability_lifespan(app)
     install_health_signals_lifespan(app, settings, health_registry)

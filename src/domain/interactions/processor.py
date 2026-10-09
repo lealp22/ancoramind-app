@@ -24,6 +24,7 @@ from src.domain.actions.presentation import (
     parse_consent_callback,
     render_proposal_block,
 )
+from src.domain.emergency_stop.models import EmergencyStopActiveError
 from src.domain.interactions.commands import (
     TelegramCommand,
     default_session_id,
@@ -413,6 +414,19 @@ class InteractionProcessor:
                     InteractionStatus.FAILED_CONTROLLED,
                     error_class="CostGovernanceError",
                     error_detail_code=exc.limit,
+                )
+                return True
+            except EmergencyStopActiveError as exc:
+                # A manual operator stop is deterministic and known in advance
+                # (checked before — or, mid-run, before — any model call): the
+                # failure is controlled, never replayed (BL-44/specs/031).
+                get_telemetry().mark_error(span, type(exc).__name__)
+                get_telemetry().counter("ancora.emergency_stop.blocked")
+                await self._mark_terminal(
+                    interaction.id,
+                    InteractionStatus.FAILED_CONTROLLED,
+                    error_class="EmergencyStopActiveError",
+                    error_detail_code="emergency_stop_active",
                 )
                 return True
             except ExecutionBudgetExceededError as exc:

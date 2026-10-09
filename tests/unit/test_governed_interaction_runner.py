@@ -12,6 +12,7 @@ import pytest
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
+from src.domain.emergency_stop.models import EmergencyStopActiveError, EmergencyStopState
 from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.interactions.processor import InteractionAgentRunner
 from src.domain.llm_access.context import current_execution_context
@@ -401,3 +402,55 @@ async def test_cost_governance_without_spend_reader_fails_closed() -> None:
         )
 
     assert factory.created_contexts == []
+
+
+class _FakeStopReader:
+    def __init__(self, state: EmergencyStopState) -> None:
+        self._state = state
+
+    def current(self) -> EmergencyStopState:
+        return self._state
+
+
+async def test_emergency_stop_blocks_before_any_agent_creation() -> None:
+    """BL-44/specs/031: a manual stop short-circuits before building the Agent."""
+    factory = _FakeFactory()
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot()),
+        factory=factory,
+        stop_reader=_FakeStopReader(EmergencyStopState(active=True, reason="cost spike")),
+    )
+
+    with pytest.raises(EmergencyStopActiveError) as exc_info:
+        await runner.run(
+            "hola",
+            user_id="88",
+            session_id="tg:ancoramind:77",
+            run_id="run-stop",
+            correlation_id=uuid4(),
+            telegram_update_id=9001,
+        )
+
+    assert exc_info.value.reason == "cost spike"
+    assert factory.created_contexts == []
+    assert factory.agent.calls == []
+
+
+async def test_runner_proceeds_when_emergency_stop_is_inactive() -> None:
+    factory = _FakeFactory()
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot()),
+        factory=factory,
+        stop_reader=_FakeStopReader(EmergencyStopState(active=False)),
+    )
+
+    output = await runner.run(
+        "hola",
+        user_id="88",
+        session_id="tg:ancoramind:77",
+        run_id="run-ok",
+        correlation_id=uuid4(),
+        telegram_update_id=9001,
+    )
+
+    assert output == "respuesta gobernada"

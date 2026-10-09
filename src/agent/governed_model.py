@@ -18,6 +18,8 @@ from typing import Any, cast
 
 from agno.models.base import Model
 
+from src.domain.emergency_stop.models import EmergencyStopActiveError
+from src.domain.emergency_stop.ports import EmergencyStopReader
 from src.domain.llm_access.context import current_execution_context
 from src.domain.llm_access.models import (
     ExecutionBudgetExceededError,
@@ -47,10 +49,20 @@ class GovernedModelMixin:
     _governed_effective_route: str
     _governed_revision: int
     _governed_provider_label: str | None
+    _governed_stop_reader: EmergencyStopReader | None
 
     async def ainvoke(self, *args: Any, **kwargs: Any) -> Any:
         """Run one governed logical model call with budget and usage audit."""
         context = current_execution_context()
+        stop_reader = self._governed_stop_reader
+        if stop_reader is not None:
+            stop_state = stop_reader.current()
+            if stop_state.active:
+                get_telemetry().counter(
+                    "ancora.emergency_stop.blocked",
+                    attributes={"ancora.route": self._governed_route_name},
+                )
+                raise EmergencyStopActiveError(stop_state.reason)
         llm_call_id = LlmUsageEventCreate.new_call_id()
         estimated_cost = _estimate_call_cost(context, self._governed_effective_route, args, kwargs)
         observability = context.config.config.observability
@@ -261,6 +273,7 @@ def build_governed_model[T: Model](
     effective_route: str,
     revision: int,
     provider_label: str | None = None,
+    stop_reader: EmergencyStopReader | None = None,
 ) -> T:
     """Instantiate the governed model and attach its governance state.
 
@@ -275,6 +288,7 @@ def build_governed_model[T: Model](
     governed._governed_effective_route = effective_route
     governed._governed_revision = revision
     governed._governed_provider_label = provider_label
+    governed._governed_stop_reader = stop_reader
     return model
 
 

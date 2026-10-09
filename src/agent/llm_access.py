@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.agent.ancora_agent import _litellm_v1_base_url, resolve_model_parts
 from src.agent.governed_model import UsageRecorder, build_governed_model
 from src.config import Settings
+from src.domain.emergency_stop.ports import EmergencyStopReader
 from src.domain.llm_access.models import (
     ExecutionContext,
     GovernanceViolationError,
@@ -60,9 +61,16 @@ class LlmUsageRecorder:
 class AgnoLLMAccess:
     """The only frontier allowed to create inference models for governed runs."""
 
-    def __init__(self, *, settings: Settings, usage_recorder: UsageRecorder | None):
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        usage_recorder: UsageRecorder | None,
+        stop_reader: EmergencyStopReader | None = None,
+    ):
         self._settings = settings
         self._usage_recorder = usage_recorder
+        self._stop_reader = stop_reader
 
     def model_for(self, route_name: str, execution_context: ExecutionContext) -> Model:
         """Return a governed model bound to the run's snapshot and context.
@@ -104,6 +112,7 @@ class AgnoLLMAccess:
             effective_route=route.effective_gateway_route,
             revision=snapshot.revision,
             provider_label=provider_label,
+            stop_reader=self._stop_reader,
         )
 
     def _resolve_api_key(self) -> str | None:

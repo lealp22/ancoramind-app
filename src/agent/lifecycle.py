@@ -24,6 +24,7 @@ from src.agent.spend_reader import SessionSpendReader
 from src.agent.telegram_admission import validate_telegram_admission_settings
 from src.agent.telegram_media import TelegramMediaResolver
 from src.config import Settings
+from src.domain.emergency_stop.service import EmergencyStopManager
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
 from src.domain.reminders.worker import RemindersWorker
@@ -127,6 +128,7 @@ def install_interaction_processor_lifespan(
     instructions: list[str],
     runtime_config_manager: RuntimeConfigManager,
     health_registry: HealthRegistry | None = None,
+    emergency_stop_manager: EmergencyStopManager | None = None,
 ) -> bool:
     """Install the T5+T7 processor lifecycle only for an explicitly enabled rollout.
 
@@ -153,6 +155,7 @@ def install_interaction_processor_lifespan(
     llm_access = AgnoLLMAccess(
         settings=settings,
         usage_recorder=LlmUsageRecorder(get_session).record,
+        stop_reader=emergency_stop_manager,
     )
     agent_factory = GovernedAgentFactory(
         llm_access=llm_access,
@@ -165,6 +168,7 @@ def install_interaction_processor_lifespan(
         config_manager=runtime_config_manager,
         factory=agent_factory,
         spend_reader=SessionSpendReader(get_session),
+        stop_reader=emergency_stop_manager,
     )
 
     @asynccontextmanager

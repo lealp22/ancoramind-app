@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.domain.interactions.processor as processor_module
+from src.domain.emergency_stop.models import EmergencyStopActiveError
 from src.domain.interactions.commands import (
     HELP_REPLY,
     NEW_SESSION_REPLY,
@@ -178,6 +179,47 @@ async def test_cost_hard_stop_is_controlled_and_never_replayed(
         InteractionStatus.FAILED_CONTROLLED,
         error_class="CostGovernanceError",
         error_detail_code="daily_budget_exhausted",
+    )
+
+
+async def test_emergency_stop_is_controlled_and_never_replayed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BL-44/specs/031: a manual operator stop is deterministic, never replayed."""
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    repo.claim_agent_start_with_run_id.return_value = interaction.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "hola"}).ciphertext}
+    )
+    runner = AsyncMock()
+    runner.run.side_effect = EmergencyStopActiveError("cost spike")
+    sender = AsyncMock()
+    sender.send_typing.return_value = None
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+    )
+
+    assert await processor._run_agent(accepted) is True
+    runner.run.assert_awaited_once()
+    sender.send_text.assert_not_awaited()
+    repo.update_status.assert_awaited_once_with(
+        accepted.id,
+        InteractionStatus.FAILED_CONTROLLED,
+        error_class="EmergencyStopActiveError",
+        error_detail_code="emergency_stop_active",
     )
 
 

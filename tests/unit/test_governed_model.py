@@ -16,6 +16,7 @@ from src.agent.governed_model import (
     build_governed_model,
     governed_model_cls,
 )
+from src.domain.emergency_stop.models import EmergencyStopActiveError, EmergencyStopState
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import (
     ExecutionBudget,
@@ -103,6 +104,7 @@ def _model(
     recorder: Any = None,
     fail: bool = False,
     ttft: int | float | None = None,
+    stop_reader: Any = None,
 ) -> FakeProviderModel:
     return build_governed_model(
         FakeProviderModel,
@@ -111,6 +113,7 @@ def _model(
         route_name="ancoramind-default",
         effective_route="ancoramind-default-r1",
         revision=1,
+        stop_reader=stop_reader,
     )
 
 
@@ -356,3 +359,51 @@ async def test_cost_ceiling_blocks_call_before_provider() -> None:
     assert context.budget.model_calls == 0
     assert context.budget.gateway_requests == 0
     assert context.budget.estimated_cost_usd == 0.0
+
+
+class _FakeStopReader:
+    def __init__(self, state: EmergencyStopState) -> None:
+        self._state = state
+
+    def current(self) -> EmergencyStopState:
+        return self._state
+
+
+async def test_ainvoke_fails_closed_when_emergency_stop_is_active() -> None:
+    """BL-44/specs/031: a manual operator stop blocks every physical model call."""
+    recorder = _Recorder()
+    model = _model(
+        recorder=recorder,
+        stop_reader=_FakeStopReader(EmergencyStopState(active=True, reason="cost spike")),
+    )
+    context = _context()
+
+    with execution_context_scope(context), pytest.raises(EmergencyStopActiveError) as exc_info:
+        await model.ainvoke([])
+
+    assert exc_info.value.reason == "cost spike"
+    assert model.provider_calls == 0
+    assert recorder.events == []
+    assert context.budget.model_calls == 0
+
+
+async def test_ainvoke_proceeds_when_emergency_stop_is_inactive() -> None:
+    model = _model(stop_reader=_FakeStopReader(EmergencyStopState(active=False)))
+    context = _context()
+
+    with execution_context_scope(context):
+        response = await model.ainvoke([])
+
+    assert response.content == "ok"
+    assert model.provider_calls == 1
+
+
+async def test_ainvoke_proceeds_without_a_stop_reader() -> None:
+    model = _model(stop_reader=None)
+    context = _context()
+
+    with execution_context_scope(context):
+        response = await model.ainvoke([])
+
+    assert response.content == "ok"
+    assert model.provider_calls == 1
