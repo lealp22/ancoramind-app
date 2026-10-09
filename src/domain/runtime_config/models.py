@@ -340,6 +340,10 @@ def bootstrap_runtime_configuration(
             "effective_gateway_route": "ancoramind-embeddings-r1",
             "capabilities": ["embeddings"],
         },
+        "ancoramind-dream": {
+            "effective_gateway_route": "ancoramind-dream-r1",
+            "capabilities": ["text", "structured_output"],
+        },
     }
     return RuntimeConfiguration.model_validate(
         {

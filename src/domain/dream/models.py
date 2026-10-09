@@ -7,6 +7,7 @@ error at construction time, never a value persisted "just in case" (specs/029
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
@@ -146,14 +147,45 @@ DreamMutation = (
     CreateCandidate | SupersedeCandidate | ReinforceCandidate | ResetCandidate | RejectProposal
 )
 
+
+class DreamCandidateBatch(BaseModel):
+    """Structured output contract for one governed consolidation call.
+
+    Bounded to a small batch: this is a background consolidation of a few
+    transcripts, never an unbounded free-form extraction.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    proposals: list[DreamCandidateProposal] = Field(max_length=20)
+
+
+@dataclass(frozen=True)
+class DreamConsolidationOutcome:
+    """Controlled, observable outcome of one consolidation inference call.
+
+    Mirrors ``DocumentExtractionOutcome``/``DocumentEmbeddingOutcome``:
+    ``error_class`` carries bounded operational metadata only, never prompts,
+    transcripts or provider payloads.
+    """
+
+    batch: DreamCandidateBatch | None
+    provider: str
+    model: str
+    status: str
+    error_class: str | None = None
+
+
 __all__ = [
     "IMPLICIT_PROMOTION_THRESHOLD",
     "CreateCandidate",
+    "DreamCandidateBatch",
     "DreamCandidateFields",
     "DreamCandidateProposal",
     "DreamCandidateSnapshot",
     "DreamCandidateStatus",
     "DreamCategory",
+    "DreamConsolidationOutcome",
     "DreamModel",
     "DreamMutation",
     "DreamSource",

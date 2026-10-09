@@ -44,33 +44,66 @@
   captura es un efecto secundario, no debe alterar las respuestas al
   usuario ni los estados de interacción ya cubiertos).
 
-## T3 — Worker y adaptador LLM
+## T3 — Worker y adaptador LLM 🔶 núcleo implementado localmente — 2026-10-09
 
-- [ ] `src/domain/dream/worker.py::DreamWorker` siguiendo la forma de
+- [x] `src/domain/dream/worker.py::DreamWorker` siguiendo la forma de
   `src/domain/reminders/worker.py` (gate, `run_once()`, purga inline,
   `run_forever()` con `try/except` por ciclo).
 - [ ] `src/agent/lifecycle.py::install_dream_worker_lifespan` (mismo patrón
   que `install_reminder_worker_lifespan`), gate `DREAM_ENABLED` +
-  `ancora_database_url`.
-- [ ] Nueva ruta lógica `ancoramind-dream` en `RoutingConfig`
-  (`src/domain/runtime_config/models.py`) — capability `text`. Confirmar si
-  requiere también un campo de configuración dedicado (como
-  `RuntimeConfiguration.speech`) o basta con la ruta + budget genérico; test
-  de compatibilidad de checksum legado como el que ya existe para `speech`
-  (`test_legacy_config_checksum_stays_compatible` en
-  `tests/unit/test_speech_access.py`) si se añade un campo nuevo al nivel
-  raíz.
-- [ ] `src/agent/dream_access.py::GovernedDreamConsolidationAdapter`
-  (análogo a `AgnoDocumentExtractionAdapter`), contexto standalone como
-  `GovernedDocumentEmbeddingAdapter._standalone_context`.
-- [ ] `prompts/skills/dream_consolidation.md` — instructions del Agent de
-  consolidación, enmarcando los transcripts como DATA no confiable.
-- [ ] Fijar umbral de lote/cadencia (spec.md §8) y documentarlo aquí una vez
-  decidido.
+  `ancora_database_url`. **Diferido:** necesita un `DreamRepositoryPort`
+  concreto sobre SQL real (T1/T2); cablearlo contra un stub hoy dejaría
+  `DREAM_ENABLED` sin efecto real, así que se deja para cuando exista la
+  migración.
+- [x] Nueva ruta lógica `ancoramind-dream` en `RoutingConfig`
+  (`src/domain/runtime_config/models.py`, capability `text` +
+  `structured_output`), añadida a `bootstrap_runtime_configuration()` igual
+  que `ancoramind-embeddings`/`ancoramind-vision`. **Decisión (resuelve la
+  pregunta abierta de spec.md §8):** no hace falta un campo dedicado como
+  `RuntimeConfiguration.speech` — Dream no tiene billing por duración, así
+  que basta con la entrada en `routing.routes` + el `ExecutionBudget`
+  genérico; no se tocó `canonical_config_json`, así que no aplica el test de
+  compatibilidad de checksum legado (ese test cubre un campo opcional nuevo
+  a nivel raíz, no una entrada más en un dict ya versionado).
+- [x] `src/agent/dream_access.py::GovernedDreamConsolidationAdapter`.
+  **Desviación deliberada del patrón de `document_extraction.py`/
+  `document_embeddings.py`:** esos adaptadores caen a un contexto standalone
+  con `bootstrap_runtime_configuration()` solo como *fallback transicional*
+  cuando no hay run gobernado. Dream nunca tiene un run gobernado — es su
+  único camino, siempre — así que usar el bootstrap ahí ignoraría en
+  silencio cualquier alias de Gateway publicado y activado para
+  `ancoramind-dream`. El adaptador construye su contexto desde
+  `RuntimeConfigManager.snapshot()` (la configuración realmente activada),
+  igual que hace `GovernedInteractionRunner` para un run real.
+- [x] `prompts/skills/dream_consolidation.md` — instructions del Agent de
+  consolidación, enmarcando transcripts y preferencias existentes como DATA
+  no confiable, con el enum cerrado de categorías repetido explícitamente
+  en el prompt (cinturón y tirantes junto al esquema Pydantic).
+- [ ] Fijar umbral de lote/cadencia (spec.md §8) — vive en
+  `DreamRepositoryPort.claim_eligible_batches`, que todavía no tiene
+  implementación concreta (T1/T2).
 - **Listo cuando:** unit tests del worker (con repos/LLM mockeados) y del
   adaptador (sin red real, mismo estilo que `test_speech_access.py`) verdes;
   Ruff/mypy limpios; `DREAM_ENABLED=false` por defecto no cambia el
-  comportamiento de arranque de `src.main`.
+  comportamiento de arranque de `src.main`. ✅ (ver evidencia abajo; el
+  gate de arranque no aplica aún porque la lifecycle wiring está diferida).
+
+**Evidencia:** `src/domain/dream/ports.py` (`DreamBatch`,
+`DreamConsolidationPort`, `DreamRepositoryPort` — el worker solo depende de
+estas formas, nunca de SQL concreto), `src/domain/dream/worker.py`,
+`src/agent/dream_access.py`, `prompts/skills/dream_consolidation.md`, más la
+ruta nueva en `bootstrap_runtime_configuration()`. Tests:
+`tests/unit/test_dream_worker.py` (5, con ambos puertos mockeados —
+aplica mutaciones por batch, registra fallo sin aplicar mutaciones, purga
+incluso sin batches elegibles, el loop sigue tras una excepción de ciclo y
+propaga `CancelledError` sin dormir indefinidamente) y
+`tests/unit/test_dream_access.py` (5, con un `Model` real de Agno como en
+`test_document_extraction_adapter.py` — usa el snapshot *activado*, no el
+bootstrap; mapea contenido estructurado válido; mapea fallo de inferencia y
+contenido inválido a resultados controlados sin fuga de detalle del
+proveedor; falla cerrado si la ruta `ancoramind-dream` no existe en la
+config, sin llamar al modelo). 970 unit tests (suite completa), Ruff y
+`mypy src/` limpios.
 
 ## T4 — Servicio de promoción ✅ implementado localmente — 2026-10-09
 
