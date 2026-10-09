@@ -599,6 +599,103 @@ class TelegramInteractionsRepository:
             raise
         return response
 
+    async def create_ack_response(
+        self,
+        interaction_id: UUID,
+        *,
+        content_ciphertext: bytes,
+        content_key_version: int,
+        content_length: int,
+    ) -> UUID | None:
+        """Persist a best-effort early acknowledgement (BL-32), outside the
+        main response's state machine.
+
+        Deliberately never reads or writes ``telegram_interactions.status`` —
+        it must coexist with ``agent_started`` while the real run is still in
+        flight. ``ON CONFLICT (interaction_id, response_kind) DO NOTHING``
+        makes a reprocessed update a no-op: this returns ``None`` (never
+        resend) rather than a second ack ever being created. Returns the new
+        delivery row's id on success.
+        """
+        now = datetime.now(tz=UTC)
+        try:
+            result = await self._session.execute(
+                text("""
+                    WITH inserted AS (
+                        INSERT INTO ancora.logical_responses (
+                            interaction_id, response_kind, content_ciphertext,
+                            content_key_version, content_length, chunk_count,
+                            status, created_at
+                        ) VALUES (
+                            :interaction_id, 'ack', :content_ciphertext,
+                            :content_key_version, :content_length, 1,
+                            'pending_delivery', :now
+                        )
+                        ON CONFLICT (interaction_id, response_kind) DO NOTHING
+                        RETURNING id
+                    )
+                    INSERT INTO ancora.telegram_response_deliveries (
+                        logical_response_id, chunk_index, status
+                    )
+                    SELECT id, 0, 'pending' FROM inserted
+                    RETURNING id
+                """),
+                {
+                    "interaction_id": interaction_id,
+                    "content_ciphertext": content_ciphertext,
+                    "content_key_version": content_key_version,
+                    "content_length": content_length,
+                    "now": now,
+                },
+            )
+            row = result.fetchone()
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return row[0] if row is not None else None
+
+    async def mark_ack_delivery_outcome(
+        self,
+        delivery_id: UUID,
+        *,
+        status: str,
+        telegram_message_id: int | None = None,
+        error_class: str | None = None,
+    ) -> None:
+        """Record the ack send outcome. Never touches ``telegram_interactions``."""
+        now = datetime.now(tz=UTC)
+        try:
+            await self._session.execute(
+                text("""
+                    UPDATE ancora.telegram_response_deliveries
+                    SET status = :status, telegram_message_id = :telegram_message_id,
+                        error_class = :error_class,
+                        started_at = COALESCE(started_at, :now), completed_at = :now
+                    WHERE id = :id
+                """),
+                {
+                    "id": delivery_id,
+                    "status": status,
+                    "telegram_message_id": telegram_message_id,
+                    "error_class": error_class,
+                    "now": now,
+                },
+            )
+            await self._session.execute(
+                text("""
+                    UPDATE ancora.logical_responses lr
+                    SET status = :status
+                    FROM ancora.telegram_response_deliveries trd
+                    WHERE trd.id = :id AND lr.id = trd.logical_response_id
+                """),
+                {"id": delivery_id, "status": status},
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+
     async def claim_command_reply(
         self,
         interaction_id: UUID,

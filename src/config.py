@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     """Start the T5 processor; requires the same trusted admission prerequisites."""
     telegram_processor_poll_interval_seconds: float = Field(default=1.0, gt=0)
     telegram_processor_global_concurrency: int = Field(default=2, ge=1, le=20)
+    telegram_fast_ack_enabled: bool = False
+    """BL-32: send an early acknowledgement for attachment-bearing interactions
+    before inference. Best-effort — a failure never blocks the main run."""
     governed_consent_enabled: bool = False
     """specs/023 T4.3-T4.4: resolve Sí/No buttons/text before the Agent and
     append a fixed proposal block to responses. Off by default: with it off,

@@ -32,8 +32,8 @@ processors:
       - key: document.content
         action: delete
   batch:
-    timeout: 5s
-    send_batch_size: 512
+    timeout: 30s
+    send_batch_size: 4096
 
 exporters:
   otlphttp/grafana:
@@ -47,7 +47,7 @@ exporters:
       max_elapsed_time: 30s
     sending_queue:
       enabled: true
-      num_consumers: 2
+      num_consumers: 1
       queue_size: 1000
 
 service:

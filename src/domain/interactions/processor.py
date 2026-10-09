@@ -64,6 +64,9 @@ logger = logging.getLogger(__name__)
 VOICE_NOT_UNDERSTOOD_REPLY = (
     "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
 )
+DOCUMENT_RECEIVED_ACK = "📄 Documento recibido, analizando…"
+"""BL-32: fixed, non-personal early acknowledgement for attachment-bearing
+interactions — never a template over user content."""
 
 
 class InteractionAgentRunner(Protocol):
@@ -139,6 +142,7 @@ class InteractionProcessor:
         voice_enabled: bool = False,
         voice_preparation: VoicePreparationService | None = None,
         voice_maintenance: Callable[[], Awaitable[int]] | None = None,
+        fast_ack_enabled: bool = False,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -155,6 +159,8 @@ class InteractionProcessor:
         self._voice_enabled = voice_enabled
         self._voice_preparation = voice_preparation
         self._voice_maintenance = voice_maintenance
+        self._fast_ack_enabled = fast_ack_enabled
+        """BL-32: best-effort, off by default; a failure never blocks the run."""
         """specs/023 T4.3-T4.4: off by default; when off, behaviour is unchanged."""
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
@@ -337,6 +343,8 @@ class InteractionProcessor:
             self._refresh_typing(interaction.chat_id),
             name=f"telegram-typing-{interaction.id}",
         )
+        if attachments and self._fast_ack_enabled:
+            await self._send_fast_ack(interaction)
         started = time.perf_counter()
         with (
             log_context_scope(attributes),
@@ -640,6 +648,68 @@ class InteractionProcessor:
             except Exception:
                 logger.debug("Telegram typing refresh failed", exc_info=True)
             await asyncio.sleep(self._typing_refresh_seconds)
+
+    async def _send_fast_ack(self, interaction: TelegramInteraction) -> None:
+        """Best-effort early acknowledgement for attachment-bearing interactions (BL-32).
+
+        Lives entirely outside the main response's outbox state machine: it
+        never reads or writes ``telegram_interactions.status``, so it cannot
+        interfere with ``agent_started``/``response_ready``/at-most-once
+        semantics. A failure here — persistence or send — is logged and
+        swallowed; it never blocks, delays or fails the main Agent run, and
+        is never retried on a later cycle (no recovery scan exists for it,
+        unlike the final response).
+        """
+        try:
+            encrypted = self._payload_cipher.encrypt({"content": DOCUMENT_RECEIVED_ACK})
+            session = await self._session_factory()
+            try:
+                delivery_id = await TelegramInteractionsRepository(session).create_ack_response(
+                    interaction.id,
+                    content_ciphertext=encrypted.ciphertext,
+                    content_key_version=encrypted.key_version,
+                    content_length=len(DOCUMENT_RECEIVED_ACK),
+                )
+            finally:
+                await session.close()
+            if delivery_id is None:
+                # Already created on a prior attempt for this interaction —
+                # never resend (idempotent across reprocessing).
+                return
+            assert interaction.chat_id is not None  # validated by the caller
+            try:
+                message_id = await self._sender.send_text(
+                    interaction.chat_id, DOCUMENT_RECEIVED_ACK
+                )
+            except Exception as exc:
+                await self._record_ack_outcome(
+                    delivery_id, status="failed", error_class=type(exc).__name__
+                )
+                return
+            await self._record_ack_outcome(
+                delivery_id, status="delivered", telegram_message_id=message_id
+            )
+        except Exception:
+            logger.warning("Fast-ack failed for interaction %s", interaction.id, exc_info=True)
+
+    async def _record_ack_outcome(
+        self,
+        delivery_id: UUID,
+        *,
+        status: str,
+        telegram_message_id: int | None = None,
+        error_class: str | None = None,
+    ) -> None:
+        session = await self._session_factory()
+        try:
+            await TelegramInteractionsRepository(session).mark_ack_delivery_outcome(
+                delivery_id,
+                status=status,
+                telegram_message_id=telegram_message_id,
+                error_class=error_class,
+            )
+        finally:
+            await session.close()
 
     async def _handle_command(
         self,

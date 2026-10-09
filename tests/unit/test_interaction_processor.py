@@ -402,6 +402,226 @@ async def test_processor_resolves_attachment_after_claim_and_passes_media(
     assert "analyze_document" in runner.run.await_args.args[0]
 
 
+def _attachment_bearing_interaction(
+    cipher: TelegramPayloadCipher,
+) -> TelegramInteraction:
+    interaction = _interaction()
+    encrypted = cipher.encrypt(
+        {"text": None, "attachments": [{"kind": "photo", "file_id": "opaque-file-id"}]}
+    )
+    return interaction.model_copy(update={"payload_ciphertext": encrypted.ciphertext})
+
+
+def _fast_ack_processor(
+    *,
+    repo: AsyncMock,
+    session: AsyncMock,
+    fast_ack_enabled: bool,
+    cipher: TelegramPayloadCipher,
+) -> InteractionProcessor:
+    resolver = AsyncMock()
+    resolver.resolve.return_value = ResolvedTelegramMedia(
+        content=b"\xff\xd8\xffJPEG",
+        filename="telegram-document.jpg",
+        mime_type="image/jpeg",
+        is_image=True,
+    )
+    runner = AsyncMock()
+    runner.run.return_value = "📄 archivado"
+    sender = AsyncMock()
+    sender.send_text.return_value = 999
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    return InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+        media_resolver=resolver,
+        fast_ack_enabled=fast_ack_enabled,
+    )
+
+
+async def test_fast_ack_sent_once_for_attachment_bearing_interaction_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BL-32: an attachment-bearing interaction gets an early ack before the Agent run."""
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _attachment_bearing_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    ack_delivery_id = uuid4()
+    repo.create_ack_response.return_value = ack_delivery_id
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    processor = _fast_ack_processor(
+        repo=repo, session=session, fast_ack_enabled=True, cipher=cipher
+    )
+
+    await processor._run_agent(accepted)
+
+    repo.create_ack_response.assert_awaited_once()
+    assert repo.create_ack_response.await_args.args[0] == accepted.id
+    processor._sender.send_text.assert_any_await(  # type: ignore[attr-defined]
+        accepted.chat_id, "📄 Documento recibido, analizando…"
+    )
+    repo.mark_ack_delivery_outcome.assert_awaited_once_with(
+        ack_delivery_id, status="delivered", telegram_message_id=999, error_class=None
+    )
+
+
+async def test_fast_ack_not_sent_for_text_only_interaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    interaction = _interaction()
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "hola"}).ciphertext}
+    )
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    processor = _fast_ack_processor(
+        repo=repo, session=session, fast_ack_enabled=True, cipher=cipher
+    )
+
+    await processor._run_agent(accepted)
+
+    repo.create_ack_response.assert_not_awaited()
+
+
+async def test_fast_ack_not_sent_when_flag_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _attachment_bearing_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    processor = _fast_ack_processor(
+        repo=repo, session=session, fast_ack_enabled=False, cipher=cipher
+    )
+
+    await processor._run_agent(accepted)
+
+    repo.create_ack_response.assert_not_awaited()
+
+
+async def test_fast_ack_skipped_without_resending_when_already_created(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reprocessed update must never duplicate the ack (idempotent insert)."""
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _attachment_bearing_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    repo.create_ack_response.return_value = None  # already exists
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    processor = _fast_ack_processor(
+        repo=repo, session=session, fast_ack_enabled=True, cipher=cipher
+    )
+
+    await processor._run_agent(accepted)
+
+    repo.create_ack_response.assert_awaited_once()
+    processor._sender.send_text.assert_not_awaited()  # type: ignore[attr-defined]
+    repo.mark_ack_delivery_outcome.assert_not_awaited()
+
+
+async def test_fast_ack_send_failure_does_not_block_the_main_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fast-ack send failure is recorded and swallowed — the main run still completes."""
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _attachment_bearing_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    ack_delivery_id = uuid4()
+    repo.create_ack_response.return_value = ack_delivery_id
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    processor = _fast_ack_processor(
+        repo=repo, session=session, fast_ack_enabled=True, cipher=cipher
+    )
+    processor._sender.send_text.side_effect = [  # type: ignore[attr-defined]
+        TelegramSendError("boom", definitive=False),
+        999,
+    ]
+
+    result = await processor._run_agent(accepted)
+
+    repo.mark_ack_delivery_outcome.assert_awaited_once_with(
+        ack_delivery_id, status="failed", telegram_message_id=None, error_class="TelegramSendError"
+    )
+    # The main run proceeds and still reaches its own completion path.
+    assert isinstance(result, bool)
+    processor._agent_runner.run.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+async def test_fast_ack_persistence_failure_does_not_block_the_main_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _attachment_bearing_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    repo.create_ack_response.side_effect = RuntimeError("database down")
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+
+    processor = _fast_ack_processor(
+        repo=repo, session=session, fast_ack_enabled=True, cipher=cipher
+    )
+
+    await processor._run_agent(accepted)
+
+    processor._agent_runner.run.assert_awaited_once()  # type: ignore[attr-defined]
+
+
 async def test_command_is_answered_deterministically_without_an_agent_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
