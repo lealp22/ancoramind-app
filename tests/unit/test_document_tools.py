@@ -11,6 +11,7 @@ import fitz
 import openpyxl
 from agno.media import File, Image
 from agno.run import RunContext
+from pptx import Presentation
 
 from src.agent.tools import documents as document_tools
 from src.domain.documents.models import AIExtraction, Document, DocumentWithExtraction
@@ -49,6 +50,15 @@ def _xlsx_with_cell(value: str) -> bytes:
     workbook.active.append([value])
     buffer = io.BytesIO()
     workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def _pptx_with_text(text: str) -> bytes:
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = text
+    buffer = io.BytesIO()
+    presentation.save(buffer)
     return buffer.getvalue()
 
 
@@ -315,6 +325,57 @@ async def test_analyze_document_ingests_malformed_xlsx_without_extraction(monkey
         content=b"not actually an xlsx",
         filename="roto.xlsx",
         mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["extracted_text"] is None
+    service.ingest.assert_awaited_once()
+
+
+async def test_analyze_document_uses_deterministic_text_for_pptx(monkeypatch):
+    """specs/021 Fase 2 / BL-35: a PPTX is extracted deterministically, never
+    sent through the visual route (which cannot rasterize it anyway)."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    content = _pptx_with_text("Resumen trimestral Murcia")
+    file = File(
+        content=content,
+        filename="presentacion.pptx",
+        mime_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["visual_pages"] == ()
+    assert kwargs["extracted_text"] is not None
+    assert "Resumen trimestral Murcia" in kwargs["extracted_text"]
+
+
+async def test_analyze_document_ingests_malformed_pptx_without_extraction(monkeypatch):
+    """A malformed PPTX still gets stored — ingestion is never blocked."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    file = File(
+        content=b"not actually a pptx",
+        filename="roto.pptx",
+        mime_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
 
     await document_tools.analyze_document(_run_context(), files=[file])

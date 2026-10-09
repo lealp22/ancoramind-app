@@ -1,6 +1,6 @@
-"""Deterministic DOCX/XLSX extraction (specs/021 Fase 2 / BL-35) — in-memory
-only, same construction style as ``test_document_vision.py`` (no fixture
-files)."""
+"""Deterministic DOCX/XLSX/PPTX extraction (specs/021 Fase 2 / BL-35) — in-
+memory only, same construction style as ``test_document_vision.py`` (no
+fixture files)."""
 
 from __future__ import annotations
 
@@ -10,16 +10,20 @@ import zipfile
 import docx
 import openpyxl
 import pytest
+from pptx import Presentation
 
 from src.agent.document_office import (
     DocxExtractionError,
+    PptxExtractionError,
     XlsxExtractionError,
     extract_docx_text_markdown,
+    extract_pptx_text_markdown,
     extract_xlsx_text_markdown,
 )
 
 _LIMITS = {"max_blocks": 100, "max_zip_entries": 200, "max_uncompressed_bytes": 50_000_000}
 _XLSX_LIMITS = {**_LIMITS, "max_sheets": 20, "max_cols_per_sheet": 50}
+_PPTX_LIMITS = {**_LIMITS, "max_slides": 100}
 
 
 def _docx_bytes(build: object) -> bytes:
@@ -46,6 +50,19 @@ def _xlsx_bytes(build: object) -> bytes:
 def _extract_xlsx(content: bytes, **overrides: int) -> str:
     limits = {**_XLSX_LIMITS, **overrides}
     return extract_xlsx_text_markdown(content, **limits)
+
+
+def _pptx_bytes(build: object) -> bytes:
+    presentation = Presentation()
+    build(presentation)
+    buffer = io.BytesIO()
+    presentation.save(buffer)
+    return buffer.getvalue()
+
+
+def _extract_pptx(content: bytes, **overrides: int) -> str:
+    limits = {**_PPTX_LIMITS, **overrides}
+    return extract_pptx_text_markdown(content, **limits)
 
 
 def test_extracts_heading_paragraph_and_table_as_markdown():
@@ -281,3 +298,100 @@ def test_xlsx_macro_project_entry_is_rejected():
         archive.writestr("xl/vbaProject.bin", b"\x00\x01")
     with pytest.raises(XlsxExtractionError, match="xlsx_macro_rejected"):
         _extract_xlsx(buffer.getvalue())
+
+
+# ── PPTX ──────────────────────────────────────────────────────────────────
+
+
+def test_extracts_slide_title_body_and_notes_as_markdown():
+    def build(presentation: Presentation) -> None:
+        slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+        slide.shapes.title.text = "Resumen trimestral"
+        slide.placeholders[1].text_frame.text = "Ingresos al alza"
+        slide.notes_slide.notes_text_frame.text = "Recordar mencionar Murcia"
+
+    markdown = _extract_pptx(_pptx_bytes(build))
+
+    assert "## Diapositiva 1" in markdown
+    assert "Resumen trimestral" in markdown
+    assert "Ingresos al alza" in markdown
+    assert "> Recordar mencionar Murcia" in markdown
+
+
+def test_pptx_never_renders_tables_or_images_only_text_and_notes():
+    """BL-35 scopes PPTX to text/notes only — tables are deliberately skipped."""
+
+    def build(presentation: Presentation) -> None:
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        slide.shapes.add_table(2, 2, 0, 0, 100, 100).table.cell(0, 0).text = "tabla"
+        slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = "texto plano"
+
+    markdown = _extract_pptx(_pptx_bytes(build))
+
+    assert "texto plano" in markdown
+    assert "tabla" not in markdown
+
+
+def test_pptx_truncates_slides_by_shared_block_budget():
+    def build(presentation: Presentation) -> None:
+        for i in range(5):
+            slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+            slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = f"diapositiva {i}"
+
+    markdown = _extract_pptx(_pptx_bytes(build), max_blocks=2)
+
+    assert "diapositiva 0" in markdown
+    assert "diapositiva 1" in markdown
+    assert "diapositiva 4" not in markdown
+
+
+def test_pptx_respects_max_slides():
+    def build(presentation: Presentation) -> None:
+        for i in range(3):
+            slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+            slide.shapes.add_textbox(0, 0, 100, 100).text_frame.text = f"diapositiva {i}"
+
+    markdown = _extract_pptx(_pptx_bytes(build), max_slides=1)
+
+    assert "diapositiva 0" in markdown
+    assert "diapositiva 1" not in markdown
+
+
+def test_pptx_malformed_zip_is_rejected():
+    with pytest.raises(PptxExtractionError, match="pptx_malformed"):
+        _extract_pptx(b"this is not a zip file at all")
+
+
+def test_pptx_zip_bomb_declared_size_is_rejected():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("ppt/presentation.xml", "<root/>")
+        archive.writestr("ppt/bomb.bin", b"\x00" * 2_000_000, zipfile.ZIP_DEFLATED)
+    with pytest.raises(PptxExtractionError, match="pptx_zip_bomb_suspected"):
+        _extract_pptx(buffer.getvalue(), max_uncompressed_bytes=1_000_000)
+
+
+def test_pptx_path_traversal_entry_name_is_rejected():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("ppt/presentation.xml", "<root/>")
+        archive.writestr("../../etc/passwd", "pwned")
+    with pytest.raises(PptxExtractionError, match="pptx_unsafe_entry_name"):
+        _extract_pptx(buffer.getvalue())
+
+
+def test_pptx_macro_project_entry_is_rejected():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("ppt/presentation.xml", "<root/>")
+        archive.writestr("ppt/vbaProject.bin", b"\x00\x01")
+    with pytest.raises(PptxExtractionError, match="pptx_macro_rejected"):
+        _extract_pptx(buffer.getvalue())
+
+
+def test_pptx_too_many_zip_entries_is_rejected():
+    def build(presentation: Presentation) -> None:
+        presentation.slides.add_slide(presentation.slide_layouts[6])
+
+    with pytest.raises(PptxExtractionError, match="pptx_too_many_entries"):
+        _extract_pptx(_pptx_bytes(build), max_zip_entries=10)

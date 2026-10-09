@@ -1,14 +1,15 @@
-"""Deterministic Office extraction (specs/021 Fase 2 / BL-35) — DOCX + XLSX.
+"""Deterministic Office extraction (specs/021 Fase 2 / BL-35) — DOCX/XLSX/PPTX.
 
 Mirrors ``document_vision.py``'s PDF text route: local, bounded, no network
-call, no persisted intermediate. Both DOCX and XLSX are ZIP containers, so
-this module inspects the archive before trusting ``python-docx``/
-``openpyxl`` to parse it — entry count, unsafe entry names, total
-uncompressed size (zip-bomb guard) and a DTD/entity scan (XML entity-
+call, no persisted intermediate. DOCX, XLSX and PPTX are all ZIP containers,
+so this module inspects the archive before trusting ``python-docx``/
+``openpyxl``/``python-pptx`` to parse it — entry count, unsafe entry names,
+total uncompressed size (zip-bomb guard) and a DTD/entity scan (XML entity-
 expansion guard, without needing the ``defusedxml`` dependency) are checked
 first, rejecting with a safe fixed code, never a raw exception message.
-Images, embedded objects, formulas and hyperlink targets are never read;
-only text/computed-value content survives into the returned Markdown.
+Images, embedded objects, formulas, charts, tables (in PPTX) and hyperlink
+targets are never read; only text/computed-value content survives into the
+returned Markdown.
 """
 
 from __future__ import annotations
@@ -31,10 +32,18 @@ XLSX_MIME_TYPES = frozenset(
 """Deliberately excludes macro-enabled `.xlsm` and the legacy binary `.xls`,
 same rationale as ``DOCX_MIME_TYPES``."""
 
+PPTX_MIME_TYPES = frozenset(
+    {"application/vnd.openxmlformats-officedocument.presentationml.presentation"}
+)
+"""Deliberately excludes macro-enabled `.pptm` and the legacy binary `.ppt`,
+same rationale as ``DOCX_MIME_TYPES``."""
+
 _DOCX_REQUIRED_ENTRY = "word/document.xml"
 _DOCX_FORBIDDEN_ENTRIES = frozenset({"word/vbaProject.bin"})
 _XLSX_REQUIRED_ENTRY = "xl/workbook.xml"
 _XLSX_FORBIDDEN_ENTRIES = frozenset({"xl/vbaProject.bin"})
+_PPTX_REQUIRED_ENTRY = "ppt/presentation.xml"
+_PPTX_FORBIDDEN_ENTRIES = frozenset({"ppt/vbaProject.bin"})
 
 
 class OfficeExtractionError(RuntimeError):
@@ -47,6 +56,10 @@ class DocxExtractionError(OfficeExtractionError):
 
 class XlsxExtractionError(OfficeExtractionError):
     """Raised when a declared XLSX cannot be safely inspected or parsed."""
+
+
+class PptxExtractionError(OfficeExtractionError):
+    """Raised when a declared PPTX cannot be safely inspected or parsed."""
 
 
 def _inspect_office_zip(
@@ -237,6 +250,59 @@ def extract_xlsx_text_markdown(
     return "\n\n".join(lines)
 
 
+def extract_pptx_text_markdown(
+    content: bytes,
+    *,
+    max_blocks: int,
+    max_slides: int,
+    max_zip_entries: int,
+    max_uncompressed_bytes: int,
+) -> str:
+    """Deterministically extract PPTX slide text and speaker notes as Markdown.
+
+    Only shapes with a text frame are read (titles, body placeholders, text
+    boxes) plus each slide's speaker notes — never tables, charts, images or
+    embedded objects (BL-35 scopes PPTX to "texto/notas" only). ``max_slides``
+    bounds breadth; ``max_blocks`` bounds total text blocks (one per shape or
+    notes frame, blank or not) scanned across all slides combined, same
+    shared-budget philosophy as DOCX/XLSX — an adversarial slide packed with
+    non-text shapes cannot cause unbounded iteration.
+    """
+    _inspect_office_zip(
+        content,
+        error_cls=PptxExtractionError,
+        code_prefix="pptx",
+        required_entry=_PPTX_REQUIRED_ENTRY,
+        forbidden_entries=_PPTX_FORBIDDEN_ENTRIES,
+        max_entries=max_zip_entries,
+        max_uncompressed_bytes=max_uncompressed_bytes,
+    )
+    try:
+        from pptx import Presentation
+
+        presentation = Presentation(io.BytesIO(content))
+    except PptxExtractionError:
+        raise
+    except Exception as exc:
+        raise PptxExtractionError("pptx_malformed") from exc
+
+    lines: list[str] = []
+    remaining = max_blocks
+    try:
+        for index, slide in enumerate(presentation.slides, start=1):
+            if index > max_slides or remaining <= 0:
+                break
+            slide_lines, consumed = _render_slide_markdown(slide, max_blocks=remaining)
+            if slide_lines:
+                lines.append(f"## Diapositiva {index}")
+                lines.extend(slide_lines)
+            remaining -= consumed
+    except Exception as exc:
+        raise PptxExtractionError("pptx_malformed") from exc
+
+    return "\n\n".join(lines)
+
+
 def _heading_level(paragraph: Any) -> int:
     """Return 1-6 for a ``Heading N`` style, 0 for anything else."""
     style = getattr(paragraph, "style", None)
@@ -296,12 +362,41 @@ def _render_sheet_markdown(sheet: Any, *, max_rows: int, max_cols: int) -> tuple
     return lines, consumed
 
 
+def _render_slide_markdown(slide: Any, *, max_blocks: int) -> tuple[list[str], int]:
+    """Render one PPTX slide's text shapes + speaker notes as plain lines.
+
+    Every scanned shape counts toward ``consumed``, text frame or not — this
+    is what keeps a slide packed with non-text shapes from iterating
+    unbounded (same philosophy as DOCX paragraphs / XLSX rows).
+    """
+    lines: list[str] = []
+    consumed = 0
+    for shape in slide.shapes:
+        if consumed >= max_blocks:
+            return lines, consumed
+        consumed += 1
+        if not getattr(shape, "has_text_frame", False):
+            continue
+        text = shape.text_frame.text.strip()
+        if text:
+            lines.append(text)
+    if consumed < max_blocks and getattr(slide, "has_notes_slide", False):
+        consumed += 1
+        notes_text = slide.notes_slide.notes_text_frame.text.strip()
+        if notes_text:
+            lines.append(f"> {notes_text}")
+    return lines, consumed
+
+
 __all__ = [
     "DOCX_MIME_TYPES",
+    "PPTX_MIME_TYPES",
     "XLSX_MIME_TYPES",
     "DocxExtractionError",
     "OfficeExtractionError",
+    "PptxExtractionError",
     "XlsxExtractionError",
     "extract_docx_text_markdown",
+    "extract_pptx_text_markdown",
     "extract_xlsx_text_markdown",
 ]

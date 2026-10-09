@@ -138,27 +138,30 @@ class Settings(BaseSettings):
     allowed_mime_types: str = (
         "application/pdf,image/jpeg,image/png,"
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     )
     """Comma-separated MIME allowlist for Telegram document ingestion.
 
-    The DOCX/XLSX entries are the only types with a deterministic extractor
-    (specs/021 Fase 2 / BL-35, ``src/agent/document_office.py``); macro-
-    enabled `.docm`/`.xlsm` and legacy binary `.doc`/`.xls` are deliberately
-    excluded.
+    The DOCX/XLSX/PPTX entries are the only types with a deterministic
+    extractor (specs/021 Fase 2 / BL-35, ``src/agent/document_office.py``);
+    macro-enabled `.docm`/`.xlsm`/`.pptm` and legacy binary `.doc`/`.xls`/
+    `.ppt` are deliberately excluded.
     """
     document_vision_max_pdf_pages: int = Field(default=3, ge=1, le=10)
     """Maximum PDF pages rendered to images for the vision extraction route."""
     document_office_max_zip_entries: int = Field(default=200, ge=1, le=2000)
-    """Maximum ZIP entries read from a DOCX/XLSX before refusing it as suspicious."""
+    """Max ZIP entries read from a DOCX/XLSX/PPTX before refusing it as suspicious."""
     document_office_max_uncompressed_bytes: int = Field(
         default=50_000_000, ge=1_000_000, le=200_000_000
     )
-    """Max total uncompressed size across all DOCX/XLSX ZIP entries (zip-bomb guard)."""
+    """Max total uncompressed size across all Office-doc ZIP entries (zip-bomb guard)."""
     document_office_max_blocks: int = Field(default=3000, ge=1, le=20000)
-    """Max paragraphs+table/sheet rows rendered before truncating output."""
+    """Max paragraphs/table-rows/sheet-rows/slide-shapes rendered before truncating."""
     document_office_max_sheets: int = Field(default=20, ge=1, le=200)
     """Maximum XLSX worksheets read before truncating output."""
+    document_office_max_slides: int = Field(default=100, ge=1, le=1000)
+    """Maximum PPTX slides read before truncating output."""
     document_office_max_cols_per_sheet: int = Field(default=50, ge=1, le=500)
     """Maximum columns read per XLSX worksheet row."""
 

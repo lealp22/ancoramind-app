@@ -921,7 +921,7 @@ autorización, argumentos/resultados de tools ni convertir un fallo de delivery 
 repetición del Agent. **Prioridad P3** (pulir después del E2E de visión, donde la
 latencia real será medible).
 
-### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 DOCX+XLSX implementados localmente — 2026-10-09
+### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 extractores de los 3 formatos implementados localmente — 2026-10-09
 Ampliar Document Memory para recibir formatos ofimáticos habituales sin ejecutar
 macros, relaciones externas, objetos embebidos ni contenido activo. Implementar
 extractores deterministas detrás de un puerto de infraestructura: texto y tablas
@@ -998,8 +998,34 @@ nunca los usa), aplicada también retroactivamente a DOCX. Nueva dependencia
 `openpyxl` (MIT, puro Python). 13 tests nuevos (11 en `test_document_office.py`
 incluida la guardia de entidades XML para ambos formatos; 2 de integración
 en `test_document_tools.py`). 995 unit tests (suite completa), Ruff y
-`mypy src/` limpios. **Pendiente del mismo item:** PPTX, como siguiente
-incremento con el mismo patrón.
+`mypy src/` limpios.
+
+**PPTX implementado localmente (2026-10-09, mismo incremento):**
+`extract_pptx_text_markdown`, mismo `document_office.py`, reutilizando
+`_inspect_office_zip` con sus propios códigos (`pptx_malformed`,
+`pptx_too_many_entries`, `pptx_zip_bomb_suspected`, `pptx_unsafe_entry_name`,
+`pptx_macro_rejected`, `pptx_xml_entity_rejected`). Alcance deliberadamente
+acotado a **texto y notas del orador** (criterio textual de BL-35 para
+PPTX): solo se leen `shapes` con `text_frame` (títulos, cuerpos, cuadros de
+texto) y `notes_slide`; tablas, gráficos, imágenes y objetos embebidos en
+diapositivas nunca se leen, ni siquiera su texto. Cada `shape` escaneado
+—tenga texto o no— consume el presupuesto compartido de bloques, igual que
+los párrafos de DOCX y las filas de XLSX, para que una diapositiva repleta
+de formas sin texto no itere sin límite. `.pptm` (macro-habilitado) y el
+`.ppt` legado binario quedan excluidos por construcción. Nueva dependencia
+`python-pptx` (MIT, puro Python; arrastra `Pillow` como transitiva, ya
+asumible por ser estándar de facto). Nuevos settings
+`document_office_max_slides` (100 por defecto). 10 tests nuevos (8 en
+`test_document_office.py` + 2 de integración en `test_document_tools.py`).
+1020 unit tests (suite completa), Ruff y `mypy src/` limpios.
+
+Con DOCX+XLSX+PPTX implementados, BL-35 solo tiene pendiente lo que ya era
+explícitamente de infraestructura en su criterio de cierre original: E2E
+Telegram real por formato (bloqueado por BL-18, igual que el resto del
+pipeline documental) y las fixtures maliciosas de "archivo renombrado"/
+"workbook desmesurado" como prueba adversarial dedicada más allá de los
+tests unitarios ya existentes (zip bomb, path traversal, macro y entidades
+XML ya cubiertos para los tres formatos).
 
 ### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 en curso — specs/021
 Existe un servidor MCP externo (`C:\Users\0020572\OneDrive - ViewNext\IA\Research\tools\mcp_doc_to_markdown.py`,

@@ -13,10 +13,13 @@ from agno.run import RunContext
 
 from src.agent.document_office import (
     DOCX_MIME_TYPES,
+    PPTX_MIME_TYPES,
     XLSX_MIME_TYPES,
     DocxExtractionError,
+    PptxExtractionError,
     XlsxExtractionError,
     extract_docx_text_markdown,
+    extract_pptx_text_markdown,
     extract_xlsx_text_markdown,
 )
 from src.agent.document_vision import (
@@ -350,6 +353,17 @@ async def analyze_document(
                     max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
                 )
             except XlsxExtractionError:
+                extracted_text = None
+        elif mime_type in PPTX_MIME_TYPES:
+            try:
+                extracted_text = extract_pptx_text_markdown(
+                    content,
+                    max_blocks=settings.document_office_max_blocks,
+                    max_slides=settings.document_office_max_slides,
+                    max_zip_entries=settings.document_office_max_zip_entries,
+                    max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+                )
+            except PptxExtractionError:
                 extracted_text = None
         else:
             try:
