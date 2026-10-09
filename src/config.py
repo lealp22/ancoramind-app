@@ -135,10 +135,26 @@ class Settings(BaseSettings):
     allowed_telegram_user_ids: str = ""
     max_file_size_mb: int = Field(default=20, ge=1, le=20)
     """Maximum Telegram attachment size accepted for document ingestion."""
-    allowed_mime_types: str = "application/pdf,image/jpeg,image/png"
-    """Comma-separated MIME allowlist for Telegram document ingestion."""
+    allowed_mime_types: str = (
+        "application/pdf,image/jpeg,image/png,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    """Comma-separated MIME allowlist for Telegram document ingestion.
+
+    The DOCX entry is the only type with a deterministic extractor
+    (specs/021 Fase 2 / BL-35, ``src/agent/document_office.py``); macro-
+    enabled `.docm` and legacy binary `.doc` are deliberately excluded.
+    """
     document_vision_max_pdf_pages: int = Field(default=3, ge=1, le=10)
     """Maximum PDF pages rendered to images for the vision extraction route."""
+    document_office_max_zip_entries: int = Field(default=200, ge=1, le=2000)
+    """Maximum ZIP entries read from a DOCX before refusing it as suspicious."""
+    document_office_max_uncompressed_bytes: int = Field(
+        default=50_000_000, ge=1_000_000, le=200_000_000
+    )
+    """Maximum total uncompressed size across all DOCX ZIP entries (zip-bomb guard)."""
+    document_office_max_blocks: int = Field(default=3000, ge=1, le=20000)
+    """Maximum paragraphs+table rows rendered from a DOCX before truncating output."""
 
     user_timezone: str = "Europe/Madrid"
     """IANA timezone used to interpret/display naive datetimes app-wide

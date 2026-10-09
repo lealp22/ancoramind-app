@@ -11,6 +11,11 @@ from uuid import UUID
 from agno.media import File, Image
 from agno.run import RunContext
 
+from src.agent.document_office import (
+    DOCX_MIME_TYPES,
+    DocxExtractionError,
+    extract_docx_text_markdown,
+)
 from src.agent.document_vision import (
     DocumentVisionPreparationError,
     extract_pdf_text_markdown,
@@ -321,6 +326,16 @@ async def analyze_document(
                     )
             except DocumentVisionPreparationError:
                 visual_pages = ()
+        elif mime_type in DOCX_MIME_TYPES:
+            try:
+                extracted_text = extract_docx_text_markdown(
+                    content,
+                    max_blocks=settings.document_office_max_blocks,
+                    max_zip_entries=settings.document_office_max_zip_entries,
+                    max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+                )
+            except DocxExtractionError:
+                extracted_text = None
         else:
             try:
                 visual_pages = prepare_visual_pages(

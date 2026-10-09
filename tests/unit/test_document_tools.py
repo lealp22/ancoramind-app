@@ -1,10 +1,12 @@
 """Unit tests for document tool media injection from Agno/Telegram."""
 
+import io
 import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import docx
 import fitz
 from agno.media import File, Image
 from agno.run import RunContext
@@ -31,6 +33,14 @@ def _scanned_pdf() -> bytes:
         return document.tobytes()
     finally:
         document.close()
+
+
+def _docx_with_text(text: str) -> bytes:
+    document = docx.Document()
+    document.add_paragraph(text)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
 
 
 def _run_context() -> RunContext:
@@ -200,6 +210,58 @@ async def test_analyze_document_falls_back_to_visual_for_scanned_pdf(monkeypatch
     kwargs = service.ingest.await_args.kwargs
     assert kwargs["extracted_text"] is None
     assert len(kwargs["visual_pages"]) == 1
+
+
+async def test_analyze_document_uses_deterministic_text_for_docx(monkeypatch):
+    """specs/021 Fase 2 / BL-35: a DOCX is extracted deterministically, never
+    sent through the visual route (which cannot rasterize it anyway)."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    content = _docx_with_text("Resumen del contrato Murcia")
+    file = File(
+        content=content,
+        filename="contrato.docx",
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["visual_pages"] == ()
+    assert kwargs["extracted_text"] is not None
+    assert "Resumen del contrato Murcia" in kwargs["extracted_text"]
+
+
+async def test_analyze_document_ingests_malformed_docx_without_extraction(monkeypatch):
+    """A DOCX that fails the ZIP/structure guard still gets stored — ingestion
+    is never blocked by a failed extraction, same as a scanned/encrypted PDF."""
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+    file = File(
+        content=b"not actually a docx",
+        filename="roto.docx",
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    await document_tools.analyze_document(_run_context(), files=[file])
+
+    kwargs = service.ingest.await_args.kwargs
+    assert kwargs["extracted_text"] is None
+    service.ingest.assert_awaited_once()
 
 
 async def test_get_document_service_uses_governed_extraction_port(monkeypatch):

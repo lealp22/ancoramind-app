@@ -26,11 +26,12 @@
 | BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
-| BL-33 Health signals + dashboard de salud | 🔶 en curso — specs/016 (fase 2 del análisis de observabilidad 2026-09-23) |
+| BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness, dashboard y alertas versionados); solo falta T7 (rollout Railway/Grafana Cloud real) — specs/016 |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) implementada localmente; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto directo al Agent framed como DATA; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
+| BL-34 Política de contexto por tokens y compactación gobernada | 🔶 diseño abierto (spec + tasks); sin implementación de código — specs/030 |
 | BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
@@ -598,7 +599,7 @@ en `app.state` y la cancela limpiamente; `main.py` ya no usa
 Ruff y mypy del alcance limpios; integración ejecutada sin fallos pero omitida
 sin PostgreSQL/Docker. Ver `specs/012-fastapi-lifespan/`.
 
-### BL-33 · Health signals + Dashboard de salud 🔶 en curso — specs/016
+### BL-33 · Health signals + Dashboard de salud 🔶 T1–T6 implementados localmente, solo T7 pendiente — specs/016
 
 Materializa la **fase 2** del análisis de observabilidad (2026-09-23): el
 `/health` actual (AgentOS) sólo prueba que el proceso escucha. Se añade
@@ -612,6 +613,24 @@ Grafana Cloud permanece como backend (ADR-006). Fuera de este incremento: stack
 OSS local (fase 3, diferida) y Langfuse (registrado como candidato BL-8).
 El dashboard complementa —no sustituye— el rollout pendiente del
 Collector/Grafana de BL-23.
+
+**Actualización (2026-10-09, sincronización de doc):** esta entrada seguía
+descrita como "en curso" sin más detalle aunque `specs/016-health-dashboard/
+tasks.md` ya tenía T1–T6 marcados hechos: `HealthRegistry` in-process,
+`GET /health/readiness` metadata-only, health metrics por la fachada OTel,
+`observability/dashboards/ancoramind-health.json` y
+`observability/alerts/` versionados (con tests estructurales), y la
+documentación de despliegue/runbook actualizada. Todo cubierto por la suite
+unit actual (970 tests, Ruff y `mypy src/` limpios). **Solo queda T7**, que
+es enteramente de infraestructura real y no se puede avanzar sin ella:
+desplegar el Collector privado en Railway, crear los secretos
+`GRAFANA_OTLP_ENDPOINT`/`GRAFANA_OTLP_AUTHORIZATION`, importar el dashboard y
+las alertas a Grafana Cloud, normalizar los nombres de métricas contra las
+series reales que Grafana termine persistiendo (no se puede asumir que
+conserva los nombres del JSON local) y ejecutar la matriz de degradación
+(Postgres/Gateway/worker caídos) en staging con evidencia. Procedimiento
+completo en `specs/016-health-dashboard/verification.md` §"Procedimiento de
+cierre T7".
 
 ---
 
@@ -902,7 +921,7 @@ autorización, argumentos/resultados de tools ni convertir un fallo de delivery 
 repetición del Agent. **Prioridad P3** (pulir después del E2E de visión, donde la
 latencia real será medible).
 
-### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX)
+### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 DOCX implementado localmente — 2026-10-09
 Ampliar Document Memory para recibir formatos ofimáticos habituales sin ejecutar
 macros, relaciones externas, objetos embebidos ni contenido activo. Implementar
 extractores deterministas detrás de un puerto de infraestructura: texto y tablas
@@ -920,6 +939,37 @@ y provenance, y declarar extracción parcial/truncada al usuario. **Prioridad P2
 **Criterio de cierre:** fixtures benignas y maliciosas (ZIP bomb, path traversal,
 macro, archivo renombrado y workbook desmesurado), deduplicación, aislamiento por
 usuario y E2E Telegram por cada formato soportado.
+
+**DOCX implementado localmente (2026-10-09):** para no mezclar tres formatos
+y tres superficies de seguridad en un solo cambio, este incremento cubre
+**solo DOCX** (`application/vnd.openxmlformats-officedocument.
+wordprocessingml.document`); XLSX y PPTX quedan como siguientes incrementos
+del mismo item, reutilizando el mismo patrón. `src/agent/document_office.py`
+inspecciona el contenedor ZIP antes de confiar en `python-docx` (nº de
+entradas, nombre de entrada sin `../`/ruta absoluta, suma de tamaños sin
+comprimir contra un tope — defensa de zip-bomb por metadato declarado, nunca
+inflando la entrada —, exige `word/document.xml` y rechaza si aparece
+`word/vbaProject.bin`); `.docm` (macro-habilitado) y el `.doc` legado binario
+quedan excluidos por construcción (no están en el MIME allowlist, caen al
+camino visual existente sin cambio de comportamiento). El Markdown se
+renderiza recorriendo `document.element.body` en orden real (párrafos +
+tablas intercaladas, no las listas planas `.paragraphs`/`.tables` de
+python-docx, que pierden el orden), con un presupuesto compartido de bloques
+que trunca sin lanzar excepción. Reutiliza el mismo mecanismo que el PDF con
+capa de texto (specs/021 Fase 1): `extracted_text` pasa a
+`DocumentService.ingest()` sin tocar `DocumentExtractionPort`,
+`DocumentCreate` ni la persistencia de `ai_extractions`. Nueva dependencia
+`python-docx` (MIT, puro Python, sin binarios nativos) — se descartó
+`mammoth` porque su soporte Markdown está marcado experimental/deprecado en
+su propia documentación. `ALLOWED_MIME_TYPES` (`.env`/`.env.example` y el
+default en `src/config.py`) amplía su allowlist con este MIME; sin ese
+cambio el adjunto se habría rechazado antes de llegar a `analyze_document`.
+12 tests nuevos (`test_document_office.py`: ZIP malformado, exceso de
+entradas, zip-bomb por metadato, path traversal, macro, truncamiento por
+bloques, extracción feliz con heading/tabla; más 2 de integración en
+`test_document_tools.py` — DOCX válido usa la ruta determinista, DOCX roto
+no bloquea el ingest). 982 unit tests (suite completa), Ruff y `mypy src/`
+limpios.
 
 ### BL-38 · Conversión de documentos texto↔Markdown/PDF reutilizando lógica de `mcp_doc_to_markdown` 🔶 en curso — specs/021
 Existe un servidor MCP externo (`C:\Users\0020572\OneDrive - ViewNext\IA\Research\tools\mcp_doc_to_markdown.py`,
@@ -1168,7 +1218,7 @@ antes de los tests unitarios. El alcance mantiene 105 módulos de `src/` con mod
 estricto; no incluye tests, scripts ni migraciones. La primera ejecución verde de
 GitHub Actions fue confirmada el 2026-09-27.
 
-### BL-34 · Política de contexto por tokens y compactación gobernada
+### BL-34 · Política de contexto por tokens y compactación gobernada 🔶 en curso — specs/030
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota
 turnos, pero no el tamaño real: diez respuestas largas pueden agotar modelos
 pequeños y desperdiciar ventana en modelos grandes. Sustituir el número fijo como
@@ -1191,6 +1241,14 @@ eventos tipados metadata-only compatibles con BL-32. Definir además retención 
 purga de sesiones en `agno_runtime`. **Criterio de cierre:** tests con historiales
 largos, mensajes/tool calls grandes, cambio de modelo/ruta, compactación fallida y
 ausencia de contenido personal en logs/OTel.
+
+**Diseño abierto (2026-10-09, specs/030):** spec + tasks completos — política
+pura de estimación de tokens (heurística `len//4`, igual que
+`governed_model.py`), nueva `context_window_tokens` opcional por ruta,
+selección/truncado de historial sin leer la sesión real de Agno (ceiling
+aproximado por tamaño medio de turno) y contrato `CompactionPort` diferido
+(sin generación real todavía). Sin implementación de código aún — ver
+`specs/030-context-window-policy/`.
 
 ### ~~BL-37~~ · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27) ✅ implementado — 2026-10-07
 Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,

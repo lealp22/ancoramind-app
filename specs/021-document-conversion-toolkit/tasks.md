@@ -59,14 +59,31 @@
       localmente con referencia a `specs/021`; BL-6 anota que el refinamiento
       "preferir extracción textual" queda resuelto.
 
-## Fase 2 — DOCX determinista (bloqueada por BL-35, no en este incremento)
+## Fase 2 — DOCX determinista ✅ implementado localmente — 2026-10-09 (BL-35)
 
-- [ ] T10 · Tras el cierre de BL-35 (ingesta ofimática con sus límites de
-      seguridad), portar `docx_to_md_app.py` (texto + tablas → Markdown, modo
-      `remove`/`save` para imágenes) como función determinista análoga a T2,
-      detrás del mismo punto de decisión de `analyze_document`.
-- [ ] T11 · Reusar los límites de tamaño/profundidad/ZIP ya exigidos por BL-35;
-      no introducir un camino de ingesta DOCX paralelo sin esos controles.
+- [x] T10 · En vez de portar `docx_to_md_app.py` (mammoth + markdownify, dos
+      dependencias nuevas y soporte Markdown de mammoth marcado
+      experimental/deprecado en su propia documentación), se implementó un
+      renderer propio sobre `python-docx` (MIT, puro Python):
+      `src/agent/document_office.py::extract_docx_text_markdown`, análoga a
+      `extract_pdf_text_markdown` (T2) y enganchada en el mismo punto de
+      decisión de `analyze_document` (`src/agent/tools/documents.py`).
+      Recorre `document.element.body` en orden real (párrafos + tablas
+      intercaladas), mapea `Heading N` → `#`×N, tablas → Markdown de pipes;
+      nunca lee imágenes, objetos embebidos ni sigue hyperlinks.
+- [x] T11 · Límites de seguridad propios (no un camino paralelo sin
+      controles): `_inspect_docx_zip` valida nº de entradas ZIP, nombres sin
+      `../`/ruta absoluta, suma de tamaños sin comprimir contra un tope
+      (zip-bomb por metadato declarado, sin inflar la entrada), exige
+      `word/document.xml` y rechaza `word/vbaProject.bin`. `.docm`/`.doc`
+      legado quedan excluidos por no estar en el MIME allowlist (caen al
+      camino visual existente, sin regresión). Config nueva en
+      `src/config.py`: `document_office_max_zip_entries`,
+      `document_office_max_uncompressed_bytes`, `document_office_max_blocks`.
+      **Alcance real: solo DOCX** — XLSX/PPTX (resto de BL-35) quedan como
+      siguiente incremento, no cubiertos aquí. 12 tests nuevos
+      (`test_document_office.py` + 2 en `test_document_tools.py`), 982 unit
+      tests (suite completa), Ruff y `mypy src/` limpios.
 
 ## Fase 3 — Export Markdown → PDF (bloqueada por decisión de diseño + BL-29)
 
