@@ -87,6 +87,22 @@ I/O añadido al camino de inferencia.
   construye una vez en `create_app()` y se inyecta en `AgnoLLMAccess` y
   `GovernedInteractionRunner` dentro de `install_interaction_processor_lifespan`.
 
+## 5.1 Singleton de proceso — `src/agent/emergency_stop_runtime.py`
+
+`_get_document_service()` (`src/agent/tools/documents.py`) construye sus
+propias instancias de `AgnoLLMAccess` fuera de la cadena de DI de
+`main.py`/`lifecycle.py`, y `GovernedDocumentEmbeddingAdapter`
+(`src/agent/document_embeddings.py`) ni siquiera pasa por `AgnoLLMAccess`
+(llama a un endpoint OpenAI-compatible por `httpx` directamente). Sin un
+punto de acceso compartido, el interruptor manual no las alcanzaría.
+`get_emergency_stop_manager()` expone un único `EmergencyStopManager` para
+todo el proceso (mismo patrón que `get_telemetry()`/`get_session()`):
+`main.py` lo usa para construir el manager que inyecta en
+`AgnoLLMAccess`/`GovernedInteractionRunner`, y tanto
+`_get_document_service()` como `GovernedDocumentEmbeddingAdapter.embed()`
+leen el mismo singleton — así el interruptor también detiene la extracción
+de documentos y los embeddings de recuperación semántica.
+
 ## 6. API admin HTTP — `src/agent/emergency_stop_admin.py`
 
 Reutiliza el mismo gate que `runtime_config_admin.py`
@@ -116,13 +132,6 @@ entorno, nunca logeado.
   (`ancora.emergency_stop_state`) + repositorio real detrás del mismo
   `EmergencyStopReader` quedan como siguiente incremento explícito — mismo
   patrón que BL-13/Dream (dominio + wiring completos, persistencia diferida).
-- **No cubre la ruta de extracción de documentos** —
-  `src/agent/tools/documents.py::_get_document_service()` construye sus
-  propias instancias de `AgnoLLMAccess` (extracción + embeddings) sin acceso
-  al `EmergencyStopManager` singleton de `main.py`: esas llamadas de
-  inferencia no se detienen con este interruptor. Requeriría un acceso
-  compartido al manager (p. ej. vía `Settings`/un localizador de servicio) —
-  fuera de alcance aquí, documentado como brecha conocida.
 - **Panel visual en `/admin/dashboard` diferido** — la API HTTP y el CLI ya
   permiten operar manualmente; el toggle visual queda pendiente, igual que
   otros seguimientos de UI de BL-43.

@@ -53,6 +53,29 @@
 - **Listo cuando:** la respuesta nunca expone el token; `pytest`, `ruff`,
   `mypy` limpios. ✅
 
+## T5 — Singleton de proceso y cierre de la brecha de documentos/embeddings ✅ — 2026-10-10
+
+- [x] `src/agent/emergency_stop_runtime.py::get_emergency_stop_manager()` —
+      accesor de un único `EmergencyStopManager` para todo el proceso (mismo
+      patrón que `get_telemetry()`/`get_session()`).
+- [x] `src/main.py` construye el manager vía este accesor en vez de
+      instanciar `EmergencyStopManager()` directamente.
+- [x] `src/agent/tools/documents.py::_get_document_service()` — ambas
+      instancias de `AgnoLLMAccess` (extracción + standalone) reciben el
+      mismo `stop_reader` compartido.
+- [x] `src/agent/document_embeddings.py::GovernedDocumentEmbeddingAdapter.embed()`
+      — comprobación temprana (antes de resolver ruta/credenciales); si está
+      activo devuelve `DocumentEmbeddingOutcome(status="failed",
+      error_class="EmergencyStopActive")`, mismo contrato de fallo
+      controlado ya usado para `EmbeddingRouteUnavailable` (no pasa por
+      `AgnoLLMAccess`, así que necesitaba su propio chequeo).
+- [x] Tests: `test_document_tools.py` (1 nuevo: ambas instancias de
+      `AgnoLLMAccess` comparten el singleton), `test_document_embeddings_adapter.py`
+      (nuevo: `embed()` falla cerrado sin llamar a `httpx`).
+- **Listo cuando:** 1111 unit tests, Ruff y `mypy src/` (160 ficheros)
+  limpios; ya no queda ninguna ruta de inferencia documental sin cubrir por
+  el interruptor manual. ✅
+
 ## T4 — Documentación y cierre ✅ — 2026-10-10
 
 - [x] `BACKLOG.md` BL-44: marcado como implementado localmente con fecha,

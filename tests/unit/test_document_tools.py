@@ -449,6 +449,35 @@ async def test_get_document_service_uses_governed_extraction_port(monkeypatch):
     assert isinstance(service._extraction_port, AgnoDocumentExtractionAdapter)
 
 
+async def test_get_document_service_shares_the_process_wide_emergency_stop_manager(
+    monkeypatch,
+):
+    """BL-44/specs/031: document extraction must respect the manual stop too —
+    both AgnoLLMAccess instances must carry the same singleton reader."""
+
+    class _FakeSettings:
+        llm_provider = "openai"
+        llm_model = "fake-model"
+        llm_base_url = None
+        openrouter_api_key = None
+        openai_api_key = None
+
+    async def fake_get_session():
+        return object()
+
+    monkeypatch.setattr(document_tools, "get_session", fake_get_session)
+    monkeypatch.setattr(document_tools, "_get_storage", lambda: object())
+    monkeypatch.setattr("src.config.Settings", lambda: _FakeSettings())
+
+    from src.agent.emergency_stop_runtime import get_emergency_stop_manager
+
+    service = await document_tools._get_document_service()
+
+    extraction_port = service._extraction_port
+    assert extraction_port._llm_access._stop_reader is get_emergency_stop_manager()
+    assert extraction_port._standalone_llm_access._stop_reader is get_emergency_stop_manager()
+
+
 async def test_document_tools_do_not_promote_extracted_action_suggestions(monkeypatch):
     result = _ingest_result("invoice.txt", "text/plain", 100)
     result.extraction = AIExtraction(

@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 27 casos sintéticos, runner estático, harness aislado y adaptador físico (sin inferencia real) implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
-| BL-18 Sustituir ngrok por Railway | 🔶 Servicio, dominio HTTPS, webhook y healthcheck reales validados en Railway; falta activar Wait for CI y completar E2E Telegram M3–M5 — specs/008 |
+| BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo (2026-10-10); servicio recuperado tras crash por migraciones pendientes (0011/0012 aplicadas); falta protección de `main` (requiere plan GitHub) y completar E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness, dashboard y alertas versionados); solo falta T7 (rollout Railway/Grafana Cloud real) — specs/016 |
@@ -559,9 +559,39 @@ CI GitHub Actions, helper de webhook seguro y documentación. **Evidencia Railwa
 de producción y webhook Telegram registrado sin updates pendientes. LiteLLM sigue
 privado sin dominio/TCP proxy.
 
-**Pendiente:** el servicio tiene `checkSuites: false`, por lo que falta activar
-**Wait for CI** (y decidir protección de `main`); también falta repetir y documentar
-el E2E Telegram de M3–M5. Por esos criterios BL-18 **no está cerrado todavía**.
+**Verificación real (2026-10-10):**
+- ✅ **Wait for CI activado**: `railway__get-service-config` confirma
+  `source.checkSuites: true` en el servicio. Las últimas 10 ejecuciones de CI
+  en `main` (`gh run list --repo lealp22/ancoramind-app`) están en verde.
+- 🔶 **Protección de rama `main`: bloqueada por plan, no por omisión.** El repo
+  es privado en el plan gratuito de GitHub — `gh api .../branches/main/protection`
+  → 404 y `.../rulesets` → 403 "Upgrade to GitHub Pro or make this repository
+  public". Pendiente de decisión del propietario (upgrade o hacer público).
+- 🔴 **Incidente encontrado y resuelto en el momento de esta verificación:**
+  el servicio `ancoramind-app` estaba `CRASHED` en producción desde
+  2026-10-07T19:52Z (commit `70ba659`). Causa:
+  `relation "ancora.voice_preparations" does not exist` —
+  `ancora.alembic_version` seguía en `0010_pairing_auto_approve` mientras el
+  código ya requería `0011_voice_preparation`/`0012_document_content_hash`
+  (nunca aplicadas a producción). Aplicadas ambas migraciones directamente
+  contra Supabase (`asnsqdbsogpxqpweyxui`) y redeploy disparado
+  (`ec46433e`): servicio `SUCCESS`/`Online`, `/health` → `200 ok`,
+  `/health/readiness` → `status: ok` (`database: healthy`,
+  `interaction_processor`/`reminder_worker`/`runtime_config`: `healthy`).
+  Cinco intentos de deploy previos ese mismo día (16:48–19:52) habían fallado
+  por la misma causa.
+- 🔶 **Gateway degradado (hallazgo aparte, no corregido aquí):**
+  `/health/readiness` reporta `gateway: degraded` — los servicios `LiteLLM`,
+  `litellm-postgres`, `Postgres` (Railway) y `Redis` están `Offline` desde
+  2026-10-05T23:06Z, parada deliberada previa al incidente anterior, sin
+  relación con el crash de migraciones. Con `LITELLM_PROXY_ENABLED=true` toda
+  inferencia real falla en modo fail-closed (comportamiento correcto, pero
+  sin servicio) hasta que el propietario decida reactivar ese stack.
+
+**Pendiente para cerrar BL-18:** repetir y documentar el E2E Telegram de
+M3–M5 con el servicio ya recuperado; decidir sobre protección de `main`
+(plan de GitHub); decisión del propietario sobre reactivar LiteLLM/Postgres/
+Redis del Gateway. Por esos criterios BL-18 **sigue sin poder cerrarse**.
 **Nota (2026-09-09):** al desplegar se activará también el worker de
 recordatorios (BL-5 / ADR-003 / specs/010): variables `REMINDER_WORKER_*`
 opcionales (defaults válidos); su entrega es **outbound** y funciona desde el
@@ -569,6 +599,7 @@ primer deployment saludable, sin esperar al registro del webhook. Ver
 `docs/deployment-railway.md` §8.
 **Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
 Telegram ejecutado sin alertas ni túneles desde el equipo local.
+
 
 ### ~~BL-25 · Script E2E nativo para PowerShell~~ ✅ implementado — specs/015 (2026-09-19)
 `scripts/run-e2e.ps1` ofrece `-Check`, `-Reset`, carga literal y segura de `.env`,
@@ -1681,8 +1712,14 @@ HTTP (`GET/POST /admin/emergency-stop/*`) reutilizando el mismo gate que
 `runtime_config_admin.py` (`RUNTIME_CONFIG_ADMIN_ENABLED`/
 `RUNTIME_CONFIG_ADMIN_TOKEN`, sin secreto nuevo) + CLI
 (`scripts/emergency_stop.py`, mismo esqueleto que `scripts/runtime_config.py`).
-28 tests nuevos, 1104 unit tests (suite completa), Ruff y `mypy src/` (159
-ficheros) limpios.
+`get_emergency_stop_manager()` (`src/agent/emergency_stop_runtime.py`, mismo
+patrón que `get_telemetry()`/`get_session()`) expone un único manager para
+todo el proceso: `_get_document_service()` (extracción de documentos) y
+`GovernedDocumentEmbeddingAdapter.embed()` (recuperación semántica,
+BL-42/specs/026 — llama a su endpoint OpenAI-compatible directo, sin pasar
+por `AgnoLLMAccess`, así que tenía su propio chequeo) también respetan el
+interruptor. 31 tests nuevos, 1111 unit tests (suite completa), Ruff y
+`mypy src/` (160 ficheros) limpios.
 
 **Limitaciones conocidas, aceptadas para este incremento (specs/031 §8):**
 
@@ -1691,10 +1728,6 @@ ficheros) limpios.
   vuelve a `active=False`. La tabla Postgres + repositorio real detrás del
   mismo `EmergencyStopReader` quedan como siguiente incremento explícito
   (mismo patrón que BL-13/Dream T1).
-- **No cubre la ruta de extracción de documentos** —
-  `src/agent/tools/documents.py::_get_document_service()` construye sus
-  propias instancias de `AgnoLLMAccess` sin acceso al manager singleton; esa
-  inferencia no se detiene con este interruptor todavía.
 - **Panel visual en `/admin/dashboard` diferido** — decisión explícita de
   este incremento; la API HTTP y el CLI ya permiten operar manualmente.
 - **Sin broadcast multi-instancia** — cada réplica tendría su propio estado
