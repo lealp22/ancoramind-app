@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 27 casos sintéticos, runner estático, harness aislado y adaptador físico (sin inferencia real) implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
-| BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo (2026-10-10); servicio recuperado tras crash por migraciones pendientes (0011/0012 aplicadas); falta protección de `main` (requiere plan GitHub) y completar E2E Telegram M3–M5 — specs/008 |
+| BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; falta protección de `main` (requiere plan GitHub) y E2E Telegram M3–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness, dashboard y alertas versionados); solo falta T7 (rollout Railway/Grafana Cloud real) — specs/016 |
@@ -587,11 +587,21 @@ privado sin dominio/TCP proxy.
   relación con el crash de migraciones. Con `LITELLM_PROXY_ENABLED=true` toda
   inferencia real falla en modo fail-closed (comportamiento correcto, pero
   sin servicio) hasta que el propietario decida reactivar ese stack.
+- ✅ **Gateway reactivado por el propietario (2026-10-09T22:57Z):** `LiteLLM`
+  y `Postgres` (Railway) vueltos a `Online`/`SUCCESS`; LiteLLM relistó sus
+  tres alias base (`ancoramind-default-r1`, `ancoramind-fast-r1`,
+  `ancoramind-vision-r1`) sin TCP proxy/dominio público (sigue privado).
+  `/health/readiness` confirma `gateway: healthy`, `database: healthy`.
+  **`litellm-postgres` y `Redis` siguen `Offline`** — no bloquean el estado
+  `healthy` observado, pero no se ha confirmado si el panel de
+  administración de LiteLLM o algún rate-limiting opcional dependen de
+  ellos; decisión del propietario si también los reactiva.
 
 **Pendiente para cerrar BL-18:** repetir y documentar el E2E Telegram de
-M3–M5 con el servicio ya recuperado; decidir sobre protección de `main`
-(plan de GitHub); decisión del propietario sobre reactivar LiteLLM/Postgres/
-Redis del Gateway. Por esos criterios BL-18 **sigue sin poder cerrarse**.
+M3–M5 con el servicio ya recuperado y el Gateway ya en línea; decidir sobre
+protección de `main` (plan de GitHub); confirmar si `litellm-postgres`/
+`Redis` deben reactivarse también. Por esos criterios BL-18 **sigue sin
+poder cerrarse**.
 **Nota (2026-09-09):** al desplegar se activará también el worker de
 recordatorios (BL-5 / ADR-003 / specs/010): variables `REMINDER_WORKER_*`
 opcionales (defaults válidos); su entrega es **outbound** y funciona desde el
@@ -1321,7 +1331,29 @@ De BL-13 solo quedan T1 (migración) y T2 (cablear la captura en
 PostgreSQL real para validar; y la wiring de T3/T5 en `main.py`/
 `lifecycle.py`, que depende de T1/T2.
 
-### BL-36 · API de aplicación multicanal para clientes web/backend
+### BL-36 · API de aplicación multicanal para clientes web/backend 🔶 diseño documentado — specs/032
+
+**Diseño documentado (2026-10-10, specs/032, sin código):** investigado el
+acoplamiento real a Telegram antes de diseñar — dos correcciones sobre el
+texto original de este ítem: (1) `GovernedInteractionRunner`/
+`ExecutionContext.telegram_update_id` es **obligatorio**, no solo
+Telegram-shaped de nombre: ningún canal nuevo puede invocar el runner hoy
+sin ese entero; (2) la ruta de **consentimiento gobernada** (`ConsentPrincipal`,
+`action_proposals.bot_id`/`chat_id`, `claim_confirmation`) **no es
+agnóstica de canal como se asumía** — necesita su propia generalización,
+no solo el ledger. Decisiones propuestas (a confirmar antes de implementar,
+ver specs/032/spec.md §5–§7): un `AncoraPrincipal` + tabla
+`channel_identities` independiente de canal para resolver la coordinación
+con BL-24 (hoy la autorización durable de BL-24 está keyed directamente por
+`telegram_user_id`, sin ningún concepto de principal); migraciones aditivas
+(nunca reemplazo) para ledger/`ExecutionContext`/consentimiento; tokens de
+API hasheados y revocables por principal para v1 (no OIDC — eso es
+responsabilidad del BFF recomendado delante de AncoraMind). `specs/032/tasks.md`
+define T1–T8 (identidad → ledger → runner → consentimiento → admisión HTTP
+→ polling/documentos/propuestas → OpenAPI/CORS/rate-limit → E2E Railway),
+ninguna implementada. Sigue bloqueado por el cierre operativo de BL-23 y
+la coordinación con BL-24, exactamente como ya marcaba este ítem.
+
 Exponer las capacidades conversacionales y operativas de AncoraMind mediante una
 API HTTP versionada, para que una página web, aplicación móvil o pequeño backend
 (BFF) pueda ofrecer los mismos casos de uso disponibles desde Telegram sin
