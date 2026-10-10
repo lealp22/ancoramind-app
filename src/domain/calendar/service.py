@@ -1,5 +1,6 @@
 """Calendar domain service — decoupled from external calendar SDK."""
 
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -9,6 +10,8 @@ from src.domain.preferences.timezone import resolve_user_timezone, to_utc
 from src.domain.shared.recurrence import RecurrenceRule, occurrences_in_range
 from src.repositories.calendar import CalendarRepository
 from src.security.user_context import UserContext
+
+logger = logging.getLogger(__name__)
 
 
 class CalendarService:
@@ -41,6 +44,14 @@ class CalendarService:
         Raises:
             AmbiguousOrNonExistentTimeError: if a naive value falls in a
                 DST fold/gap in the resolved timezone.
+
+        The external provider push is best-effort: a real provider (BL-7)
+        can fail (network, auth, outage) in ways ``NoopCalendarProvider``
+        never could, and the canonical PostgreSQL write must never depend on
+        an external service answering — AncoraMind's own DB always wins
+        (AGENTS.md §6). A provider failure is logged and leaves
+        ``provider_event_id`` as ``None``; it never blocks or fails this
+        call.
         """
         tz = resolve_user_timezone(user_context)
         data = CalendarEventCreate(
@@ -51,8 +62,14 @@ class CalendarService:
             source_document_id=source_document_id,
             recurrence_rule=recurrence_rule,
         )
-        # Call external provider (or Noop placeholder)
-        provider_id = await self._provider.create_event(user_context.user_id, data)
+        try:
+            provider_id = await self._provider.create_event(user_context.user_id, data)
+        except Exception:
+            logger.warning(
+                "Calendar provider create_event failed; proceeding canonically-only",
+                exc_info=True,
+            )
+            provider_id = None
         return await self._repo.create(user_context.user_id, data, provider_id)
 
     async def check_calendar(

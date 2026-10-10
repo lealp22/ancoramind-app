@@ -699,9 +699,49 @@ latencia y el E2E Telegram con PDF/imagen — OCR dedicado solo si la ruta
 visual no alcanza precisión en escaneados.
 
 
-### BL-7 · Proveedor de calendario real
-Implementar un `CalendarProvider` real (Google Calendar, CalDAV o similar)
-tras el Protocol existente. NoopCalendarProvider queda como default para dev.
+### BL-7 · Proveedor de calendario real 🔶 CalDAV implementado localmente — 2026-10-10
+
+**Implementado localmente:** `CaldavCalendarProvider`
+(`src/agent/calendar_caldav.py`) tras el `Protocol` ya existente — CalDAV en
+vez de Google Calendar/Outlook porque estos exigen un flujo OAuth2 completo
+con refresh tokens, fuera de alcance sin infraestructura para probarlo.
+Vía deliberadamente simple: `httpx` (ya dependencia) + `icalendar` (nueva,
+BSD-2-Clause, puro Python) con un `PUT` directo del VEVENT a la URL de
+colección de calendario que configure el operador — sin descubrimiento
+WebDAV (principal/calendar-home-set) como haría la librería `caldav`
+completa. `list_events` también implementado de verdad vía `REPORT`
+CalDAV (`calendar-query` + `time-range`), aunque **hoy nadie lo invoca**
+(`check_calendar` solo lee de Postgres, nunca del proveedor externo) — se
+implementó igual para dejar el Protocol completo. La respuesta XML del
+servidor se trata como no confiable: se rechaza si declara
+`<!ENTITY`/`<!DOCTYPE` antes de parsearla, mismo criterio ya usado para
+OOXML en `document_office.py`, sin añadir `defusedxml`.
+
+**Hallazgo y decisión de fiabilidad:** `CalendarService.create_event`
+llamaba al proveedor **antes** de persistir en Postgres; con Noop eso nunca
+podía fallar, pero un proveedor real sí puede (red, auth, caída) — así que
+se hizo la llamada al proveedor **best-effort**: un fallo se loguea y
+`provider_event_id` queda `None`, pero el evento siempre se persiste
+canónicamente (mismo criterio ya usado en BL-32/BL-38/Dream). Esto permitió
+conectar el proveedor real en `tools/calendar.py` sin riesgo.
+
+**Limitación conocida, aceptada:** una sola cuenta/calendario compartido
+por despliegue, sin OAuth ni cuentas por usuario — coherente con que este
+es un asistente personal de un propietario (más un grupo acotado de
+evaluadores vía BL-24), no un SaaS multi-tenant. `user_external_id` se
+ignora en la implementación CalDAV. El dispatch de mutación **gobernado**
+(`src/domain/actions/mutations.py`, usado bajo `GOVERNED_CONSENT_ENABLED`)
+sigue deliberadamente en `NoopCalendarProvider` — conectarlo ahí violaría
+la separación dominio/infra (AGENTS.md §2.1: el dominio nunca importa
+`src/agent/`) sin antes inyectar el proveedor vía
+`InteractionProcessor`→`ProposalExecutor`→`apply_mutation`, un cambio de
+plomería mayor fuera de alcance de este incremento. Config nueva:
+`CALENDAR_PROVIDER` (`noop`/`caldav`), `CALENDAR_CALDAV_BASE_URL/USERNAME/
+PASSWORD`, fail-closed si `caldav` sin las tres variables. 20 tests nuevos
+(`test_calendar_caldav.py` + 1 en `test_reminder_calendar_service.py`),
+1145 unit tests (suite completa), Ruff y `mypy src/` (161 ficheros)
+limpios. Validación E2E contra un servidor CalDAV real pendiente — sin
+infraestructura disponible en esta sesión.
 
 ### BL-26 · Notas de voz entrantes y transcripción gobernada (STT) 🔶 implementación parcial — specs/028
 **Autorización ampliada (2026-10-07, prevalece):** propietario acepta las
@@ -1708,15 +1748,24 @@ de Agno.
 reproducir el caso; si Agno ya filtra llamadas incompletas, eliminar subclase
 y sus tests. Mientras exista, test unitario obligatorio sobre la forma exacta.
 
-### BL-17 · Mantener indicador «escribiendo…» durante procesos largos
-Agno 2.9 Telegram envía `send_chat_action("typing")` una sola vez antes de
-procesar. Telegram lo expira a los pocos segundos; búsquedas/tools lentas
-parecen bloqueadas. Implementar un refresco periódico mientras dure el run,
-cancelándolo siempre en `finally`. Preferible a enviar/borrar un mensaje
-«Procesando…», que ensucia el chat y requiere más llamadas API.
-**Restricción:** Agno no expone configuración/hook para refrescarlo; aislar la
-extensión en la capa `agent/` y seguir ADR-001 (no tocar domain). Añadir tests
-de cancelación en éxito y error. Post-MVP salvo que la latencia empeore.
+### ~~BL-17~~ · Mantener indicador «escribiendo…» durante procesos largos ✅ resuelto por specs/013 — 2026-10-11
+
+El hallazgo original seguía vigente para la interfaz Telegram **nativa de
+AgentOS** (`send_chat_action` una sola vez, sin refresco) — pero, igual que
+BL-15, esa ruta ya no gobierna producción: la admisión durable propia
+(specs/013) la sustituye por completo cuando `TELEGRAM_ADMISSION_ENABLED`.
+Sobre esa ruta propia, `InteractionProcessor._run_agent` ya lanza
+`_refresh_typing` como tarea en paralelo al arrancar el run
+(`asyncio.create_task`, `src/domain/interactions/processor.py`), que llama
+a `sender.send_typing(chat_id)` cada `typing_refresh_seconds` mientras el
+run está en curso, y la cancela siempre en el `finally` del bloque
+principal (`typing_task.cancel()` + `await` con `CancelledError`
+suprimida) — tanto en éxito como en error, exactamente lo que este ítem
+pedía. Cubierto por
+`test_processor_refreshes_typing_while_agent_run_is_pending`
+(`tests/unit/test_interaction_processor.py`). Se cierra como resuelto en
+vez de dejarlo abierto con texto obsoleto sobre una ruta que ya no
+gobierna producción.
 
 ### BL-12 · Introducir Alembic como sistema de migraciones ✅ implementado — 2026-09-13
 Alembic es la historia canónica del schema `ancora`: revisión

@@ -201,6 +201,14 @@ class Settings(BaseSettings):
     reminder_poll_interval_seconds: int = 60
     """Seconds between reminder worker scan cycles."""
 
+    # ── Calendar provider (BL-7) ──────────────────────
+    calendar_provider: str = "noop"
+    """``noop`` (default, PostgreSQL-only) or ``caldav`` (BL-7: a single
+    shared CalDAV calendar collection, not per-user accounts)."""
+    calendar_caldav_base_url: str = ""
+    calendar_caldav_username: str = ""
+    calendar_caldav_password: str = ""
+
     @property
     def allowed_user_ids(self) -> list[int]:
         """Parse comma-separated allowed user IDs."""
@@ -277,6 +285,26 @@ class Settings(BaseSettings):
         """Never enable an external search capability without its secret."""
         if self.web_search_enabled and not self.tavily_api_key.strip():
             raise ValueError("WEB_SEARCH_ENABLED requires TAVILY_API_KEY")
+        return self
+
+    @model_validator(mode="after")
+    def validate_calendar_provider_settings(self) -> "Settings":
+        """Fail closed: a CalDAV provider may not silently fall back to noop."""
+        if self.calendar_provider not in ("noop", "caldav"):
+            raise ValueError("CALENDAR_PROVIDER must be 'noop' or 'caldav'")
+        if self.calendar_provider != "caldav":
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("CALENDAR_CALDAV_BASE_URL", self.calendar_caldav_base_url),
+                ("CALENDAR_CALDAV_USERNAME", self.calendar_caldav_username),
+                ("CALENDAR_CALDAV_PASSWORD", self.calendar_caldav_password),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise ValueError("CALENDAR_PROVIDER=caldav requires: " + ", ".join(missing))
         return self
 
     @model_validator(mode="after")

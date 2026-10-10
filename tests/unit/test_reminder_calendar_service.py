@@ -134,6 +134,20 @@ class TestCalendarService:
         provider.create_event.assert_awaited_once()
         repo.create.assert_awaited_once()
 
+    async def test_create_event_persists_canonically_even_when_provider_fails(self, user_ctx):
+        """BL-7: a real provider can fail; the canonical write must never
+        depend on it — mismo criterio best-effort que BL-32/BL-38/Dream."""
+        repo = AsyncMock()
+        provider = AsyncMock()
+        provider.create_event.side_effect = RuntimeError("CalDAV unavailable")
+        service = CalendarService(repo, provider)
+
+        await service.create_event(user_ctx, "Dentista", datetime(2026, 8, 28, 17, 30, tzinfo=UTC))
+
+        provider.create_event.assert_awaited_once()
+        repo.create.assert_awaited_once()
+        assert repo.create.call_args.args[2] is None  # provider_id
+
     async def test_check_calendar(self, user_ctx):
         repo = AsyncMock()
         repo.list_range.return_value = []

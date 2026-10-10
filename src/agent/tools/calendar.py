@@ -7,6 +7,7 @@ from uuid import UUID
 
 from agno.run import RunContext
 
+from src.agent.calendar_caldav import create_calendar_provider
 from src.agent.tools.sessions import closes_sessions, track_session
 from src.agent.tools.untrusted_results import (
     MAX_RESULT_RECORDS,
@@ -20,7 +21,6 @@ from src.agent.tools.validation import (
     parse_optional_uuid,
 )
 from src.domain.calendar.models import CalendarEvent
-from src.domain.calendar.provider import NoopCalendarProvider
 from src.domain.calendar.service import CalendarService
 from src.domain.preferences.timezone import (
     AmbiguousOrNonExistentTimeError,
@@ -40,8 +40,10 @@ logger = logging.getLogger(__name__)
 
 
 async def _get_calendar_service() -> CalendarService:
+    from src.config import Settings
+
     session = track_session(await get_session())
-    return CalendarService(CalendarRepository(session), NoopCalendarProvider())
+    return CalendarService(CalendarRepository(session), create_calendar_provider(Settings()))
 
 
 async def _get_reminder_service() -> ReminderService:
