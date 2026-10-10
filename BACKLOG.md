@@ -846,20 +846,46 @@ coste/latencia real antes de activar en producción.
 **Prioridad propuesta: P2.** Puede subir a P1 tras cerrar BL-23, pues mejora de
 forma directa el uso cotidiano del asistente.
 
-### BL-27 · Respuestas de voz opcionales en Telegram (TTS) — análisis previo
-**La respuesta textual ya está implementada:** el processor de specs/013 persiste
-una `logical_response` cifrada y la entrega por `TelegramNotifier.send_text()` →
-Bot API `sendMessage`. Por tanto, recibir voz y responder con texto no requiere
-otra capability de salida.
+### BL-27 · Respuestas de voz opcionales en Telegram (TTS) 🔶 mini-ADR documentado — specs/033
 
-Evaluar por separado la respuesta **hablada**: síntesis TTS del texto final,
-entrega como `sendVoice`/`sendAudio`, preferencia explícita por usuario y fallback
-a texto. Requiere decidir proveedor/modelo, idiomas/voces, coste/latencia, formato
-Telegram, moderación de contenido, retención de audio, límites de longitud,
-idempotencia de delivery y cómo persistir/auditar `response_kind='voice'` sin
-guardar contenido en telemetría. Debe pasar por una capability gobernada y no
-introducir un provider directo ni reenvíos ambiguos. Crear mini-ADR/spec antes de
-implementar; no asumir que TTS es necesario para entregar el valor de BL-26.
+**Mini-ADR documentado (2026-10-11, specs/033, sin código):** investigado
+el pipeline de voz entrante (BL-26/specs/028) como plantilla a invertir, no
+reutilizar literalmente. Decisiones clave:
+
+- **El texto nunca deja de enviarse** — TTS es un enriquecimiento
+  best-effort *posterior* a que la respuesta de texto ya esté `completed`,
+  nunca un sustituto ni algo que compita con la máquina de estados
+  principal. Esto resuelve de raíz el "fallback a texto": nunca hay que
+  activarlo, porque el texto nunca espera a la voz.
+- **Outbox independiente** — `response_kind='voice'` como fila hermana de
+  `'ack'` (BL-32: `ON CONFLICT (interaction_id, response_kind) DO NOTHING`,
+  nunca toca `telegram_interactions.status`, `chunk_count=1` siempre; una
+  respuesta hablada es un fichero, nunca se fragmenta como el texto).
+- **Ruta gobernada hermana, no reutilización** — `RuntimeConfiguration.speech`
+  es un único campo para la ruta de STT, no un diccionario de capacidades
+  de voz; TTS necesita un campo `speech_output` aditivo propio y un nuevo
+  valor `"speech_synthesis"` en el `Literal` de capacidades, con la misma
+  exigencia de `cost_governance` que ya aplica a `speech` si hay tarifa.
+- **Entrega confirmada con el propietario:** `sendVoice` (Ogg/Opus, nota de
+  voz nativa) en vez de `sendAudio`, transcodificando con `ffmpeg` — mismo
+  binario ya aprobado para STT (`voice_inspector.py`), usado en sentido
+  inverso (codificar, no decodificar).
+- **Nunca se persisten bytes de audio** sintetizado, igual que la voz
+  entrante; el texto que origina el audio ya es la fuente de verdad
+  persistida.
+- **Gap real señalado, no ocultado:** no existe ningún almacén de
+  preferencias por usuario en el repo hoy (`src/domain/preferences/` solo
+  tiene zona horaria, y su propio código documenta que la tabla todavía no
+  existe) — v1 queda gobernada por un flag global
+  (`TELEGRAM_TTS_ENABLED`), igual que BL-26; la preferencia por usuario
+  que pedía el ítem original queda como su propio pendiente (T6 de
+  `specs/033/tasks.md`), no como algo resuelto implícitamente.
+
+`specs/033/tasks.md` define T1–T7 (campo de runtime config → spike de
+proveedor contra Gateway real → `GovernedSpeechSynthesisAccess` →
+transcodificación/entrega → outbox independiente → preferencia por
+usuario → E2E), ninguna implementada. Bloqueado por el mismo Gateway real
+que BL-30 Fase 2 para fijar el proveedor concreto.
 
 ### BL-21 · Listas TODO (múltiples listas por usuario) ✅ implementado — 2026-09-10
 Permitir al usuario crear y gestionar **listas de tareas (TODO)** con nombre
