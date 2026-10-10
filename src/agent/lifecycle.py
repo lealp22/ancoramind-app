@@ -207,6 +207,7 @@ def install_interaction_processor_lifespan(
                 voice_enabled=settings.telegram_voice_enabled,
                 voice_preparation=voice_preparation,
                 voice_maintenance=lambda: maintain_voice_preparations(get_session),
+                fast_ack_enabled=settings.telegram_fast_ack_enabled,
                 on_cycle=(lambda _: health_registry.heartbeat("interaction_processor"))
                 if health_registry is not None
                 else None,

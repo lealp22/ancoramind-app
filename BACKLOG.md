@@ -958,30 +958,49 @@ integration passing (1 fallo de timing preexistente y no relacionado,
 confirmado en aislamiento), Ruff y `mypy src/` limpios. Desbloquea BL-35 y la
 Fase 2 de BL-38.
 
-### BL-32 · Acuse de recibo temprano para procesos pesados (fast-ack UX)
-Cuando la respuesta previsible tarde (documento/imagen/PDF), enviar en el
-mismo run un mensaje inmediato tipo "📄 Documento recibido, analizando…" antes
-de la inferencia, sin romper las garantías de specs/013. Restricciones: no
-reenvíos ambiguos (el acuse es un mensaje más de la outbox con su delivery
-state; si falla se marca y no se reintenta a ciegas), no duplicar acuses si el
-update se reprocesa (idempotente por `interaction_id`), y el mensaje final
-sigue siendo único. Alternativas a evaluar: (a) acuse como chunk previo de la
-misma `logical_response`; (b) mensaje efímero borrado al responder (ensucia y
-necesita `deleteMessage`); (c) solo `typing` continuo (ya existe como BL-17,
-no basta para 15–30 s de visión). Propongo (a) con heuristic gate: media/flags
-por tipo de interacción (media ⇒ acuse; texto ⇒ no).
+### BL-32 · Acuse de recibo temprano para procesos pesados (fast-ack UX) 🔶 acuse Telegram implementado localmente — 2026-10-10
 
-Generalizar el mecanismo como **eventos internos tipados de progreso**
-metadata-only (`operation_started`, `stage_changed`, `operation_succeeded`,
-`operation_failed`), vinculados a `interaction_id`/`correlation_id`. Productores
-como documentos, STT, búsqueda web o consolidación de memoria publican estados
-semánticos, no texto de canal; un proyector Telegram decide qué eventos merecen
-mensaje y los persiste primero en la outbox. Los hooks son puntos de extensión
-internos, explícitos y acotados del lifecycle —no plugins dinámicos—, con timeout,
-aislamiento de errores y allowlist de payload. No pueden alterar identidad,
-autorización, argumentos/resultados de tools ni convertir un fallo de delivery en
-repetición del Agent. **Prioridad P3** (pulir después del E2E de visión, donde la
-latencia real será medible).
+**Implementado localmente (2026-10-10):** opción (a) del diseño original
+— acuse como respuesta propia de la outbox, no un chunk de la respuesta
+final ni un mensaje efímero. Hallazgo clave de diseño: no se pudo
+reutilizar `persist_response_ready`/`claim_delivery_start`/
+`finalize_response_delivery` (`src/repositories/interactions.py`) porque
+los tres mutan `telegram_interactions.status`
+(`accepted→response_ready→delivery_started→completed`) — exactamente el
+estado que el acuse no puede tocar, ya que convive con `agent_started`
+mientras el run principal sigue en curso. Solución: dos métodos nuevos y
+deliberadamente simples, `create_ack_response`/`mark_ack_delivery_outcome`,
+que escriben en `ancora.logical_responses`/`ancora.telegram_response_deliveries`
+con `response_kind='ack'` (la tabla ya soporta esto nativamente —
+`UNIQUE (interaction_id, response_kind)` y `claim_delivery_start` ya filtra
+por `response_kind='agent_final'`, así que una fila `'ack'` es invisible
+para toda la máquina de estados del flujo principal) **sin ninguna
+migración nueva**. `InteractionProcessor._run_agent` envía el acuse justo
+tras `_claim_agent` (heurística: `attachments` no vacío tras descartar
+voces ⇒ acuse; texto ⇒ no), con `ON CONFLICT (interaction_id, response_kind)
+DO NOTHING` garantizando que un update reprocesado nunca duplica el acuse.
+Todo el envío va envuelto en un único `try/except` que solo loguea: un
+fallo de persistencia o de `sender.send_text` nunca bloquea, retrasa ni
+falla el run principal, y no hay scan de recuperación para `response_kind='ack'`
+(a diferencia de `agent_final`) — limitación aceptada explícitamente, mismo
+criterio "best-effort" ya usado para `export_document` (BL-38) y la captura
+de Dream (BL-13). Flag nuevo `TELEGRAM_FAST_ACK_ENABLED` (default `false`,
+mismo patrón que `TELEGRAM_VOICE_ENABLED`/`GOVERNED_CONSENT_ENABLED`). 6
+tests nuevos en `test_interaction_processor.py` (envío único con flag
+activo, nunca para texto puro, nunca con flag apagado, no duplica si ya
+existía, un fallo de envío o de persistencia del acuse no bloquea el run
+principal). 1125 unit tests (suite completa), Ruff y `mypy src/` limpios.
+Los dos métodos de repositorio nuevos no tienen test de integración propio
+todavía (solo SQL, requiere Postgres real) — queda pendiente para cuando
+haya infraestructura, igual que el resto de la suite de integración.
+
+**Diferido explícitamente, sin cambios respecto al diseño original:** la
+generalización a **eventos internos tipados de progreso** metadata-only
+(`operation_started`, `stage_changed`, `operation_succeeded`,
+`operation_failed`) para otros productores (documentos, STT, búsqueda web,
+consolidación de memoria) sigue fuera de alcance — este incremento resuelve
+solo el acuse de Telegram para adjuntos, no la plataforma de eventos
+genérica que el ítem original esbozaba como visión a futuro.
 
 ### BL-35 · Ingesta gobernada de documentos ofimáticos (DOCX/XLSX/PPTX) 🔶 extractores + fixtures adversariales implementados, falta E2E — 2026-10-10
 Ampliar Document Memory para recibir formatos ofimáticos habituales sin ejecutar
@@ -1652,17 +1671,31 @@ Descartados de partida: LangSmith/Braintrust/OpenAI Evals (envían contenido a
 terceros — incompatible con la policy de specs/013) y Ragas (RAG/vector search
 fuera de alcance).
 
-### BL-15 · Botones de confirmación en Telegram (HITL UX)
-La interfaz Telegram de AgentOS ignora los `callback_query`: no soporta
-inline keyboards nativamente (Discord sí — ver hallazgo en
-`specs/006-vehicle-creation/verification.md`). Opciones: (a) extender el
-webhook de AgentOS para procesar callback_query y enviar reply_markup vía
-pyTelegramBotAPI (toca internals de Agno — seguir proceso ADR-001:
-documentar → demostrar límite → proponer → decidir), (b) mantener
-confirmación textual (estado actual, suficiente para POC), (c) reconsiderar
-canal. Hallazgo proveniente del E2E de specs/006.
-**Previsto para:** post-MVP, junto a la decisión de BL-14 (Supabase) si hay
-migración de runtime.
+### ~~BL-15~~ · Botones de confirmación en Telegram (HITL UX) ✅ resuelto por BL-40/specs/023 T4.3 — 2026-10-10
+
+El hallazgo original seguía vigente para la interfaz Telegram **nativa de
+AgentOS** (que efectivamente ignora `callback_query` y no soporta inline
+keyboards) — pero esa ruta ya no es la que gobierna producción: la admisión
+durable propia (specs/013) la sustituye por completo cuando
+`TELEGRAM_ADMISSION_ENABLED`. Sobre esa ruta propia, BL-40 (specs/023 T4.3)
+implementó botones de confirmación inline **reales**, sin tocar internals
+de Agno — ninguna de las tres vías (a)/(b)/(c) que este ítem planteaba
+originalmente, sino un cuarto camino que resultó más simple al no depender
+del runtime de AgentOS en absoluto:
+`normalize_telegram_update` (`src/domain/interactions/models.py`) ya
+reconoce `callback_query` como tipo de update válido;
+`TelegramNotifier.send_text` (`src/notifications/telegram.py`) envía
+`reply_markup` con los botones ✅ Sí/❌ No reales
+(`consent_buttons`/`ConsentButton`, `src/domain/actions/presentation.py`);
+`InteractionProcessor._handle_consent_input`/`_handle_consent_callback`
+(`src/domain/interactions/processor.py`) resuelven el callback **antes**
+de cualquier ejecución del Agent, re-validando principal/bot/chat/ventana/
+hash del payload en `ActionProposalsRepository.claim_confirmation` — el
+`callback_data` nunca es prueba de consentimiento por sí mismo. Activo
+detrás de `GOVERNED_CONSENT_ENABLED` (default `false`, mismo patrón de
+rollout que el resto de flags opt-in). Se cierra como resuelto en vez de
+dejarlo abierto con texto obsoleto; el E2E real contra Telegram/Railway
+sigue pendiente igual que el resto del pipeline (bloqueado por BL-18).
 
 ### BL-16 · Retirar workaround SafeOpenRouter cuando Agno valide tool calls
 El E2E de specs/006 descubrió que `minimax/minimax-m3:free` vía OpenRouter
