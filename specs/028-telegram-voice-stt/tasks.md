@@ -57,7 +57,17 @@ hasta T5; comandos/callbacks transcritos nunca se interpretan como control.
 
 - [x] Resolver Sí/No antes de Agent; sin callback/comando sintético como control.
 - [x] Evidencia original/current, entrega antes de accepted_at, caducidad/generación.
-- [ ] Claims/descartes condicionales y concurrencia (V20–V30).
+- [ ] Claims/descartes condicionales y concurrencia (V20–V30). **Parcial
+  (2026-10-11, unit):** V27/V29/V30 — propuesta ajena/reenviada/editada/
+  mezclada, executor apagado o sin ejecutor determinista, y el guardado de
+  evidencia (nunca desde documentos/historial) — cubiertos en
+  `tests/unit/test_voice_consent_handling.py` (15 tests) a nivel de
+  `InteractionProcessor._handle_voice_consent`, mockeando los repositorios.
+  **V25/V26/V28 siguen pendientes** — son carreras reales de PostgreSQL
+  (dos «Sí» concurrentes, generación/caducidad cambiando mientras STT
+  procesa) que exigen el locking real de
+  `ActionProposalsRepository.resolve_voice_consent`; no se pueden cubrir
+  con mocks sin fingir el resultado.
 - [x] Cerrar executor pendiente en BL-40/specs/023; sin bypass legacy. Documentar
   diagnóstico del flag/botones por separado; voz no exige que aparezcan botones.
 

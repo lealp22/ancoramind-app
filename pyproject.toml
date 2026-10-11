@@ -87,4 +87,4 @@ source = ["src"]
 # BL-37: baseline measured on `pytest tests/unit/` (2026-10-07) was 76%.
 # Integration tests cover a different slice (repositories/DB) and are not
 # gated by this threshold — only the unit-test CI step passes --cov.
-fail_under = 70
+fail_under = 75

@@ -800,6 +800,20 @@ adaptadores físicos; no hay STT fake en producción.
 Dependencia para E2E de confirmación/ejecución: conectar `_execute_claimed()`
 (BL-40/specs/023) y habilitar consentimiento gobernado sin bypass legacy.
 
+**V27/V29/V30 implementados localmente (2026-10-11):** 15 tests unitarios
+nuevos (`tests/unit/test_voice_consent_handling.py`) sobre
+`InteractionProcessor._handle_voice_consent` — propuesta reenviada/editada/
+mezclada con texto nunca es consentimiento fresco (V27), consentimiento
+gobernado apagado o sin ejecutor determinista responde sin ejecutar nada
+(V29), y la verificación de evidencia (transcripción re-descifrada contra
+el payload original, nunca el argumento de texto suelto) impide que un
+documento/foto/historial con un "Sí" cree evidencia de consentimiento
+vocal (V30). **V25/V26/V28 (carreras reales en PostgreSQL — dos "Sí"
+concurrentes, generación/caducidad cambiando mientras STT procesa) siguen
+pendientes**, no se pueden cubrir con mocks sin fingir el resultado;
+requieren el locking real de `resolve_voice_consent` contra PostgreSQL.
+1209 unit tests (suite completa), Ruff y `mypy src/` limpios.
+
 Permitir que una nota de voz de Telegram se procese como un mensaje conversacional:
 descargar el audio autorizado por Telegram, transcribirlo y pasar **solo el texto
 resultante** al mismo flujo de admission/processor/Agent que usa un mensaje escrito.
