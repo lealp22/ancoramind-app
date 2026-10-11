@@ -122,6 +122,29 @@ class LlmUsageRepository:
         )
         await self._session.commit()
 
+    async def sum_session_tokens(self, session_id: str) -> int:
+        """Cheap, indexed aggregate — never reads Agno's own session content.
+
+        Deliberately not the I/O specs/030 §6 avoided (reading and
+        deserializing the full Agno session): this sums an integer column
+        on AncoraMind's own usage ledger, joined to the interaction row
+        that already carries ``agno_session_id`` (BL-34, 2026-10-12).
+        Requires the ``idx_telegram_interactions_agno_session_id`` index to
+        stay cheap as the table grows.
+        """
+        row = (
+            await self._session.execute(
+                text("""
+                    SELECT COALESCE(SUM(e.total_tokens), 0) AS total
+                    FROM ancora.llm_usage_events e
+                    JOIN ancora.telegram_interactions i ON i.id = e.interaction_id
+                    WHERE i.agno_session_id = :session_id
+                """),
+                {"session_id": session_id},
+            )
+        ).one()
+        return int(row.total)
+
     async def summarize_spend(self, *, now: datetime | None = None) -> SpendSummary:
         """Aggregate the AncoraMind spend log for cost governance (T12).
 

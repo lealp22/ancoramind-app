@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -18,6 +19,15 @@ from src.domain.interactions.models import (
     TelegramInteractionCreate,
     TelegramResponseDelivery,
 )
+
+
+@dataclass(frozen=True)
+class EncryptedSessionExchange:
+    """Raw ciphertext row for one interaction — the caller decrypts (BL-34)."""
+
+    interaction_id: UUID
+    payload_ciphertext: bytes | None
+    response_ciphertext: bytes | None
 
 
 class TelegramInteractionsRepository:
@@ -487,6 +497,36 @@ class TelegramInteractionsRepository:
         )
         row = result.fetchone()
         return row.agno_session_id if row is not None else None
+
+    async def list_session_exchanges(self, session_id: str) -> list[EncryptedSessionExchange]:
+        """Oldest-first ciphertext rows for one session (BL-34 compaction path).
+
+        Only interactions with a persisted final reply are returned — never
+        Agno's own session store, staying within AncoraMind's own governed
+        ledger (specs/030 §6: no coupling to ``agno_runtime``). The caller
+        decrypts with the same payload cipher used everywhere else and must
+        never persist the plaintext.
+        """
+        result = await self._session.execute(
+            text("""
+                SELECT i.id AS interaction_id, i.payload_ciphertext,
+                    lr.content_ciphertext AS response_ciphertext
+                FROM ancora.telegram_interactions i
+                JOIN ancora.logical_responses lr
+                    ON lr.interaction_id = i.id AND lr.response_kind = 'agent_final'
+                WHERE i.agno_session_id = :session_id
+                ORDER BY i.received_at ASC
+            """),
+            {"session_id": session_id},
+        )
+        return [
+            EncryptedSessionExchange(
+                interaction_id=row.interaction_id,
+                payload_ciphertext=row.payload_ciphertext,
+                response_ciphertext=row.response_ciphertext,
+            )
+            for row in result.fetchall()
+        ]
 
     async def list_recoverable_work(self, limit: int = 20) -> list[TelegramInteraction]:
         """List accepted/response-ready work in deterministic chat/update order."""

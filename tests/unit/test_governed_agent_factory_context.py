@@ -92,3 +92,38 @@ def test_missing_window_falls_back_to_the_conservative_default() -> None:
     agent = _factory().create_for_run(_context(snapshot), route_name="ancoramind-default")
 
     assert 1 <= agent.num_history_runs <= 10
+
+
+def test_compaction_summary_is_appended_as_an_extra_instruction_block() -> None:
+    """BL-34: the digest is instructions-only — never written to Agno's own session."""
+    snapshot = _snapshot_with_window("ancoramind-default", 128_000)
+
+    agent = _factory().create_for_run(
+        _context(snapshot),
+        route_name="ancoramind-default",
+        compaction_summary="El usuario registró un cambio de aceite en enero.",
+    )
+
+    assert any(
+        "El usuario registró un cambio de aceite en enero." in block
+        for block in agent.instructions
+    )
+    assert "instr" in agent.instructions
+
+
+def test_without_compaction_summary_instructions_are_unchanged() -> None:
+    snapshot = _snapshot_with_window("ancoramind-default", 128_000)
+
+    agent = _factory().create_for_run(_context(snapshot), route_name="ancoramind-default")
+
+    assert agent.instructions == ["instr"]
+
+
+def test_reduced_history_runs_overrides_the_computed_ceiling() -> None:
+    snapshot = _snapshot_with_window("ancoramind-default", 128_000)
+
+    agent = _factory().create_for_run(
+        _context(snapshot), route_name="ancoramind-default", reduced_history_runs=2
+    )
+
+    assert agent.num_history_runs == 2

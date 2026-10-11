@@ -121,6 +121,8 @@ class GovernedInteractionRunner:
         media: tuple[ResolvedTelegramMedia, ...] = (),
         provenance: InteractionProvenance | None = None,
         execution_context: ExecutionContext | None = None,
+        compaction_summary: str | None = None,
+        reduced_history_runs: int | None = None,
     ) -> str:
         context = execution_context or await self.prepare_execution_context(
             session_id=session_id,
@@ -182,7 +184,11 @@ class GovernedInteractionRunner:
                     # never by invoking analyze_document directly: only arun()
                     # persists the turn into the session history, which the next
                     # turn needs to follow up on a just-ingested document (BL-1).
-                    agent = self._factory.create_for_run(context)
+                    agent = self._factory.create_for_run(
+                        context,
+                        compaction_summary=compaction_summary,
+                        reduced_history_runs=reduced_history_runs,
+                    )
                     agent_output: RunOutput = await asyncio.wait_for(
                         agent.arun(
                             input_text,

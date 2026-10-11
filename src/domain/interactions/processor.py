@@ -24,6 +24,8 @@ from src.domain.actions.presentation import (
     parse_consent_callback,
     render_proposal_block,
 )
+from src.domain.context_policy.service import oldest_fraction_count
+from src.domain.context_policy.session_summary import SessionExchange, SessionSummarizationPort
 from src.domain.emergency_stop.models import EmergencyStopActiveError
 from src.domain.interactions.commands import (
     TelegramCommand,
@@ -60,6 +62,7 @@ from src.domain.speech.service import VoicePreparationError, VoicePreparationSer
 from src.observability import get_telemetry, log_context_scope
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.interactions import TelegramInteractionsRepository
+from src.repositories.llm_usage import LlmUsageRepository
 
 logger = logging.getLogger(__name__)
 VOICE_NOT_UNDERSTOOD_REPLY = (
@@ -93,6 +96,8 @@ class InteractionAgentRunner(Protocol):
         media: tuple[ResolvedTelegramMedia, ...] = (),
         provenance: InteractionProvenance | None = None,
         execution_context: ExecutionContext | None = None,
+        compaction_summary: str | None = None,
+        reduced_history_runs: int | None = None,
     ) -> str: ...
 
 
@@ -128,6 +133,23 @@ class TelegramSendError(RuntimeError):
         """Telegram's ``description`` field, when the API answered with one."""
 
 
+def _decrypt_field(
+    cipher: TelegramPayloadCipher, ciphertext: bytes | None, field: str
+) -> str | None:
+    """Best-effort decrypt for BL-34's compaction path — never raises.
+
+    A single corrupt/legacy row must not abort compaction for the whole
+    session; it is simply treated as an exchange with nothing to say.
+    """
+    if ciphertext is None:
+        return None
+    try:
+        value = cipher.decrypt(ciphertext).get(field)
+    except ValueError:
+        return None
+    return value if isinstance(value, str) and value.strip() else None
+
+
 SessionFactory = Callable[[], Awaitable[AsyncSession]]
 
 
@@ -153,6 +175,10 @@ class InteractionProcessor:
         voice_preparation: VoicePreparationService | None = None,
         voice_maintenance: Callable[[], Awaitable[int]] | None = None,
         fast_ack_enabled: bool = False,
+        summarizer: SessionSummarizationPort | None = None,
+        context_compaction_enabled: bool = False,
+        context_compaction_token_threshold: int = 60_000,
+        context_compaction_ratio: float = 0.4,
     ):
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
@@ -172,6 +198,12 @@ class InteractionProcessor:
         self._fast_ack_enabled = fast_ack_enabled
         """BL-32: best-effort, off by default; a failure never blocks the run."""
         """specs/023 T4.3-T4.4: off by default; when off, behaviour is unchanged."""
+        self._summarizer = summarizer
+        self._context_compaction_enabled = context_compaction_enabled
+        self._context_compaction_token_threshold = context_compaction_token_threshold
+        self._context_compaction_ratio = context_compaction_ratio
+        """BL-34: off by default; a compaction failure never blocks the run,
+        it only forfeits the summary for that run."""
         self._chat_locks: dict[int, asyncio.Lock] = {}
         self._user_locks: dict[int, asyncio.Lock] = {}
 
@@ -353,6 +385,8 @@ class InteractionProcessor:
         if claimed is None:
             return False
 
+        compaction_summary, reduced_history_runs = await self._maybe_compact_context(session_id)
+
         attributes = {
             "ancora.correlation_id": str(interaction.correlation_id),
             "ancora.interaction_id": str(interaction.id),
@@ -392,6 +426,8 @@ class InteractionProcessor:
                     telegram_message_id=interaction.telegram_message_id,
                     media=media,
                     provenance=self._provenance(interaction),
+                    compaction_summary=compaction_summary,
+                    reduced_history_runs=reduced_history_runs,
                     **({"execution_context": prepared_context} if prepared_context else {}),
                 )
                 if not content.strip():
@@ -1245,6 +1281,49 @@ class InteractionProcessor:
             )
         finally:
             await session.close()
+
+    async def _maybe_compact_context(self, session_id: str) -> tuple[str | None, int | None]:
+        """Cheap gate first; the expensive read only runs once it's crossed.
+
+        BL-34, 2026-10-12: with the flag off (default), this returns
+        immediately — zero queries, identical behaviour to before this
+        feature existed. A compaction failure degrades to ``(None, None)``,
+        never raises: the caller must still run with today's behaviour.
+        """
+        if not self._context_compaction_enabled or self._summarizer is None:
+            return None, None
+        session = await self._session_factory()
+        try:
+            tokens = await LlmUsageRepository(session).sum_session_tokens(session_id)
+            if tokens < self._context_compaction_token_threshold:
+                return None, None
+            rows = await TelegramInteractionsRepository(session).list_session_exchanges(
+                session_id
+            )
+        finally:
+            await session.close()
+        compact_count = oldest_fraction_count(len(rows), self._context_compaction_ratio)
+        if compact_count == 0:
+            return None, None
+        exchanges = tuple(
+            SessionExchange(
+                interaction_id=str(row.interaction_id),
+                user_text=_decrypt_field(self._payload_cipher, row.payload_ciphertext, "text"),
+                assistant_text=_decrypt_field(
+                    self._payload_cipher, row.response_ciphertext, "content"
+                ),
+            )
+            for row in rows[:compact_count]
+        )
+        outcome = await self._summarizer.summarize(exchanges)
+        if outcome.status != "completed" or not outcome.summary_text:
+            logger.warning(
+                "Context compaction skipped (session_id=%s, error_class=%s)",
+                session_id,
+                outcome.error_class,
+            )
+            return None, None
+        return outcome.summary_text, max(1, len(rows) - compact_count)
 
     async def _persist_response(
         self,

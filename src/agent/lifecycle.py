@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from src.agent.context_compaction_access import GovernedContextCompactionAdapter
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
 from src.agent.health import HealthRegistry, install_health_monitor_lifespan
@@ -170,6 +171,13 @@ def install_interaction_processor_lifespan(
         spend_reader=SessionSpendReader(get_session),
         stop_reader=emergency_stop_manager,
     )
+    context_compaction_summarizer = (
+        GovernedContextCompactionAdapter(
+            llm_access=llm_access, config_manager=runtime_config_manager
+        )
+        if settings.context_compaction_enabled
+        else None
+    )
 
     @asynccontextmanager
     async def interaction_processor_lifespan(application: FastAPI) -> AsyncIterator[Any]:
@@ -208,6 +216,10 @@ def install_interaction_processor_lifespan(
                 voice_preparation=voice_preparation,
                 voice_maintenance=lambda: maintain_voice_preparations(get_session),
                 fast_ack_enabled=settings.telegram_fast_ack_enabled,
+                summarizer=context_compaction_summarizer,
+                context_compaction_enabled=settings.context_compaction_enabled,
+                context_compaction_token_threshold=settings.context_compaction_token_threshold,
+                context_compaction_ratio=settings.context_compaction_ratio,
                 on_cycle=(lambda _: health_registry.heartbeat("interaction_processor"))
                 if health_registry is not None
                 else None,

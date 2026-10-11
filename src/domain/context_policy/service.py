@@ -127,6 +127,17 @@ def estimate_turn_size_tokens(execution_budget: ExecutionBudgetConfig) -> int:
     return execution_budget.max_output_tokens + estimate_tokens("x" * MAX_MESSAGE_CHARS)
 
 
+def oldest_fraction_count(total: int, ratio: float) -> int:
+    """How many of the oldest exchanges to compact (BL-34 session-ledger path).
+
+    Keeps at least one exchange out of compaction so there is always
+    something recent left, even for a tiny session.
+    """
+    if total <= 1:
+        return 0
+    return max(0, min(total - 1, round(total * ratio)))
+
+
 def resolve_history_ceiling(
     *,
     context_window_tokens: int | None,

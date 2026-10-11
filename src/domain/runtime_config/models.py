@@ -360,6 +360,11 @@ def bootstrap_runtime_configuration(
             "capabilities": ["text", "structured_output"],
             "context_window_tokens": 128_000,
         },
+        "ancoramind-context-compaction": {
+            "effective_gateway_route": "ancoramind-context-compaction-r1",
+            "capabilities": ["text"],
+            "context_window_tokens": 128_000,
+        },
     }
     return RuntimeConfiguration.model_validate(
         {

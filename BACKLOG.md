@@ -1638,7 +1638,7 @@ antes de los tests unitarios. El alcance mantiene 105 módulos de `src/` con mod
 estricto; no incluye tests, scripts ni migraciones. La primera ejecución verde de
 GitHub Actions fue confirmada el 2026-09-27.
 
-### BL-34 · Política de contexto por tokens y compactación gobernada 🔶 implementado localmente, compactación real diferida — specs/030
+### BL-34 · Política de contexto por tokens y compactación gobernada 🔶 compactación real implementada localmente (gate barato + resumen vía LLM) — specs/030
 La mitigación actual (`num_history_runs=10`, `add_history_to_context=True`) acota
 turnos, pero no el tamaño real: diez respuestas largas pueden agotar modelos
 pequeños y desperdiciar ventana en modelos grandes. Sustituir el número fijo como
@@ -1688,6 +1688,54 @@ existe, `needs_compaction` nunca se activa de verdad todavía).
 **Pendiente separado, fuera de alcance de este spec:** retención/purga de
 sesiones en `agno_runtime` — housekeeping operativo de la tabla de Agno, no
 parte de la política de contexto en sí.
+
+**Compactación real activada localmente (2026-10-12), vía el ledger propio
+en vez de la sesión de Agno:** el propietario propuso un contador barato
+(tokens reales acumulados de la sesión, ya devueltos por el LLM) para no
+pagar en cada mensaje el I/O que §6 evitó (leer la sesión completa de Agno),
+reservando la lectura cara al momento puntual de cruzar un umbral.
+Confirmado antes de implementar: `ancora.llm_usage_events.total_tokens` ya
+existe por llamada; solo faltaba un índice en
+`telegram_interactions.agno_session_id` (migración `0013_session_token_index`,
+`init.sql` sincronizado) para que `LlmUsageRepository.sum_session_tokens()`
+(nuevo, `SUM` + `JOIN` indexado) sea barato. Con el flag activo y el umbral
+cruzado, `InteractionProcessor._maybe_compact_context()` lee
+`TelegramInteractionsRepository.list_session_exchanges()` — **el propio
+ledger gobernado de AncoraMind (mensaje del usuario + respuesta final del
+Agent, ambos ya cifrados), nunca la tabla interna de Agno** — descifra con
+el mismo `TelegramPayloadCipher`, toma el ~40% más antiguo
+(`context_policy.service.oldest_fraction_count`, ratio configurable) y pide
+un resumen real vía LLM a `GovernedContextCompactionAdapter`
+(`src/agent/context_compaction_access.py`, ruta lógica dedicada
+`ancoramind-context-compaction`, mismo patrón standalone-context que Dream).
+El resumen se añade como bloque extra de `instructions` para ese run
+(`GovernedAgentFactory.create_for_run(..., compaction_summary=...,
+reduced_history_runs=...)`) — nunca se persiste, ni en Postgres ni en la
+sesión de Agno. Flag `CONTEXT_COMPACTION_ENABLED` apagado por defecto; un
+fallo del compactor nunca aborta el run, solo pierde la mejora para ese
+turno. 15 tests nuevos, 1310 unit tests (suite completa), Ruff y
+`mypy src/` limpios. Migración del índice escrita pero no validada contra
+PostgreSQL real en esta sesión (sin Docker disponible).
+
+**Decisión de diseño que diverge del contrato original:** `CompactionPort`/
+`CompactionOutcome` (`compaction.py`) seguían pensados para turnos reales de
+Agno (`ConversationTurn`, opacos) — exactamente el I/O que §6 evitó. Este
+incremento no los activa; usa un contrato nuevo y más simple,
+`SessionSummarizationPort`/`SessionExchange` (`session_summary.py`), sobre
+el ledger propio. `CompactionPort` queda sin usar, documentado como tal —
+no se ha borrado por si una futura necesidad de resumir la sesión real de
+Agno (no solo el ledger) lo retoma.
+
+**Hallazgo colateral, no corregido aquí:** al replicar el patrón de Dream
+(`src/agent/dream_access.py`, specs/029 T3) para `context_compaction_access.py`
+se encontró que `dream_access.py` nunca abre `execution_context_scope(context)`
+antes de `agent.arun()` — con un modelo real envuelto por
+`build_governed_model` (no el `Model` directo que usan sus propios tests),
+eso lanzaría `GovernanceViolationError` (`current_execution_context()` sin
+contexto activo). El patrón correcto está en
+`src/agent/document_extraction.py`. No se toca `dream_access.py` en este
+incremento (fuera de alcance de BL-34); queda anotado aquí para que no se
+pierda antes del próximo cambio en Dream.
 
 ### ~~BL-37~~ · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27) ✅ implementado — 2026-10-07
 Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,

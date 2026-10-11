@@ -78,6 +78,8 @@ class _FakeFactory(GovernedAgentFactory):
         execution_context: ExecutionContext,
         *,
         route_name: str | None = None,
+        compaction_summary: str | None = None,
+        reduced_history_runs: int | None = None,
     ) -> Any:
         # Must be creatable only inside the governed scope.
         self.created_contexts.append(current_execution_context())

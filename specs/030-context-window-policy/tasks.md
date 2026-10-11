@@ -105,3 +105,62 @@
   BACKLOG.md sobre lo que este incremento sí entrega (política + wiring);
   la compactación real sigue correctamente marcada como no implementada. ✅
   1084 unit tests, Ruff y `mypy src/` (154 ficheros) limpios.
+
+## T7 — Compactación real activada, vía el ledger propio (no `CompactionPort`) ✅ — 2026-10-12
+
+El propietario propuso un gate barato (contador de tokens acumulados por
+sesión, ya devueltos por cada llamada al LLM) para activar la compactación
+sin pagar en cada mensaje el I/O que T5/§6 evitó deliberadamente (leer la
+sesión completa de Agno). Investigado y confirmado antes de implementar:
+`ancora.llm_usage_events.total_tokens` ya existe por llamada; solo faltaba
+indexar `telegram_interactions.agno_session_id`.
+
+- [x] Migración `0013_session_token_index` (índice) + `init.sql`
+      sincronizado — no validada contra PostgreSQL real en esta sesión.
+- [x] `LlmUsageRepository.sum_session_tokens(session_id)` — `SUM` indexado,
+      nunca lee contenido.
+- [x] **Decisión de diseño que diverge del contrato T5:** `CompactionPort`/
+      `CompactionOutcome` seguían pensados para turnos reales de Agno
+      (`ConversationTurn`, opacos) — exactamente el I/O que §6 evitó. Este
+      incremento define un contrato nuevo, más simple,
+      `SessionSummarizationPort`/`SessionExchange`/`SessionSummaryOutcome`
+      (`src/domain/context_policy/session_summary.py`), sobre el **ledger
+      propio de AncoraMind** (mensaje del usuario + respuesta final del
+      Agent, ya cifrados en `telegram_interactions`/`logical_responses`) —
+      nunca la tabla interna de Agno. `CompactionPort` queda sin usar,
+      documentado como tal, no borrado.
+- [x] `TelegramInteractionsRepository.list_session_exchanges(session_id)` —
+      ciphertext crudo oldest-first; el llamador descifra con el mismo
+      `TelegramPayloadCipher` ya usado en todo el procesador.
+- [x] `oldest_fraction_count(total, ratio)` (`context_policy/service.py`) —
+      pura, cuántos intercambios antiguos compactar (ratio configurable,
+      40% por defecto, pedido por el propietario; conserva al menos uno).
+- [x] `GovernedContextCompactionAdapter` (`src/agent/context_compaction_access.py`)
+      — mismo patrón standalone-context que `GovernedDreamConsolidationAdapter`
+      (specs/029 T3), nueva ruta lógica dedicada `ancoramind-context-compaction`.
+      **Corrige un gap encontrado en Dream al replicar su patrón:**
+      `dream_access.py` nunca abre `execution_context_scope` antes de
+      `agent.arun()` — con un modelo real gobernado eso lanzaría
+      `GovernanceViolationError`; este adaptador sí lo abre (patrón correcto
+      ya usado en `document_extraction.py`). No se corrige `dream_access.py`
+      en este incremento — anotado aparte en BACKLOG.md.
+- [x] `InteractionProcessor._maybe_compact_context()` — gate barato primero
+      (cero queries con el flag apagado o bajo umbral); solo si se cruza el
+      umbral lee y descifra el tramo antiguo y pide el resumen. Un fallo del
+      compactor degrada a `(None, None)` sin abortar el run.
+- [x] `GovernedAgentFactory.create_for_run(..., compaction_summary=,
+      reduced_history_runs=)` — el resumen se añade como bloque extra de
+      `instructions` para ese run; nunca se persiste.
+- [x] Config: `CONTEXT_COMPACTION_ENABLED` (false por defecto),
+      `CONTEXT_COMPACTION_TOKEN_THRESHOLD`, `CONTEXT_COMPACTION_RATIO`.
+- [x] Tests: `test_llm_usage_repository.py`,
+      `test_interactions_repository_session_exchanges.py`,
+      `test_context_compaction_access.py`, ampliados
+      `test_governed_agent_factory_context.py` y
+      `test_interaction_processor.py` (15 tests nuevos en total).
+- **Listo cuando:** con el flag apagado el comportamiento es idéntico al de
+  T1-T6 (cero queries nuevas); con el flag activo y el umbral cruzado, se
+  compacta de verdad vía LLM sin tocar `agno_runtime`. ✅ 1310 unit tests,
+  Ruff y `mypy src/` (166 ficheros) limpios. **Pendiente:** validar el
+  índice contra PostgreSQL real y un E2E con una sesión larga de verdad
+  (bloqueado por infraestructura, igual que el resto del pipeline).

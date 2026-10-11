@@ -354,6 +354,8 @@ CREATE INDEX IF NOT EXISTS idx_telegram_interactions_user_accepted_at
 CREATE INDEX IF NOT EXISTS idx_telegram_interactions_accepted_queue
     ON ancora.telegram_interactions(received_at)
     WHERE status = 'accepted';
+CREATE INDEX IF NOT EXISTS idx_telegram_interactions_agno_session_id
+    ON ancora.telegram_interactions(agno_session_id);
 
 CREATE TABLE IF NOT EXISTS ancora.telegram_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

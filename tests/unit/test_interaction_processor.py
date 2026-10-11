@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.domain.interactions.processor as processor_module
+from src.domain.context_policy.session_summary import SessionSummaryOutcome
 from src.domain.emergency_stop.models import EmergencyStopActiveError
 from src.domain.interactions.commands import (
     HELP_REPLY,
@@ -24,7 +25,7 @@ from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor, TelegramSendError
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import ExecutionBudgetExceededError
-from src.repositories.interactions import TelegramInteractionsRepository
+from src.repositories.interactions import EncryptedSessionExchange, TelegramInteractionsRepository
 
 
 def _interaction(status: InteractionStatus = InteractionStatus.ACCEPTED) -> TelegramInteraction:
@@ -311,6 +312,8 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
             telegram_message_id: int | None = None,
             media=(),
             provenance=None,
+            compaction_summary=None,
+            reduced_history_runs=None,
         ) -> str:
             assert input_text == "hola"
             assert user_id == "5"
@@ -1009,3 +1012,180 @@ class TestConsentInput:
             assert await processor._handle_consent_input(_interaction(), raw) is None
         actions.claim_confirmation.assert_not_awaited()
         actions.discard_proposal.assert_not_awaited()
+
+
+def _compaction_interaction(cipher: TelegramPayloadCipher) -> TelegramInteraction:
+    interaction = _interaction()
+    encrypted = cipher.encrypt({"text": "hola"})
+    return interaction.model_copy(update={"payload_ciphertext": encrypted.ciphertext})
+
+
+def _compaction_processor(
+    *,
+    session: AsyncMock,
+    cipher: TelegramPayloadCipher,
+    summarizer: AsyncMock | None,
+    context_compaction_enabled: bool,
+) -> InteractionProcessor:
+    runner = AsyncMock()
+    runner.run.return_value = "respuesta"
+    sender = AsyncMock()
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    return InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+        summarizer=summarizer,
+        context_compaction_enabled=context_compaction_enabled,
+        context_compaction_token_threshold=1_000,
+        context_compaction_ratio=0.4,
+    )
+
+
+async def test_compaction_disabled_never_queries_usage_or_exchanges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    usage_repo = AsyncMock()
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _compaction_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    monkeypatch.setattr(processor_module, "LlmUsageRepository", lambda _: usage_repo)
+    processor = _compaction_processor(
+        session=session, cipher=cipher, summarizer=AsyncMock(), context_compaction_enabled=False
+    )
+
+    await processor._run_agent(accepted)
+
+    usage_repo.sum_session_tokens.assert_not_awaited()
+    repo.list_session_exchanges.assert_not_awaited()
+    assert processor._agent_runner.run.await_args.kwargs["compaction_summary"] is None  # type: ignore[attr-defined]
+    assert processor._agent_runner.run.await_args.kwargs["reduced_history_runs"] is None  # type: ignore[attr-defined]
+
+
+async def test_compaction_enabled_but_under_threshold_skips_the_expensive_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    usage_repo = AsyncMock()
+    usage_repo.sum_session_tokens.return_value = 10
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _compaction_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    monkeypatch.setattr(processor_module, "LlmUsageRepository", lambda _: usage_repo)
+    processor = _compaction_processor(
+        session=session, cipher=cipher, summarizer=AsyncMock(), context_compaction_enabled=True
+    )
+
+    await processor._run_agent(accepted)
+
+    usage_repo.sum_session_tokens.assert_awaited_once()
+    repo.list_session_exchanges.assert_not_awaited()
+    assert processor._agent_runner.run.await_args.kwargs["compaction_summary"] is None  # type: ignore[attr-defined]
+
+
+async def test_compaction_over_threshold_summarizes_the_oldest_slice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    usage_repo = AsyncMock()
+    usage_repo.sum_session_tokens.return_value = 5_000
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _compaction_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    old_payload = cipher.encrypt({"text": "mensaje antiguo"}).ciphertext
+    old_response = cipher.encrypt({"content": "respuesta antigua"}).ciphertext
+    repo.list_session_exchanges.return_value = [
+        EncryptedSessionExchange(
+            interaction_id=uuid4(), payload_ciphertext=old_payload, response_ciphertext=old_response
+        )
+        for _ in range(5)
+    ]
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    monkeypatch.setattr(processor_module, "LlmUsageRepository", lambda _: usage_repo)
+    summarizer = AsyncMock()
+    summarizer.summarize.return_value = SessionSummaryOutcome(
+        summary_text="Resumen de lo antiguo.", status="completed"
+    )
+    processor = _compaction_processor(
+        session=session, cipher=cipher, summarizer=summarizer, context_compaction_enabled=True
+    )
+
+    await processor._run_agent(accepted)
+
+    summarizer.summarize.assert_awaited_once()
+    [exchanges] = summarizer.summarize.await_args.args
+    assert len(exchanges) == 2  # oldest_fraction_count(5, 0.4) == 2
+    assert exchanges[0].user_text == "mensaje antiguo"
+    assert exchanges[0].assistant_text == "respuesta antigua"
+    kwargs = processor._agent_runner.run.await_args.kwargs  # type: ignore[attr-defined]
+    assert kwargs["compaction_summary"] == "Resumen de lo antiguo."
+    assert kwargs["reduced_history_runs"] == 3
+
+
+async def test_compaction_failure_does_not_block_the_main_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    usage_repo = AsyncMock()
+    usage_repo.sum_session_tokens.return_value = 5_000
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _compaction_interaction(cipher)
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    old_payload = cipher.encrypt({"text": "mensaje antiguo"}).ciphertext
+    repo.list_session_exchanges.return_value = [
+        EncryptedSessionExchange(
+            interaction_id=uuid4(), payload_ciphertext=old_payload, response_ciphertext=None
+        )
+        for _ in range(5)
+    ]
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    monkeypatch.setattr(processor_module, "LlmUsageRepository", lambda _: usage_repo)
+    summarizer = AsyncMock()
+    summarizer.summarize.return_value = SessionSummaryOutcome(
+        summary_text=None, status="failed", error_class="AgentRunError"
+    )
+    processor = _compaction_processor(
+        session=session, cipher=cipher, summarizer=summarizer, context_compaction_enabled=True
+    )
+
+    await processor._run_agent(accepted)
+
+    processor._agent_runner.run.assert_awaited_once()  # type: ignore[attr-defined]
+    kwargs = processor._agent_runner.run.await_args.kwargs  # type: ignore[attr-defined]
+    assert kwargs["compaction_summary"] is None
+    assert kwargs["reduced_history_runs"] is None

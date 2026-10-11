@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     telegram_fast_ack_enabled: bool = False
     """BL-32: send an early acknowledgement for attachment-bearing interactions
     before inference. Best-effort — a failure never blocks the main run."""
+    context_compaction_enabled: bool = False
+    """BL-34: summarize the oldest slice of a session's own exchange ledger
+    via a governed LLM call once its cumulative tokens cross the threshold
+    below. Off by default; a failed compaction never aborts the run."""
+    context_compaction_token_threshold: int = Field(default=60_000, gt=0)
+    """Cumulative session tokens (from llm_usage_events) that trigger compaction."""
+    context_compaction_ratio: float = Field(default=0.4, gt=0, lt=1)
+    """Fraction of the oldest exchanges summarized away once triggered."""
     governed_consent_enabled: bool = False
     """Resolve human consent and execute through the Core, never the LLM.
     Off by default: proposals remain pending and cannot execute; no legacy
