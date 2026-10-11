@@ -287,6 +287,26 @@ comportamiento en producción (admisión ya activa) ni en dev local (admisión
 apagada por defecto). 912 unit + 141 integration passing, Ruff y
 `mypy src/` limpios.
 
+**Piloto de detectores locales offline implementado (2026-10-11, P2):**
+primer incremento del punto "comparar detectores locales offline y falsos
+positivos antes de añadir dependencias". `src/domain/security/
+injection_heuristics.py` (`scan_for_injection_patterns`) — puro, sin I/O,
+sin dependencias nuevas, cinco heurísticas deterministas (frase imperativa
+tipo "ignore...instructions"/filename "IGNORE_...EXECUTE", prefijo falso
+`SYSTEM:`, caracteres de control bidi Unicode, blob base64 junto a un verbo
+de decodificación, URL acoplada a un verbo de acción). Validado contra el
+catálogo real `evals/security/cases.json` (BL-8, no se crearon casos
+nuevos): **8/8 recall** en los 8 casos `prompt_injection`, **0/2 falsos
+positivos** en los 2 `benign_control`/`false_positive`
+(`tests/unit/test_injection_heuristics.py`, 12 tests). Detalle completo,
+incluidas las heurísticas descartadas de terceros, en
+`docs/llm-security-hardening.md` §"Herramientas consideradas". **No
+cierra el punto:** es señal de observabilidad, no un gate — ninguna tool
+de producción lo invoca, sin telemetría nueva; el catálogo solo tiene 2
+negativos benignos, muestra demasiado pequeña para fijar un umbral de
+adopción (el propio plan de arriba pide ampliar ese corpus antes). 1224
+unit tests (suite completa), Ruff y `mypy src/` limpios.
+
 ### BL-23 · Governed LLM Access, Telegram Admission and Observability 🔶 T2–T14 implementados localmente — specs/013 + ADR-004/005/006
 
 Convertir el acceso a LLM y la entrada Telegram en capabilities gobernadas:

@@ -189,6 +189,26 @@ Referencias primarias consultadas: [OWASP LLM Prompt Injection Prevention](https
 Las características/licencias/estado de terceros deben reconfirmarse al decidir
 una dependencia; este análisis no añade ninguna.
 
+**Piloto propio de heurísticas deterministas implementado (2026-10-11):** en
+vez de evaluar las dependencias de terceros de la tabla anterior (ninguna
+instalada todavía), se implementó un primer candidato propio, cero
+dependencias: `src/domain/security/injection_heuristics.py`
+(`scan_for_injection_patterns`), puro/sin I/O, cinco señales deterministas
+(`imperative_override`, `fake_role_prefix`, `unicode_bidi_control`,
+`base64_blob_with_decode_instruction`, `exfiltration_link_prompt`). Probado
+contra el catálogo real `evals/security/cases.json` (BL-8):
+**8/8 recall** sobre los casos etiquetados `prompt_injection` y **0/2
+falsos positivos** sobre los etiquetados `benign_control`/`false_positive`
+(`tests/unit/test_injection_heuristics.py`). **Limitación explícita:** el
+catálogo tiene solo 2 negativos benignos — insuficiente para fijar un
+umbral de producción o decidir adopción; las heurísticas están calibradas
+contra este catálogo concreto, no validadas contra un corpus real más
+amplio. **Sin wiring a producción**: ninguna tool llama a esta función en
+este incremento, no hay telemetría nueva — es solo la medición que este
+plan pide antes de decidir. Próximo paso (no iniciado): ampliar
+`evals/security/` con más negativos benignos reales antes de evaluar
+wiring/telemetría/umbral.
+
 ## Plan verificable para BL-39
 
 1. **P0:** diseñar y probar consentimiento ligado a evento de usuario +
