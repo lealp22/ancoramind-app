@@ -8,6 +8,20 @@
 
 ## 0. Mapa rápido síntoma → runbook
 
+### Gate manual de rollout — hardening 2026-10-11
+
+Wait for CI permanece desactivado por decisión del propietario. Revisar checks
+del SHA exacto a desplegar y registrar el deployment; no habilitarlo automáticamente.
+
+El cierre local BL-39/40 retira `execute_*` del Agent y rechaza la API legacy.
+**Con `GOVERNED_CONSENT_ENABLED=false` las propuestas NO se ejecutan.** Antes
+de publicar, acordar el rollout del flag con admission/processor activos y E2E
+Telegram sintético. No tratar rollback a código legacy como restauración segura
+de la gobernanza: reintroduciría la confirmación decidida por el modelo.
+No reejecutar propuestas ni interacciones ambiguas para probar recuperación.
+
+Evidencia/pendientes: `specs/023-audit-remediation/operational-review-2026-10-11.md`.
+
 | Síntoma | Ir a |
 |---|---|
 | AncoraMind no responde o Telegram no entrega respuesta | §1 Triage inicial |

@@ -12,8 +12,8 @@ When creating an event:
 1. Extract: title, date, time, duration (if mentioned)
 2. Call `propose_calendar_event` to persist the proposal and show its details
 3. Wait for explicit confirmation
-4. Call `execute_calendar_event` with the exact proposal ID
-5. Only claim success after the execute tool confirms creation
+4. The Core validates consent and executes; do not call an executor
+5. Only claim success after a verified Core result, never from the proposal alone
 
 Examples:
 - "Tengo dentista el jueves a las 17:30"
@@ -61,7 +61,5 @@ Calendar events are EXTERNAL_ACTIONS. Always confirm before creating.
 - Don't create events without a clear date/time
 - If the date is ambiguous ("el jueves"), ask which Thursday
 - Don't expose calendar provider details to the user
-- A recurring event and its linked reminder are created with two separate
-  database commits (not one atomic transaction) — if the tool reports the
-  event was created but the reminder link failed, tell the user plainly;
-  don't claim full success
+- The Core creates a calendar event and its linked reminder in one transaction.
+  A failed linked reminder rolls back the event too; never claim success on failure.

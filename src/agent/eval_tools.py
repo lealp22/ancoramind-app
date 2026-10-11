@@ -26,6 +26,7 @@ from typing import Any
 
 from agno.run import RunContext
 
+from src.agent.tool_catalog import proposal_only_tools
 from src.agent.tools.untrusted_results import (
     MAX_SUMMARY_CHARS,
     bounded_text,
@@ -37,8 +38,8 @@ from src.agent.tools.untrusted_results import (
 class SyntheticProposalStore:
     """In-memory pending-proposal state for exactly one isolated eval run.
 
-    Mirrors ``ActionProposalsRepository.confirm_or_use_confirmed`` (specs/023)
-    without a database. Entries are seeded by the executor from the eval
+    Represents pending proposals only; model calls cannot confirm them.
+    Entries are seeded by the executor from the eval
     case's own trusted fixture (never from simulated-model output) or created
     by a simulated ``propose_*`` tool call during the run. Never shared
     across cases.
@@ -59,8 +60,8 @@ class SyntheticProposalStore:
         return proposal_id
 
     def confirm(self, proposal_id: str) -> bool:
-        """Simulate ``execute_*``: consume the entry once, if it is pending."""
-        return self._pending.pop(proposal_id, None) is not None
+        """Retired legacy confirmation; a model-owned call grants no authority."""
+        return False
 
 
 def _fixture_text(fixtures: Mapping[str, object], *keys: str, default: str) -> str:
@@ -114,12 +115,6 @@ def build_eval_tools(
         """PROPOSE storing a personal note — requires user confirmation."""
         proposal_id = store.create("note")
         return f"Propuesta de nota creada (`{proposal_id}`). ¿Confirmas?"
-
-    async def execute_note(run_context: RunContext, proposal_id: str) -> str:
-        """Execute a confirmed note proposal."""
-        if store.confirm(proposal_id):
-            return f"Nota guardada (`{proposal_id}`)."
-        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
 
     async def search_documents(run_context: RunContext, query: str | None = None) -> str:
         """Search personal documents by filename."""
@@ -186,12 +181,6 @@ def build_eval_tools(
         proposal_id = store.create("vehicle")
         return f"Propuesta de registro de vehículo creada (`{proposal_id}`). ¿Confirmas?"
 
-    async def execute_vehicle(run_context: RunContext, proposal_id: str) -> str:
-        """Execute a confirmed vehicle registration proposal."""
-        if store.confirm(proposal_id):
-            return f"Vehículo registrado (`{proposal_id}`)."
-        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
-
     async def propose_vehicle_maintenance(
         run_context: RunContext,
         vehicle_id: str,
@@ -202,51 +191,30 @@ def build_eval_tools(
         proposal_id = store.create("vehicle_maintenance")
         return f"Propuesta de mantenimiento creada (`{proposal_id}`). ¿Confirmas?"
 
-    async def execute_vehicle_maintenance(run_context: RunContext, proposal_id: str) -> str:
-        """Execute a confirmed vehicle maintenance proposal."""
-        if store.confirm(proposal_id):
-            return f"Mantenimiento registrado (`{proposal_id}`)."
-        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
-
     async def propose_reminder(run_context: RunContext, title: str, trigger_at: str) -> str:
         """PROPOSE a reminder — requires user confirmation."""
         proposal_id = store.create("reminder")
         return f"Propuesta de recordatorio creada (`{proposal_id}`). ¿Confirmas?"
-
-    async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
-        """Execute a confirmed reminder proposal."""
-        if store.confirm(proposal_id):
-            return f"Recordatorio creado (`{proposal_id}`)."
-        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
 
     async def propose_calendar_event(run_context: RunContext, title: str, start_at: str) -> str:
         """PROPOSE a calendar event — requires user confirmation (EXTERNAL_ACTION)."""
         proposal_id = store.create("calendar_event")
         return f"Propuesta de evento creada (`{proposal_id}`). ¿Confirmas?"
 
-    async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> str:
-        """Execute a confirmed calendar event proposal."""
-        if store.confirm(proposal_id):
-            return f"Evento creado (`{proposal_id}`)."
-        return f"No se encontró la propuesta `{proposal_id}` o ya no está pendiente."
-
-    return [
-        search_notes,
-        propose_note,
-        execute_note,
-        search_documents,
-        get_document,
-        analyze_document,
-        find_vehicle,
-        propose_vehicle,
-        execute_vehicle,
-        propose_vehicle_maintenance,
-        execute_vehicle_maintenance,
-        propose_reminder,
-        execute_reminder,
-        propose_calendar_event,
-        execute_calendar_event,
-    ]
+    return proposal_only_tools(
+        [
+            search_notes,
+            propose_note,
+            search_documents,
+            get_document,
+            analyze_document,
+            find_vehicle,
+            propose_vehicle,
+            propose_vehicle_maintenance,
+            propose_reminder,
+            propose_calendar_event,
+        ]
+    )
 
 
 __all__ = ["SyntheticProposalStore", "build_eval_tools"]

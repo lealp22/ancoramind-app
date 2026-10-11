@@ -1,9 +1,10 @@
 """Action proposals repository — governance layer for WRITE operations.
 
-Two generations of API coexist until specs/023 T4.5 rewrites the executors:
+The legacy execution API is retired (BL-39/40): ``confirm``,
+``confirm_or_use_confirmed`` and ``mark_executed`` fail closed without I/O.
+Only Core-owned consent and ``ProposalExecutor`` can authorize and execute.
+``create`` still commits a pending proposal; it never writes canonical data.
 
-* ``create`` / ``get_pending`` / ``confirm`` / ``mark_executed`` — legacy path
-  still used by the ``execute_*`` tools. They commit on their own.
 * Consent API (``mark_presented``, ``list_confirmable``, ``claim_confirmation``,
   ``begin_execution``, ``complete_execution``, ``discard_pending_for_chat``) —
   the Core-owned state machine of ``specs/022-llm-input-trust/consent-design.md``.
@@ -134,77 +135,26 @@ class ActionProposalsRepository:
         }
 
     async def confirm(self, user_id: str, proposal_id: str) -> ProposalRecord | None:
-        """Confirm a pending proposal."""
-        now = datetime.now(tz=UTC)
-        stmt = text("""
-            UPDATE ancora.action_proposals SET status='confirmed', confirmed_at=:now
-            WHERE id=:id AND user_id=:uid AND status='pending_confirmation'
-            RETURNING id,user_id,tool_name,status,payload
-        """)
-        result = await self._session.execute(
-            stmt, {"id": UUID(proposal_id), "uid": user_id, "now": now}
-        )
-        row = result.fetchone()
-        await self._session.commit()
-        if not row:
-            return None
-        return {
-            "id": str(row.id),
-            "tool_name": row.tool_name,
-            "status": row.status,
-            "payload": row.payload,
-        }
+        """Retired: an LLM-supplied ID is never evidence of human consent.
+
+        Keep a rejecting shim for old adapters, independently of rollout flags.
+        Confirmation must use ``claim_confirmation`` from the trusted processor.
+        """
+        return None
 
     async def confirm_or_use_confirmed(
         self, user_id: str, proposal_id: str
     ) -> ProposalRecord | None:
-        """Legacy ``execute_*`` entry point during the T4.5 transition.
+        """Retired: even confirmed proposals must use the atomic Core executor.
 
-        Tries the old LLM-driven ``confirm()`` first (unchanged behaviour
-        while ``GOVERNED_CONSENT_ENABLED`` is off). If the row is no longer
-        ``pending_confirmation``, it may already be ``confirmed`` by the
-        pre-Agent consent path (specs/023 T4.3) — in that case the already
-        committed confirmation is reused instead of rejecting the proposal.
+        Returning a confirmed row here would let legacy tools mutate outside
+        the single-use execution claim and its transaction. Never reuse it.
         """
-        confirmed = await self.confirm(user_id, proposal_id)
-        if confirmed is not None:
-            return confirmed
-        stmt = text("""
-            SELECT id, tool_name, status, payload
-            FROM ancora.action_proposals
-            WHERE id = :id AND user_id = :uid AND status = 'confirmed'
-        """)
-        result = await self._session.execute(stmt, {"id": UUID(proposal_id), "uid": user_id})
-        row = result.fetchone()
-        if row is None:
-            return None
-        return {
-            "id": str(row.id),
-            "tool_name": row.tool_name,
-            "status": row.status,
-            "payload": row.payload,
-        }
+        return None
 
     async def mark_executed(self, user_id: str, proposal_id: str) -> bool:
-        """Mark a confirmed proposal as executed (legacy path).
-
-        Only ``confirmed`` rows transition (specs/023 T4.2): previously any row
-        of the user — pending, already executed or failed — was overwritten.
-        Returns whether the transition happened.
-        """
-        now = datetime.now(tz=UTC)
-        stmt = text("""
-            UPDATE ancora.action_proposals
-            SET status='executed', executed_at=:now
-            WHERE id=:id AND user_id=:uid AND status='confirmed'
-            RETURNING id
-        """)
-        result = await self._session.execute(
-            stmt, {"id": UUID(proposal_id), "uid": user_id, "now": now}
-        )
-        transitioned = result.fetchone() is not None
-        await self._session.commit()
-        return transitioned
+        """Retired: terminal audit belongs to the Core execution transaction."""
+        return False
 
     # ── Consent API (specs/022 consent-design.md) — never commits ──────────
 

@@ -16,9 +16,8 @@
 1. Call `propose_preference_forget` — it creates the proposal and shows it.
    **You MUST call this tool.** Never write a confirmation request yourself.
 2. Wait for the user's explicit confirmation ("Sí", "confirma").
-3. Call `execute_preference_forget` with the exact proposal id from step 1.
-4. Only claim a preference was forgotten after `execute_preference_forget`
-   confirms it.
+3. The Core validates consent and executes; the Agent has no executor.
+4. Only claim a preference was forgotten after a verified Core result.
 
 ## What These Preferences Are, and Are Not
 
@@ -26,7 +25,7 @@
   past conversations — never canonical memory (notes, vehicles, reminders,
   etc.) and never something you write to directly. You cannot teach the
   model a new preference by calling a tool; only `list_my_preferences` and
-  `propose_preference_forget`/`execute_preference_forget` exist.
+   `propose_preference_forget` are available to the Agent.
 - Only confirmed preferences are ever shown — if the user asks and
   `list_my_preferences` returns none, say so plainly; do not guess or infer
   a preference from the current conversation and present it as remembered.

@@ -10,7 +10,7 @@ from src.repositories.documents import DocumentsRepository
 pytestmark = pytest.mark.integration
 
 
-async def test_governance_lifecycle(session, user_a):
+async def test_pending_proposal_cannot_be_confirmed_or_executed_by_legacy_api(session, user_a):
     repo = ActionProposalsRepository(session)
 
     proposal = await repo.create(
@@ -27,26 +27,22 @@ async def test_governance_lifecycle(session, user_a):
     assert pending is not None
     assert pending["tool_name"] == "register_vehicle_maintenance"
 
-    confirmed = await repo.confirm(user_a, proposal_id)
-    assert confirmed is not None
-    assert confirmed["status"] == "confirmed"
-
-    # Once confirmed it is no longer pending; a second confirm is a no-op
-    assert await repo.get_pending(user_a, proposal_id) is None
     assert await repo.confirm(user_a, proposal_id) is None
-
-    await repo.mark_executed(user_a, proposal_id)
+    assert await repo.confirm_or_use_confirmed(user_a, proposal_id) is None
+    assert not await repo.mark_executed(user_a, proposal_id)
 
     row = (
         await session.execute(
-            text("SELECT status, confirmed_at, executed_at FROM ancora.action_proposals"
-                 " WHERE id = :id"),
+            text(
+                "SELECT status, confirmed_at, executed_at FROM ancora.action_proposals"
+                " WHERE id = :id"
+            ),
             {"id": proposal_id},
         )
     ).fetchone()
-    assert row.status == "executed"
-    assert row.confirmed_at is not None
-    assert row.executed_at is not None
+    assert row.status == "pending_confirmation"
+    assert row.confirmed_at is None
+    assert row.executed_at is None
 
 
 async def test_governance_is_user_scoped(session, user_a, user_b):
@@ -61,9 +57,7 @@ async def test_governance_is_user_scoped(session, user_a, user_b):
     await repo.mark_executed(user_b, proposal_id)
 
     assert await repo.get_pending(user_a, proposal_id) is not None
-    assert (await repo.get_pending(user_a, proposal_id))["status"] == (
-        "pending_confirmation"
-    )
+    assert (await repo.get_pending(user_a, proposal_id))["status"] == ("pending_confirmation")
 
 
 async def test_source_document_set_null_on_document_delete(session, user_a):
@@ -96,29 +90,25 @@ async def test_source_document_set_null_on_document_delete(session, user_a):
     assert pending["source_document_id"] is None
 
 
-async def test_confirm_or_use_confirmed_prefers_legacy_llm_confirm(session, user_a):
-    """specs/023 T4.5: unchanged behaviour while GOVERNED_CONSENT_ENABLED is off."""
+async def test_confirm_or_use_confirmed_never_authorizes_pending_proposals(session, user_a):
+    """No rollout flag can restore model-owned authorization."""
     repo = ActionProposalsRepository(session)
     proposal = await repo.create(user_a, "create_reminder", {"title": "ITV"})
 
     result = await repo.confirm_or_use_confirmed(user_a, proposal["id"])
 
-    assert result is not None
-    assert result["status"] == "confirmed"
+    assert result is None
     row = (
         await session.execute(
             text("SELECT confirmed_at FROM ancora.action_proposals WHERE id = :id"),
             {"id": proposal["id"]},
         )
     ).one()
-    assert row.confirmed_at is not None
+    assert row.confirmed_at is None
 
 
-async def test_confirm_or_use_confirmed_reuses_pre_agent_claim(session, user_a):
-    """specs/023 T4.5: a proposal already confirmed by T4.3 executes without
-
-    a second ``confirm()`` call — the LLM's «Sí» cannot re-authorise it.
-    """
+async def test_legacy_api_cannot_reuse_a_core_claim(session, user_a):
+    """A valid Core claim is exclusively consumed by ProposalExecutor."""
     from datetime import UTC, datetime
     from uuid import UUID
 
@@ -186,8 +176,12 @@ async def test_confirm_or_use_confirmed_reuses_pre_agent_claim(session, user_a):
 
     result = await repo.confirm_or_use_confirmed(user_a, proposal["id"])
 
-    assert result is not None
-    assert result["status"] == "confirmed"
-    assert result["payload"]["title"] == "ITV"
-
-
+    assert result is None
+    assert not await repo.mark_executed(user_a, proposal["id"])
+    assert (
+        await session.scalar(
+            text("SELECT status FROM ancora.action_proposals WHERE id=:id"),
+            {"id": proposal_id},
+        )
+        == "confirmed"
+    )

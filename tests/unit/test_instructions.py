@@ -120,3 +120,10 @@ class TestAssembleInstructions:
 
         assert "## Available Tools" not in prompt_text
         assert "delete_document" not in prompt_text
+
+    def test_confirmation_is_owned_by_core_not_the_agent(self):
+        prompt_text = "\n".join(assemble_instructions())
+        assert "`execute_*` tools are not available" in prompt_text
+        assert "the Core validates human consent before the Agent" in prompt_text
+        assert "Call `execute_" not in prompt_text
+        assert "Use `execute_" not in prompt_text

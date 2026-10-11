@@ -91,6 +91,16 @@ sentinel no_tool_call).
 
 ## Límite pendiente
 
+**Actualización 2026-10-11 (BL-39/40):** el catálogo simulado y el Agent de eval
+ya no exponen `execute_*`; `SyntheticProposalStore.confirm` rechaza sin consumir.
+El adaptador rechaza `expected_outcome=confirm_pending_action` y `required_tool`
+`execute_*` antes de resolver el modelo (test verifica cero llamadas). No son
+casos aprobados ni confirmación ejecutada: el catálogo histórico JSON continúa
+estáticamente válido, pero esas dos evaluaciones deben trasladarse a un harness
+determinista del Core y actualizar sus expectativas antes de ejecutar T7.
+Otros casos se ejecutan con reads/proposals y el mismo framing de datos.
+Unit scripted sin red/coste; 1263 unit passing en la suite final.
+
 Ningún test de este incremento llama a un provider real, a `AgnoLLMAccess`
 con credenciales, ni a `scripts/run_evals.py` (sin cambios). T7 (ejecutar la
 modalidad LLM real con credenciales/presupuesto aprobados, fuera de CI por

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import pytest
 from agno.models.base import Model
 from agno.models.response import ModelResponse
 
@@ -39,9 +40,7 @@ class _ScriptedModel(Model):
     def _parse_provider_response(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover
         raise NotImplementedError
 
-    def _parse_provider_response_delta(
-        self, *args: Any, **kwargs: Any
-    ) -> Any:  # pragma: no cover
+    def _parse_provider_response_delta(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover
         raise NotImplementedError
 
     async def ainvoke(self, messages: Any = None, **kwargs: Any) -> ModelResponse:
@@ -140,7 +139,7 @@ async def test_propose_tool_call_requires_user_confirmation() -> None:
     assert observation.requires_user_confirmation is True
 
 
-async def test_pending_proposal_fixture_enables_confirm_pending_action() -> None:
+async def test_legacy_confirmation_case_is_rejected_before_inference() -> None:
     model = _ScriptedModel(
         id="eval-test",
         turns=(
@@ -168,11 +167,9 @@ async def test_pending_proposal_fixture_enables_confirm_pending_action() -> None
         config_revision=0,
     )
 
-    observation = await executor.execute(request)
-
-    assert observation.outcome == "confirm_pending_action"
-    assert observation.tool_names == ("execute_vehicle",)
-    assert observation.requires_user_confirmation is False
+    with pytest.raises(ValueError, match="deterministic consent harness"):
+        await executor.execute(request)
+    assert model.calls == 0
 
 
 async def test_no_tool_call_is_a_distinct_sentinel_not_clarify_or_safe_response() -> None:

@@ -28,3 +28,7 @@
       fuera de CI por defecto y capturar evidencia metadata-only.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con
       etiquetas humanas sintéticas y baseline por ruta/configuración.
+- [ ] T6b · Tras el cierre legacy (BL-39/40, 2026-10-11), trasladar los casos
+      de confirmación a un harness Core y actualizar expectativas. El adaptador
+      Agent ya los rechaza antes de inferencia y no expone ejecutoras; no contar
+      ese rechazo como un éxito de la evaluación de consentimiento.

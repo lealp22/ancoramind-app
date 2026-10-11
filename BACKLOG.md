@@ -45,6 +45,24 @@ Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
+**Incremento 2026-10-11 — BL-23/39/40 (local, sin deploy):** cerrado el bypass
+legacy de consentimiento: Agent gobernado/singleton/eval Agent sin `execute_*`;
+`confirm`/`confirm_or_use_confirmed`/`mark_executed` rechazan sin I/O. Core
+`ProposalExecutor` conserva claims únicos, transacción y auditoría. Con
+consentimiento OFF no hay mutación ni fallback LLM. Prompts/catálogo cambiados
+(cambio evaluable), pendiente rollout explícito y E2E Telegram.
+
+Diagnóstico remoto de solo lectura: app en `e25bfc4` (local base `9166f55`),
+health/readiness 200 y REST/admin consultadas 401; Supabase revisión runtime 2.
+Collector recibe 429 de Grafana; Gateway referencia Redis apagado (uso efectivo
+pendiente). Valores efectivos de secrets/flags ocultos. Wait for CI permanece
+OFF por decisión del propietario, con gate manual sobre el SHA desplegado.
+Evidencia completa: `specs/023-audit-remediation/operational-review-2026-10-11.md`.
+Validación final: 1263 unit + 144 integration passed (1 live STT skipped),
+Ruff/mypy limpios, 27 casos de catálogo estático válidos. BL-23/39/40 abiertos.
+El harness físico rechaza casos legacy de confirmación antes de inferencia;
+BL-8 requiere trasladarlos a un harness Core, no considerarlos ya cubiertos.
+
 ### BL-40 · Remediación de auditoría técnica (2026-10-02) 🔶 en curso — specs/023
 
 Auditoría de coherencia especificación/implementación (2026-10-02) detectó 8

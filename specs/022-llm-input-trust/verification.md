@@ -1,6 +1,20 @@
 # Verificación — Spec 022 / BL-39
 
-> Estado: verificación local parcial; sin infraestructura externa.
+> Estado: verificación local parcial y diagnóstico remoto de solo lectura
+> (2026-10-11); rollout de consentimiento y evals LLM reales pendientes.
+> La evidencia fechada inferior conserva la historia de incrementos anteriores.
+
+## Corrección del bypass legacy — 2026-10-11
+
+Se retiran `execute_*` del Agent gobernado/singleton y eval Agent; las APIs
+legacy de confirmación/reutilización/auditoría rechazan sin I/O. Flag OFF no
+habilita ejecución legacy. `ProposalExecutor` es la única vía de ejecución.
+1263 unit + 144 integration passed (1 live STT skipped), Ruff/mypy limpios;
+sin inferencia real. Prueba de integración nueva verifica claim humano real,
+rechazo legacy antes/después del claim y una sola ejecución Core sin replay.
+Evidencia y límites: `../023-audit-remediation/operational-review-2026-10-11.md`.
+Los párrafos históricos sobre `confirm_or_use_confirmed` describen el camino
+anterior, no el comportamiento actual. BL-39 no se cierra por esta corrección.
 
 ## Ejecución local
 

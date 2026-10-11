@@ -378,9 +378,7 @@ async def test_ambiguous_failure_is_terminal(session: AsyncSession, user_a: str)
         proposal_id, user_id=user_a, status=ProposalStatus.EXECUTED
     )
     with pytest.raises(ValueError):
-        await repo.complete_execution(
-            proposal_id, user_id=user_a, status=ProposalStatus.CONFIRMED
-        )
+        await repo.complete_execution(proposal_id, user_id=user_a, status=ProposalStatus.CONFIRMED)
 
 
 async def test_status_check_constraint_rejects_unknown_states(
@@ -397,7 +395,7 @@ async def test_status_check_constraint_rejects_unknown_states(
     await session.rollback()
 
 
-async def test_legacy_mark_executed_requires_confirmed(
+async def test_legacy_mark_executed_cannot_consume_even_confirmed_proposals(
     session: AsyncSession, user_a: str
 ) -> None:
     """Regression (specs/023 T4.2): it used to overwrite any status of the user."""
@@ -407,10 +405,16 @@ async def test_legacy_mark_executed_requires_confirmed(
     assert await repo.mark_executed(user_a, proposal_id) is False
     assert await _status(session, UUID(proposal_id)) == "pending_confirmation"
 
-    assert await repo.confirm(user_a, proposal_id) is not None
-    assert await repo.mark_executed(user_a, proposal_id) is True
-    assert await repo.mark_executed(user_a, proposal_id) is False
-    assert await _status(session, UUID(proposal_id)) == "executed"
+    presented = await _presented_proposal(session, user_a)
+    claim = await repo.claim_confirmation(
+        presented,
+        principal=_principal(user_a),
+        confirming_interaction_id=await _interaction(session),
+    )
+    await session.commit()
+    assert claim.ok
+    assert await repo.mark_executed(user_a, str(presented)) is False
+    assert await _status(session, presented) == "confirmed"
 
 
 async def test_create_takes_provenance_from_the_governed_run(

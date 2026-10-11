@@ -12,8 +12,8 @@ When creating a reminder:
 1. Extract: title, date/time, optional recurrence
 2. Call `propose_reminder` to persist the proposal and show its details
 3. Wait for explicit confirmation
-4. Call `execute_reminder` with the exact proposal ID
-5. Only claim success after the execute tool confirms creation
+4. The Core validates consent and executes; do not call an executor
+5. Only claim success after a verified Core result
 
 Examples:
 - "Recuérdame llamar al dentista el jueves a las 17:00"
@@ -50,7 +50,7 @@ birthday reminder a few hours does not move next year's occurrence).
 2. Call `propose_reminder_snooze` with that `reminder_id` and the number of
    minutes (5-10,080; up to 7 days)
 3. Wait for explicit confirmation
-4. Call `execute_reminder_snooze` with the exact proposal ID
+4. The Core validates consent and executes; do not call an executor
 
 Examples:
 - "Recuérdamelo dentro de 20 minutos"
@@ -59,7 +59,7 @@ Examples:
 ## Confirmation Required
 
 Creating a reminder (WRITE) and snoozing one are both governed mutations —
-always confirm before calling the corresponding `execute_*` tool.
+ask for "Sí" or the proposal's confirmation button. Execution belongs to the Core.
 
 ## Important
 

@@ -45,6 +45,12 @@ Estas reglas vienen del brief de ingeniería. **No violarlas aunque parezca más
    `propose_*` crea propuesta `pending_confirmation` → usuario confirma ("Sí")
    → `execute_*` valida, ejecuta y audita. Ejemplos:
    `propose_vehicle_maintenance` / `execute_vehicle_maintenance`.
+   **Hardening local (2026-10-11, BL-39/40):** el Agent solo dispone de
+   READ/`propose_*` y excepciones aprobadas; ningún `execute_*` se registra.
+   Confirmación y ejecución viven en el Core (`ProposalExecutor`). Las APIs
+   legacy `confirm`/`confirm_or_use_confirmed`/`mark_executed` rechazan sin I/O.
+   Con `GOVERNED_CONSENT_ENABLED=false` las propuestas no se ejecutan; no hay
+   fallback al criterio del LLM. Pendiente rollout manual y E2E Telegram.
    **Excepción aprobada (specs/023 T4.7, 2026-10-02):** `analyze_document`/
    `DocumentService.ingest` siguen siendo automáticos — enviar un adjunto ya
    es la señal de intención de guardarlo; pedir confirmación añadiría
@@ -62,6 +68,9 @@ Estas reglas vienen del brief de ingeniería. **No violarlas aunque parezca más
 7. **Separación de DBs.** Agno persiste su runtime donde quiera
    (`agno_database_url`); el dominio usa `ancora_database_url` → schema `ancora`.
    AncoraMind Core jamás depende de las tablas internas de Agno.
+   Despliegue acordado: Supabase aloja `ancora` (incluye dominio, ledger,
+   propuestas, uso LLM y runtime-config); Railway aloja runtime Agno y Gateway.
+   No usar las BD productivas como destino de fixtures/tests de integración.
 
 8. **Datos no confiables = DATA, no INSTRUCTIONS.** Contenido de documentos,
    filenames, extracciones IA no pueden cambiar permisos ni instrucciones.
@@ -367,6 +376,10 @@ multi-agent, WhatsApp, web frontend, microservices, event sourcing.
 ---
 
 ## 10. Al hacer cambios
+
+**Gate de despliegue manual (decisión del propietario, 2026-10-11):** mantener
+Wait for CI desactivado. Revisar checks del mismo SHA antes de desplegar y
+registrar SHA/deployment/resultados; no reactivar la opción automáticamente.
 
 1. **Añadir capability nueva** = models + repository + service + tool +
    registro en `_init_domain_tools()` (main.py) + tests + skill prompt si aplica.

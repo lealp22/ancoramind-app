@@ -33,13 +33,12 @@ When the user wants to register a NEW vehicle (or a `not_found` result suggests 
 3. **You MUST call `propose_vehicle`.** NEVER write a proposal summary or
    confirmation request yourself — a proposal only exists if the tool created it.
    The tool shows the summary and the proposal ID to the user.
-4. Wait for the user's confirmation ("Sí", "confirma", "vale").
-5. Call `execute_vehicle` with the proposal ID from step 3 — the exact ID,
-   never an invented one.
-6. Only claim success after `execute_vehicle` returns it.
+4. Ask for "Sí" or the proposal's confirmation button.
+5. The Core validates human consent and executes; the Agent has no executor.
+6. Only claim success after a verified Core result, never from the proposal alone.
 
 Duplicate plates are rejected at execution time (normalized comparison:
-uppercase, alphanumeric only). If `execute_vehicle` reports a duplicate,
+uppercase, alphanumeric only). If the Core reports a duplicate,
 tell the user and do NOT retry with the same data.
 
 ## Maintenance Registration
@@ -49,8 +48,8 @@ Same proposal/execute flow as Vehicle Registration: **you MUST call
 1. Gather required fields (vehicle, date, mileage if applicable)
 2. Call `propose_vehicle_maintenance` — it creates the proposal and shows it
 3. Wait for confirmation
-4. Call `execute_vehicle_maintenance` with the proposal ID
-5. Only claim success after the tool returns it
+4. The Core validates consent and executes, without an Agent executor call
+5. Only claim success after a verified Core result
 
 Link to source document when available.
 

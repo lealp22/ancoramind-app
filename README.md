@@ -153,26 +153,30 @@ observability/      ← Private OpenTelemetry Collector configuration
       BL-23 stays open)
 - [ ] MVP: Usable personal assistant (complete Telegram E2E validation remains)
 
-### Capabilities (35 tools when `ANCORA_DATABASE_URL` is configured)
+### Capabilities (Agent reads/proposes; Core executes)
 
 | Domain | Tools | Risk |
 |---|---|---|
 | System | `get_current_datetime` | READ |
-| Notes | `propose_note`, `execute_note`, `search_notes` | WRITE/READ |
-| Documents | `search_documents`, `get_document`, `analyze_document`, `propose_document_delete`, `execute_document_delete` | READ/EXTRACT/DESTRUCTIVE |
+| Notes | `propose_note`, `search_notes` | WRITE/READ |
+| Documents | `search_documents`, `search_documents_semantically`, `get_document`, `analyze_document`, `propose_document_delete`, `export_document` | READ/EXTRACT/DESTRUCTIVE/EXPORT |
 | Vehicles | `find_vehicle`, `get_vehicle_summary`, `get_vehicle_maintenance_history` | READ |
-| Vehicles (creation) | `propose_vehicle`, `execute_vehicle` | WRITE |
-| Vehicles (write) | `propose_vehicle_maintenance`, `execute_vehicle_maintenance` | WRITE |
-| Reminders | `list_reminders`, `propose_reminder`, `execute_reminder` | READ/WRITE |
-| Calendar | `check_calendar`, `propose_calendar_event`, `execute_calendar_event` | READ/EXTERNAL_ACTION |
-| TODO lists | `list_todo_lists`, `propose_todo_list`, `execute_todo_list`, `propose_todo_list_rename`, `propose_todo_list_delete` | READ/WRITE/DESTRUCTIVE |
-| TODO items | `list_todo_items`, `propose_todo_item`, `propose_todo_item_update`, `propose_todo_item_complete`, `propose_todo_item_reopen`, `propose_todo_item_move`, `propose_todo_item_delete`, `execute_todo_item` | READ/WRITE/DESTRUCTIVE |
+| Vehicles (creation) | `propose_vehicle` | WRITE |
+| Vehicles (write) | `propose_vehicle_maintenance` | WRITE |
+| Reminders | `list_reminders`, `propose_reminder`, `propose_reminder_snooze` | READ/WRITE |
+| Calendar | `check_calendar`, `propose_calendar_event` | READ/EXTERNAL_ACTION |
+| TODO lists | `list_todo_lists`, `propose_todo_list`, `propose_todo_list_rename`, `propose_todo_list_delete` | READ/WRITE/DESTRUCTIVE |
+| TODO items | `list_todo_items`, `propose_todo_item`, `propose_todo_item_update`, `propose_todo_item_complete`, `propose_todo_item_reopen`, `propose_todo_item_move`, `propose_todo_item_delete` | READ/WRITE/DESTRUCTIVE |
 
 > All WRITE, EXTERNAL_ACTION, and DESTRUCTIVE operations use ActionProposal governance:
-> propose → user confirmation → execute → audit.
+> propose → Core-verified human consent → atomic Core execution → audit.
+> No `execute_*` tool is exposed to the Agent. With governed consent disabled,
+> proposals stay pending; the legacy LLM confirmation path is retired (2026-10-11).
+> This local hardening still requires controlled rollout and Telegram E2E.
 
 Without `ANCORA_DATABASE_URL`, the application starts in a degraded mode with
-only the system time tool available; domain tools are intentionally not loaded.
+domain DB tools omitted; system time and separately configured export/web search
+remain available.
 
 ### Quality checks
 

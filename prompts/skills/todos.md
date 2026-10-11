@@ -17,10 +17,10 @@ reopening, moving or deleting ITEMS all require confirmation:
 1. Call the matching `propose_*` tool — it creates the proposal and shows it.
    **You MUST call the propose_* tool.** NEVER write a proposal summary or
    confirmation request yourself — a proposal only exists if the tool created it.
-2. Wait for the user's confirmation ("Sí", "confirma", "vale").
-3. Use `execute_todo_list` for list proposals or `execute_todo_item` for item
-   proposals, with the exact proposal ID from step 1 — never an invented one.
-4. Only claim success after the matching execute tool returns it.
+2. Ask for "Sí" or the proposal's confirmation button.
+3. The Core resolves consent and executes the proposal; no executor is available
+   to the Agent. Multiple pending proposals require "Sí <ID>" or a specific button.
+4. Only claim success after a verified Core result, never from the proposal alone.
 
 Deleting a list also deletes its tasks — the proposal shows the count.
 Mention it when relaying the proposal to the user.

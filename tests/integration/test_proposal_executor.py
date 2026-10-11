@@ -197,6 +197,39 @@ async def test_concurrent_executors_and_tampered_claim(session):
     )
 
 
+async def test_real_consent_survives_legacy_calls_and_core_executes_only_once(session, user_a):
+    from src.domain.actions.models import ConsentPrincipal
+    from tests.integration.test_proposal_consent import (
+        BOT_ID,
+        CHAT_ID,
+        _interaction,
+        _presented_proposal,
+    )
+
+    repo = ActionProposalsRepository(session)
+    proposal_id = await _presented_proposal(
+        session,
+        user_a,
+        payload={"title": "synthetic", "trigger_at": "2026-11-20T09:00:00+00:00"},
+    )
+    assert await repo.confirm(user_a, str(proposal_id)) is None
+    assert await repo.confirm_or_use_confirmed(user_a, str(proposal_id)) is None
+    assert await session.scalar(text("SELECT count(*) FROM ancora.reminders")) == 0
+    claim = await repo.claim_confirmation(
+        proposal_id,
+        principal=ConsentPrincipal(user_a, BOT_ID, CHAT_ID),
+        confirming_interaction_id=await _interaction(session),
+    )
+    await session.commit()
+    assert claim.ok and claim.claimed is not None
+    assert await repo.confirm_or_use_confirmed(user_a, str(proposal_id)) is None
+    assert not await repo.mark_executed(user_a, str(proposal_id))
+    service = executor(session)
+    assert "✅" in await service.execute(claim.claimed, user_id=user_a)
+    assert "✅" not in await service.execute(claim.claimed, user_id=user_a)
+    assert await session.scalar(text("SELECT count(*) FROM ancora.reminders")) == 1
+
+
 @pytest.mark.parametrize("failure", [False, True])
 async def test_document_external_intent_is_durable_and_never_replayed(session, failure):
     doc = await DocumentsRepository(session).create(

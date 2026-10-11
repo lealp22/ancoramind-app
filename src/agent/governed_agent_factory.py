@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from agno.agent import Agent
 
 from src.agent.tool_budget_hooks import build_budget_tool_hook
+from src.agent.tool_catalog import proposal_only_tools
 from src.domain.context_policy.service import (
     available_history_tokens,
     resolve_history_ceiling,
@@ -37,7 +38,7 @@ class GovernedAgentFactory:
     ):
         self._llm_access = llm_access
         self._db = db
-        self._tools = tools
+        self._tools = proposal_only_tools(tools)
         self._instructions = instructions
         self._tool_hooks: list[Any] = []
         if fingerprint_key:

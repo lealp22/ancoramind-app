@@ -108,14 +108,13 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         )
         logger.info("Domain database initialized")
 
-        from src.agent.tools.notes import execute_note, propose_note, search_notes
+        from src.agent.tools.notes import propose_note, search_notes
 
-        tools.extend([propose_note, execute_note, search_notes])
-        logger.info("Note tools registered: propose_note, execute_note, search_notes")
+        tools.extend([propose_note, search_notes])
+        logger.info("Note tools registered: propose_note, search_notes")
 
         from src.agent.tools.documents import (
             analyze_document,
-            execute_document_delete,
             get_document,
             propose_document_delete,
             search_documents,
@@ -129,21 +128,18 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
                 get_document,
                 analyze_document,
                 propose_document_delete,
-                execute_document_delete,
             ]
         )
         logger.info(
             "Document tools registered: search_documents, search_documents_semantically, "
             "get_document, analyze_document, "
-            "propose_document_delete, execute_document_delete"
+            "propose_document_delete"
         )
 
         from src.agent.tools.maintenance import (
-            execute_vehicle_maintenance,
             propose_vehicle_maintenance,
         )
         from src.agent.tools.vehicles import (
-            execute_vehicle,
             find_vehicle,
             get_vehicle_maintenance_history,
             get_vehicle_summary,
@@ -156,25 +152,20 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
                 get_vehicle_summary,
                 get_vehicle_maintenance_history,
                 propose_vehicle,
-                execute_vehicle,
                 propose_vehicle_maintenance,
-                execute_vehicle_maintenance,
             ]
         )
         logger.info(
             "Vehicle tools registered: find_vehicle, get_vehicle_summary, "
-            "get_vehicle_maintenance_history, propose/execute_vehicle, "
-            "propose/execute_vehicle_maintenance"
+            "get_vehicle_maintenance_history, propose_vehicle, "
+            "propose_vehicle_maintenance"
         )
 
         from src.agent.tools.calendar import (
             check_calendar,
-            execute_calendar_event,
             propose_calendar_event,
         )
         from src.agent.tools.reminders import (
-            execute_reminder,
-            execute_reminder_snooze,
             list_reminders,
             propose_reminder,
             propose_reminder_snooze,
@@ -184,23 +175,17 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             [
                 list_reminders,
                 propose_reminder,
-                execute_reminder,
                 propose_reminder_snooze,
-                execute_reminder_snooze,
                 check_calendar,
                 propose_calendar_event,
-                execute_calendar_event,
             ]
         )
         logger.info(
-            "Reminder + Calendar tools registered: list/propose/execute_reminder, "
-            "propose/execute_reminder_snooze, check_calendar, "
-            "propose/execute_calendar_event"
+            "Reminder + Calendar tools registered: list/propose_reminder, "
+            "propose_reminder_snooze, check_calendar, propose_calendar_event"
         )
 
         from src.agent.tools.todos import (
-            execute_todo_item,
-            execute_todo_list,
             list_todo_items,
             list_todo_lists,
             propose_todo_item,
@@ -218,7 +203,6 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             [
                 list_todo_lists,
                 propose_todo_list,
-                execute_todo_list,
                 propose_todo_list_rename,
                 propose_todo_list_delete,
                 list_todo_items,
@@ -228,12 +212,11 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
                 propose_todo_item_reopen,
                 propose_todo_item_move,
                 propose_todo_item_delete,
-                execute_todo_item,
             ]
         )
         logger.info(
-            "Todo tools registered: list/propose/execute_todo_list (+rename/delete), "
-            "list/propose/execute_todo_item (+update/complete/reopen/move/delete)"
+            "Todo tools registered: list/propose_todo_list (+rename/delete), "
+            "list/propose_todo_item (+update/complete/reopen/move/delete)"
         )
 
     except Exception:

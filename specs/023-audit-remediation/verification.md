@@ -1,7 +1,9 @@
 # Verification: 023 — Audit Remediation
 
 > **Status:** 🔶 en curso — Fases 1–3 implementadas localmente (2026-10-02);
-> verificación Railway de Fase 1 bloqueada (servicio pausado).
+> verificación Railway de Fase 1 registrada el 2026-10-11 (GET sin credenciales);
+> cierre local del bypass legacy implementado, pendiente rollout/E2E.
+> Las secciones fechadas anteriores conservan evidencia histórica, no estado actual.
 
 ## Fase 1 — Superficie REST de AgentOS
 
@@ -180,3 +182,27 @@
 ## Fase 6 — Sincronización documental
 
 - [ ] Pendiente.
+
+## Incremento de cierre legacy — 2026-10-11
+
+Revisión de código encontró que `confirm_or_use_confirmed()` llamaba a
+`confirm()` sin evidencia humana y reutilizaba confirmaciones fuera del claim
+de ejecución único. Los diez adaptadores `execute_*` (incluidos snooze y Dream)
+podían alcanzar ese camino. Se retiran del registro y de ambas factories, y
+`confirm`/`confirm_or_use_confirmed`/`mark_executed` rechazan sin acceder a DB.
+`ProposalExecutor` y sus transacciones/claims permanecen como vía válida.
+No cambia el esquema ni requiere migración. Cambio de catálogo/prompts evaluable.
+
+Tests de regresión nuevos usan el repositorio real con sesión mockeada, no un
+mock de su resultado: las diez ejecutoras rechazan con flag ON/OFF sin SQL.
+Integración adicional: propuesta presentada → legacy rechaza → evento humano
+→ claim real → legacy no lo consume → Core escribe una vez → replay rechaza.
+Se conservan pruebas de concurrencia, expiración, aislamiento y rollback.
+
+**Despliegue:** con `GOVERNED_CONSENT_ENABLED=false` las propuestas quedan
+pendientes sin ejecutar. No publicar esperando compatibilidad con el criterio
+legacy del LLM. Activación del flag y E2E requieren un paso operativo aparte.
+`answerCallbackQuery` sigue pendiente; no se implementó en este incremento.
+
+Diagnóstico remoto detallado y resultados de validación:
+`operational-review-2026-10-11.md`. BL-23/39/40 no se cierran por este incremento.

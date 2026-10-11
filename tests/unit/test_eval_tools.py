@@ -45,30 +45,21 @@ async def test_propose_creates_pending_entry_without_external_side_effects() -> 
     )
 
     assert "`eval-proposal-reminder-1`" in reply
-    assert store.confirm("eval-proposal-reminder-1") is True
+    assert store.confirm("eval-proposal-reminder-1") is False
 
 
-async def test_execute_without_pending_proposal_does_not_confirm() -> None:
+async def test_eval_catalog_never_exposes_model_execution() -> None:
     store = SyntheticProposalStore()
     tools = build_eval_tools(store)
-    execute_vehicle = _tool("execute_vehicle", tools)
-
-    reply = await execute_vehicle(_run_context(), proposal_id="unknown-id")
-
-    assert "no está pendiente" in reply
+    assert not any(tool.__name__.startswith("execute_") for tool in tools)
+    assert store.confirm("unknown-id") is False
 
 
-async def test_execute_with_seeded_pending_proposal_confirms_once() -> None:
+async def test_seeded_pending_proposal_does_not_grant_model_authority() -> None:
     store = SyntheticProposalStore()
     store.seed("synthetic-vehicle-proposal", "create_vehicle")
-    tools = build_eval_tools(store)
-    execute_vehicle = _tool("execute_vehicle", tools)
-
-    first = await execute_vehicle(_run_context(), proposal_id="synthetic-vehicle-proposal")
-    second = await execute_vehicle(_run_context(), proposal_id="synthetic-vehicle-proposal")
-
-    assert "registrado" in first
-    assert "no está pendiente" in second
+    assert store.confirm("synthetic-vehicle-proposal") is False
+    assert store.confirm("synthetic-vehicle-proposal") is False
 
 
 async def test_search_notes_embeds_fixture_as_untrusted_data() -> None:

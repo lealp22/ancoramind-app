@@ -26,8 +26,7 @@ own minimal ``Agent`` instead, preserving the same governance invariants
   real ``AgnoLLMAccess`` to actually spend budget is T7 — explicitly gated on
   separate credential/cost approval, not part of this module.
 - ``outcome`` is derived **only from code-observable facts** (which tools
-  were called): any ``execute_*`` tool observed → ``"confirm_pending_action"``;
-  any other tool observed → ``"tool_call"``; no tool observed →
+  were called): a tool observed → ``"tool_call"``; no tool observed →
   ``"no_tool_call"``. This last value is a deliberate sentinel, distinct from
   the catalog's ``"clarify"``/``"safe_response"`` labels: telling those two
   apart requires judging the free-text response semantically (is this a
@@ -41,13 +40,13 @@ own minimal ``Agent`` instead, preserving the same governance invariants
 **Simulating ``synthetic_context`` without granting authority from it:**
 ``EvalCase.synthetic_context`` is untrusted test data (see its docstring in
 ``src/agent/evals.py``) and must never *itself* establish confirmation state.
-What this executor does is seed the *code-side* ``SyntheticProposalStore``
-(ground truth owned by the harness) and, separately, let the model *see* an
-equivalent fact the same way it would see conversation history or a prior
-tool result — exactly as a real pending proposal is visible to a real user
-from a previous Telegram message. The model still has to decide, on its own,
-to call the right tool; the store — not the model's claim — is what the
-simulated ``execute_*`` tools actually check.
+Legacy confirmation cases require a separate Core consent harness and are
+rejected before resolving any model. This executor cannot certify them.
+For other cases this executor seeds the *code-side* ``SyntheticProposalStore``
+(ground truth owned by the harness) and separately lets the model see a pending
+proposal as synthetic conversation history. It grants no execution authority.
+The model can only read and propose: all ``execute_*`` adapters are excluded
+from its catalog, just like production (BL-39/40, 2026-10-11).
 """
 
 from __future__ import annotations
@@ -67,6 +66,7 @@ from src.agent.eval_tools import SyntheticProposalStore, build_eval_tools
 from src.agent.evals import EvalExecutionRequest, EvalObservation
 from src.agent.instructions import assemble_instructions
 from src.agent.tool_budget_hooks import build_budget_tool_hook
+from src.agent.tool_catalog import proposal_only_tools
 from src.domain.llm_access.access import LLMAccess
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import ExecutionBudget, ExecutionContext, generate_traceparent
@@ -108,6 +108,10 @@ class GovernedPhysicalEvalExecutor:
 
     async def execute(self, request: EvalExecutionRequest) -> EvalObservation:
         case = request.case
+        if case.expected_outcome == "confirm_pending_action" or (
+            case.required_tool is not None and case.required_tool.startswith("execute_")
+        ):
+            raise ValueError("Core consent cases require a deterministic consent harness")
         fixtures = case.synthetic_context
         store = SyntheticProposalStore()
 
@@ -157,12 +161,7 @@ class GovernedPhysicalEvalExecutor:
         tool_names = tuple(
             name for execution in (output.tools or []) if (name := execution.tool_name)
         )
-        if any(name.startswith("execute_") for name in tool_names):
-            outcome = "confirm_pending_action"
-        elif tool_names:
-            outcome = "tool_call"
-        else:
-            outcome = "no_tool_call"
+        outcome = "tool_call" if tool_names else "no_tool_call"
 
         return EvalObservation(
             outcome=outcome,
@@ -200,7 +199,7 @@ class GovernedPhysicalEvalExecutor:
             id="ancoramind-eval",
             name="AncoraMind (eval)",
             model=model,
-            tools=tools,
+            tools=proposal_only_tools(tools),
             tool_call_limit=context.config.config.execution_budget.max_tool_calls,
             retries=0,
             telemetry=False,

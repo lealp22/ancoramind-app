@@ -19,6 +19,8 @@ from agno.models.openai import OpenAILike
 from agno.models.openrouter import OpenRouter
 from agno.models.response import ModelResponse
 
+from src.agent.tool_catalog import proposal_only_tools
+
 if TYPE_CHECKING:
     from src.config import Settings
 
@@ -274,7 +276,7 @@ def create_ancora_agent(
         name="AncoraMind",
         model=model,
         db=db,
-        tools=tools,
+        tools=proposal_only_tools(tools),
         tool_call_limit=tool_call_limit,
         retries=retries,
         telemetry=False,

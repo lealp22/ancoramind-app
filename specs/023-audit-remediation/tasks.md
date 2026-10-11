@@ -6,6 +6,24 @@
 
 ---
 
+## Incremento de cierre legacy — 2026-10-11
+
+- [x] Diagnóstico remoto acotado solo lectura: health/readiness, auth sin
+      credenciales, deployed SHA, runtime-config Supabase y superficies privadas.
+- [x] Retirar `execute_*` del registro y ambas factories; cerrar confirmación/
+      reutilización/auditoría legacy sin I/O, incluso con flag OFF.
+- [x] Regresión de las diez ejecutoras con repositorio real y prueba de claim
+      humano → ejecución Core única; concurrencia/rollback existentes preservados.
+- [x] Alinear prompts, docs y harness de evals; casos de confirmación legacy
+      rechazados antes de inferencia y pendientes de migración a harness Core.
+- [x] Gates finales: 1263 unit, 144 integration passed (1 live STT skipped),
+      Ruff/mypy limpios y catálogo estático válido.
+- [ ] Rollout manual del SHA validado, consentimiento gobernado y E2E Telegram.
+- [ ] Completar `answerCallbackQuery` y verificar configuración efectiva Gateway.
+
+Evidencia: `operational-review-2026-10-11.md`; no se marca cerrada toda la spec.
+Las tareas anteriores/inferiores conservan su historia fechada.
+
 ## Fase 1 — Cerrar la superficie REST de AgentOS (🔴 crítico)
 
 **Objetivo:** que ningún endpoint no gobernado (`/agents/*/runs`, `/sessions`,

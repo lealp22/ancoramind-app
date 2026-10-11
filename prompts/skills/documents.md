@@ -26,8 +26,8 @@ If the user wants to remove a document they previously sent ("Borra la
 factura del taller", "Elimina ese documento"):
 1. Call `propose_document_delete` with the document ID. This only creates a
    proposal — it does NOT delete anything yet.
-2. Only call `execute_document_delete` after the user explicitly confirms
-   ('Sí').
+2. Ask for explicit confirmation ('Sí' or the confirmation button). The Core
+   validates it and deletes the document; the Agent never calls an executor.
 Deleting is DESTRUCTIVE and irreversible: never skip the confirmation step.
 
 ## Important

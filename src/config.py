@@ -66,9 +66,10 @@ class Settings(BaseSettings):
     """BL-32: send an early acknowledgement for attachment-bearing interactions
     before inference. Best-effort — a failure never blocks the main run."""
     governed_consent_enabled: bool = False
-    """specs/023 T4.3-T4.4: resolve Sí/No buttons/text before the Agent and
-    append a fixed proposal block to responses. Off by default: with it off,
-    delivery is byte-for-byte unchanged (no T4.5 executor exists yet)."""
+    """Resolve human consent and execute through the Core, never the LLM.
+    Off by default: proposals remain pending and cannot execute; no legacy
+    confirmation fallback. Enable only after the controlled Telegram rollout.
+    """
     execution_budget_fingerprint_key: str = ""
     """Explicit HMAC key for tool-call fingerprints; when empty, a dedicated
     subkey is derived from TELEGRAM_PAYLOAD_ENCRYPTION_KEY (Railway secrets only)."""

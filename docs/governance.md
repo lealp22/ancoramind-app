@@ -180,12 +180,20 @@ Toda acción WRITE, EXTERNAL_ACTION o DESTRUCTIVE debe:
 
 1. Pasar por el Policy Engine
 2. Generar un `ActionProposal`
-3. Obtener confirmación humana (Agno HITL)
+3. Obtener confirmación humana validada por el Core antes del Agent
 4. Ser re-validada por el Core antes de ejecución
 5. Registrar ejecución en audit trail
 6. Vincular procedencia (source document, extraction, etc.)
 
 > **El prompt puede instruir al agente, pero no constituye la barrera de seguridad.** La política final debe evaluarse en código.
+
+**Hardening local 2026-10-11 (BL-39/40, pendiente rollout):** el catálogo del
+Agent excluye `execute_*`, también en el singleton AgentOS. El repositorio
+rechaza `confirm`/`confirm_or_use_confirmed`/`mark_executed` sin I/O: ni una
+propuesta pendiente ni una ya confirmada pueden ejecutarse por una tool legacy.
+`ProposalExecutor` conserva el claim único, revalidación, transacción y auditoría.
+Con consentimiento gobernado OFF no se ejecutan propuestas; no hay fallback LLM.
+La ingesta documental y exportación conservan sus excepciones aprobadas.
 
 ---
 

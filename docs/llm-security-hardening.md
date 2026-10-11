@@ -215,9 +215,12 @@ wiring/telemetría/umbral.
    propuesta, consumo único, caducidad y propiedad; revisar WRITE directos.
    **Implementado (2026-10-02, specs/023 Fase 4), detrás de
    `GOVERNED_CONSENT_ENABLED` (apagado por defecto en producción):**
-   `_handle_consent_input` resuelve «Sí»/botón antes del LLM;
-   `confirm_or_use_confirmed` aplica en los 8 `execute_*` existentes; `/new`
-   invalida propuestas pendientes del chat. Falta: activar el flag en
+   `_handle_consent_input` resuelve «Sí»/botón antes del LLM; `/new`
+   invalida propuestas pendientes del chat. **Corrección local 2026-10-11:**
+   eliminado el bypass legacy de `confirm_or_use_confirmed`: todas las APIs
+   legacy de confirmación/ejecución rechazan sin I/O y el Agent no expone
+   `execute_*`. Solo `ProposalExecutor` ejecuta el claim Core una vez. Con el
+   flag OFF no hay ejecución ni fallback LLM. Falta: rollout y activar el flag en
    producción, evals adversariales ejecutadas contra el Agent real (sigue
    siendo el punto 4) y `answerCallbackQuery` del botón Telegram.
    Evals: instrucciones en documento/nota/filename o extracción no pueden
