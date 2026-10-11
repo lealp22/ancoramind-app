@@ -1726,16 +1726,23 @@ el ledger propio. `CompactionPort` queda sin usar, documentado como tal —
 no se ha borrado por si una futura necesidad de resumir la sesión real de
 Agno (no solo el ledger) lo retoma.
 
-**Hallazgo colateral, no corregido aquí:** al replicar el patrón de Dream
-(`src/agent/dream_access.py`, specs/029 T3) para `context_compaction_access.py`
-se encontró que `dream_access.py` nunca abre `execution_context_scope(context)`
-antes de `agent.arun()` — con un modelo real envuelto por
-`build_governed_model` (no el `Model` directo que usan sus propios tests),
-eso lanzaría `GovernanceViolationError` (`current_execution_context()` sin
-contexto activo). El patrón correcto está en
-`src/agent/document_extraction.py`. No se toca `dream_access.py` en este
-incremento (fuera de alcance de BL-34); queda anotado aquí para que no se
-pierda antes del próximo cambio en Dream.
+**Hallazgo colateral corregido (2026-10-12):** al replicar el patrón de
+Dream (`src/agent/dream_access.py`, specs/029 T3) para
+`context_compaction_access.py` se encontró que `dream_access.py` nunca
+abría `execution_context_scope(context)` antes de `agent.arun()` — con un
+modelo real envuelto por `build_governed_model` (no el `Model` directo que
+usan sus propios tests), eso lanzaba `GovernanceViolationError`
+(`current_execution_context()` sin contexto activo). Corregido con el mismo
+patrón ya usado en `src/agent/document_extraction.py`: `model_for`+
+`agent.arun()` ahora corren dentro de `with execution_context_scope(context):`.
+Nuevo test de regresión en `test_dream_access.py`
+(`test_consolidate_opens_its_own_execution_context_scope`) que construye un
+modelo gobernado real vía `build_governed_model` (no el `Model` plano que
+usan los demás tests de este fichero, que nunca habría detectado el gap) y
+confirma `outcome.status == "completed"` con `budget.model_calls == 1`;
+verificado manualmente que ese mismo test falla con
+`GovernanceViolationError` si se revierte el fix. 1311 unit tests (suite
+completa), Ruff y `mypy src/` limpios.
 
 ### ~~BL-37~~ · Cerrar gates de calidad detectados en auditoría técnica (2026-09-27) ✅ implementado — 2026-10-07
 Auditoría de arquitectura/consistencia sobre `main.py`, `ancora_agent.py`,

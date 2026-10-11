@@ -195,3 +195,40 @@ async def test_consolidate_fails_closed_when_route_is_missing():
     assert outcome.error_class == "DreamRouteUnavailable"
     assert llm_access.calls == []
     assert _ScriptedModel.ainvoke_calls == 0
+
+
+async def test_consolidate_opens_its_own_execution_context_scope() -> None:
+    """Regression: a real governed model must never be called context-less.
+
+    ``GovernedModelMixin.ainvoke`` reads the active context via a
+    contextvar, not a parameter — without the adapter opening
+    ``execution_context_scope`` itself, this would raise
+    ``GovernanceViolationError`` the moment a real governed model (as
+    opposed to the raw ``_ScriptedModel`` the other tests use) is wired in.
+    """
+    from src.agent.governed_model import build_governed_model
+
+    _ScriptedModel.ainvoke_calls = 0
+    _ScriptedModel.raise_on_ainvoke = None
+    _ScriptedModel.response_content = '{"proposals": []}'
+    governed_model = build_governed_model(
+        _ScriptedModel,
+        {"id": "test/model", "provider": "OpenRouter"},
+        recorder=None,
+        route_name="ancoramind-dream",
+        effective_route="ancoramind-dream-r1",
+        revision=1,
+    )
+    llm_access = _FakeLLMAccess(governed_model)
+    adapter = GovernedDreamConsolidationAdapter(llm_access=llm_access, config_manager=_manager())
+
+    # No execution_context_scope opened here on purpose — the adapter must
+    # open its own, exactly like src/agent/document_extraction.py does.
+    # Before the fix, GovernedModelMixin.ainvoke's call to
+    # current_execution_context() would raise GovernanceViolationError here.
+    outcome = await adapter.consolidate(_batch())
+
+    assert outcome.status == "completed"
+    # The call actually reached the governed model and consumed its budget —
+    # not just skipped past a silently-swallowed error.
+    assert llm_access.calls[0][1].budget.model_calls == 1

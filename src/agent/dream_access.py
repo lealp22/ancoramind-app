@@ -23,6 +23,7 @@ from agno.agent import Agent
 from src.agent.instructions import load_prompt
 from src.domain.dream.models import DreamCandidateBatch, DreamConsolidationOutcome
 from src.domain.dream.ports import DreamBatch
+from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import ExecutionBudget, ExecutionContext, generate_traceparent
 from src.observability import get_telemetry, telemetry_attributes_from_execution_context
 
@@ -50,52 +51,54 @@ class GovernedDreamConsolidationAdapter:
                 batch=None, provider="", model="", status="failed",
                 error_class="DreamRouteUnavailable",
             )
-        model = self._llm_access.model_for(self.ROUTE_NAME, context)
-        provider = str(getattr(model, "provider", None) or "")
-        model_id = str(getattr(model, "id", None) or "")
-        observability = context.config.config.observability
-        attributes = {
-            **telemetry_attributes_from_execution_context(context),
-            "ancora.route": self.ROUTE_NAME,
-            "gen_ai.provider.name": provider,
-            "gen_ai.request.model": model_id,
-        }
-        agent = Agent(
-            model=model,
-            output_schema=DreamCandidateBatch,
-            instructions=[load_prompt("skills/dream_consolidation.md")],
-            markdown=False,
-            retries=0,
-            telemetry=False,
-        )
-        prompt = _build_prompt(batch)
-        with get_telemetry().span(
-            "agno.agent.run", attributes, enabled=observability.traces_enabled
-        ) as span:
-            try:
-                response = await agent.arun(prompt)
-            except Exception as exc:
-                get_telemetry().mark_error(span, type(exc).__name__)
-                logger.warning(
-                    "Dream consolidation inference failed (error_class=%s, provider=%s, model=%s)",
-                    type(exc).__name__,
-                    provider,
-                    model_id,
-                )
-                return DreamConsolidationOutcome(
-                    None, provider, model_id, "failed", type(exc).__name__
-                )
-            run_status = getattr(response, "status", None)
-            if str(getattr(run_status, "value", run_status)).upper() == "ERROR":
-                get_telemetry().mark_error(span, "AgentRunError")
-                logger.warning(
-                    "Dream consolidation agent run errored (provider=%s, model=%s)",
-                    provider,
-                    model_id,
-                )
-                return DreamConsolidationOutcome(
-                    None, provider, model_id, "failed", "AgentRunError"
-                )
+        with execution_context_scope(context):
+            model = self._llm_access.model_for(self.ROUTE_NAME, context)
+            provider = str(getattr(model, "provider", None) or "")
+            model_id = str(getattr(model, "id", None) or "")
+            observability = context.config.config.observability
+            attributes = {
+                **telemetry_attributes_from_execution_context(context),
+                "ancora.route": self.ROUTE_NAME,
+                "gen_ai.provider.name": provider,
+                "gen_ai.request.model": model_id,
+            }
+            agent = Agent(
+                model=model,
+                output_schema=DreamCandidateBatch,
+                instructions=[load_prompt("skills/dream_consolidation.md")],
+                markdown=False,
+                retries=0,
+                telemetry=False,
+            )
+            prompt = _build_prompt(batch)
+            with get_telemetry().span(
+                "agno.agent.run", attributes, enabled=observability.traces_enabled
+            ) as span:
+                try:
+                    response = await agent.arun(prompt)
+                except Exception as exc:
+                    get_telemetry().mark_error(span, type(exc).__name__)
+                    logger.warning(
+                        "Dream consolidation inference failed (error_class=%s, provider=%s, "
+                        "model=%s)",
+                        type(exc).__name__,
+                        provider,
+                        model_id,
+                    )
+                    return DreamConsolidationOutcome(
+                        None, provider, model_id, "failed", type(exc).__name__
+                    )
+                run_status = getattr(response, "status", None)
+                if str(getattr(run_status, "value", run_status)).upper() == "ERROR":
+                    get_telemetry().mark_error(span, "AgentRunError")
+                    logger.warning(
+                        "Dream consolidation agent run errored (provider=%s, model=%s)",
+                        provider,
+                        model_id,
+                    )
+                    return DreamConsolidationOutcome(
+                        None, provider, model_id, "failed", "AgentRunError"
+                    )
         content = getattr(response, "content", None)
         result = _coerce_batch(content)
         if result is None:
