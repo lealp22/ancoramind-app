@@ -1334,8 +1334,36 @@ como seguimiento. 20 tests nuevos, 1066 unit tests (suite completa), Ruff
 y `mypy src/` limpios. **Pendiente:** E2E real por Telegram, bloqueado por
 BL-18 igual que el resto del pipeline documental.
 
+**Seguimiento de idempotencia cerrado (2026-10-11):** el párrafo anterior
+especulaba con que "un reintento del run" podría duplicar el PDF y proponía
+integrarlo en el outbox de BL-32. Investigado antes de tocar código: ese
+reintento **no existe** en este repo — `retries=0` en el Agent gobernado
+(`governed_agent_factory.py`), admisión de Telegram at-most-once antes de
+llegar al Agent, y `mark_inflight_as_ambiguous` marca `failed_ambiguous`
+(nunca reejecuta) cualquier interacción que quedara `agent_started` tras un
+crash. El riesgo real es intra-run: el modelo invocando `export_document`
+dos veces para la misma petición dentro de un único `agent.arun()`. Se
+cierra con deduplicación en memoria, con alcance de un solo run — no con el
+outbox (ese patrón resuelve "como mucho una fila por interacción"; aquí un
+run puede generar legítimamente N exports distintos, así que la clave debe
+ser el contenido, no la interacción). `GovernedInteractionRunner.run()`
+(`src/agent/governed_interaction_runner.py`) construye `RunContext(...,
+session_state={})` — un dict vacío, nuevo en cada run, no ligado a la
+persistencia de sesión de Agno (`add_session_state_to_context` nunca se
+activa). `export_document` (`src/agent/tools/export.py`) guarda en
+`run_context.session_state["sent_exports"]` la respuesta ya devuelta,
+indexada por `sha256(title + markdown_text)`: una segunda llamada idéntica
+dentro del mismo run devuelve la misma respuesta sin reenviar; dos llamadas
+con contenido distinto (dos PDFs pedidos a la vez) se envían ambas. Si
+`session_state` es `None` (p. ej. un `RunContext` construido a mano en un
+test sin pasar el kwarg) se degrada a no deduplicar — el comportamiento
+previo, nunca un error. Nunca se persiste el PDF, solo el texto de
+respuesta. 3 tests nuevos en `test_export_tools.py` + 1 ampliado en
+`test_governed_interaction_runner.py`, 1212 unit tests (suite completa),
+Ruff y `mypy src/` limpios.
+
 Con esto, de BL-38 solo queda el E2E real (BL-18) — las tres fases de
-diseño/implementación están completas.
+diseño/implementación y el seguimiento de idempotencia están completos.
 
 ### BL-13 · Memoria personal y consolidación gobernada «Dream» 🔶 T3/T4/T5 implementados localmente, T1/T2 pendientes de Postgres — specs/029
 Convertir la "Soft Personal memory" de `docs/architecture.md` §7 en una capacidad

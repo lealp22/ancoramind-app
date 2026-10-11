@@ -12,8 +12,13 @@ from src.agent.tools import export as export_tools
 from src.domain.interactions.processor import TelegramSendError
 
 
-def _context() -> RunContext:
-    return RunContext(run_id="export-test", session_id="tg:test:1", user_id="452022640")
+def _context(*, no_session_state: bool = False) -> RunContext:
+    return RunContext(
+        run_id="export-test",
+        session_id="tg:test:1",
+        user_id="452022640",
+        session_state=None if no_session_state else {},
+    )
 
 
 async def test_export_document_renders_and_sends(monkeypatch):
@@ -110,3 +115,45 @@ async def test_export_document_outside_private_chat_is_rejected(monkeypatch):
 
     notifier.send_document.assert_not_awaited()
     assert "chat privado" in response.lower()
+
+
+async def test_export_document_deduplicates_identical_calls_within_the_same_run(monkeypatch):
+    """BL-38 follow-up: a tool call repeated within one agent.arun() never resends."""
+    monkeypatch.setattr(export_tools, "render_markdown_to_pdf", lambda *a, **k: b"%PDF-fake")
+    notifier = AsyncMock()
+    notifier.send_document.return_value = 1
+    monkeypatch.setattr(export_tools, "TelegramNotifier", lambda token: notifier)
+    context = _context()
+
+    first = await export_tools.export_document(context, "# Hola", title="Mi lista")
+    second = await export_tools.export_document(context, "# Hola", title="Mi lista")
+
+    notifier.send_document.assert_awaited_once()
+    assert first == second
+
+
+async def test_export_document_does_not_deduplicate_distinct_content(monkeypatch):
+    monkeypatch.setattr(export_tools, "render_markdown_to_pdf", lambda *a, **k: b"%PDF-fake")
+    notifier = AsyncMock()
+    notifier.send_document.return_value = 1
+    monkeypatch.setattr(export_tools, "TelegramNotifier", lambda token: notifier)
+    context = _context()
+
+    await export_tools.export_document(context, "# Hola", title="Primero")
+    await export_tools.export_document(context, "# Adiós", title="Segundo")
+
+    assert notifier.send_document.await_count == 2
+
+
+async def test_export_document_without_session_state_never_deduplicates(monkeypatch):
+    """A RunContext built without session_state degrades to today's behaviour (always sends)."""
+    monkeypatch.setattr(export_tools, "render_markdown_to_pdf", lambda *a, **k: b"%PDF-fake")
+    notifier = AsyncMock()
+    notifier.send_document.return_value = 1
+    monkeypatch.setattr(export_tools, "TelegramNotifier", lambda token: notifier)
+    context = _context(no_session_state=True)
+
+    await export_tools.export_document(context, "# Hola", title="Mi lista")
+    await export_tools.export_document(context, "# Hola", title="Mi lista")
+
+    assert notifier.send_document.await_count == 2

@@ -130,6 +130,9 @@ async def test_runner_binds_context_metadata_and_returns_text() -> None:
     assert metadata["correlation_id"] == str(correlation_id)
     assert metadata["traceparent"] == context.traceparent
     assert metadata["config_revision"] == 3
+    # BL-38 follow-up: a fresh in-memory scratch dict per run, for tool-level
+    # dedup (export_document) — never Agno's persisted session_state.
+    assert call["run_context"].session_state == {}
 
     # The Agent was created inside the same governed scope.
     assert factory.created_contexts == [context]

@@ -3,13 +3,17 @@
 (BL-38 Fase 3) Automatic, no propose/execute (AGENTS.md §2.4 exception, same reasoning as
 ``analyze_document``): generating and sending the requesting user their own
 PDF mutates no canonical data and reaches no one but them, over the same
-channel they are already using. Known limitation of this increment: the
-send happens mid-run, outside the processor's governed delivery/outbox
-(specs/013) — a rare run failure right after a successful send could in
-theory cause a duplicate PDF on an eventual retry, never a data-integrity
-issue. Accepted explicitly, same "best-effort" posture already used for
-Dream's transcript capture.
+channel they are already using. The send happens mid-run, outside the
+processor's governed delivery/outbox (specs/013) — but there is no run-level
+retry to duplicate it against: ``retries=0`` on the governed Agent, Telegram
+admission is at-most-once before the Agent ever runs, and a crash mid-run
+is marked ``failed_ambiguous`` rather than replayed (specs/013). The real
+risk is intra-run: the model invoking this tool twice for the same request.
+Guarded via ``run_context.session_state`` (BL-38 follow-up, 2026-10-11) — a
+plain dict scoped to this single ``agent.arun()`` call, never persisted.
 """
+
+import hashlib
 
 from agno.run import RunContext
 
@@ -18,6 +22,8 @@ from src.config import Settings
 from src.domain.interactions.processor import TelegramSendError
 from src.notifications.telegram import TelegramNotifier
 from src.security.user_context import UserContext
+
+_SENT_EXPORTS_KEY = "sent_exports"
 
 _ERROR_REPLIES = {
     "export_empty_output": "No hay contenido que exportar.",
@@ -53,6 +59,15 @@ async def export_document(
     except (TypeError, ValueError):
         return "No puedo exportar documentos fuera de un chat privado de Telegram."
 
+    sent_exports: dict[str, str] | None = (
+        run_context.session_state.setdefault(_SENT_EXPORTS_KEY, {})
+        if run_context.session_state is not None
+        else None
+    )
+    dedup_key = hashlib.sha256(f"{title or ''}\n{markdown_text}".encode()).hexdigest()
+    if sent_exports is not None and dedup_key in sent_exports:
+        return sent_exports[dedup_key]
+
     settings = Settings()
     try:
         pdf = render_markdown_to_pdf(
@@ -73,7 +88,10 @@ async def export_document(
         return "Generé el PDF pero no pude enviarlo por Telegram. Inténtalo de nuevo."
     finally:
         await notifier.close()
-    return f"✅ Documento enviado (`{filename}`)."
+    reply = f"✅ Documento enviado (`{filename}`)."
+    if sent_exports is not None:
+        sent_exports[dedup_key] = reply
+    return reply
 
 
 def _safe_filename(title: str | None) -> str:

@@ -156,6 +156,11 @@ class GovernedInteractionRunner:
                     session_id=session_id,
                     user_id=user_id,
                     metadata=governance_metadata(context),
+                    # Plain scratch dict scoped to this single arun() call —
+                    # not Agno's persisted session_state (add_session_state_to_context
+                    # is never set on this agent). Used by export_document (BL-38
+                    # follow-up) to dedupe a tool invoked twice within one run.
+                    session_state={},
                 )
                 started = time.perf_counter()
                 try:
