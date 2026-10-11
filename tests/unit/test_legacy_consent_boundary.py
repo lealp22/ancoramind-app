@@ -102,6 +102,11 @@ def test_governed_agent_cannot_expose_execution_tools_even_if_injected():
 
 
 def test_production_registration_only_exposes_reads_proposals_and_approved_exceptions(monkeypatch):
+    # src/main.py builds the real app at import time (module-level `create_app()`,
+    # needed for `uvicorn src.main:app`); Agno's Telegram router reads
+    # TELEGRAM_TOKEN straight from os.environ, bypassing Settings entirely —
+    # must be set here so this test never depends on the host shell's env.
+    monkeypatch.setenv("TELEGRAM_TOKEN", "000000000:synthetic")
     import src.main as main
     from src.config import Settings
     from src.repositories import database

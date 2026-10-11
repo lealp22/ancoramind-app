@@ -202,7 +202,22 @@ Se conservan pruebas de concurrencia, expiración, aislamiento y rollback.
 **Despliegue:** con `GOVERNED_CONSENT_ENABLED=false` las propuestas quedan
 pendientes sin ejecutar. No publicar esperando compatibilidad con el criterio
 legacy del LLM. Activación del flag y E2E requieren un paso operativo aparte.
-`answerCallbackQuery` sigue pendiente; no se implementó en este incremento.
+`answerCallbackQuery` no se implementó en ese incremento; completado localmente
+en el incremento posterior `callback-acknowledgement.md` (2026-10-11), pendiente E2E.
 
 Diagnóstico remoto detallado y resultados de validación:
 `operational-review-2026-10-11.md`. BL-23/39/40 no se cierran por este incremento.
+
+## Acuse de botones — 2026-10-11
+
+`callback_query_id` opcional se conserva solo en el payload cifrado admitido;
+ninguna migración. Sender/notifier hacen acuse mínimo sin anunciar éxito,
+timeout 2 s, sin retries/eco de errores. ID ausente conserva consentimiento.
+Callbacks inválidos/OFF tienen reply determinista, nunca Agent/comandos; no
+reingesta de adjuntos del mensaje viejo. Error de acuse no altera claims ni
+ejecución. Duplicate admission/doble pulsación/concurrencia preservan ejecución
+única; el acuse best-effort puede repetirse con procesadores concurrentes o crash
+antes de persistir respuesta (no garantía durable de una sola petición de acuse).
+
+1300 unit passed, cobertura 79.46%, 155 integration passed/1 live STT skipped.
+Contrato, límites y checklist E2E: `callback-acknowledgement.md`.

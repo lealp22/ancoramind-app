@@ -44,6 +44,7 @@ from src.domain.interactions.models import (
     LogicalResponse,
     TelegramInteraction,
     TelegramResponseDelivery,
+    bounded_callback_query_id,
 )
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
@@ -67,6 +68,13 @@ VOICE_NOT_UNDERSTOOD_REPLY = (
 DOCUMENT_RECEIVED_ACK = "📄 Documento recibido, analizando…"
 """BL-32: fixed, non-personal early acknowledgement for attachment-bearing
 interactions — never a template over user content."""
+CALLBACK_ACK_TIMEOUT_SECONDS = 2.0
+CALLBACK_INVALID_REPLY = (
+    "Ese botón no es una confirmación válida. No se ha ejecutado ninguna acción."
+)
+CALLBACK_DISABLED_REPLY = (
+    "La confirmación por botones aún no está habilitada. No se ha ejecutado ninguna acción."
+)
 
 
 class InteractionAgentRunner(Protocol):
@@ -106,6 +114,8 @@ class TelegramResponseSender(Protocol):
     ) -> int: ...
 
     async def send_typing(self, chat_id: int) -> None: ...
+
+    async def answer_callback_query(self, callback_query_id: str) -> bool: ...
 
 
 class TelegramSendError(RuntimeError):
@@ -282,6 +292,19 @@ class InteractionProcessor:
 
         try:
             payload = self._payload_cipher.decrypt(interaction.payload_ciphertext)
+        except ValueError:
+            await self._mark_terminal(
+                interaction.id,
+                InteractionStatus.FAILED_CONTROLLED,
+                error_class="PayloadDecodeError",
+                error_detail_code="payload_unusable",
+            )
+            return True
+        if interaction.update_type == "callback_query":
+            # Channel receipt is independent from authorization/execution.
+            # Never parse callback data as a command, voice, upload or LLM input.
+            return await self._process_callback(interaction, payload)
+        try:
             input_text = payload.get("text")
             attachments = tuple(
                 TelegramAttachment.model_validate(item) for item in payload.get("attachments", [])
@@ -817,6 +840,46 @@ class InteractionProcessor:
             logger.warning("Failed to discard pending proposals on /new", exc_info=True)
         finally:
             await session.close()
+
+    async def _process_callback(
+        self, interaction: TelegramInteraction, payload: dict[str, Any]
+    ) -> bool:
+        """Acknowledge an admitted button, then independently resolve its consent.
+
+        No success notice is attached to the acknowledgement. Best-effort failure
+        cannot authorize, roll back, retry or replay the canonical action. The
+        durable ledger suppresses duplicate admission; no ack retry is scheduled.
+        Old encrypted payloads without an id still use the Core consent path.
+        """
+        callback_id = bounded_callback_query_id(payload.get("callback_query_id"))
+        if callback_id is not None:
+            try:
+                await asyncio.wait_for(
+                    self._sender.answer_callback_query(callback_id),
+                    timeout=CALLBACK_ACK_TIMEOUT_SECONDS,
+                )
+            except Exception as exc:
+                # Never log the identifier, Bot API URL/token, exception text or
+                # response body; none belong in operational telemetry.
+                logger.warning(
+                    "Callback acknowledgement failed (error_class=%s)", type(exc).__name__
+                )
+        if not self._governed_consent:
+            reply = CALLBACK_DISABLED_REPLY
+        else:
+            raw = payload.get("text")
+            callback = parse_consent_callback(raw if isinstance(raw, str) else None)
+            if callback is None:
+                reply = CALLBACK_INVALID_REPLY
+            else:
+                assert interaction.telegram_user_id is not None and interaction.chat_id is not None
+                principal = ConsentPrincipal(
+                    user_id=str(interaction.telegram_user_id),
+                    bot_id=interaction.bot_id,
+                    chat_id=interaction.chat_id,
+                )
+                reply = await self._handle_consent_callback(interaction, principal, callback)
+        return await self._reply_deterministically(interaction, reply)
 
     async def _handle_consent_input(
         self, interaction: TelegramInteraction, input_text: str

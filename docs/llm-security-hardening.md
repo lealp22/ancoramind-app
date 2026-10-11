@@ -222,7 +222,10 @@ wiring/telemetría/umbral.
    `execute_*`. Solo `ProposalExecutor` ejecuta el claim Core una vez. Con el
    flag OFF no hay ejecución ni fallback LLM. Falta: rollout y activar el flag en
    producción, evals adversariales ejecutadas contra el Agent real (sigue
-   siendo el punto 4) y `answerCallbackQuery` del botón Telegram.
+   siendo el punto 4). `answerCallbackQuery` implementado localmente 2026-10-11:
+   acuse best-effort antes del Core, independiente de autorización; callbacks
+   inválidos/OFF no llegan al Agent. Pendiente validación visual Telegram real;
+   contrato/límites en `specs/023-audit-remediation/callback-acknowledgement.md`.
    Evals: instrucciones en documento/nota/filename o extracción no pueden
    ejecutar ni confirmar; «sí» ambiguo o anterior tampoco.
 2. **P1:** serialización inicial JSON y tests de cierre de delimitador, Unicode,

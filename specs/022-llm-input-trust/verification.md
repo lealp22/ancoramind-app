@@ -16,6 +16,13 @@ Evidencia y límites: `../023-audit-remediation/operational-review-2026-10-11.md
 Los párrafos históricos sobre `confirm_or_use_confirmed` describen el camino
 anterior, no el comportamiento actual. BL-39 no se cierra por esta corrección.
 
+**Incremento posterior 2026-10-11:** `answerCallbackQuery` completado localmente,
+1300 unit/155 integration passed (1 live STT skipped), cobertura 79.46%.
+El acuse no concede autoridad y su fallo no repite una acción. E2E pendiente;
+detalle en `../023-audit-remediation/callback-acknowledgement.md`. Las referencias
+históricas inferiores a "answerCallbackQuery pendiente" quedan superadas por
+este incremento, no por una validación visual de producción.
+
 ## Ejecución local
 
 ```powershell

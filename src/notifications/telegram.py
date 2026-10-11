@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 import httpx
 
 from src.domain.actions.presentation import ConsentButton
+from src.domain.interactions.models import bounded_callback_query_id
 from src.domain.interactions.processor import TelegramSendError
 from src.domain.preferences.timezone import resolve_user_timezone, to_local_display
 from src.domain.reminders.models import Reminder
@@ -162,9 +163,7 @@ class TelegramNotifier:
                     "resending the chunk as plain text",
                     exc.description,
                 )
-        return await self._send_message(
-            chat_id, text, parse_mode=None, button_rows=button_rows
-        )
+        return await self._send_message(chat_id, text, parse_mode=None, button_rows=button_rows)
 
     async def _send_message(
         self,
@@ -270,6 +269,37 @@ class TelegramNotifier:
                 definitive=False,
             )
         return message_id
+
+    async def answer_callback_query(self, callback_query_id: str) -> bool:
+        """Stop a button's progress indicator; this is NOT an execution result.
+
+        One bounded Bot API call, no retry, popup, personal content or raw errors.
+        Expired ids, 429, malformed responses and transport failures are all
+        best-effort failures independent from proposal consent and execution.
+        """
+        if bounded_callback_query_id(callback_query_id) is None:
+            return False
+        try:
+            response = await self._client.post(
+                f"{API_BASE_URL}/bot{self._token}/answerCallbackQuery",
+                json={"callback_query_id": callback_query_id},
+                timeout=2.0,
+            )
+            body = response.json()
+        except (httpx.HTTPError, ValueError):
+            logger.warning("Telegram callback acknowledgement failed")
+            return False
+        if (
+            response.status_code == 200
+            and isinstance(body, dict)
+            and body.get("ok") is True
+            and body.get("result") is True
+        ):
+            return True
+        logger.warning(
+            "Telegram callback acknowledgement rejected (http_status=%d)", response.status_code
+        )
+        return False
 
     async def send_typing(self, chat_id: int) -> None:
         """Refresh Telegram's typing indicator without sending user content."""

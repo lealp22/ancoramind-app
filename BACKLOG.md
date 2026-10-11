@@ -45,6 +45,15 @@ Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
+**Acuse botones 2026-10-11 — BL-39/40 (local, sin rollout):** `answerCallbackQuery`
+implementado; `callback_query_id` solo en payload cifrado, sin migración. Acuse
+antes del Core, best-effort/2 s/sin retry, no autoriza ni anuncia éxito. Callbacks
+inválidos/OFF no alcanzan Agent/comandos; adjuntos del botón no se reingestan.
+1300 unit (79.46% cobertura) + 155 integration passed (1 live STT skipped).
+E2E pendiente y límites de acuse/concurrencia documentados en
+`specs/023-audit-remediation/callback-acknowledgement.md`. Redis sigue disponible
+y apagado por decisión del propietario; no es dependencia de este incremento.
+
 **Incremento 2026-10-11 — BL-23/39/40 (local, sin deploy):** cerrado el bypass
 legacy de consentimiento: Agent gobernado/singleton/eval Agent sin `execute_*`;
 `confirm`/`confirm_or_use_confirmed`/`mark_executed` rechazan sin I/O. Core

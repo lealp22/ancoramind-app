@@ -11,6 +11,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.domain.interactions.media import TelegramAttachment
 
+MAX_CALLBACK_QUERY_ID_CHARS = 256
+"""Local defensive bound for opaque Bot API identifiers, not a Telegram limit."""
+
+
+def bounded_callback_query_id(value: object) -> str | None:
+    """Keep an opaque, bounded identifier; never truncate or echo invalid data."""
+    if (
+        isinstance(value, str)
+        and 0 < len(value) <= MAX_CALLBACK_QUERY_ID_CHARS
+        and value.isascii()
+        and all(33 <= ord(char) <= 126 for char in value)
+    ):
+        return value
+    return None
+
 
 class InteractionStatus(StrEnum):
     """States allowed by the specs/013 interaction state machine."""
@@ -185,6 +200,12 @@ class NormalizedTelegramUpdate(BaseModel):
     text: str | None = None
     attachments: tuple[TelegramAttachment, ...] = ()
     voice_message_kind: str | None = None
+    callback_query_id: str | None = None
+
+    @field_validator("callback_query_id", mode="before")
+    @classmethod
+    def validate_callback_query_id(cls, value: object) -> str | None:
+        return bounded_callback_query_id(value)
 
 
 def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdate:
@@ -224,7 +245,16 @@ def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdat
                 if isinstance(chat, dict) and isinstance(chat.get("type"), str)
                 else None,
                 text=text if isinstance(text, str) else None,
-                attachments=_normalize_attachments(message_data),
+                callback_query_id=(
+                    bounded_callback_query_id(candidate.get("id"))
+                    if update_type == "callback_query"
+                    else None
+                ),
+                # A button message may contain an OLD attachment: it is not a
+                # new upload and must never cause ingesta/voice preparation.
+                attachments=()
+                if update_type == "callback_query"
+                else _normalize_attachments(message_data),
                 voice_message_kind=(
                     "edited"
                     if update_type != "message"
@@ -240,7 +270,7 @@ def normalize_telegram_update(update: dict[str, Any]) -> NormalizedTelegramUpdat
                     )
                     else "original"
                 )
-                if "voice" in message_data
+                if update_type != "callback_query" and "voice" in message_data
                 else None,
             )
 

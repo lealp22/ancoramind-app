@@ -19,7 +19,10 @@
 - [x] Gates finales: 1263 unit, 144 integration passed (1 live STT skipped),
       Ruff/mypy limpios y catálogo estático válido.
 - [ ] Rollout manual del SHA validado, consentimiento gobernado y E2E Telegram.
-- [ ] Completar `answerCallbackQuery` y verificar configuración efectiva Gateway.
+- [x] Completar `answerCallbackQuery` localmente: ID cifrado, acuse best-effort
+      antes del Core y callbacks inválidos/OFF sin Agent. 1300 unit + 155
+      integration passing (live STT omitido). Evidencia: `callback-acknowledgement.md`.
+- [ ] Verificar configuración efectiva Gateway; E2E de botones en Telegram real.
 
 Evidencia: `operational-review-2026-10-11.md`; no se marca cerrada toda la spec.
 Las tareas anteriores/inferiores conservan su historia fechada.
