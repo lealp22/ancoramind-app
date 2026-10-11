@@ -1,5 +1,6 @@
 """Unit tests for AncoraMind model factory and provider safeguards."""
 
+import pytest
 from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
 from agno.models.base import MessageData
@@ -12,6 +13,7 @@ from openai.types.chat.chat_completion_chunk import (
 )
 
 from src.agent.ancora_agent import (
+    SafeOpenAILike,
     SafeOpenRouter,
     create_ancora_agent,
     create_db,
@@ -98,6 +100,7 @@ def test_create_model_from_settings_uses_litellm_proxy_when_enabled():
     model = create_model_from_settings(settings)
 
     assert isinstance(model, OpenAILike)
+    assert isinstance(model, SafeOpenAILike)
     assert model.id == "ancoramind-default-r1"
     assert str(model.base_url).rstrip("/") == "http://litellm.railway.internal:4000/v1"
     assert model.api_key == "sk-ancoramind-only"
@@ -124,7 +127,8 @@ def test_create_ancora_agent_defaults_to_approved_tool_ceiling_and_zero_retries(
     assert agent.telemetry is False
 
 
-def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):
+@pytest.mark.parametrize("model_cls", [SafeOpenRouter, SafeOpenAILike])
+def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog, model_cls):
     response = ModelResponse(
         tool_calls=[
             {},
@@ -140,7 +144,7 @@ def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):
             },
         ]
     )
-    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    model = model_cls(id="minimax/minimax-m3:free", api_key="test-key")
     assistant_message = Message(role="assistant")
 
     populated = model._populate_assistant_message(assistant_message, response)
@@ -159,7 +163,8 @@ def test_safe_openrouter_drops_malformed_tool_calls_before_persistence(caplog):
     assert caplog.records[-1].levelname == "WARNING"
 
 
-def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog):
+@pytest.mark.parametrize("model_cls", [SafeOpenRouter, SafeOpenAILike])
+def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog, model_cls):
     response = ModelResponse(
         content="¡Hola! ¿En qué puedo ayudarte?",
         tool_calls=[
@@ -168,7 +173,7 @@ def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog):
             {"id": "missing-name", "type": "function", "function": {}},
         ],
     )
-    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    model = model_cls(id="minimax/minimax-m3:free", api_key="test-key")
     assistant_message = Message(role="assistant")
 
     populated = model._populate_assistant_message(assistant_message, response)
@@ -180,7 +185,8 @@ def test_safe_openrouter_normalizes_only_malformed_tool_calls_to_none(caplog):
     assert caplog.records[-1].levelname == "WARNING"
 
 
-def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
+@pytest.mark.parametrize("model_cls", [SafeOpenRouter, SafeOpenAILike])
+def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog, model_cls):
     stream_data = MessageData(
         response_tool_calls=[
             ChoiceDeltaToolCall(index=0, id="id-only"),
@@ -195,7 +201,7 @@ def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
             ),
         ]
     )
-    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    model = model_cls(id="minimax/minimax-m3:free", api_key="test-key")
     assistant_message = Message(role="assistant")
 
     model._populate_assistant_message_from_stream_data(
@@ -217,12 +223,13 @@ def test_safe_openrouter_drops_malformed_streaming_tool_calls(caplog):
     assert caplog.records[-1].levelname == "WARNING"
 
 
-def test_safe_openrouter_normalizes_only_malformed_streaming_tool_calls_to_none(caplog):
+@pytest.mark.parametrize("model_cls", [SafeOpenRouter, SafeOpenAILike])
+def test_safe_openrouter_normalizes_only_malformed_streaming_tool_calls_to_none(caplog, model_cls):
     stream_data = MessageData(
         response_content="¡Hola! ¿En qué puedo ayudarte?",
         response_tool_calls=[ChoiceDeltaToolCall(index=0, id="id-only")],
     )
-    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+    model = model_cls(id="minimax/minimax-m3:free", api_key="test-key")
     assistant_message = Message(role="assistant")
 
     model._populate_assistant_message_from_stream_data(
@@ -236,8 +243,9 @@ def test_safe_openrouter_normalizes_only_malformed_streaming_tool_calls_to_none(
     assert caplog.records[-1].levelname == "WARNING"
 
 
-def test_safe_openrouter_stops_stream_loop_after_only_malformed_tool_calls(monkeypatch):
-    model = SafeOpenRouter(id="minimax/minimax-m3:free", api_key="test-key")
+@pytest.mark.parametrize("model_cls", [SafeOpenRouter, SafeOpenAILike])
+def test_safe_openrouter_stops_stream_loop_after_only_malformed_tool_calls(monkeypatch, model_cls):
+    model = model_cls(id="minimax/minimax-m3:free", api_key="test-key")
     request_count = 0
 
     def fake_invoke_stream(**_kwargs):

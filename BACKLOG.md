@@ -1763,7 +1763,7 @@ rollout que el resto de flags opt-in). Se cierra como resuelto en vez de
 dejarlo abierto con texto obsoleto; el E2E real contra Telegram/Railway
 sigue pendiente igual que el resto del pipeline (bloqueado por BL-18).
 
-### BL-16 · Retirar workaround SafeOpenRouter cuando Agno valide tool calls
+### BL-16 · Retirar workaround SafeOpenRouter cuando Agno valide tool calls 🔶 protección compartida — specs/034
 El E2E de specs/006 descubrió que `minimax/minimax-m3:free` vía OpenRouter
 (backend GMICloud) emitió un tool call vacío junto al válido. Agno 2.9.0 le
 añadió UUID, lo persistió y OpenRouter rechazó el siguiente turno. Workaround
@@ -1773,6 +1773,37 @@ de Agno.
 **Criterio de cierre:** al actualizar Agno o cambiar de modelo/proveedor,
 reproducir el caso; si Agno ya filtra llamadas incompletas, eliminar subclase
 y sus tests. Mientras exista, test unitario obligatorio sobre la forma exacta.
+
+**Revisión e incremento local (2026-10-11, specs/034):** el repro sintético
+con Agno **2.9.0** confirma que `OpenRouter` y `OpenAILike` nativos aún
+conservan llamadas vacías; el segundo era el adaptador elegido por LiteLLM
+y por tanto no recibía el filtro de `SafeOpenRouter`. Corregido mediante
+`ToolCallSafetyMixin` compartido + `SafeOpenAILike` seleccionado por la
+factory `openai-like`, también bajo `AgnoLLMAccess`. Se mantienen retries
+cero, Gateway privado/fail-closed, snapshots, budget y auditoría; el modo
+gobernado sigue rechazando sync/streaming. Los deltas streaming solo se
+filtran **después** de consolidarlos; llamadas válidas conservan orden y
+argumentos, y Agno sigue generando IDs ausentes. El filtro admite ausencia
+de llamadas (`[]`/`None`) y rechaza nombres no-string o solo espacios, sin
+convertirse en un validador de argumentos/autorización.
+
+La revisión del código upstream **v3.1.2** encontró las mismas
+implementaciones de los tres métodos relevantes que en 2.9.0; no se instaló
+ni ejecutó 3.x, fuera del rango del proyecto. **BL-16 sigue abierta:** el
+criterio de retirada no se cumple. Pruebas offline del modelo compuesto
+por `AgnoLLMAccess` cubren solo vacías → un turno y ninguna tool; vacías +
+válida → una ejecución y siguiente turno con historial limpio; también
+budget, usage y caminos prohibidos. Sin inferencia, E2E ni cambios remotos.
+Evidencia y procedimiento de retirada: `specs/034-tool-call-safety/`.
+
+**Validación:** 1199 unit pasando (78,58 % cobertura, gate 70 % superado),
+143 integration pasando + 1 smoke live omitido; Ruff y `mypy src/` limpios
+(161 módulos), catálogo de 27 evals válido y diff-check limpio. 49 casos
+adicionales: 44 nuevos + parametrización de las 5 regresiones originales
+para ambos adaptadores. El SDK OpenAI/parser/loop se prueban con
+`httpx.MockTransport`, sin sockets externos. La suite integration tuvo dos
+fallos de timing en STT (timeout de 50 ms antes de entrar al mock), pasó en
+aislamiento y en la repetición final completa; no se modificó voz.
 
 ### ~~BL-17~~ · Mantener indicador «escribiendo…» durante procesos largos ✅ resuelto por specs/013 — 2026-10-11
 

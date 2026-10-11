@@ -89,7 +89,7 @@ src/
 ├── main.py              ← Entry point: AgentOS + Telegram + registro de tools
 ├── config.py            ← Pydantic Settings (.env). extra="ignore"
 ├── agent/               ← Capa Agno (infraestructura)
-│   ├── ancora_agent.py  ← factory física legado + SafeOpenRouter; T7 la compone con GovernedModel
+│   ├── ancora_agent.py  ← factory + ToolCallSafetyMixin/SafeOpenRouter/SafeOpenAILike (BL-16); composición GovernedModel
 │   ├── llm_access.py / governed_model.py / governed_agent_factory.py /
 │   │   governed_interaction_runner.py ← T7: LLMAccess + Agent por run
 │   ├── instructions.py  ← assemble_instructions(): carga prompts/*.md → list[str]
@@ -148,7 +148,8 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             localmente; Fase 6 en curso — BL-40),
                             024-recurring-events-reminders (eventos y
                             recordatorios recurrentes + snooze — en curso,
-                            BL-41)
+                            BL-41), 034-tool-call-safety (BL-16: filtro compartido
+                            OpenRouter/OpenAILike; retirada upstream pendiente)
 tests/unit/              ← 643 tests
 tests/integration/        ← 94 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
@@ -211,11 +212,13 @@ y pasa por `LLMAccess`.
 | `LLM_PROVIDER` | Clase Agno | API key env var | `LLM_BASE_URL` |
 |---|---|---|---|
 | `openai` | `OpenAIChat` | `OPENAI_API_KEY` | opcional |
-| `openrouter` | `OpenRouter` | `OPENROUTER_API_KEY` | automático |
-| `openai-like` | `OpenAILike` | `OPENAI_API_KEY` | **requerido** |
+| `openrouter` | `SafeOpenRouter` (Agno `OpenRouter`) | `OPENROUTER_API_KEY` | automático |
+| `openai-like` | `SafeOpenAILike` (Agno `OpenAILike`) | `OPENAI_API_KEY` | **requerido** |
 
 Modo Gateway (T11): con `LITELLM_PROXY_ENABLED=true` la tabla anterior se ignora
-— `LLMAccess` y el AgentOS legado componen únicamente `OpenAILike` hacia el
+— `LLMAccess` y el AgentOS legado componen únicamente `SafeOpenAILike`
+(subclase de `OpenAILike`, filtro de tool calls compartido con
+`SafeOpenRouter` — BL-16/specs/034) hacia el
 LiteLLM privado (`LITELLM_PROXY_BASE_URL` + `LITELLM_PROXY_VIRTUAL_KEY`,
 fail-closed si faltan), usando el alias versionado del snapshot como `model`.
 La virtual key se crea con `scripts/litellm_create_virtual_key.py`; los secretos

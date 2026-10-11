@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 from agno.models.openai import OpenAIChat, OpenAILike
 
-from src.agent.ancora_agent import SafeOpenRouter
+from src.agent.ancora_agent import SafeOpenAILike, SafeOpenRouter
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_model import GovernedModelMixin
 from src.agent.llm_access import AgnoLLMAccess
@@ -171,6 +171,7 @@ def test_model_for_uses_private_litellm_alias_instead_of_direct_provider() -> No
     )
 
     assert isinstance(model, OpenAILike)
+    assert isinstance(model, SafeOpenAILike)
     assert isinstance(model, GovernedModelMixin)
     assert model.id == "ancoramind-fast-r1"
     assert str(model.base_url).rstrip("/") == "http://litellm.railway.internal:4000/v1"

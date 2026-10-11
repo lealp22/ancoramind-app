@@ -1,7 +1,7 @@
 """GovernedModel adapter — the only physical-model wrapper for governed runs.
 
 The mixin is composed dynamically on top of the concrete provider class
-(``SafeOpenRouter``/``OpenAIChat``/``OpenAILike``) so the existing OpenRouter
+(``SafeOpenRouter``/``OpenAIChat``/``SafeOpenAILike``) so the shared provider
 safety fixes (malformed tool calls, stream-loop termination) are preserved
 instead of being replaced. Agno's agentic loop is not reimplemented: the
 mixin only intercepts the per-turn ``ainvoke`` primitive that ``aresponse``

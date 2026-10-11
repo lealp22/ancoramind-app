@@ -15,6 +15,7 @@ from agno.db.postgres import PostgresDb
 from agno.db.sqlite import SqliteDb
 from agno.models.base import MessageData, Model
 from agno.models.message import Message
+from agno.models.openai import OpenAILike
 from agno.models.openrouter import OpenRouter
 from agno.models.response import ModelResponse
 
@@ -32,15 +33,40 @@ def _is_complete_function_call(tool_call: dict[str, Any]) -> bool:
     persists it, but the provider rejects the malformed history next turn.
     """
     function = tool_call.get("function")
+    name = function.get("name") if isinstance(function, dict) else None
     return (
         tool_call.get("type") == "function"
         and isinstance(function, dict)
-        and bool(function.get("name"))
+        and isinstance(name, str)
+        and bool(name.strip())
     )
 
 
-class SafeOpenRouter(OpenRouter):
-    """OpenRouter adapter that drops malformed tool calls before persistence."""
+class ToolCallSafetyMixin(Model):
+    """Shared Agno message-boundary safeguard, not a standalone provider.
+
+    BL-16: apply to direct OpenRouter and OpenAI-compatible Gateway responses.
+    Validate structural completeness only; argument parsing and authorization
+    remain Agno/Core responsibilities. Never filter individual streaming deltas.
+    """
+
+    def _complete_tool_calls(
+        self, tool_calls: list[dict[str, Any]] | None, *, streaming: bool = False
+    ) -> list[dict[str, Any]] | None:
+        """Filter final calls without logging names, arguments or response data."""
+        calls = tool_calls or []
+        complete_calls = [call for call in calls if _is_complete_function_call(call)]
+        dropped_calls = len(calls) - len(complete_calls)
+        if dropped_calls:
+            logger.warning(
+                "Dropped %d malformed %stool call(s) from model %s",
+                dropped_calls,
+                "streaming " if streaming else "",
+                self.id,
+            )
+        # Agno 2.9.0 treats [] as another tool iteration in streaming. None
+        # terminates the loop without a request lacking any executable tool.
+        return complete_calls or None
 
     def _populate_assistant_message(
         self,
@@ -52,20 +78,11 @@ class SafeOpenRouter(OpenRouter):
         This is deliberately applied after streaming deltas are consolidated:
         individual deltas may be incomplete, while the final calls may not.
         """
-        complete_calls = [
-            call for call in provider_response.tool_calls if _is_complete_function_call(call)
-        ]
-        dropped_calls = len(provider_response.tool_calls) - len(complete_calls)
-        if dropped_calls:
-            logger.warning(
-                "Dropped %d malformed OpenRouter tool call(s) from model %s",
-                dropped_calls,
-                self.id,
-            )
-        # Agno 2.9.0 streaming checks ``tool_calls is not None`` rather than
-        # truthiness. Leaving [] here makes its model loop continue forever
-        # without executing a tool or incrementing the tool-call counter.
-        cast(Any, provider_response).tool_calls = complete_calls or None
+        # ModelResponse annotates a list, but Agno message loops also accept
+        # None as "no calls". Keep that compatibility localized to this adapter.
+        cast(Any, provider_response).tool_calls = self._complete_tool_calls(
+            provider_response.tool_calls
+        )
         return super()._populate_assistant_message(
             assistant_message,
             provider_response,
@@ -81,18 +98,17 @@ class SafeOpenRouter(OpenRouter):
             assistant_message,
             stream_data,
         )
-        tool_calls = assistant_message.tool_calls or []
-        complete_calls = [call for call in tool_calls if _is_complete_function_call(call)]
-        dropped_calls = len(tool_calls) - len(complete_calls)
-        if dropped_calls:
-            logger.warning(
-                "Dropped %d malformed streaming OpenRouter tool call(s) from model %s",
-                dropped_calls,
-                self.id,
-            )
-        # None means "no tool calls" to Agno's streaming response loop. An
-        # empty list is incorrectly treated as another tool iteration in 2.9.0.
-        assistant_message.tool_calls = complete_calls or None
+        assistant_message.tool_calls = self._complete_tool_calls(
+            assistant_message.tool_calls, streaming=True
+        )
+
+
+class SafeOpenRouter(ToolCallSafetyMixin, OpenRouter):
+    """OpenRouter adapter that drops malformed tool calls before persistence."""
+
+
+class SafeOpenAILike(ToolCallSafetyMixin, OpenAILike):
+    """OpenAI-compatible adapter with the same safeguard, including LiteLLM."""
 
 
 def create_db(db_url: str | None = None) -> PostgresDb | SqliteDb:
@@ -146,8 +162,6 @@ def resolve_model_parts(
         return SafeOpenRouter, kwargs
 
     if normalized == "openai-like":
-        from agno.models.openai import OpenAILike
-
         if not base_url:
             raise ValueError(
                 "LLM_BASE_URL is required when LLM_PROVIDER=openai-like. "
@@ -156,7 +170,7 @@ def resolve_model_parts(
         kwargs = {"id": model_id, "base_url": base_url}
         if api_key:
             kwargs["api_key"] = api_key
-        return OpenAILike, kwargs
+        return SafeOpenAILike, kwargs
 
     raise ValueError(
         f"Unsupported LLM_PROVIDER: {provider!r}. Use one of: openai, openrouter, openai-like"
