@@ -252,9 +252,23 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
-    assert "content_hash" not in _columns(migration_database, "documents")
+    assert "idx_telegram_interactions_agno_session_id" not in _indexes(
+        migration_database, "telegram_interactions"
+    )
+    assert "content_hash" in _columns(migration_database, "documents")
     assert "voice_preparations" in _tables(migration_database)
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _note_count(migration_database, "preserved through downgrade") == 1
+
+    # 0012 owns document deduplication. It is no longer the head, so exercise
+    # its downgrade explicitly after verifying the latest revision above.
+    command.downgrade(config, "-1")
+
+    assert _current_revision(migration_database) == _down_revision(
+        _down_revision(HEAD_REVISION)
+    )
+    assert "content_hash" not in _columns(migration_database, "documents")
+    assert "idx_documents_user_content_hash" not in _indexes(migration_database, "documents")
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
     command.downgrade(config, GOVERNANCE_REVISION)
