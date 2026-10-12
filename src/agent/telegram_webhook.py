@@ -11,6 +11,9 @@ from urllib.error import URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
+TELEGRAM_WEBHOOK_ALLOWED_UPDATES = ("message", "callback_query")
+"""Inbound updates required by the governed Telegram admission pipeline."""
+
 
 def build_webhook_url(base_url: str) -> str:
     """Build the canonical AncoraMind Telegram webhook URL from a public HTTPS URL."""
@@ -21,6 +24,15 @@ def build_webhook_url(base_url: str) -> str:
     if parsed.query or parsed.fragment:
         raise ValueError("Webhook base URL must not contain query parameters or fragments")
     return f"{normalized}/telegram/webhook"
+
+
+def build_webhook_registration_payload(webhook_url: str, secret_token: str) -> dict[str, str]:
+    """Build the secret-bearing Bot API payload without omitting consent callbacks."""
+    return {
+        "url": webhook_url,
+        "secret_token": secret_token,
+        "allowed_updates": json.dumps(TELEGRAM_WEBHOOK_ALLOWED_UPDATES),
+    }
 
 
 def telegram_api_request(

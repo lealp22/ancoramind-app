@@ -121,6 +121,5 @@ def render_proposal_block(proposal_id: UUID, tool_name: str, payload: dict[str, 
         if len(rendered) > MAX_FIELD_CHARS:
             rendered = rendered[: MAX_FIELD_CHARS - 1] + "…"
         lines.append(f"   {label}: {rendered}")
-    lines.append(f"   ID: `{proposal_id}`")
     lines.append("Pulsa ✅ Sí para confirmar o ❌ No para descartarla (válida 15 min).")
     return "\n".join(lines)

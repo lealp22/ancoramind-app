@@ -8,6 +8,7 @@ import pytest
 
 from src.agent.telegram_webhook import (
     build_command_menu_payload,
+    build_webhook_registration_payload,
     build_webhook_url,
     summarize_webhook_info,
     telegram_api_request,
@@ -59,6 +60,17 @@ def test_build_webhook_url(base_url, expected):
 def test_build_webhook_url_requires_clean_https_url(base_url):
     with pytest.raises(ValueError, match="Webhook base URL"):
         build_webhook_url(base_url)
+
+
+def test_webhook_registration_includes_governed_consent_callbacks() -> None:
+    payload = build_webhook_registration_payload(
+        "https://ancoramind-production.up.railway.app/telegram/webhook",
+        "secret",
+    )
+
+    assert payload["url"] == "https://ancoramind-production.up.railway.app/telegram/webhook"
+    assert payload["secret_token"] == "secret"
+    assert json.loads(payload["allowed_updates"]) == ["message", "callback_query"]
 
 
 def test_telegram_api_request_posts_payload_without_exposing_token():

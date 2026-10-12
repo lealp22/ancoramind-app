@@ -412,7 +412,8 @@ async def test_governed_consent_button_claims_the_proposal_it_presented(
     assert runner.proposal_id is not None
     assert sender.calls, "the Agent reply must have been delivered"
     final_chunk_text = sender.calls[-1][1]
-    assert str(runner.proposal_id) in final_chunk_text
+    assert str(runner.proposal_id) not in final_chunk_text
+    assert "ID:" not in final_chunk_text
     assert sender.button_rows[-1] is not None
     yes_button, no_button = sender.button_rows[-1][0]
     assert yes_button.callback_data == f"c:{runner.proposal_id}"

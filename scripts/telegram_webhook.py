@@ -23,6 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.agent.telegram_webhook import (  # noqa: E402
     build_command_menu_payload,
+    build_webhook_registration_payload,
     build_webhook_url,
     summarize_webhook_info,
     telegram_api_request,
@@ -72,11 +73,9 @@ def main() -> int:
             telegram_api_request(
                 settings.telegram_token,
                 "setWebhook",
-                {
-                    "url": webhook_url,
-                    "secret_token": settings.telegram_webhook_secret_token,
-                    "allowed_updates": json.dumps(["message"]),
-                },
+                build_webhook_registration_payload(
+                    webhook_url, settings.telegram_webhook_secret_token
+                ),
             )
             print(f"Webhook registered: {webhook_url}")
             return 0

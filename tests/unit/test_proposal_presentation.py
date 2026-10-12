@@ -56,7 +56,8 @@ def test_block_is_built_from_the_stored_payload_only() -> None:
     assert "Crear recordatorio" in block
     assert "Título: ITV" in block
     assert "Cuándo: 2026-10-20T09:00:00" in block
-    assert str(proposal_id) in block
+    assert str(proposal_id) not in block
+    assert "ID:" not in block
     assert "Descripción" not in block
     assert "should-not-appear" not in block
 
