@@ -15,6 +15,8 @@ from pptx import Presentation
 
 from src.agent.tools import documents as document_tools
 from src.domain.documents.models import AIExtraction, Document, DocumentWithExtraction
+from src.domain.interactions.media import ResolvedTelegramMedia
+from src.security.user_context import UserContext
 
 
 def _pdf_with_text(text: str) -> bytes:
@@ -125,6 +127,73 @@ async def test_analyze_document_receives_telegram_photo(monkeypatch):
     assert payload["trust"] == "untrusted_data"
     assert payload["source"] == "analyze_document"
     assert payload["records"][0]["source"] == "canonical_document"
+
+
+async def test_resolved_telegram_media_is_ingested_and_returns_safe_context(monkeypatch):
+    service = AsyncMock()
+    service.ingest.side_effect = lambda user, content, filename, mime, **_: _ingest_result(
+        filename, mime, len(content)
+    )
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+
+    response = await document_tools.ingest_resolved_telegram_media(
+        UserContext(user_id="452022640"),
+        (
+            ResolvedTelegramMedia(
+                content=b"%PDF-1.4",
+                filename="../../factura.pdf",
+                mime_type="application/pdf",
+                is_image=False,
+            ),
+        ),
+    )
+
+    args = service.ingest.await_args.args
+    assert args[0].user_id == "452022640"
+    assert args[1] == b"%PDF-1.4"
+    assert args[2] == "factura.pdf"
+    assert args[3] == "application/pdf"
+    payload = json.loads(response.split("\n", 1)[1])
+    assert payload["trust"] == "untrusted_data"
+    assert payload["source"] == "telegram_attachment_ingestion"
+    assert payload["records"][0]["source"] == "canonical_document"
+
+
+async def test_resolved_telegram_media_hides_ingestion_exceptions(monkeypatch):
+    service = AsyncMock()
+    service.ingest.side_effect = RuntimeError("litellm.BadRequestError: provider payload")
+
+    async def get_service():
+        return service
+
+    monkeypatch.setattr(document_tools, "_get_document_service", get_service)
+
+    response = await document_tools.ingest_resolved_telegram_media(
+        UserContext(user_id="452022640"),
+        (
+            ResolvedTelegramMedia(
+                content=b"document",
+                filename="factura.txt",
+                mime_type="text/plain",
+                is_image=False,
+            ),
+        ),
+    )
+
+    assert "litellm" not in response.lower()
+    assert "provider payload" not in response
+    payload = json.loads(response.split("\n", 1)[1])
+    assert payload["records"] == [
+        {
+            "source": "attachment_error",
+            "index": 1,
+            "message": "No se pudo guardar o analizar el adjunto.",
+        }
+    ]
 
 
 async def test_search_documents_semantically_wraps_results_as_untrusted_data(monkeypatch):

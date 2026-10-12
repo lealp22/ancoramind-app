@@ -98,8 +98,10 @@ el ledger — ver §6.
 
 `TelegramMediaResolverPort` (`src/domain/interactions/processor.py`) ya es
 un `Protocol` trivialmente extensible; `ResolvedTelegramMedia` — el DTO que
-de verdad consume el Agent vía `agent.arun(images=..., files=...)` — ya es
-agnóstico de canal (bytes + metadata). Solo `TelegramAttachment` (con
+consume la frontera de ingestión antes del Agent — ya es agnóstico de canal
+(bytes + metadata). Esa frontera archiva/procesa el adjunto y el Agent recibe
+sólo un resumen canónico de texto, acotado y marcado como `untrusted_data`;
+nunca `agent.arun(images=..., files=...)`. Solo `TelegramAttachment` (con
 `file_id` de la Bot API) es Telegram-shaped.
 
 ### 3.7 Autenticación

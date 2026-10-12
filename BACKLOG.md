@@ -594,6 +594,20 @@ pasa por `agent.arun(..., images=..., files=...)`, dejando que Agno invoque
 en `test_governed_interaction_runner.py`; 506 unit tests, ruff y mypy en verde.
 Pendiente de re-validar en Telegram/Railway como parte del E2E de M3.
 
+**Corrección 2026-10-13 (frontera de adjuntos Telegram):** el flujo anterior
+de continuidad quedó retirado porque entregar `images=`/`files=` crudos al
+Agent principal hacía que Agno/LiteLLM/OpenRouter intentara parsear el archivo
+original antes de que pudiera ejecutarse `analyze_document`. Ahora
+`GovernedInteractionRunner` llama primero a la entrada de ingesta de aplicación:
+almacena el original, prepara localmente PDFs con capa de texto y Office, y
+limita la ruta visual a PDFs escaneados/imágenes. El Agent principal recibe sólo
+un resumen canónico `untrusted_data` dentro de su turno persistido, sin bytes,
+URLs, `images=` ni `files=` de Telegram. `analyze_document` deja de estar en el
+catálogo del Agent principal; permanece como adaptador legado/testeable de la
+misma lógica. Validación local: 1307 unit tests passed, Ruff y `mypy src/`
+limpios. Pendiente: E2E Telegram/Railway que confirme ausencia de solicitudes
+de parser documental/rate limits de OpenRouter.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue

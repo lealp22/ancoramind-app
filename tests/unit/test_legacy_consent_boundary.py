@@ -130,6 +130,5 @@ def test_production_registration_only_exposes_reads_proposals_and_approved_excep
         "propose_document_delete",
         "propose_todo_item",
         "search_notes",
-        "analyze_document",
         "export_document",
     } <= names

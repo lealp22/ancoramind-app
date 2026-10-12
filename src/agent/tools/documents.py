@@ -40,6 +40,7 @@ from src.agent.tools.validation import internal_error_reply, invalid_proposal_re
 from src.domain.documents.extraction import DocumentVisualPage
 from src.domain.documents.models import AIExtraction
 from src.domain.documents.service import DocumentService
+from src.domain.interactions.media import ResolvedTelegramMedia
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
 from src.repositories.documents import DocumentsRepository
@@ -265,6 +266,177 @@ def _media_filename(media: File | Image, mime_type: str, index: int) -> str:
     return f"telegram-media-{media_id}{extension}"
 
 
+def _resolved_media_filename(media: ResolvedTelegramMedia, mime_type: str, index: int) -> str:
+    """Normalize the resolver-provided filename before storing canonical data."""
+    filename = Path(media.filename).name
+    if filename:
+        return filename
+    extension = mimetypes.guess_extension(mime_type) or ".bin"
+    return f"telegram-media-{index}{extension}"
+
+
+async def _ingest_content(
+    *,
+    user_context: UserContext,
+    service: DocumentService,
+    content: bytes,
+    filename: str,
+    mime_type: str,
+    index: int,
+) -> dict[str, object]:
+    """Run bounded local preparation then archive one attachment.
+
+    Text-layer PDFs and Office files use deterministic local extraction. Images
+    and scanned PDFs take only the dedicated, bounded visual-extraction route
+    owned by ``DocumentService``; they are never attached to the main agent.
+    """
+    from src.config import Settings
+
+    settings = Settings()
+    visual_pages: tuple[DocumentVisualPage, ...] = ()
+    extracted_text: str | None = None
+    if mime_type == "application/pdf":
+        try:
+            if has_extractable_text(content):
+                extracted_text = extract_pdf_text_markdown(
+                    content,
+                    max_pages=settings.document_text_max_pdf_pages,
+                )
+            else:
+                visual_pages = prepare_visual_pages(
+                    content,
+                    mime_type,
+                    max_pdf_pages=settings.document_vision_max_pdf_pages,
+                )
+        except DocumentVisionPreparationError:
+            visual_pages = ()
+    elif mime_type in DOCX_MIME_TYPES:
+        try:
+            extracted_text = extract_docx_text_markdown(
+                content,
+                max_blocks=settings.document_office_max_blocks,
+                max_zip_entries=settings.document_office_max_zip_entries,
+                max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+            )
+        except DocxExtractionError:
+            extracted_text = None
+    elif mime_type in XLSX_MIME_TYPES:
+        try:
+            extracted_text = extract_xlsx_text_markdown(
+                content,
+                max_blocks=settings.document_office_max_blocks,
+                max_sheets=settings.document_office_max_sheets,
+                max_cols_per_sheet=settings.document_office_max_cols_per_sheet,
+                max_zip_entries=settings.document_office_max_zip_entries,
+                max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+            )
+        except XlsxExtractionError:
+            extracted_text = None
+    elif mime_type in PPTX_MIME_TYPES:
+        try:
+            extracted_text = extract_pptx_text_markdown(
+                content,
+                max_blocks=settings.document_office_max_blocks,
+                max_slides=settings.document_office_max_slides,
+                max_zip_entries=settings.document_office_max_zip_entries,
+                max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+            )
+        except PptxExtractionError:
+            extracted_text = None
+    else:
+        try:
+            visual_pages = prepare_visual_pages(
+                content,
+                mime_type,
+                max_pdf_pages=settings.document_vision_max_pdf_pages,
+            )
+        except DocumentVisionPreparationError:
+            visual_pages = ()
+
+    result = await service.ingest(
+        user_context,
+        content,
+        filename,
+        mime_type,
+        visual_pages=visual_pages,
+        extracted_text=extracted_text,
+    )
+    doc = result.document
+    doc_filename, doc_filename_truncated = bounded_text(doc.original_filename, MAX_FILENAME_CHARS)
+    record: dict[str, object] = {
+        "source": "canonical_document",
+        "id": str(doc.id),
+        "filename": doc_filename,
+        "filename_truncated": doc_filename_truncated,
+        "mime_type": doc.mime_type[:127],
+        "size_bytes": doc.size_bytes,
+    }
+    extracted = _extraction_record(result.extraction)
+    if extracted is not None:
+        record["extraction"] = extracted
+    return record
+
+
+@closes_sessions
+async def ingest_resolved_telegram_media(
+    user_context: UserContext,
+    media: Sequence[ResolvedTelegramMedia],
+) -> str:
+    """Archive resolved Telegram media before the main Agent turn.
+
+    This is an application-level ingestion entry point, not an Agno tool. It
+    deliberately accepts resolver bytes directly and returns a bounded,
+    ``untrusted_data`` attachment summary for the subsequent text-only turn.
+    A per-attachment failure is represented by a fixed safe record, preventing
+    provider/storage exception details from becoming model or Telegram content.
+    """
+    if not media:
+        return ""
+
+    service = await _get_document_service()
+    records: list[dict[str, object]] = []
+    for index, item in enumerate(media, start=1):
+        if not item.content:
+            records.append(
+                {
+                    "source": "attachment_error",
+                    "index": index,
+                    "message": "No se pudo leer el adjunto.",
+                }
+            )
+            continue
+        mime_type = (
+            _image_mime_type(item.content, item.mime_type)
+            if item.is_image
+            else item.mime_type
+            or mimetypes.guess_type(item.filename)[0]
+            or "application/octet-stream"
+        )
+        filename = _resolved_media_filename(item, mime_type, index)
+        try:
+            records.append(
+                await _ingest_content(
+                    user_context=user_context,
+                    service=service,
+                    content=item.content,
+                    filename=filename,
+                    mime_type=mime_type,
+                    index=index,
+                )
+            )
+        except Exception:
+            records.append(
+                {
+                    "source": "attachment_error",
+                    "index": index,
+                    "message": "No se pudo guardar o analizar el adjunto.",
+                }
+            )
+    return render_retrieved_records(
+        "telegram_attachment_ingestion", records[:MAX_RESULT_RECORDS], len(records)
+    )
+
+
 @closes_sessions
 async def analyze_document(
     run_context: RunContext,
@@ -287,10 +459,7 @@ async def analyze_document(
     if not media_items:
         return "No se recibió ningún archivo para analizar."
 
-    from src.config import Settings
-
     user_ctx = UserContext.from_run_context(run_context)
-    settings = Settings()
     service = await _get_document_service()
     records: list[dict[str, object]] = []
 
@@ -320,89 +489,25 @@ async def analyze_document(
             or "application/octet-stream"
         )
         filename = _media_filename(media, mime_type, index)
-        visual_pages: tuple[DocumentVisualPage, ...] = ()
-        extracted_text: str | None = None
-        if mime_type == "application/pdf":
-            try:
-                if has_extractable_text(content):
-                    extracted_text = extract_pdf_text_markdown(
-                        content,
-                        max_pages=settings.document_text_max_pdf_pages,
-                    )
-                else:
-                    visual_pages = prepare_visual_pages(
-                        content,
-                        mime_type,
-                        max_pdf_pages=settings.document_vision_max_pdf_pages,
-                    )
-            except DocumentVisionPreparationError:
-                visual_pages = ()
-        elif mime_type in DOCX_MIME_TYPES:
-            try:
-                extracted_text = extract_docx_text_markdown(
-                    content,
-                    max_blocks=settings.document_office_max_blocks,
-                    max_zip_entries=settings.document_office_max_zip_entries,
-                    max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
+        try:
+            records.append(
+                await _ingest_content(
+                    user_context=user_ctx,
+                    service=service,
+                    content=content,
+                    filename=filename,
+                    mime_type=mime_type,
+                    index=index,
                 )
-            except DocxExtractionError:
-                extracted_text = None
-        elif mime_type in XLSX_MIME_TYPES:
-            try:
-                extracted_text = extract_xlsx_text_markdown(
-                    content,
-                    max_blocks=settings.document_office_max_blocks,
-                    max_sheets=settings.document_office_max_sheets,
-                    max_cols_per_sheet=settings.document_office_max_cols_per_sheet,
-                    max_zip_entries=settings.document_office_max_zip_entries,
-                    max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
-                )
-            except XlsxExtractionError:
-                extracted_text = None
-        elif mime_type in PPTX_MIME_TYPES:
-            try:
-                extracted_text = extract_pptx_text_markdown(
-                    content,
-                    max_blocks=settings.document_office_max_blocks,
-                    max_slides=settings.document_office_max_slides,
-                    max_zip_entries=settings.document_office_max_zip_entries,
-                    max_uncompressed_bytes=settings.document_office_max_uncompressed_bytes,
-                )
-            except PptxExtractionError:
-                extracted_text = None
-        else:
-            try:
-                visual_pages = prepare_visual_pages(
-                    content,
-                    mime_type,
-                    max_pdf_pages=settings.document_vision_max_pdf_pages,
-                )
-            except DocumentVisionPreparationError:
-                visual_pages = ()
-        result = await service.ingest(
-            user_ctx,
-            content,
-            filename,
-            mime_type,
-            visual_pages=visual_pages,
-            extracted_text=extracted_text,
-        )
-        doc = result.document
-        doc_filename, doc_filename_truncated = bounded_text(
-            doc.original_filename, MAX_FILENAME_CHARS
-        )
-        record: dict[str, object] = {
-            "source": "canonical_document",
-            "id": str(doc.id),
-            "filename": doc_filename,
-            "filename_truncated": doc_filename_truncated,
-            "mime_type": doc.mime_type[:127],
-            "size_bytes": doc.size_bytes,
-        }
-        extracted = _extraction_record(result.extraction)
-        if extracted is not None:
-            record["extraction"] = extracted
-        records.append(record)
+            )
+        except Exception:
+            records.append(
+                {
+                    "source": "attachment_error",
+                    "index": index,
+                    "message": "No se pudo guardar o analizar el adjunto.",
+                }
+            )
 
     return render_retrieved_records(
         "analyze_document", records[:MAX_RESULT_RECORDS], len(records)

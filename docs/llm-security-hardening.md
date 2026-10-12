@@ -138,9 +138,13 @@ pasan por el mismo envoltorio (`src/agent/tools/untrusted_results.py`), con
 (2026-10-07):** `analyze_document` también usa ese mismo envoltorio en vez de
 devolver texto plano sin acotar — era la última tool de lectura documental
 sin él; adjuntos ilegibles producen un record `attachment_error` en lugar de
-una línea suelta. El adjunto original entregado directamente al Agent
-principal (no solo su extracción) queda cubierto por el framing de prompt
-descrito arriba. La ruta AgentOS legada (`agno.os.interfaces.telegram.Telegram`)
+una línea suelta. **Endurecido (2026-10-13):** la ruta Telegram gobernada
+archiva y procesa `ResolvedTelegramMedia` antes de crear el Agent principal;
+ningún byte, URL o `files=`/`images=` de Telegram llega a su llamada
+`agent.arun()`. El turno sólo recibe un resumen canónico, acotado y marcado
+`trust: "untrusted_data"`; PDFs con capa de texto y Office se preparan
+localmente, y PDFs escaneados/imágenes usan únicamente la ruta visual acotada
+de extracción documental. La ruta AgentOS legada (`agno.os.interfaces.telegram.Telegram`)
 ya no se registra cuando la admisión gobernada está activa (`src/main.py`) —
 antes coexistían ambas rutas, dejando compilada una superficie Telegram sin
 `TelegramMediaResolver` ni el pipeline de admisión/consentimiento de

@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import time
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -176,9 +177,18 @@ async def test_runner_scope_is_released_after_run() -> None:
         current_execution_context()
 
 
-async def test_runner_passes_media_through_agent_arun() -> None:
-    """Attachments must flow through agent.arun() so the turn is persisted (BL-1)."""
+async def test_runner_ingests_media_before_a_text_only_agent_turn(monkeypatch) -> None:
+    """Telegram bytes stay out of the main Agent and its provider request."""
     runner, factory = _runner()
+    ingest = AsyncMock(
+        return_value=(
+            'Datos recuperados:\n{"trust":"untrusted_data",'
+            '"source":"telegram_attachment_ingestion","records":[]}'
+        )
+    )
+    monkeypatch.setattr(
+        "src.agent.governed_interaction_runner.ingest_resolved_telegram_media", ingest
+    )
 
     output = await runner.run(
         "He adjuntado un documento.",
@@ -198,18 +208,25 @@ async def test_runner_passes_media_through_agent_arun() -> None:
     )
 
     assert output == "respuesta gobernada"
+    ingest.assert_awaited_once()
+    assert ingest.await_args.args[0].user_id == "88"
+    assert ingest.await_args.args[1][0].filename == "factura.png"
     assert len(factory.agent.calls) == 1
     call = factory.agent.calls[0]
-    assert call["input_text"] == "He adjuntado un documento."
+    assert call["input_text"].startswith("He adjuntado un documento.")
+    assert '"trust":"untrusted_data"' in call["input_text"]
     assert call["session_id"] == "tg:ancoramind:77"
-    assert call["images"][0].mime_type == "image/png"
-    assert call["files"] is None
-    # The Agent (not analyze_document directly) is created for media runs too.
+    assert "images" not in call
+    assert "files" not in call
     assert len(factory.created_contexts) == 1
 
 
-async def test_runner_rejects_non_text_content_with_media() -> None:
+async def test_runner_rejects_non_text_content_with_media(monkeypatch) -> None:
     runner, factory = _runner()
+    monkeypatch.setattr(
+        "src.agent.governed_interaction_runner.ingest_resolved_telegram_media",
+        AsyncMock(return_value='Datos recuperados:\n{"trust":"untrusted_data","records":[]}'),
+    )
 
     class _NonTextAgent:
         async def arun(self, input_text: str, **kwargs: Any) -> Any:

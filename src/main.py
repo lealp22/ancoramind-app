@@ -114,7 +114,6 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
         logger.info("Note tools registered: propose_note, search_notes")
 
         from src.agent.tools.documents import (
-            analyze_document,
             get_document,
             propose_document_delete,
             search_documents,
@@ -126,14 +125,12 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
                 search_documents,
                 search_documents_semantically,
                 get_document,
-                analyze_document,
                 propose_document_delete,
             ]
         )
         logger.info(
             "Document tools registered: search_documents, search_documents_semantically, "
-            "get_document, analyze_document, "
-            "propose_document_delete"
+            "get_document, propose_document_delete"
         )
 
         from src.agent.tools.maintenance import (
