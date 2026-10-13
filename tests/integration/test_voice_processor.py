@@ -96,7 +96,7 @@ async def test_voice_runs_once_and_cleans_ciphertext(session):
     assert len(agent_factory.agent.calls) == 1
     call = agent_factory.agent.calls[0]
     assert call["input_text"] == "consulta mis notas"
-    assert call["files"] is None and call["images"] is None
+    assert "files" not in call and "images" not in call
     assert call["context"].budget.model_calls == 1
 
 
