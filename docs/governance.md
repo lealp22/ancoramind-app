@@ -138,8 +138,18 @@ requires_confirmation: true
 |---|---|---|
 | **READ** | Solo consulta | `get_vehicle_summary` |
 | **WRITE** | Modifica datos canónicos | `register_vehicle_maintenance` |
+| **WRITE_TRIVIAL** | Subnivel de WRITE: reversible en un paso, sin dato ambiguo que revisar, target ya existente | `propose_todo_item` (solo título), `propose_note` |
 | **EXTERNAL_ACTION** | Actúa fuera del sistema | `create_calendar_event` |
 | **DESTRUCTIVE** | Elimina datos | `execute_document_delete` |
+
+`WRITE_TRIVIAL` (BL-46/specs/035, 2026-10-13) no es una excepción ad hoc como
+`analyze_document`: sigue siendo gobernanza equivalente — la mutación y su
+auditoría comitean juntas, atómicamente, vía `TrivialExecutor`
+(`src/domain/actions/trivial_executor.py`), sin pasar nunca por el pipeline
+de confirmación (`claim_confirmation`/`ProposalExecutor`) que usa el resto de
+`WRITE`. La fila de auditoría queda marcada `consent_mode='self_authorized'`
+en vez de `'explicit_confirmation'`, para que quede trazable que esa mutación
+concreta no esperó un "Sí".
 
 ### Matriz de confirmación
 
@@ -148,8 +158,13 @@ requires_confirmation: true
 | `get_vehicle_summary` | READ | No |
 | `search_documents` | READ | No |
 | `analyze_document` | READ/PROCESS | No |
+| `propose_todo_item` (solo título, lista existente) | WRITE_TRIVIAL | No |
+| `propose_todo_item_complete` / `propose_todo_item_reopen` | WRITE_TRIVIAL | No |
+| `propose_note` | WRITE_TRIVIAL | No |
 | `register_vehicle_maintenance` | WRITE | Sí |
 | `create_reminder` | WRITE | Sí |
+| `propose_todo_item` (con description/priority/due_date) | WRITE | Sí |
+| `propose_todo_item_move` / `propose_todo_item_delete` | WRITE | Sí |
 | `create_calendar_event` | EXTERNAL_ACTION | Sí |
 | `execute_document_delete` | DESTRUCTIVE | Sí |
 
@@ -194,6 +209,14 @@ propuesta pendiente ni una ya confirmada pueden ejecutarse por una tool legacy.
 `ProposalExecutor` conserva el claim único, revalidación, transacción y auditoría.
 Con consentimiento gobernado OFF no se ejecutan propuestas; no hay fallback LLM.
 La ingesta documental y exportación conservan sus excepciones aprobadas.
+
+**WRITE_TRIVIAL (2026-10-13, BL-46/specs/035):** el subconjunto de mutaciones
+listado en la matriz de confirmación como `WRITE_TRIVIAL` nunca crea una
+`ActionProposal` `pending_confirmation` — se ejecuta y audita en la misma
+transacción vía `TrivialExecutor`, independiente de `GOVERNED_CONSENT_ENABLED`
+(ese flag solo gobierna el pipeline de confirmación explícita, que
+`WRITE_TRIVIAL` nunca usa). Ampliar este subconjunto a otra tool o dominio es
+una decisión de gobernanza nueva, no una generalización automática.
 
 ---
 

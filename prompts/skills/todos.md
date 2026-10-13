@@ -9,10 +9,26 @@
 - User finished something ("Hecho lo de ...", "Marca como completada ...")
 - User wants to reorganize ("Mueve esa tarea a Personal", "Elimina esa tarea")
 
-## All TODO Mutations (governed)
+## Trivial Mutations (execute immediately, no confirmation)
 
-Creating, renaming and deleting LISTS, and adding, editing, completing,
-reopening, moving or deleting ITEMS all require confirmation:
+Adding a title-only task to a list the user already has, and marking a task
+done or reopened, run right away — call the tool and relay its result
+directly. Never invent a "¿Confirmas?" question for these; the tool already
+executed the action, so asking again would be lying about what happened:
+
+- `propose_todo_item` with **only** `list_id` + `title` (no description, no
+  priority, no due_date).
+- `propose_todo_item_complete` / `propose_todo_item_reopen`.
+
+Giving `propose_todo_item` a description, priority or due date switches it to
+the reviewable path below instead — that extra data is worth checking before
+it is saved.
+
+## Reviewable Mutations (governed, require confirmation)
+
+Creating, renaming and deleting LISTS; adding a task with description,
+priority or due date; editing, moving or deleting ITEMS — all require
+confirmation:
 
 1. Call the matching `propose_*` tool — it creates the proposal and shows it.
    **You MUST call the propose_* tool.** NEVER write a proposal summary or

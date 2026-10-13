@@ -156,25 +156,23 @@
 
 ## T7: Documentación y gobernanza
 
-- [ ] `AGENTS.md` §2.4: añade la subclasificación `WRITE_TRIVIAL` /
-      `WRITE_REVIEWABLE` dentro del punto 4, con el criterio ("reversible en
-      un paso, sin datos ambiguos que revisar, target ya existente y
-      propiedad verificada") y los 3 ejemplos concretos de esta iteración
-      (`create_todo_item` sin campos opcionales, `set_todo_item_status`,
-      `remember_note`). Mantiene intacta la excepción ya aprobada de
-      `analyze_document` (T4.7/specs/023) y aclara que `WRITE_TRIVIAL` es
-      gobernanza equivalente (auditoría atómica obligatoria), no una
-      segunda excepción ad hoc.
-- [ ] `docs/governance.md`: tabla de riesgo actualizada con la subfila
-      `WRITE_TRIVIAL` y sus 3 tools.
-- [ ] `prompts/skills/todos.md` / `prompts/skills/notes.md` (si existe este
-      último; si no, valorar si hace falta crearlo): nota breve sobre qué
-      respuesta esperar en la rama trivial (confirmación inmediata, no
-      botones Sí/No).
-- [ ] `AGENTS.md` §1 (contador de tests) y `BACKLOG.md` BL-46: marcar
-      "implementado localmente" con fecha, enlazando `specs/035` y
-      resumiendo el alcance real entregado (no el propuesto originalmente,
-      si difiere).
+- [x] `AGENTS.md` §2.4: añadida la subclasificación `WRITE_TRIVIAL` /
+      `WRITE_REVIEWABLE` dentro del punto 4, con el criterio y los 3
+      ejemplos concretos de esta iteración. Mantiene intacta la excepción
+      ya aprobada de `analyze_document` (T4.7/specs/023) y aclara que
+      `WRITE_TRIVIAL` es gobernanza equivalente (auditoría atómica
+      obligatoria), no una segunda excepción ad hoc.
+- [x] `docs/governance.md`: tabla de riesgo + matriz de confirmación
+      actualizadas con la subfila `WRITE_TRIVIAL` y sus 3 tools; nota en §7
+      aclarando que es independiente de `GOVERNED_CONSENT_ENABLED`.
+- [x] `prompts/skills/todos.md`: separado en "Trivial Mutations" (ejecuta
+      directo, nunca inventar "¿Confirmas?") y "Reviewable Mutations"
+      (gobernado, sin cambios). `prompts/skills/notes.md` no existe y no se
+      crea — el docstring de `propose_note` ya es la única fuente que el
+      Agent necesita para una tool suelta sin skill dedicada.
+- [x] `AGENTS.md` §1 (1329 unit + 158 integration) y `BACKLOG.md` BL-46
+      (snapshot + entrada completa) actualizados con el alcance real
+      entregado.
 
 ## T8: Verificación
 

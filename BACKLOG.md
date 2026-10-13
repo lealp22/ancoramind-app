@@ -36,9 +36,10 @@
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
+| BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado localmente (TODO items título-solo + completar/reabrir, notas); pendiente validación E2E Telegram — specs/035 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests (2026-10-13): 1307 unitarias + 155 de integración (1 omitida) — Ruff y
+Tests (2026-10-13): 1329 unitarias + 158 de integración (1 omitida) — Ruff y
 `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
@@ -668,7 +669,7 @@ pero con una capa de resumen que no repita "Pulsa ✅ Sí..." por cada item.
 **Prioridad P2** — mejora de usabilidad, no bloquea el MVP (los flujos
 funcionan, solo son incómodos con múltiples items a la vez).
 
-### BL-46 · Niveles de riesgo dentro de WRITE para reducir confirmaciones redundantes 🔶 en curso — specs/035
+### BL-46 · Niveles de riesgo dentro de WRITE para reducir confirmaciones redundantes ✅ implementado localmente — 2026-10-13 — specs/035
 
 **Hallazgo (E2E Telegram, flujo TODO/BL-1):** al pedir explícitamente "Añade
 leche y pan a la lista Compras" (lista ya existente, orden inequívoca), el
@@ -702,9 +703,35 @@ aprueba: mantener siempre un `execute_*` auditado aunque sin "pending"
 intermedio, o un undo rápido ("deshacer") en vez de confirmación previa para
 ese subconjunto. **Toca una regla no negociable de AGENTS.md §2.4 — requiere
 decisión explícita del propietario antes de cualquier cambio de código**,
-igual que T4.7. **Prioridad propuesta: P1** si se aprueba (afecta la
-usabilidad percibida del MVP en el día a día), pero queda sin spec ni
-implementación hasta esa decisión.
+igual que T4.7.
+
+**Decisión del propietario (2026-10-13):** aprobada la opción
+`WRITE_TRIVIAL`/`WRITE_REVIEWABLE` ("ejecuta directo con auditoría", no el
+undo ni el "siempre execute_* sin pending"). Alcance de esta primera
+iteración: toda nota (`propose_note` — `Note` no tiene ningún campo
+estructurado de riesgo) y, en TODO items, solo añadir con título (sin
+`description`/`priority`/`due_date`) y completar/reabrir sobre una lista ya
+existente. Mover/eliminar item y crear/renombrar/borrar lista quedan
+`WRITE_REVIEWABLE` sin cambios. Nombres de tool sin cambios (`propose_note`,
+`propose_todo_item*`) — solo cambian docstrings y el texto de respuesta.
+
+**Implementado localmente (2026-10-13, specs/035):** nueva columna
+`action_proposals.consent_mode` (migración `0014_write_trivial_consent_mode`)
+y `ActionProposalsRepository.create_self_authorized()` (disciplina de la
+Consent API: nunca comitea) insertan la auditoría de una mutación trivial ya
+en estado terminal `executed`, con `confirming_interaction_id=NULL` (el
+índice único de esa columna es parcial sobre `NOT NULL`, así que nunca
+colisiona). Nuevo `TrivialExecutor`
+(`src/domain/actions/trivial_executor.py`) reutiliza `apply_mutation()` tal
+cual existe — mutación y auditoría comitean en una sola transacción, sin
+crear nunca un `ActionProposal` `pending_confirmation`. `propose_todo_item`
+ramifica según si vienen informados los campos opcionales;
+`propose_todo_item_complete`/`reopen` y `propose_note` ejecutan siempre
+directo. `AGENTS.md` §2.4 y `docs/governance.md` documentan la
+subclasificación. 1329 unit + 158 integration tests (los 2 nuevos de
+integración, sobre `create_self_authorized`, quedan preparados y pendientes
+de verificar contra PostgreSQL real cuando haya Docker), Ruff y `mypy src/`
+limpios. Pendiente: validación E2E Telegram.
 
 ### BL-47 · El Agent narra el estado de propuestas pendientes desde memoria conversacional, sin fuente de verdad 🆕 propuesto — 2026-10-13
 

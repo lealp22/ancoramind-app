@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-10-03
+> Última actualización: 2026-10-13
 
 ---
 
@@ -19,8 +19,10 @@ recordatorios y eventos, con trazabilidad completa.
   recurrencia/snooze (BL-41/specs/024) + extracción determinista de PDF con
   capa de texto (BL-38 Fase 1/specs/021) + adaptador físico de evals sin
   inferencia real (BL-8/specs/018 T6) + frontera `untrusted_results`
-  extendida a vehículos/recordatorios/calendario/TODOs (BL-39/specs/022 T8).
-  723 unit tests + 94 integration tests; los integration requieren
+  extendida a vehículos/recordatorios/calendario/TODOs (BL-39/specs/022 T8) +
+  subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE para TODO items y notas
+  (BL-46/specs/035, ver §2.4).
+  1329 unit tests + 158 integration tests; los integration requieren
   PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
   limpios; ambos son gates globales en CI.
 
@@ -57,6 +59,27 @@ Estas reglas vienen del brief de ingeniería. **No violarlas aunque parezca más
    fricción innecesaria para el caso común. A cambio existe
    `propose_document_delete`/`execute_document_delete` (DESTRUCTIVE,
    gobernado) para el caso "no quiero esto guardado".
+   **Subclasificación WRITE_TRIVIAL / WRITE_REVIEWABLE (BL-46/specs/035,
+   2026-10-13):** dentro de `WRITE`, una mutación es `WRITE_TRIVIAL` solo si
+   es reversible en un paso, no tiene ningún dato ambiguo que convenga
+   revisar antes de persistir, y su target ya existe y su propiedad se
+   verifica igual que en el camino `WRITE_REVIEWABLE`. `WRITE_TRIVIAL` sigue
+   siendo gobernanza equivalente, no una segunda excepción ad hoc como
+   `analyze_document`: toda mutación trivial se audita atómicamente junto
+   con su efecto (`ActionProposalsRepository.create_self_authorized`, fila
+   `consent_mode='self_authorized'` ya en estado terminal `executed`, sin
+   `pending_confirmation` ni "¿Confirmas?"), vía `TrivialExecutor`
+   (`src/domain/actions/trivial_executor.py`) — nunca el pipeline de
+   confirmación (`claim_confirmation`/`ProposalExecutor`), que sigue siendo
+   exclusivo de `WRITE_REVIEWABLE`. Alcance aprobado hoy (primera
+   iteración, ampliar requiere su propio hallazgo/decisión): añadir una
+   tarea TODO con solo título a una lista ya existente
+   (`propose_todo_item` sin `description`/`priority`/`due_date`), marcar una
+   tarea completada/reabierta (`propose_todo_item_complete`/`reopen`), y
+   toda nota (`propose_note` — `Note` no tiene ningún campo estructurado de
+   riesgo, es texto libre). Mover/eliminar una tarea, crear/renombrar/borrar
+   una lista y el resto de dominios (vehículos, recordatorios, calendario,
+   documentos) permanecen `WRITE_REVIEWABLE` sin cambios.
 
 5. **SQL siempre parametrizado.** Solo `sqlalchemy.text()` con bind params.
    Nunca interpolación de strings. Toda query scoped por `user_id`.
@@ -158,7 +181,10 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             024-recurring-events-reminders (eventos y
                             recordatorios recurrentes + snooze — en curso,
                             BL-41), 034-tool-call-safety (BL-16: filtro compartido
-                            OpenRouter/OpenAILike; retirada upstream pendiente)
+                            OpenRouter/OpenAILike; retirada upstream pendiente),
+                            035-write-trivial-risk-tier (BL-46: subclasificación
+                            WRITE_TRIVIAL/WRITE_REVIEWABLE — implementada
+                            localmente)
 tests/unit/              ← 643 tests
 tests/integration/        ← 94 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
