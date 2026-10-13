@@ -1,8 +1,9 @@
 # Spec: 035 — Subclasificación WRITE_TRIVIAL / WRITE_REVIEWABLE
 
 > **Backlog:** BL-46
-> **Status:** proposed (2026-10-13) — pendiente de implementación, sin tasks.md
-> ejecutable todavía.
+> **Status:** implemented locally (2026-10-13) — ver `verification.md`.
+> Pendiente: aplicar la migración y correr `tests/integration/` contra
+> PostgreSQL real (sin Docker en esta sesión), y validación E2E Telegram.
 > **Decisiones del propietario (2026-10-13):**
 > 1. Se aprueba subclasificar `WRITE` dentro de AGENTS.md §2.4 en
 >    `WRITE_TRIVIAL` (ejecuta directo, con auditoría) y `WRITE_REVIEWABLE`

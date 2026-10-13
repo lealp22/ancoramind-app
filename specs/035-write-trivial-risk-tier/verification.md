@@ -1,0 +1,89 @@
+# Verification: 035 — Subclasificación WRITE_TRIVIAL / WRITE_REVIEWABLE
+
+> Fecha: 2026-10-13
+
+## Automatizada
+
+- `pytest tests/unit/` → **1329 passed** (0 fallos, 0 omitidos). Archivos
+  nuevos/ampliados por esta spec:
+  - `tests/unit/test_proposal_consent_model.py` (+2: round-trip de
+    `ConsentMode` y sincronía con el `CHECK` de la migración 0014).
+  - `tests/unit/test_trivial_executor.py` (nuevo, 6 tests: alcance exacto de
+    `TRIVIAL_MUTATIONS`, rechazo fuera de alcance, éxito con 1 solo commit,
+    fallo "no encontrado" sin auditoría, fallo inesperado sin reintento, y
+    fallo de la auditoría revirtiendo también la mutación).
+  - `tests/unit/test_todos_tools.py` (+2, -1: nuevo test de la rama trivial
+    de `propose_todo_item`, nuevo test de `complete`/`reopen` vía
+    `TrivialExecutor`, y el test de regresión de `move`/`delete` que
+    confirma que siguen siendo `WRITE_REVIEWABLE`; se retiró el test que
+    verificaba que `complete`/`reopen` creaban `ActionProposal`, porque ya
+    no es el comportamiento real).
+  - `tests/unit/test_note_tools.py` (reescrito el test de `propose_note`
+    para la rama trivial; el resto de tests de `search_notes`/`execute_note`
+    sin cambios).
+  - `tests/unit/test_tool_sessions_and_errors.py` (1 aserción corregida:
+    comprobaba texto literal del docstring anterior de `propose_note`).
+- `ruff check src/ tests/ scripts/ migrations/` → limpio.
+- `mypy src/` → limpio (167 archivos).
+- `python -c "from src.main import app"` → import limpio (confirma que el
+  wiring nuevo de `TrivialExecutor` dentro de `todos.py`/`notes.py` no rompe
+  el arranque de la app).
+- `pytest tests/integration/ --collect-only` → **158 tests** recolectados
+  sin error (incluye los 2 nuevos de
+  `test_actions_repo.py::test_create_self_authorized_*`). **No se ejecutaron**
+  contra PostgreSQL real: esta sesión no tiene Docker disponible
+  (`docker info` falla). Quedan preparados con las aserciones completas
+  (no comitea por su cuenta, dos filas `self_authorized` con
+  `confirming_interaction_id=NULL` no colisionan con el índice único) para
+  cuando haya infraestructura.
+- Migración `0014_write_trivial_consent_mode`: verificada con
+  `alembic.script.ScriptDirectory` que es el head único, encadenada a
+  `0013_session_token_index`, sin fork. **No se aplicó** contra PostgreSQL
+  real (mismo motivo: sin Docker en esta sesión) — `migrations/init.sql` se
+  actualizó en paralelo con el mismo bloque DDL, pero su equivalencia con
+  `alembic upgrade head` tampoco se verificó end-to-end
+  (`test_init_sql_is_compatible_with_alembic_head` requiere Postgres).
+
+## Pendiente (requiere infraestructura — no bloqueante para esta spec)
+
+- [ ] `alembic upgrade head` / `downgrade -1` contra PostgreSQL real
+  (Docker o Supabase de desarrollo), confirmando que
+  `test_alembic_fresh_install_and_latest_downgrade` y
+  `test_init_sql_is_compatible_with_alembic_head` pasan con la nueva
+  revisión.
+- [ ] `pytest tests/integration/test_actions_repo.py` contra Postgres real,
+  en particular los 2 tests nuevos de `create_self_authorized`.
+- [ ] Validación E2E Telegram: pedir "Añade leche a la lista Compras" (sin
+  prioridad/fecha) y confirmar que el bot responde sin pedir "¿Confirmas?";
+  marcar una tarea como completada y confirmar lo mismo; pedir "Recuerda que
+  ..." y confirmar que la nota queda guardada sin botones Sí/No. Repetir con
+  `description`/`priority`/`due_date` informados y confirmar que **sí** pide
+  confirmación (regresión del camino reviewable).
+
+## Success Criteria (spec.md) — estado
+
+1. ✅ `WRITE_TRIVIAL` documentado en `AGENTS.md` §2.4 y
+   `docs/governance.md`, con el criterio y los 3 ejemplos de esta
+   iteración.
+2. ✅ Vía de ejecución nueva (tool → `TrivialExecutor` → `apply_mutation` +
+   `create_self_authorized`, 1 transacción) sin tocar
+   `claim_confirmation`/`ProposalExecutor` — cubierto por
+   `test_trivial_executor.py` y, para la auditoría, por
+   `test_actions_repo.py` (pendiente de verificar contra Postgres real).
+3. ✅ Alcance exacto implementado: `propose_todo_item` (solo título, lista
+   existente), `propose_todo_item_complete`/`reopen`, `propose_note` —
+   siempre triviales; `propose_todo_item` con algún campo opcional,
+   `propose_todo_item_move`/`delete`, `propose_todo_list*` — sin cambios
+   (`WRITE_REVIEWABLE`). Cubierto por `test_todos_tools.py`/
+   `test_note_tools.py`.
+4. ✅ Ninguna mutación trivial puede quedar sin su fila de auditoría ni
+   viceversa — cubierto por
+   `test_audit_row_failure_also_rolls_back_the_mutation` y
+   `test_target_not_owned_rolls_back_and_audits_nothing`.
+5. ✅ Nombres de tool sin cambios (decisión del propietario, 2026-10-13) —
+   solo cambiaron docstrings y `prompts/skills/todos.md`.
+6. ✅ `pytest`/`ruff`/`mypy` verdes (unit + lint completos; integración
+   preparada, no ejecutada por falta de infraestructura — ver sección
+   anterior).
+7. ✅ `AGENTS.md`/`BACKLOG.md` referencian BL-46/specs/035 con el alcance
+   real entregado.

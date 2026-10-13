@@ -176,15 +176,16 @@
 
 ## T8: Verificación
 
-- [ ] `pytest tests/unit/` completo en verde, incluidos los tests nuevos de
+- [x] `pytest tests/unit/` → 1329 passed, incluidos los tests nuevos de
       T2/T4/T5 y de regresión (los casos existentes de `propose_todo_item`
       con `description`/`priority`/`due_date` informados siguen creando
       `ActionProposal` pending sin tocar `TrivialExecutor`).
-- [ ] `ruff check src/ tests/ scripts/ migrations/` y `mypy src/` limpios.
-- [ ] `tests/integration/` (T3) ejecutado y verificado contra PostgreSQL
-      real cuando haya Docker disponible; documentar en `verification.md`
-      si esta iteración se cierra sin esa verificación (como ya ocurrió en
-      specs/024, T3 marcado "aplicada y verificada" solo tras disponer de
-      Postgres).
-- [ ] `verification.md` nuevo, con el resumen de qué se probó y qué quedó
-      pendiente de infraestructura real.
+- [x] `ruff check src/ tests/ scripts/ migrations/` y `mypy src/` (167
+      archivos) limpios.
+- [x] `tests/integration/` (T3): recolectados sin error (158 tests), **no
+      ejecutados** contra PostgreSQL real — sin Docker disponible en esta
+      sesión. Documentado como pendiente en `verification.md`, mismo
+      patrón que otras specs cuando no hay infraestructura.
+- [x] `verification.md` escrito, con el resumen de qué se probó y qué
+      queda pendiente de infraestructura real (migración aplicada,
+      integración, E2E Telegram).
