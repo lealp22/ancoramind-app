@@ -295,6 +295,40 @@ class ActionProposalsRepository:
         )
         return [row.id for row in result.fetchall()]
 
+    async def list_pending(self, user_id: str) -> list[ProposalRecord]:
+        """Pending, presented, unexpired proposals for the Agent to read (BL-47).
+
+        Same criteria as ``list_confirmable`` (minus the ``bot_id``/``chat_id``
+        scope, which no tool-layer caller has — ``UserContext`` only carries
+        ``user_id``), but returns full records instead of bare IDs: the
+        Agent must never narrate "what's pending" from its own conversational
+        memory, because a proposal it mentioned earlier may already be
+        executed or expired by now. This is a READ: it never claims, confirms
+        or mutates anything.
+        """
+        result = await self._session.execute(
+            text("""
+                SELECT id, tool_name, payload, created_at, expires_at
+                FROM ancora.action_proposals
+                WHERE user_id = :uid
+                  AND status = 'pending_confirmation'
+                  AND presented_at IS NOT NULL
+                  AND expires_at > now()
+                ORDER BY presented_at, id
+            """),
+            {"uid": user_id},
+        )
+        return [
+            {
+                "id": str(row.id),
+                "tool_name": row.tool_name,
+                "payload": row.payload,
+                "created_at": row.created_at.isoformat(),
+                "expires_at": row.expires_at.isoformat(),
+            }
+            for row in result.fetchall()
+        ]
+
     async def list_created_in_interaction(
         self, interaction_id: UUID, *, user_id: str
     ) -> list[ProposalRecord]:

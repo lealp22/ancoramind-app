@@ -131,4 +131,5 @@ def test_production_registration_only_exposes_reads_proposals_and_approved_excep
         "propose_todo_item",
         "search_notes",
         "export_document",
+        "list_pending_proposals",
     } <= names

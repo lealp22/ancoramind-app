@@ -37,9 +37,10 @@
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado localmente (TODO items título-solo + completar/reabrir, notas); pendiente validación E2E Telegram — specs/035 |
+| BL-47 Tool de lectura `list_pending_proposals` | 🔶 implementado localmente; pendiente validación E2E Telegram |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests (2026-10-13): 1329 unitarias + 158 de integración (1 omitida) — Ruff y
+Tests (2026-10-13): 1332 unitarias + 160 de integración (1 omitida) — Ruff y
 `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
@@ -733,7 +734,7 @@ integración, sobre `create_self_authorized`, quedan preparados y pendientes
 de verificar contra PostgreSQL real cuando haya Docker), Ruff y `mypy src/`
 limpios. Pendiente: validación E2E Telegram.
 
-### BL-47 · El Agent narra el estado de propuestas pendientes desde memoria conversacional, sin fuente de verdad 🆕 propuesto — 2026-10-13
+### BL-47 · El Agent narra el estado de propuestas pendientes desde memoria conversacional, sin fuente de verdad ✅ implementado localmente — 2026-10-13
 
 **Hallazgo (E2E Telegram, flujo TODO/BL-1):** tras confirmar una propuesta ya
 ejecutada (`a93acfbf`, "Leche completada") y dejar caducar otra (`bbe31cd8`,
@@ -768,6 +769,23 @@ para que el modelo la invoque en vez de narrar desde memoria cuando el
 usuario pregunta "qué tengo pendiente" o tras un intento de confirmación
 fallido. **Prioridad P1** — afecta la fiabilidad percibida de un patrón
 (`propose_*`/`execute_*`) que es central en toda la gobernanza WRITE del MVP.
+
+**Implementado localmente (2026-10-13):** nuevo
+`ActionProposalsRepository.list_pending(user_id)` (mismo criterio que
+`list_confirmable` — `pending_confirmation`, presentada, no caducada, reloj
+de la BD — pero devuelve registros completos en vez de solo IDs, y sin
+`bot_id`/`chat_id` porque `UserContext` no los expone a las tools). Nueva
+tool `list_pending_proposals` (`src/agent/tools/proposals.py`), READ,
+envuelta en `untrusted_results` igual que el resto de tools de lectura;
+registrada en `_init_domain_tools()`. `prompts/tool_contract.md` instruye
+explícitamente al Agent a llamarla en vez de narrar desde memoria, tanto
+cuando el usuario pregunta "qué tengo pendiente" como tras un intento de
+confirmación fallido. 1332 unit + 160 integration tests (2 nuevos de
+integración sobre `list_pending`, preparados y pendientes de verificar
+contra PostgreSQL real sin Docker en esta sesión), Ruff y `mypy src/`
+limpios. Pendiente: validación E2E Telegram (reproducir el caso real del
+hallazgo: confirmar una propuesta, dejar caducar otra, y comprobar que la
+respuesta ya no narra ninguna de las dos como pendiente).
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta

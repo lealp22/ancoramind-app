@@ -1,13 +1,66 @@
 """Integration tests for ActionProposalsRepository against real PostgreSQL (specs/009)."""
 
+from datetime import UTC, datetime
+from uuid import UUID
+
 import pytest
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.actions.models import ConsentPrincipal
 from src.domain.documents.models import DocumentCreate
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.documents import DocumentsRepository
 
 pytestmark = pytest.mark.integration
+
+_BOT_ID = 9101
+_CHAT_ID = 7101
+
+
+async def _presented_proposal(
+    session: AsyncSession, user_id: str, *, update_id: int, payload: dict[str, object]
+) -> UUID:
+    """Minimal provenance-bearing, presented proposal (BL-47 fixture)."""
+    source = (
+        await session.execute(
+            text("""
+                INSERT INTO ancora.telegram_interactions (
+                    bot_id, telegram_update_id, telegram_message_id, chat_id,
+                    telegram_user_id, update_type, status, accepted_at,
+                    received_at, updated_at
+                ) VALUES (:bot_id, :update_id, 1, :chat_id, 3101, 'message', 'accepted',
+                    now(), now(), now())
+                RETURNING id
+            """),
+            {"bot_id": _BOT_ID, "update_id": update_id, "chat_id": _CHAT_ID},
+        )
+    ).scalar_one()
+    repo = ActionProposalsRepository(session)
+    proposal = await repo.create(
+        user_id, "create_todo_item", payload,
+        source_interaction_id=source, bot_id=_BOT_ID, chat_id=_CHAT_ID,
+    )
+    proposal_id = UUID(proposal["id"])
+    response_id = (
+        await session.execute(
+            text("""
+                INSERT INTO ancora.logical_responses (interaction_id, response_kind, status)
+                VALUES (:interaction_id, 'agent', 'delivered')
+                RETURNING id
+            """),
+            {"interaction_id": source},
+        )
+    ).scalar_one()
+    marked = await repo.mark_presented(
+        [proposal_id],
+        principal=ConsentPrincipal(user_id=user_id, bot_id=_BOT_ID, chat_id=_CHAT_ID),
+        response_id=response_id,
+        presented_at=datetime.now(tz=UTC),
+    )
+    assert marked == 1
+    await session.commit()
+    return proposal_id
 
 
 async def test_pending_proposal_cannot_be_confirmed_or_executed_by_legacy_api(session, user_a):
@@ -253,3 +306,64 @@ async def test_create_self_authorized_never_collides_on_null_confirming_interact
         )
     ).fetchall()
     assert all(row.confirming_interaction_id is None for row in rows)
+
+
+async def test_list_pending_returns_only_presented_unexpired_proposals_of_this_user(
+    session, user_a, user_b
+):
+    """BL-47: the Agent's read tool must see the real state, nothing stale."""
+    repo = ActionProposalsRepository(session)
+    visible = await _presented_proposal(
+        session, user_a, update_id=90001, payload={"title": "Gel de ducha"}
+    )
+    other_user = await _presented_proposal(
+        session, user_b, update_id=90002, payload={"title": "No es de user_a"}
+    )
+
+    pending = await repo.list_pending(user_a)
+
+    assert [p["id"] for p in pending] == [str(visible)]
+    assert pending[0]["tool_name"] == "create_todo_item"
+    assert pending[0]["payload"] == {"title": "Gel de ducha"}
+    assert str(other_user) not in [p["id"] for p in pending]
+
+
+async def test_list_pending_excludes_confirmed_and_expired_proposals(session, user_a):
+    """A proposal already confirmed, or past its deadline, is no longer "pending"."""
+    repo = ActionProposalsRepository(session)
+    confirmed = await _presented_proposal(
+        session, user_a, update_id=90003, payload={"title": "Leche"}
+    )
+    expired = await _presented_proposal(
+        session, user_a, update_id=90004, payload={"title": "Pan"}
+    )
+    await session.execute(
+        text("UPDATE ancora.action_proposals SET expires_at = now() - interval '1 minute'"
+             " WHERE id = :id"),
+        {"id": expired},
+    )
+    confirming = (
+        await session.execute(
+            text("""
+                INSERT INTO ancora.telegram_interactions (
+                    bot_id, telegram_update_id, telegram_message_id, chat_id,
+                    telegram_user_id, update_type, status, accepted_at,
+                    received_at, updated_at
+                ) VALUES (:bot_id, 90005, 1, :chat_id, 3101, 'callback_query', 'accepted',
+                    now(), now(), now())
+                RETURNING id
+            """),
+            {"bot_id": _BOT_ID, "chat_id": _CHAT_ID},
+        )
+    ).scalar_one()
+    claim = await repo.claim_confirmation(
+        confirmed,
+        principal=ConsentPrincipal(user_id=user_a, bot_id=_BOT_ID, chat_id=_CHAT_ID),
+        confirming_interaction_id=confirming,
+    )
+    assert claim.ok
+    await session.commit()
+
+    pending = await repo.list_pending(user_a)
+
+    assert pending == []

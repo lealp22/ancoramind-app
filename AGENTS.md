@@ -21,8 +21,10 @@ recordatorios y eventos, con trazabilidad completa.
   inferencia real (BL-8/specs/018 T6) + frontera `untrusted_results`
   extendida a vehículos/recordatorios/calendario/TODOs (BL-39/specs/022 T8) +
   subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE para TODO items y notas
-  (BL-46/specs/035, ver §2.4).
-  1329 unit tests + 158 integration tests; los integration requieren
+  (BL-46/specs/035, ver §2.4) + tool de lectura `list_pending_proposals`
+  para que el Agent nunca narre propuestas pendientes desde memoria
+  conversacional (BL-47).
+  1332 unit tests + 160 integration tests; los integration requieren
   PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
   limpios; ambos son gates globales en CI.
 

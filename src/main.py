@@ -216,6 +216,11 @@ def _init_domain_tools(settings: Settings) -> list[Any]:
             "list/propose_todo_item (+update/complete/reopen/move/delete)"
         )
 
+        from src.agent.tools.proposals import list_pending_proposals
+
+        tools.append(list_pending_proposals)
+        logger.info("Proposal tools registered: list_pending_proposals")
+
     except Exception:
         logger.warning(
             "Failed to initialize domain database — domain tools will not be available",
