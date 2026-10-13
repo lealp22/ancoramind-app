@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-13
+Última actualización: 2026-10-14
 
 ---
 
@@ -38,6 +38,7 @@
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado localmente (TODO items título-solo + completar/reabrir, notas); pendiente validación E2E Telegram — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | 🔶 implementado localmente; pendiente validación E2E Telegram |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 📝 diseño documentado; implementación y E2E pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests (2026-10-13): 1332 unitarias + 160 de integración (1 omitida) — Ruff y
@@ -786,6 +787,39 @@ contra PostgreSQL real sin Docker en esta sesión), Ruff y `mypy src/`
 limpios. Pendiente: validación E2E Telegram (reproducir el caso real del
 hallazgo: confirmar una propuesta, dejar caducar otra, y comprobar que la
 respuesta ya no narra ninguna de las dos como pendiente).
+
+### BL-48 · Presentación única de propuestas y respuestas acotadas tras descarte 📝 diseño documentado — 2026-10-14 — specs/036
+
+**Hallazgo (E2E Telegram comunicado por el propietario):** al proponer la
+tarea «Renovar el seguro» con prioridad alta y vencimiento el 20 de octubre
+de 2026, el Agent enumera los campos y pide confirmación; a continuación el
+Core añade otro resumen con esos mismos campos, la petición Sí/No y los
+botones. El segundo bloque muestra `high` y `2026-10-20T00:00:00`, formatos
+internos innecesarios para este caso. La duplicación está confirmada en la
+composición actual: `_append_proposal_blocks` concatena la respuesta del
+modelo con `render_proposal_block` generado desde el payload guardado.
+
+**El descarte funciona:** pulsar No devuelve «Propuesta descartada» y la
+consulta posterior solo muestra «Comprar café» completada. Sin embargo,
+esa respuesta añade el estado de propuestas pendientes y ofrece volver a
+proponer la tarea rechazada sin que se haya pedido. No hay evidencia de la
+tool consultada en ese turno: no se afirma que BL-47 haya fallado.
+
+**Cambio a implementar:** una sola presentación autoritativa por propuesta,
+propiedad del Core, con prioridad/fecha legibles; el Agent no duplica los
+campos ni el pedido de confirmación. Las consultas de tareas se limitan a
+las tareas solicitadas, sin ofertas automáticas de reproponer lo rechazado
+ni afirmaciones de pendientes desde memoria. Mantener respuestas útiles
+en mensajes mixtos y el circuito determinista de consentimiento, TTL,
+presentación verificada, auditoría y aislamiento por usuario.
+
+**Alcance autorizado ahora:** documentación previa únicamente.
+`specs/036-telegram-proposal-presentation/spec.md` fija alcance y criterios;
+`tasks.md` deja toda implementación pendiente; `verification.md` separa la
+evidencia funcional previa de la validación futura de esta mejora. Sin
+código, cambios de prompts, migraciones, despliegue ni nueva policy de
+consentimiento. Relacionado con BL-46/specs/035, BL-47 y BL-39/40/specs/023;
+no incluye confirmación por lotes (BL-45).
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
