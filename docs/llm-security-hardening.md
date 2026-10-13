@@ -154,6 +154,13 @@ mismo turno en que el usuario lo escribió — riesgo distinto, no auditado
 aquí). Permisos y destinatarios externos deben verificarse en Core; no
 proporcionar una herramienta genérica de HTTP/SQL para eludirlo.
 
+**Evidencia E2E (2026-10-13):** un PDF real con capa de texto enviado al bot de
+Telegram se archivó y resumió correctamente en Railway; una consulta de
+seguimiento del mismo chat respondió de forma correcta usando la información
+archivada y su nivel de confianza. No se observó el fallo previo de parser/rate
+limit de OpenRouter. La evidencia valida la frontera para PDFs textuales; no
+equivale aún a validar la ruta visual de imágenes o PDFs escaneados.
+
 Si se introduce RAG, aplicar la misma política **al ingerir y al recuperar**:
 scope por usuario, procedencia por chunk, límite de tamaño, delimitación en
 cada contexto recuperado y ensayos de contenido adversarial. No hacer chunking

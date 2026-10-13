@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-03
+Última actualización: 2026-10-13
 
 ---
 
@@ -23,11 +23,11 @@
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 27 casos sintéticos, runner estático, harness aislado y adaptador físico (sin inferencia real) implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
-| BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; falta protección de `main` (requiere plan GitHub) y E2E Telegram M3–M5 — specs/008 |
+| BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; M3 PDF textual validado en Telegram/Railway el 2026-10-13; faltan protección de `main` (requiere plan GitHub), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness, dashboard y alertas versionados); solo falta T7 (rollout Railway/Grafana Cloud real) — specs/016 |
-| BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) implementada localmente; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
+| BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) validada E2E por Telegram/Railway el 2026-10-13; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto directo al Agent framed como DATA; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
@@ -36,9 +36,10 @@
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
-| MVP usable | 🔶 E2E en curso (M1–M2 + M3 txt validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
+| MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests: 684 unit + 94 integration — Ruff y `mypy src/` limpios en
+Tests (2026-10-13): 1307 unitarias + 155 de integración (1 omitida) — Ruff y
+`mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---
@@ -594,6 +595,26 @@ pasa por `agent.arun(..., images=..., files=...)`, dejando que Agno invoque
 en `test_governed_interaction_runner.py`; 506 unit tests, ruff y mypy en verde.
 Pendiente de re-validar en Telegram/Railway como parte del E2E de M3.
 
+**Actualización 2026-10-13 (sesión E2E en producción, flujo 5/TODO ✅
+funcional):** con `GOVERNED_CONSENT_ENABLED=true` confirmado activo en
+Railway (y `CALENDAR_PROVIDER` sin definir ⇒ `noop` por defecto), se probó el
+flujo TODO completo contra el bot real: crear lista → confirmar por botón →
+proponer 2 items en paralelo → confirmar cada uno por botón → marcar un item
+como completado → listar la lista con estados reales. **Resultado funcional:
+correcto end-to-end**, incluida la caducidad real de una propuesta a los 15
+minutos (rechazada tal como diseña consent-design) y el rechazo de un "Sí"
+mezclado con otra frase cuando había más de una propuesta pendiente. Tres
+hallazgos de UX/fiabilidad derivados de esta prueba, documentados como nuevas
+entradas (no implementados): **BL-45** (N propuestas simultáneas ⇒ N pares de
+botones, no escala), **BL-46** (pedir confirmación para una orden explícita
+sin ambigüedad sobre un recurso ya existente se siente redundante — propuesta
+de subniveles de riesgo dentro de WRITE, toca AGENTS.md §2.4, requiere
+decisión del propietario) y **BL-47** (el Agent narra qué propuestas están
+"pendientes" desde memoria conversacional, no desde una tool de lectura real
+— puede afirmar como pendiente algo ya ejecutado o ya caducado). Pendiente en
+esta ronda de E2E: flujos 4 (calendario), 3 (recordatorio), 2 (vehículo +
+mantenimiento) y 1 (documento imagen/PDF visión).
+
 **Corrección 2026-10-13 (frontera de adjuntos Telegram):** el flujo anterior
 de continuidad quedó retirado porque entregar `images=`/`files=` crudos al
 Agent principal hacía que Agno/LiteLLM/OpenRouter intentara parsear el archivo
@@ -607,6 +628,17 @@ catálogo del Agent principal; permanece como adaptador legado/testeable de la
 misma lógica. Validación local: 1307 unit tests passed, Ruff y `mypy src/`
 limpios. Pendiente: E2E Telegram/Railway que confirme ausencia de solicitudes
 de parser documental/rate limits de OpenRouter.
+
+**Validación E2E 2026-10-13 (PDF textual + continuidad ✅):** en Telegram con
+Railway se subió un PDF real con capa de texto. El bot confirmó que quedó
+archivado, produjo un resumen documental correcto con confianza aproximada del
+85 % y no presentó el error previo de parsing/rate limit de OpenRouter. Una
+pregunta de seguimiento en el mismo chat obtuvo una respuesta correcta y
+trazable a la guía archivada, incluyendo la advertencia de confianza; confirma
+que el turno persistido conserva el resumen canónico `untrusted_data` sin
+reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
+textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
+escaneados (ruta visual), ni los flujos M4–M5.
 
 ### BL-45 · Confirmación por lote para múltiples propuestas pendientes simultáneas 🆕 propuesto — 2026-10-13
 

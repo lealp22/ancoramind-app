@@ -1,8 +1,9 @@
 # Verification: 021 — Document Conversion Toolkit
 
-> **Status:** 🔶 Fase 1 implementada localmente (T1-T9, 2026-10-03); pendiente
-> validación E2E con un PDF real de usuario vía Telegram (bloqueado por
-> restricciones de infraestructura actuales)
+> **Status:** 🔶 Fase 1 implementada localmente (T1-T9, 2026-10-03) y validada
+> E2E con un PDF real con capa de texto vía Telegram/Railway (2026-10-13).
+> Permanecen fuera de esta evidencia la ruta visual de imágenes/PDF escaneado y
+> las Fases 2-3.
 
 ## Incremento T1 — 2026-09-30
 
@@ -56,8 +57,23 @@ python -m mypy src/
 `pytest tests/integration/` no se ejecutó (sin PostgreSQL/Docker disponible en
 este incremento); el pipeline de persistencia de documentos no cambió de
 forma, solo el contenido textual que llega a `_build_extraction_prompt`.
-Pendiente confirmar cuando haya infraestructura disponible, junto con el
-ensayo E2E real de un PDF con texto enviado por Telegram.
+La validación E2E real de un PDF con texto enviado por Telegram quedó registrada
+el 2026-10-13; ver la sección siguiente.
+
+## Validación E2E PDF textual — 2026-10-13
+
+En Railway, un usuario envió por Telegram un PDF real con capa de texto. El
+bot confirmó su archivado, devolvió un resumen correcto de la guía contenida en
+el documento y señaló una confianza aproximada del 85 %. A continuación, una
+pregunta de seguimiento en el mismo chat obtuvo una respuesta correcta basada
+en la guía archivada, incluyendo el aviso de que se trataba de extracción
+automática. No apareció el error previo de parser/rate limit de OpenRouter.
+
+Esto evidencia el flujo efectivo: adjunto Telegram → preparación/extracción
+determinista local → persistencia canónica → resumen `untrusted_data` en el
+turno del Agent → continuidad conversacional persistida, sin reenviar el PDF
+original mediante `files=`/`images=`. Por privacidad, no se registran nombre,
+contenido ni identificadores del documento en esta verificación.
 
 ## Local verification required (al implementar Fase 1)
 
@@ -97,10 +113,10 @@ mypy src/
       por este incremento: no cambia el pipeline de persistencia).
 - [x] `BACKLOG.md` (BL-38, BL-6) actualizado referenciando este spec al cerrar
       la Fase 1.
-- [ ] Ensayo E2E real: un PDF con capa de texto enviado por un usuario real vía
-      Telegram usa la ruta determinista (sin llamada de visión) y la extracción
-      llega correctamente. Bloqueado por las restricciones de infraestructura
-      actuales — pendiente de validación por el propietario.
+- [x] Ensayo E2E real: un PDF con capa de texto enviado por un usuario real vía
+      Telegram se archivó, se resumió correctamente y permitió una consulta de
+      seguimiento en el mismo chat (Railway, 2026-10-13). No se observaron
+      errores de parser/rate limit de OpenRouter.
 
 ## Incremento — Límite de páginas desacoplado (2026-10-10)
 

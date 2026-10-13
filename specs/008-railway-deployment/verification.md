@@ -36,5 +36,8 @@
       `pending_update_count=0`.
 - [ ] Activar **Wait for CI**: Railway informa `checkSuites: false`.
 - [ ] Confirmar/probar rollback a deployment anterior.
-- [ ] Repetir E2E Telegram M3–M5: documento, vehículo/mantenimiento,
-      recordatorio y calendario. Este punto cierra BL-18 y desbloquea BL-1.
+- [~] Repetir E2E Telegram M3–M5: **M3 PDF textual** validado en Railway el
+      2026-10-13 (archivado, resumen correcto y consulta de seguimiento; sin
+      error de parser/rate limit de OpenRouter). Pendientes M3 visual
+      (imagen/PDF escaneado), vehículo/mantenimiento, recordatorio y calendario.
+      El conjunto completo sigue siendo necesario para cerrar BL-18 y BL-1.
