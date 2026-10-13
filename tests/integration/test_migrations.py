@@ -51,6 +51,9 @@ HEAD_REVISION = _canonical_head()
 silently drifts when a revision is added (it went stale with 0004)."""
 BASELINE_REVISION = "0001_ancora_baseline"
 GOVERNANCE_REVISION = "0002_llm_governance"
+DOCUMENT_HASH_REVISION = "0012_document_content_hash"
+SESSION_INDEX_REVISION = "0013_session_token_index"
+WRITE_TRIVIAL_REVISION = "0014_write_trivial_consent_mode"
 
 BASELINE_TABLES = {
     "action_proposals",
@@ -199,6 +202,19 @@ def _indexes(database: MigrationDatabase, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
+def _constraints(database: MigrationDatabase, table: str) -> set[str]:
+    with psycopg.connect(database.dsn) as connection:
+        rows = connection.execute(
+            """
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE table_schema = 'ancora' AND table_name = %s
+            """,
+            (table,),
+        ).fetchall()
+    return {row[0] for row in rows}
+
+
 def _current_revision(database: MigrationDatabase) -> str:
     with psycopg.connect(database.dsn) as connection:
         row = connection.execute("SELECT version_num FROM ancora.alembic_version").fetchone()
@@ -252,23 +268,51 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
+    assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _note_count(migration_database, "preserved through downgrade") == 1
+
+    # Check revision-owned schema changes at explicit boundaries, not relative
+    # offsets from head: adding a new migration must not shift these assertions.
+    command.upgrade(config, "head")
+    command.downgrade(config, WRITE_TRIVIAL_REVISION)
+
+    assert _current_revision(migration_database) == WRITE_TRIVIAL_REVISION
+    assert "consent_mode" in _columns(migration_database, "action_proposals")
+    assert "ck_action_proposals_consent_mode" in _constraints(
+        migration_database, "action_proposals"
+    )
+
+    command.downgrade(config, _down_revision(WRITE_TRIVIAL_REVISION))
+
+    assert _current_revision(migration_database) == SESSION_INDEX_REVISION
+    assert "consent_mode" not in _columns(migration_database, "action_proposals")
+    assert "ck_action_proposals_consent_mode" not in _constraints(
+        migration_database, "action_proposals"
+    )
+    assert "idx_telegram_interactions_agno_session_id" in _indexes(
+        migration_database, "telegram_interactions"
+    )
+    assert "content_hash" in _columns(migration_database, "documents")
+    assert "idx_documents_user_content_hash" in _indexes(migration_database, "documents")
+    assert "voice_preparations" in _tables(migration_database)
+    assert _note_count(migration_database, "preserved through downgrade") == 1
+
+    command.downgrade(config, _down_revision(SESSION_INDEX_REVISION))
+
+    assert _current_revision(migration_database) == DOCUMENT_HASH_REVISION
     assert "idx_telegram_interactions_agno_session_id" not in _indexes(
         migration_database, "telegram_interactions"
     )
     assert "content_hash" in _columns(migration_database, "documents")
-    assert "voice_preparations" in _tables(migration_database)
-    assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert "idx_documents_user_content_hash" in _indexes(migration_database, "documents")
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
-    # 0012 owns document deduplication. It is no longer the head, so exercise
-    # its downgrade explicitly after verifying the latest revision above.
-    command.downgrade(config, "-1")
+    command.downgrade(config, _down_revision(DOCUMENT_HASH_REVISION))
 
-    assert _current_revision(migration_database) == _down_revision(
-        _down_revision(HEAD_REVISION)
-    )
+    assert _current_revision(migration_database) == _down_revision(DOCUMENT_HASH_REVISION)
     assert "content_hash" not in _columns(migration_database, "documents")
     assert "idx_documents_user_content_hash" not in _indexes(migration_database, "documents")
+    assert "voice_preparations" in _tables(migration_database)
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
     command.downgrade(config, GOVERNANCE_REVISION)
