@@ -668,7 +668,7 @@ pero con una capa de resumen que no repita "Pulsa ✅ Sí..." por cada item.
 **Prioridad P2** — mejora de usabilidad, no bloquea el MVP (los flujos
 funcionan, solo son incómodos con múltiples items a la vez).
 
-### BL-46 · Niveles de riesgo dentro de WRITE para reducir confirmaciones redundantes 🆕 propuesto — 2026-10-13
+### BL-46 · Niveles de riesgo dentro de WRITE para reducir confirmaciones redundantes 🔶 en curso — specs/035
 
 **Hallazgo (E2E Telegram, flujo TODO/BL-1):** al pedir explícitamente "Añade
 leche y pan a la lista Compras" (lista ya existente, orden inequívoca), el
