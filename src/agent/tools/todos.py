@@ -1,8 +1,17 @@
 """Todo tools — thin Agno adapters with strict ActionProposal governance.
 
-Every TODO mutation is a WRITE operation. A propose_* tool records the intent
-as a pending ActionProposal; execute_* confirms it, revalidates ownership via
-the domain service, performs the mutation, and records execution.
+Every TODO mutation is a WRITE operation. Most are WRITE_REVIEWABLE: a
+propose_* tool records the intent as a pending ActionProposal; execute_*
+confirms it, revalidates ownership via the domain service, performs the
+mutation, and records execution.
+
+A narrow subset is WRITE_TRIVIAL (specs/035, BL-46): adding a title-only task
+to an existing list, and marking a task done/reopened. These run through
+``TrivialExecutor`` instead — the mutation and its audit row commit on one
+transaction with no pending-confirmation step, because there is no ambiguous
+data to review and the target already exists. Any optional field on
+``propose_todo_item`` (description/priority/due_date) switches it back to the
+reviewable path.
 """
 
 from __future__ import annotations
@@ -27,12 +36,15 @@ from src.agent.tools.validation import (
     invalid_proposal_reply,
     parse_uuid,
 )
+from src.domain.actions.trivial_executor import TrivialExecutor
 from src.domain.todos.models import TodoItem, TodoItemCreate, TodoItemUpdate
 from src.domain.todos.service import TodosService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
 from src.repositories.todos import TodosRepository
 from src.security.user_context import UserContext
+
+_trivial_executor: TrivialExecutor | None = None
 
 
 async def _get_todos_service() -> TodosService:
@@ -43,6 +55,20 @@ async def _get_todos_service() -> TodosService:
 async def _get_actions_repo() -> ActionProposalsRepository:
     session = track_session(await get_session())
     return ActionProposalsRepository(session)
+
+
+def _get_trivial_executor() -> TrivialExecutor:
+    """Lazy singleton, same pattern as the other module-level factories.
+
+    Not registered with ``track_session``/``closes_sessions``: unlike the
+    factories above, ``TrivialExecutor`` opens and closes its own session
+    internally (commit-or-rollback, then close), so there is nothing for the
+    tool-call-scoped cleanup to do here.
+    """
+    global _trivial_executor
+    if _trivial_executor is None:
+        _trivial_executor = TrivialExecutor(sessions=get_session)
+    return _trivial_executor
 
 
 def _parse_uuid(value: str, label: str) -> UUID | str:
@@ -329,19 +355,25 @@ async def propose_todo_item(
     priority: str | None = None,
     due_date: str | None = None,
 ) -> str:
-    """PROPOSE adding a task to a TODO list — requires user confirmation.
+    """Add a task to a TODO list.
+
+    A title-only task on a list you already have is added right away — no
+    confirmation needed (WRITE_TRIVIAL). Giving a description, priority or
+    due date instead PROPOSES the task and requires user confirmation,
+    because that is data worth reviewing before it is saved.
 
     Use when the user wants to add something to a list:
-    - "Añade a Trabajo: preparar la presentación"
-    - "Apunta en Personal comprar regalo, prioridad alta"
+    - "Añade a Trabajo: preparar la presentación" (se añade al momento)
+    - "Apunta en Personal comprar regalo, prioridad alta" (requiere confirmación)
 
     Args:
         run_context: Injected by Agno.
         list_id: UUID of the list (from list_todo_lists).
         title: Task title.
-        description: Optional details.
-        priority: Optional: low | normal | high.
-        due_date: Optional ISO 8601 datetime (ej. '2026-09-15').
+        description: Optional details. Any value here requires confirmation.
+        priority: Optional: low | normal | high. Any value here requires confirmation.
+        due_date: Optional ISO 8601 datetime (ej. '2026-09-15'). Any value here
+            requires confirmation.
 
     """
     user_context = UserContext.from_run_context(run_context)
@@ -362,6 +394,15 @@ async def propose_todo_item(
         )
     except ValidationError as error:
         return f"Datos no válidos: {error.errors()[0]['msg']}"
+
+    if description is None and priority is None and due_date is None:
+        # WRITE_TRIVIAL (specs/035): title-only task on an existing list —
+        # reversible in one step, no ambiguous data to review.
+        return await _get_trivial_executor().execute(
+            "create_todo_item",
+            {"list_id": str(parsed_list_id), "title": data.title},
+            user_context.user_id,
+        )
 
     proposal = await _create_proposal(
         user_context,
@@ -450,7 +491,7 @@ async def propose_todo_item_update(
 
 @closes_sessions
 async def propose_todo_item_complete(run_context: RunContext, item_id: str) -> str:
-    """PROPOSE marking a TODO task as done — requires user confirmation.
+    """Mark a TODO task as done — executed right away (WRITE_TRIVIAL).
 
     Use when the user finished something:
     - "Hecho lo de preparar la presentación"
@@ -461,12 +502,12 @@ async def propose_todo_item_complete(run_context: RunContext, item_id: str) -> s
         item_id: UUID of the item (from list_todo_items).
 
     """
-    return await _propose_todo_item_status(run_context, item_id, "done", "completar")
+    return await _execute_todo_item_status(run_context, item_id, "done")
 
 
 @closes_sessions
 async def propose_todo_item_reopen(run_context: RunContext, item_id: str) -> str:
-    """PROPOSE reopening a TODO task — requires user confirmation.
+    """Reopen a TODO task — executed right away (WRITE_TRIVIAL).
 
     Use when the user wants to reopen a done task:
     - "Reabre la tarea de preparar la presentación"
@@ -476,28 +517,18 @@ async def propose_todo_item_reopen(run_context: RunContext, item_id: str) -> str
         item_id: UUID of the item (from list_todo_items).
 
     """
-    return await _propose_todo_item_status(run_context, item_id, "pending", "reabrir")
+    return await _execute_todo_item_status(run_context, item_id, "pending")
 
 
-async def _propose_todo_item_status(
-    run_context: RunContext,
-    item_id: str,
-    status: str,
-    action_label: str,
-) -> str:
+async def _execute_todo_item_status(run_context: RunContext, item_id: str, status: str) -> str:
     user_context = UserContext.from_run_context(run_context)
     parsed_item_id = _parse_uuid(item_id, "tarea")
     if isinstance(parsed_item_id, str):
         return parsed_item_id
-    proposal = await _create_proposal(
-        user_context,
+    return await _get_trivial_executor().execute(
         "set_todo_item_status",
         {"item_id": str(parsed_item_id), "status": status},
-    )
-    return (
-        f"📋 **Propuesta para {action_label} tarea** (`{proposal['id']}`)\n"
-        f"   Tarea: `{parsed_item_id}`\n"
-        "\n¿Confirmas esta acción?"
+        user_context.user_id,
     )
 
 

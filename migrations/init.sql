@@ -590,3 +590,25 @@ DROP TRIGGER IF EXISTS trg_voice_preparation_parent_guard ON ancora.telegram_int
 CREATE TRIGGER trg_voice_preparation_parent_guard
     BEFORE UPDATE ON ancora.telegram_interactions
     FOR EACH ROW EXECUTE FUNCTION ancora.voice_preparation_parent_guard();
+
+-- WRITE_TRIVIAL consent mode (0014_write_trivial_consent_mode, specs/035,
+-- BL-46). Distinguishes the existing explicit-confirmation path from the
+-- new self-authorized one (TrivialExecutor): a proposal row inserted
+-- directly in a terminal 'executed' state, confirming_interaction_id left
+-- NULL (that column's unique index is partial on NOT NULL, so this never
+-- collides with a real confirmation).
+ALTER TABLE ancora.action_proposals
+    ADD COLUMN IF NOT EXISTS consent_mode VARCHAR(32) NOT NULL DEFAULT 'explicit_confirmation';
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+        JOIN pg_namespace n ON n.oid = c.connamespace
+        WHERE n.nspname = 'ancora'
+          AND c.conname = 'ck_action_proposals_consent_mode'
+    ) THEN
+        ALTER TABLE ancora.action_proposals
+        ADD CONSTRAINT ck_action_proposals_consent_mode
+        CHECK (consent_mode IN ('explicit_confirmation', 'self_authorized'));
+    END IF;
+END $$;

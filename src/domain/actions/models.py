@@ -30,6 +30,22 @@ class ProposalStatus(StrEnum):
     DISCARDED = "discarded"
 
 
+class ConsentMode(StrEnum):
+    """How a proposal's execution was authorised (specs/035, BL-46).
+
+    Orthogonal to ``ProposalStatus``: it records the authorisation path, not
+    the state machine position. ``explicit_confirmation`` is the existing
+    WRITE_REVIEWABLE path (a user "Sí" claimed via ``claim_confirmation``
+    before ``ProposalExecutor`` ran it); ``self_authorized`` is the
+    WRITE_TRIVIAL path (``TrivialExecutor``), where the row is inserted
+    directly in a terminal ``executed`` state because the user's own request
+    already was the signal (same precedent as ``analyze_document``).
+    """
+
+    EXPLICIT_CONFIRMATION = "explicit_confirmation"
+    SELF_AUTHORIZED = "self_authorized"
+
+
 class ConsentRejection(StrEnum):
     """Why a confirmation claim did not consume a proposal (content-free)."""
 

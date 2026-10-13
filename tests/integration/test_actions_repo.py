@@ -185,3 +185,71 @@ async def test_legacy_api_cannot_reuse_a_core_claim(session, user_a):
         )
         == "confirmed"
     )
+
+
+async def test_create_self_authorized_inserts_executed_row_without_committing(session, user_a):
+    """WRITE_TRIVIAL audit row (specs/035): terminal state, no pending window."""
+    repo = ActionProposalsRepository(session)
+
+    record = await repo.create_self_authorized(
+        user_a, "remember_note", {"content": "leche y pan"}
+    )
+
+    assert record["status"] == "executed"
+    assert record["consent_mode"] == "self_authorized"
+    assert record["payload"] == {"content": "leche y pan"}
+
+    row = (
+        await session.execute(
+            text(
+                "SELECT status, consent_mode, confirming_interaction_id,"
+                " completed_at, executed_at FROM ancora.action_proposals WHERE id = :id"
+            ),
+            {"id": record["id"]},
+        )
+    ).one()
+    assert row.status == "executed"
+    assert row.consent_mode == "self_authorized"
+    assert row.confirming_interaction_id is None
+    assert row.completed_at is not None
+    assert row.executed_at is not None
+
+    # Never pending_confirmation at any point: nothing to claim/confirm later.
+    assert await repo.get_pending(user_a, record["id"]) is None
+
+    await session.rollback()
+    assert (
+        await session.scalar(
+            text("SELECT 1 FROM ancora.action_proposals WHERE id = :id"),
+            {"id": record["id"]},
+        )
+        is None
+    ), "create_self_authorized must not commit on its own"
+
+
+async def test_create_self_authorized_never_collides_on_null_confirming_interaction(
+    session, user_a
+):
+    """Several self_authorized rows share NULL confirming_interaction_id safely.
+
+    ``uq_action_proposals_confirming_interaction`` is a partial unique index on
+    ``NOT NULL`` values, so this must not raise even though a real "Sí" could
+    never authorise two proposals the same way.
+    """
+    repo = ActionProposalsRepository(session)
+
+    first = await repo.create_self_authorized(user_a, "remember_note", {"content": "leche"})
+    second = await repo.create_self_authorized(user_a, "remember_note", {"content": "pan"})
+    await session.commit()
+
+    assert first["id"] != second["id"]
+    rows = (
+        await session.execute(
+            text(
+                "SELECT confirming_interaction_id FROM ancora.action_proposals"
+                " WHERE id = ANY(:ids)"
+            ),
+            {"ids": [first["id"], second["id"]]},
+        )
+    ).fetchall()
+    assert all(row.confirming_interaction_id is None for row in rows)

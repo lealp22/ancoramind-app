@@ -74,25 +74,23 @@ async def test_search_notes_benign_and_empty_query(monkeypatch):
     assert "SYSTEM" not in await note_tools.search_notes(_context(), "SYSTEM")
 
 
-async def test_propose_note_creates_proposal_without_writing(monkeypatch):
-    """specs/023 T4.6: propose_note never writes canonical data."""
+async def test_propose_note_executes_directly_as_write_trivial(monkeypatch):
+    """specs/035: a note has no reviewable field, so it executes right away."""
+    executor = AsyncMock()
+    executor.execute.return_value = "✅ Operación ejecutada y registrada."
+    monkeypatch.setattr(note_tools, "_get_trivial_executor", lambda: executor)
     actions = AsyncMock()
-    actions.create.return_value = {"id": "11111111-1111-1111-1111-111111111111"}
-
-    async def get_actions_repo():
-        return actions
-
-    monkeypatch.setattr(note_tools, "_get_actions_repo", get_actions_repo)
+    monkeypatch.setattr(note_tools, "_get_actions_repo", AsyncMock(return_value=actions))
 
     response = await note_tools.propose_note(_context(), "La plaza del garaje es la 42")
 
-    actions.create.assert_awaited_once_with(
-        user_id="user-1",
-        tool_name="remember_note",
-        payload={"content": "La plaza del garaje es la 42"},
+    executor.execute.assert_awaited_once_with(
+        "remember_note",
+        {"content": "La plaza del garaje es la 42"},
+        "user-1",
     )
-    assert "11111111-1111-1111-1111-111111111111" in response
-    assert "confirmas" in response.lower()
+    actions.create.assert_not_awaited()  # no pending-confirmation proposal is ever created
+    assert response == "✅ Operación ejecutada y registrada."
 
 
 async def test_propose_note_rejects_blank_content_without_a_proposal(monkeypatch):

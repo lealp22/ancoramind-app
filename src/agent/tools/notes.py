@@ -3,10 +3,14 @@
 These are plain Python functions. Agno auto-converts them to tools.
 The `run_context` parameter is injected automatically by Agno.
 
-Writing a note is governed (specs/023 T4.6, AGENTS.md §2.4): the previous
-``remember_note`` wrote directly from the model's call, with no ActionProposal
-and no human confirmation. ``propose_note``/``execute_note`` follow the same
-propose/confirm pattern as every other WRITE tool.
+Writing a note is WRITE_TRIVIAL (specs/035, BL-46): ``Note`` has no
+structured field (date/amount/identifier) worth reviewing before it is
+saved — it is free text, nothing else — so ``propose_note`` executes right
+away through ``TrivialExecutor`` instead of waiting for a confirmation.
+Before specs/035, ``propose_note``/``execute_note`` followed the
+propose/confirm pattern of every other WRITE tool (specs/023 T4.6,
+superseding an even older ``remember_note`` that wrote directly from the
+model's call with no ActionProposal at all).
 """
 
 from agno.run import RunContext
@@ -19,11 +23,14 @@ from src.agent.tools.untrusted_results import (
     render_retrieved_records,
 )
 from src.agent.tools.validation import internal_error_reply, invalid_proposal_reply
+from src.domain.actions.trivial_executor import TrivialExecutor
 from src.domain.notes.service import NotesService
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.database import get_session
 from src.repositories.notes import NotesRepository
 from src.security.user_context import UserContext
+
+_trivial_executor: TrivialExecutor | None = None
 
 
 async def _get_notes_service() -> NotesService:
@@ -38,9 +45,17 @@ async def _get_actions_repo() -> ActionProposalsRepository:
     return ActionProposalsRepository(session)
 
 
+def _get_trivial_executor() -> TrivialExecutor:
+    """Lazy singleton; not tracked by ``closes_sessions`` (see todos.py)."""
+    global _trivial_executor
+    if _trivial_executor is None:
+        _trivial_executor = TrivialExecutor(sessions=get_session)
+    return _trivial_executor
+
+
 @closes_sessions
 async def propose_note(run_context: RunContext, content: str) -> str:
-    """PROPOSE storing a personal note — requires user confirmation.
+    """Store a personal note — executed right away (WRITE_TRIVIAL).
 
     Use when the user explicitly asks you to remember something:
     - "Recuerda que la plaza del garaje es la 42"
@@ -56,16 +71,10 @@ async def propose_note(run_context: RunContext, content: str) -> str:
     if not content or not content.strip():
         return "Dime qué quieres que recuerde."
 
-    actions_repo = await _get_actions_repo()
-    proposal = await actions_repo.create(
-        user_id=user_ctx.user_id,
-        tool_name="remember_note",
-        payload={"content": content.strip()},
-    )
-    return (
-        f"📝 **Propuesta de nota** (`{proposal['id']}`)\n"
-        f"   {content.strip()}\n"
-        "\n¿Confirmas que la guarde?"
+    return await _get_trivial_executor().execute(
+        "remember_note",
+        {"content": content.strip()},
+        user_ctx.user_id,
     )
 
 

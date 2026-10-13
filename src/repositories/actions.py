@@ -6,11 +6,12 @@ Only Core-owned consent and ``ProposalExecutor`` can authorize and execute.
 ``create`` still commits a pending proposal; it never writes canonical data.
 
 * Consent API (``mark_presented``, ``list_confirmable``, ``claim_confirmation``,
-  ``begin_execution``, ``complete_execution``, ``discard_pending_for_chat``) —
-  the Core-owned state machine of ``specs/022-llm-input-trust/consent-design.md``.
-  These methods **never commit**: the caller owns the transaction so that the
-  claim, the canonical mutation and the terminal state can be committed (or
-  rolled back) together.
+  ``begin_execution``, ``complete_execution``, ``discard_pending_for_chat``,
+  ``create_self_authorized``) — the Core-owned state machine of
+  ``specs/022-llm-input-trust/consent-design.md`` (extended by ``specs/035``
+  for the WRITE_TRIVIAL tier). These methods **never commit**: the caller owns
+  the transaction so that the claim, the canonical mutation and the terminal
+  state can be committed (or rolled back) together.
 """
 
 import json
@@ -25,6 +26,7 @@ from src.domain.actions.models import (
     CONSENT_TTL,
     ClaimedProposal,
     ConsentClaimResult,
+    ConsentMode,
     ConsentPrincipal,
     ConsentRejection,
     ProposalStatus,
@@ -111,6 +113,76 @@ class ActionProposalsRepository:
             "status": row.status,
             "payload": row.payload,
             "source_document_id": (str(row.source_document_id) if row.source_document_id else None),
+            "created_at": row.created_at.isoformat(),
+        }
+
+    async def create_self_authorized(
+        self,
+        user_id: str,
+        tool_name: str,
+        payload: ProposalPayload,
+        *,
+        source_interaction_id: UUID | None = None,
+        bot_id: int | None = None,
+        chat_id: int | None = None,
+    ) -> ProposalRecord:
+        """Audit a WRITE_TRIVIAL mutation already decided by the caller (specs/035).
+
+        Unlike ``create()``, this inserts directly in a terminal ``executed``
+        state with ``consent_mode='self_authorized'`` — there is no
+        ``pending_confirmation`` window because the user's own request was
+        the signal (same precedent as ``analyze_document``, specs/023 T4.7),
+        not a proposal awaiting a «Sí». ``confirming_interaction_id`` stays
+        ``NULL``: this is not a confirmation, and that column's unique index
+        is partial on ``NOT NULL``, so leaving it unset never collides with a
+        real confirmation on another row.
+
+        Belongs to the Consent API discipline: **never commits**. The caller
+        (``TrivialExecutor``) must run the canonical mutation and this insert
+        on the same transaction and commit them together, so a mutation is
+        never audited without having happened and vice versa.
+        """
+        now = datetime.now(tz=UTC)
+        normalized = json.loads(json.dumps(payload))
+        if source_interaction_id is None and bot_id is None and chat_id is None:
+            provenance = current_provenance()
+            if provenance is not None:
+                source_interaction_id = provenance.interaction_id
+                bot_id = provenance.bot_id
+                chat_id = provenance.chat_id
+        stmt = text("""
+            INSERT INTO ancora.action_proposals
+                (user_id, tool_name, status, consent_mode, payload, created_at,
+                 payload_hash, source_interaction_id, bot_id, chat_id,
+                 completed_at, executed_at)
+            VALUES (:uid,:tool,'executed','self_authorized',CAST(:payload AS jsonb),:now,
+                    :hash,:source_interaction,:bot_id,:chat_id,:now,:now)
+            RETURNING id,user_id,tool_name,status,payload,source_document_id,created_at
+        """)
+        result = await self._session.execute(
+            stmt,
+            {
+                "uid": user_id,
+                "tool": tool_name,
+                "payload": json.dumps(normalized),
+                "now": now,
+                "hash": payload_hash(tool_name, normalized),
+                "source_interaction": source_interaction_id,
+                "bot_id": bot_id,
+                "chat_id": chat_id,
+            },
+        )
+        row = result.fetchone()
+        if row is None:
+            raise RuntimeError("Self-authorized action proposal insert did not return a row")
+        return {
+            "id": str(row.id),
+            "user_id": row.user_id,
+            "tool_name": row.tool_name,
+            "status": row.status,
+            "consent_mode": ConsentMode.SELF_AUTHORIZED.value,
+            "payload": row.payload,
+            "source_document_id": None,
             "created_at": row.created_at.isoformat(),
         }
 

@@ -74,7 +74,7 @@ class TestClosesSessions:
     def test_preserves_agno_schema(self) -> None:
         function = Function.from_callable(notes.propose_note)
         assert function.name == "propose_note"
-        assert "requires user confirmation" in (function.description or "")
+        assert "WRITE_TRIVIAL" in (function.description or "")
         assert list(function.parameters["properties"]) == ["content"]
 
 

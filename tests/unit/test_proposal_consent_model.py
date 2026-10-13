@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from src.domain.actions.models import (
     CONSENT_TTL,
+    ConsentMode,
     ConsentPrincipal,
     ConsentRejection,
     consent_deadline,
@@ -77,3 +78,19 @@ def test_legacy_beats_every_other_reason() -> None:
         ActionProposalsRepository._claim_rejection(row, PRINCIPAL)
         is ConsentRejection.LEGACY_PROPOSAL
     )
+
+
+def test_consent_mode_values_match_the_db_check_constraint() -> None:
+    """Must stay byte-for-byte in sync with migrations/0014 (manual pair)."""
+    assert ConsentMode.EXPLICIT_CONFIRMATION == "explicit_confirmation"
+    assert ConsentMode.SELF_AUTHORIZED == "self_authorized"
+    assert {mode.value for mode in ConsentMode} == {
+        "explicit_confirmation",
+        "self_authorized",
+    }
+
+
+def test_consent_mode_compares_equal_to_plain_strings() -> None:
+    """``StrEnum`` round-trips through JSON/SQL as a plain string."""
+    assert ConsentMode("self_authorized") == ConsentMode.SELF_AUTHORIZED
+    assert str(ConsentMode.SELF_AUTHORIZED) == "self_authorized"

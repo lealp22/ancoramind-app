@@ -69,6 +69,28 @@ async def test_propose_todo_item_records_intent_without_mutating(monkeypatch):
     assert "¿Confirmas" in response
 
 
+async def test_propose_todo_item_title_only_executes_directly_as_write_trivial(monkeypatch):
+    """specs/035: a title-only task on an existing list skips confirmation."""
+    executor = AsyncMock()
+    executor.execute.return_value = "✅ Operación ejecutada y registrada."
+    actions = AsyncMock()
+    monkeypatch.setattr(todo_tools, "_get_trivial_executor", lambda: executor)
+    monkeypatch.setattr(todo_tools, "_get_actions_repo", AsyncMock(return_value=actions))
+    list_id = uuid4()
+
+    response = await todo_tools.propose_todo_item(
+        _run_context(), str(list_id), "  Preparar presentación  "
+    )
+
+    executor.execute.assert_awaited_once_with(
+        "create_todo_item",
+        {"list_id": str(list_id), "title": "Preparar presentación"},
+        "452022640",
+    )
+    actions.create.assert_not_awaited()  # no pending-confirmation proposal is ever created
+    assert response == "✅ Operación ejecutada y registrada."
+
+
 async def test_propose_todo_item_rejects_invalid_input_without_proposal(monkeypatch):
     actions = AsyncMock()
     monkeypatch.setattr(todo_tools, "_get_actions_repo", AsyncMock(return_value=actions))
@@ -215,26 +237,40 @@ async def test_execute_todo_item_deletes_after_confirmation(monkeypatch):
     assert "Tarea eliminada" in response
 
 
-async def test_item_proposal_tools_only_record_action_proposals(monkeypatch):
+async def test_complete_and_reopen_execute_directly_as_write_trivial(monkeypatch):
+    """specs/035: no optional field can make these ambiguous, so always trivial."""
+    executor = AsyncMock()
+    executor.execute.return_value = "✅ Operación ejecutada y registrada."
+    actions = AsyncMock()
+    monkeypatch.setattr(todo_tools, "_get_trivial_executor", lambda: executor)
+    monkeypatch.setattr(todo_tools, "_get_actions_repo", AsyncMock(return_value=actions))
+    item_id = str(uuid4())
+
+    await todo_tools.propose_todo_item_complete(_run_context(), item_id)
+    await todo_tools.propose_todo_item_reopen(_run_context(), item_id)
+
+    assert [call.args for call in executor.execute.await_args_list] == [
+        ("set_todo_item_status", {"item_id": item_id, "status": "done"}, "452022640"),
+        ("set_todo_item_status", {"item_id": item_id, "status": "pending"}, "452022640"),
+    ]
+    actions.create.assert_not_awaited()  # no pending-confirmation proposal is ever created
+
+
+async def test_move_and_delete_remain_write_reviewable(monkeypatch):
+    """specs/035 Won't Have: moving/deleting a task is not part of this iteration."""
     actions = AsyncMock()
     actions.create.side_effect = lambda **kwargs: {"id": kwargs["tool_name"]}
     monkeypatch.setattr(todo_tools, "_get_actions_repo", AsyncMock(return_value=actions))
     item_id = str(uuid4())
     target_list_id = str(uuid4())
 
-    await todo_tools.propose_todo_item_complete(_run_context(), item_id)
-    await todo_tools.propose_todo_item_reopen(_run_context(), item_id)
     await todo_tools.propose_todo_item_move(_run_context(), item_id, target_list_id)
     await todo_tools.propose_todo_item_delete(_run_context(), item_id)
 
     assert [call.kwargs["tool_name"] for call in actions.create.await_args_list] == [
-        "set_todo_item_status",
-        "set_todo_item_status",
         "move_todo_item",
         "delete_todo_item",
     ]
-    assert actions.create.await_args_list[0].kwargs["payload"]["status"] == "done"
-    assert actions.create.await_args_list[1].kwargs["payload"]["status"] == "pending"
 
 
 def _todo_list(name: str = "Trabajo") -> TodoList:

@@ -136,15 +136,23 @@
 
 ## T6: Wiring — `main.py`
 
-- [ ] `src/main.py::_init_domain_tools()` (o el helper equivalente que ya
-      construye `ProposalExecutor` para el `InteractionProcessor`):
-      instanciar `TrivialExecutor` con el mismo factory de sesiones
-      (`repositories.database.get_session`) y pasarlo a los módulos de
-      tools de `todos.py`/`notes.py` — mismo patrón perezoso que
-      `_get_document_service()` en `documents.py` (closure/singleton de
-      módulo, sin estado global mutable entre requests).
-- [ ] Verificar con `python -c "from src.main import app"` que el wiring no
-      rompe el arranque (igual chequeo que BL-22/specs/012).
+- [x] **Resuelto sin cambios en `main.py` (2026-10-13).** T5 ya instancia
+      `TrivialExecutor` como singleton perezoso **dentro de cada módulo**
+      (`todos.py::_get_trivial_executor()`, `notes.py::_get_trivial_executor()`),
+      usando `src.repositories.database.get_session` directamente — el mismo
+      patrón que ya usan `_get_todos_service()`/`_get_actions_repo()`/
+      `_get_notes_service()` en esos mismos módulos. `main.py` nunca
+      construye esos repositorios/servicios por inyección; solo llama
+      `init_database()` en `_init_domain_tools()` para que `get_session`
+      funcione, y eso ya cubre `TrivialExecutor` sin tocar nada más.
+      Centralizar la construcción en `main.py` habría sido inconsistente con
+      el resto del fichero y no aportaba nada (no hay estado que compartir
+      entre tools).
+- [x] `python -c "from src.main import app"` — import limpio, sin errores.
+- [x] `tests/unit/test_legacy_consent_boundary.py` (incluye
+      `test_production_registration_only_exposes_reads_proposals_and_approved_exceptions`)
+      — 33 passed, confirma que `propose_note`/`propose_todo_item` siguen
+      registrados y que ningún `execute_*` lo está.
 
 ## T7: Documentación y gobernanza
 
