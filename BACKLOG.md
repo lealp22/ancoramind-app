@@ -608,6 +608,108 @@ misma lógica. Validación local: 1307 unit tests passed, Ruff y `mypy src/`
 limpios. Pendiente: E2E Telegram/Railway que confirme ausencia de solicitudes
 de parser documental/rate limits de OpenRouter.
 
+### BL-45 · Confirmación por lote para múltiples propuestas pendientes simultáneas 🆕 propuesto — 2026-10-13
+
+**Hallazgo (E2E Telegram, flujo TODO/BL-1):** al pedir "Añade leche y pan a la
+lista Compras" se generan dos `ActionProposal` independientes y Telegram
+muestra **dos pares de botones Sí/No** (uno por propuesta). Con N elementos en
+una sola petición saldrían N pares de botones — no escala y es confuso para
+el usuario, que ve una sola intención ("añadir estos dos items") partida en
+N confirmaciones visualmente separadas.
+
+**Causa:** por diseño (`src/domain/actions/presentation.py::consent_buttons`),
+cada botón codifica el `proposal_id` exacto que autoriza, precisamente para
+que la confirmación sea atribuible a una propuesta concreta (specs/022
+consent-design) y no exista un "confirmar todo" genérico que ejecute algo no
+revisado individualmente. No es un bug; es el trade-off seguridad/UX actual.
+
+**Propuesta a evaluar (sin diseñar aún):** un mecanismo de confirmación por
+lote cuando varias propuestas se crean en el mismo turno del Agent — por
+ejemplo, un botón único "✅ Confirmar todas (N)" cuyo `callback_data` referencie
+un lote (hash/lista de IDs, respetando el límite de 64 bytes de Telegram) y que
+en el Core se traduzca en N claims atómicos individuales (reutilizando
+`claim_confirmation` por cada proposal_id, nunca un claim "todo o nada" que
+oculte cuáles se autorizaron). Debe seguir cumpliendo consent-design: la
+atribución de qué se confirmó debe quedar auditada id por id. Alternativa más
+simple: agrupar el texto en un solo bloque y dejar los botones individuales,
+pero con una capa de resumen que no repita "Pulsa ✅ Sí..." por cada item.
+**Prioridad P2** — mejora de usabilidad, no bloquea el MVP (los flujos
+funcionan, solo son incómodos con múltiples items a la vez).
+
+### BL-46 · Niveles de riesgo dentro de WRITE para reducir confirmaciones redundantes 🆕 propuesto — 2026-10-13
+
+**Hallazgo (E2E Telegram, flujo TODO/BL-1):** al pedir explícitamente "Añade
+leche y pan a la lista Compras" (lista ya existente, orden inequívoca), el
+bot pide confirmación igualmente. Desde la perspectiva de uso cotidiano, esto
+es redundante y poco práctico: el usuario ya expresó la intención completa y
+sin ambigüedad; no se parece al comportamiento esperado de un asistente
+personal (comparado, por ejemplo, con pedir confirmación para crear un
+recordatorio con detalles de fecha/hora que sí conviene revisar antes de
+guardarlos).
+
+**Tensión con AGENTS.md §2.4 (no negociable tal como está hoy):** "Toda
+operación WRITE/EXTERNAL_ACTION/DESTRUCTIVE requiere gobernanza" sin
+distinción de riesgo dentro de WRITE, salvo la única excepción aprobada hasta
+ahora (`analyze_document`, T4.7 — "enviar un adjunto ya es la señal de
+intención"). Este hallazgo plantea si esa misma lógica ("el usuario ya dio
+una orden explícita y sin ambigüedad sobre un recurso que ya existe") debería
+extenderse a un subconjunto de mutaciones WRITE de bajo riesgo.
+
+**Propuesta formal a decidir por el propietario (no implementada):**
+introducir una subclasificación dentro de `WRITE` — por ejemplo
+`WRITE_TRIVIAL` (reversible con un solo paso, sin ambigüedad de datos, target
+ya identificado — ej. añadir un item con solo título a una lista existente,
+marcar un item como completado) vs `WRITE_REVIEWABLE` (implica datos que
+conviene que el usuario revise antes de persistir — ej. fecha/hora de un
+recordatorio, importe de un mantenimiento, matrícula de un vehículo). Solo
+`WRITE_REVIEWABLE` seguiría exigiendo `propose_*`/`execute_*` con
+confirmación explícita; `WRITE_TRIVIAL` podría ejecutar directo (igual que la
+excepción ya aprobada de `analyze_document`) manteniendo auditoría pero sin
+bloquear en espera de un "Sí". Alternativas a valorar en el spec si se
+aprueba: mantener siempre un `execute_*` auditado aunque sin "pending"
+intermedio, o un undo rápido ("deshacer") en vez de confirmación previa para
+ese subconjunto. **Toca una regla no negociable de AGENTS.md §2.4 — requiere
+decisión explícita del propietario antes de cualquier cambio de código**,
+igual que T4.7. **Prioridad propuesta: P1** si se aprueba (afecta la
+usabilidad percibida del MVP en el día a día), pero queda sin spec ni
+implementación hasta esa decisión.
+
+### BL-47 · El Agent narra el estado de propuestas pendientes desde memoria conversacional, sin fuente de verdad 🆕 propuesto — 2026-10-13
+
+**Hallazgo (E2E Telegram, flujo TODO/BL-1):** tras confirmar una propuesta ya
+ejecutada (`a93acfbf`, "Leche completada") y dejar caducar otra (`bbe31cd8`,
+"Gel de ducha", >15 min sin confirmar), al intentar confirmar una propuesta
+expirada el bot respondió correctamente "Esa propuesta ya caducó" (el Core
+rechazó bien — sin fallo de seguridad), pero en el mismo mensaje añadió "Y
+siguen pendientes de confirmar: Leche completada (a93acfbf) y Gel de ducha
+(bbe31cd8)" — **ambas afirmaciones son falsas**: la primera ya estaba
+`executed` desde varios turnos antes, la segunda ya estaba expirada.
+
+**Causa probable:** no existe ninguna tool de lectura `list_pending_proposals`
+(o equivalente) que el Agent pueda invocar para consultar el estado real de
+`action_proposals` del chat/usuario — el inventario de tools confirma que
+las únicas operaciones sobre propuestas son los `execute_*` por tool de
+dominio (`src/agent/tools/*.py`, grep de `proposal_id`), ninguna de lectura
+agregada. El modelo reconstruye "qué está pendiente" únicamente desde su
+propio historial conversacional, que puede quedar desincronizado del estado
+real en Postgres (confirmaciones/expiraciones ya ocurridas no se reflejan en
+lo que el modelo "recuerda" haber dicho antes).
+
+**Impacto:** no es un fallo de autorización (`ProposalExecutor`/
+`claim_confirmation` siguen siendo la única fuente que importa para
+ejecutar), pero sí de confianza/UX — el usuario recibe información
+incorrecta sobre qué sigue abierto, lo que puede llevar a reintentos
+innecesarios o confusión sobre si algo se guardó o no.
+
+**Propuesta a evaluar:** nueva tool de lectura (`list_pending_proposals` o
+similar, READ, envuelta en `untrusted_results` igual que el resto de tools de
+lectura) que consulte `ActionProposalsRepository` por `user_id`/chat y
+devuelva las propuestas realmente en `pending_confirmation` (no caducadas),
+para que el modelo la invoque en vez de narrar desde memoria cuando el
+usuario pregunta "qué tengo pendiente" o tras un intento de confirmación
+fallido. **Prioridad P1** — afecta la fiabilidad percibida de un patrón
+(`propose_*`/`execute_*`) que es central en toda la gobernanza WRITE del MVP.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue
