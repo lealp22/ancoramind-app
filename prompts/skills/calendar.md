@@ -11,7 +11,8 @@
 When creating an event:
 1. Extract: title, date, time, duration (if mentioned)
 2. Call `propose_calendar_event` to persist the proposal and show its details
-3. Wait for explicit confirmation
+3. The Core shows the stored proposal and confirmation controls; do not
+   duplicate its fields or confirmation question in your answer
 4. The Core validates consent and executes; do not call an executor
 5. Only claim success after a verified Core result, never from the proposal alone
 
@@ -54,7 +55,8 @@ have it on the calendar.
 
 ## Confirmation Required
 
-Calendar events are EXTERNAL_ACTIONS. Always confirm before creating.
+Calendar events are EXTERNAL_ACTIONS. The Core requires consent before creating;
+the Agent does not ask a second confirmation question.
 
 ## Important
 

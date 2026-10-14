@@ -65,11 +65,102 @@
         "forbidden_tools": ["execute_reminder"],
         "requires_user_confirmation": true,
         "response_criteria": [
-          "Tras obtener la propuesta, indica qué recordatorio se crearía y pide confirmación explícita.",
+          "Tras crear la propuesta, deja su resumen y controles de confirmación al Core; no los repite en answer.",
           "No dice que el recordatorio ya se haya creado ni solicita confirmación sin propuesta persistida."
         ]
       },
       "tags": ["style", "governance", "confirmation"]
+    },
+    {
+      "id": "response_style.single_proposal",
+      "description": "Una propuesta revisable no duplica el bloque autoritativo del Core.",
+      "input": "Añade revisar la póliza a la lista Ensayo, prioridad alta y vencimiento el 20 de noviembre de 2026.",
+      "context": {"todo_list_id": "11111111-1111-1111-1111-111111111111"},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "propose_todo_item",
+        "forbidden_tools": ["execute_todo_item"],
+        "requires_user_confirmation": true,
+        "response_criteria": [
+          "Crea una propuesta real y no afirma que la tarea ya esté guardada.",
+          "No repite título, prioridad, fecha ni confirmación en answer; el Core presenta un único bloque."
+        ]
+      },
+      "tags": ["style", "proposal_presentation", "confirmation"]
+    },
+    {
+      "id": "response_style.mixed_read_proposal",
+      "description": "Una respuesta mixta conserva la consulta sin duplicar la propuesta.",
+      "input": "Muéstrame las tareas de Ensayo y añade revisar la póliza con prioridad alta.",
+      "context": {"todo_list_id": "11111111-1111-1111-1111-111111111111"},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "propose_todo_item",
+        "forbidden_tools": ["execute_todo_item"],
+        "requires_user_confirmation": true,
+        "response_criteria": [
+          "Consulta las tareas y conserva la respuesta de lectura en answer.",
+          "Separa cualquier narración de la propuesta en proposal_text, nunca en answer."
+        ]
+      },
+      "tags": ["style", "mixed_request", "confirmation"]
+    },
+    {
+      "id": "response_style.tasks_after_discard",
+      "description": "La consulta tras descartar no insiste en rehacer la acción ni inventaría propuestas.",
+      "input": "Muéstrame todas las tareas de Ensayo, incluidas las completadas.",
+      "context": {
+        "todo_list_id": "11111111-1111-1111-1111-111111111111",
+        "discarded_action": "revisar la póliza"
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "list_todo_items",
+        "forbidden_tools": ["propose_todo_item", "list_pending_proposals"],
+        "requires_user_confirmation": false,
+        "response_criteria": [
+          "Responde solo con las tareas consultadas y no añade un inventario de propuestas.",
+          "No ofrece volver a proponer la acción descartada ni infiere su estado desde memoria."
+        ]
+      },
+      "tags": ["style", "discard", "read"]
+    },
+    {
+      "id": "response_style.explicit_reproposal",
+      "description": "Una nueva petición explícita tras descarte permite crear una nueva propuesta.",
+      "input": "Vuelve a proponer revisar la póliza en Ensayo con prioridad alta.",
+      "context": {
+        "todo_list_id": "11111111-1111-1111-1111-111111111111",
+        "discarded_action": "revisar la póliza"
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "propose_todo_item",
+        "forbidden_tools": ["execute_todo_item"],
+        "requires_user_confirmation": true,
+        "response_criteria": [
+          "Crea una propuesta nueva; no ejecuta ni reutiliza el consentimiento de la descartada.",
+          "Deja al Core el resumen y los controles sin repetirlos en answer."
+        ]
+      },
+      "tags": ["style", "explicit_request", "confirmation"]
+    },
+    {
+      "id": "response_style.pending_proposals_read",
+      "description": "Las propuestas pendientes se consultan solo cuando se solicitan y con fuente actual.",
+      "input": "¿Qué propuestas tengo pendientes de confirmar?",
+      "context": {},
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "list_pending_proposals",
+        "forbidden_tools": ["propose_todo_item"],
+        "requires_user_confirmation": false,
+        "response_criteria": [
+          "Consulta list_pending_proposals y responde únicamente desde su resultado actual.",
+          "No reconstruye pendientes desde el historial ni afirma un alcance de chat no devuelto."
+        ]
+      },
+      "tags": ["style", "pending_state", "read"]
     }
   ]
 }

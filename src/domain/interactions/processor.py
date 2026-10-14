@@ -50,6 +50,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import (
     ExecutionBudgetExceededError,
@@ -98,7 +99,7 @@ class InteractionAgentRunner(Protocol):
         execution_context: ExecutionContext | None = None,
         compaction_summary: str | None = None,
         reduced_history_runs: int | None = None,
-    ) -> str: ...
+    ) -> str | AgentReply: ...
 
 
 class TelegramMediaResolverPort(Protocol):
@@ -430,6 +431,7 @@ class InteractionProcessor:
                     reduced_history_runs=reduced_history_runs,
                     **({"execution_context": prepared_context} if prepared_context else {}),
                 )
+                content = await self._append_proposal_blocks(interaction, content)
                 if not content.strip():
                     await self._mark_terminal(
                         interaction.id,
@@ -438,7 +440,6 @@ class InteractionProcessor:
                         error_detail_code="agent_returned_empty_content",
                     )
                     return True
-                content = await self._append_proposal_blocks(interaction, content)
                 encrypted = self._payload_cipher.encrypt({"content": content})
                 chunks = split_telegram_message(content)
                 response = await self._persist_response(
@@ -624,15 +625,18 @@ class InteractionProcessor:
             chat_id=interaction.chat_id,
         )
 
-    async def _append_proposal_blocks(self, interaction: TelegramInteraction, content: str) -> str:
-        """Append a fixed, Core-rendered block per proposal this run created.
+    async def _append_proposal_blocks(
+        self, interaction: TelegramInteraction, content: str | AgentReply
+    ) -> str:
+        """Replace proposal narration, preserving independent answers (BL-48).
 
         The block is generated from the stored payload, never from the
         model's wording, so confirming «Sí» always matches what was shown
         (specs/023 T4.4). A no-op while the rollout is off.
         """
+        text = content.text() if isinstance(content, AgentReply) else content
         if not self._governed_consent:
-            return content
+            return text
         session = await self._session_factory()
         try:
             created = await ActionProposalsRepository(session).list_created_in_interaction(
@@ -641,11 +645,15 @@ class InteractionProcessor:
         finally:
             await session.close()
         if not created:
-            return content
+            return text
+        if not isinstance(content, AgentReply):
+            # A plain-text test/custom adapter cannot safely partition a mixed
+            # reply. Never deduce proposal narration from free-form prose.
+            raise ValueError("Proposal presentation requires a partitioned Agent reply")
         blocks = "\n\n".join(
             render_proposal_block(row["id"], row["tool_name"], row["payload"]) for row in created
         )
-        return f"{content}\n\n{blocks}"
+        return "\n\n".join(part for part in (content.answer.strip(), blocks) if part)
 
     async def _mark_proposals_presented(
         self, interaction: TelegramInteraction, response_id: UUID
@@ -1297,9 +1305,7 @@ class InteractionProcessor:
             tokens = await LlmUsageRepository(session).sum_session_tokens(session_id)
             if tokens < self._context_compaction_token_threshold:
                 return None, None
-            rows = await TelegramInteractionsRepository(session).list_session_exchanges(
-                session_id
-            )
+            rows = await TelegramInteractionsRepository(session).list_session_exchanges(session_id)
         finally:
             await session.close()
         compact_count = oldest_fraction_count(len(rows), self._context_compaction_ratio)

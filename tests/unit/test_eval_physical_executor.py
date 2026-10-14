@@ -17,6 +17,7 @@ from agno.models.response import ModelResponse
 
 from src.agent.eval_physical_executor import GovernedPhysicalEvalExecutor
 from src.agent.evals import EvalCase, EvalExecutionRequest
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import ExecutionContext
 
 
@@ -95,7 +96,11 @@ async def test_tool_call_is_observed_as_tool_call_outcome() -> None:
         id="eval-test",
         turns=(
             _tool_call_turn("call-1", "search_notes", "{}"),
-            ModelResponse(content="Aquí tienes tu nota."),
+            ModelResponse(
+                content=AgentReply(
+                    answer="Aquí tienes tu nota.", proposal_text=""
+                ).model_dump_json()
+            ),
         ),
     )
     executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model=model))
@@ -122,7 +127,7 @@ async def test_propose_tool_call_requires_user_confirmation() -> None:
                 "propose_reminder",
                 '{"title": "Llamar al dentista", "trigger_at": "2026-01-01T10:00:00"}',
             ),
-            ModelResponse(content="¿Confirmas que cree el recordatorio?"),
+            ModelResponse(content=AgentReply(answer="", proposal_text="").model_dump_json()),
         ),
     )
     executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model=model))
@@ -148,7 +153,11 @@ async def test_legacy_confirmation_case_is_rejected_before_inference() -> None:
                 "execute_vehicle",
                 '{"proposal_id": "synthetic-vehicle-proposal"}',
             ),
-            ModelResponse(content="Vehículo registrado."),
+            ModelResponse(
+                content=AgentReply(
+                    answer="Vehículo registrado.", proposal_text=""
+                ).model_dump_json()
+            ),
         ),
     )
     executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model=model))
@@ -175,7 +184,14 @@ async def test_legacy_confirmation_case_is_rejected_before_inference() -> None:
 async def test_no_tool_call_is_a_distinct_sentinel_not_clarify_or_safe_response() -> None:
     """Known T6 scope limit: clarify vs safe_response needs a semantic judge (T8)."""
     model = _ScriptedModel(
-        id="eval-test", turns=(ModelResponse(content="No tengo esa información."),)
+        id="eval-test",
+        turns=(
+            ModelResponse(
+                content=AgentReply(
+                    answer="No tengo esa información.", proposal_text=""
+                ).model_dump_json()
+            ),
+        ),
     )
     executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model=model))
     request = EvalExecutionRequest(

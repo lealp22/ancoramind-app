@@ -59,10 +59,7 @@ class TestAssembleInstructions:
     def test_document_skill_loaded(self):
         """The document ingestion contract should be included."""
         instructions = assemble_instructions()
-        assert any(
-            "MUST call `analyze_document` exactly once" in block
-            for block in instructions
-        )
+        assert any("MUST call `analyze_document` exactly once" in block for block in instructions)
 
     def test_identity_is_first(self):
         """Identity block should be first."""
@@ -127,3 +124,15 @@ class TestAssembleInstructions:
         assert "the Core validates human consent before the Agent" in prompt_text
         assert "Call `execute_" not in prompt_text
         assert "Use `execute_" not in prompt_text
+
+    def test_proposal_presentation_is_partitioned_and_discard_is_respected(self):
+        prompt_text = "\n".join(assemble_instructions())
+        assert "`answer` and `proposal_text`" in prompt_text
+        assert "The Core replaces only `proposal_text`" in prompt_text
+        assert (
+            "Do not offer to re-propose a discarded action unless the user asks anew" in prompt_text
+        )
+        assert "Any statement about pending proposals" in prompt_text
+        assert 'Ask for "Sí"' not in prompt_text
+        assert "ask for explicit confirmation" not in prompt_text
+        assert "Approved WRITE_TRIVIAL tools execute and audit immediately" in prompt_text

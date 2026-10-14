@@ -24,6 +24,7 @@ from src.agent.tools.documents import ingest_resolved_telegram_media
 from src.domain.emergency_stop.models import EmergencyStopActiveError
 from src.domain.emergency_stop.ports import EmergencyStopReader
 from src.domain.interactions.media import ResolvedTelegramMedia
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.cost_governance import (
     LlmSpendReader,
@@ -124,7 +125,7 @@ class GovernedInteractionRunner:
         execution_context: ExecutionContext | None = None,
         compaction_summary: str | None = None,
         reduced_history_runs: int | None = None,
-    ) -> str:
+    ) -> AgentReply:
         context = execution_context or await self.prepare_execution_context(
             session_id=session_id,
             run_id=run_id,
@@ -197,8 +198,10 @@ class GovernedInteractionRunner:
                         ),
                         timeout=context.budget.seconds_remaining(),
                     )
-                    if not isinstance(agent_output.content, str):
-                        raise ValueError("Governed interaction run returned non-text content")
+                    if not isinstance(agent_output.content, AgentReply):
+                        raise ValueError(
+                            "Governed interaction run returned invalid presentation output"
+                        )
                     return agent_output.content
                 except TimeoutError as exc:
                     get_telemetry().mark_error(span, "ExecutionBudgetExceededError")

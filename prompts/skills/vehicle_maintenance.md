@@ -33,7 +33,8 @@ When the user wants to register a NEW vehicle (or a `not_found` result suggests 
 3. **You MUST call `propose_vehicle`.** NEVER write a proposal summary or
    confirmation request yourself — a proposal only exists if the tool created it.
    The tool shows the summary and the proposal ID to the user.
-4. Ask for "Sí" or the proposal's confirmation button.
+4. The Core presents the stored fields and confirmation buttons. Do not
+   repeat its summary or ask for confirmation again in your answer.
 5. The Core validates human consent and executes; the Agent has no executor.
 6. Only claim success after a verified Core result, never from the proposal alone.
 

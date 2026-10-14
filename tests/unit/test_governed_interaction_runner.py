@@ -5,17 +5,21 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
+from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from agno.models.base import Model
+from agno.models.response import ModelResponse
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import GovernedInteractionRunner
 from src.domain.emergency_stop.models import EmergencyStopActiveError, EmergencyStopState
 from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.interactions.processor import InteractionAgentRunner
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.context import current_execution_context
 from src.domain.llm_access.cost_governance import CostGovernanceError, SpendSummary
 from src.domain.llm_access.models import (
@@ -62,7 +66,7 @@ class _FakeAgent:
         self.calls.append({"input_text": input_text, "context": context, **kwargs})
 
         class _Output:
-            content = "respuesta gobernada"
+            content = AgentReply(answer="respuesta gobernada", proposal_text="")
 
         return _Output()
 
@@ -96,6 +100,62 @@ def _runner() -> tuple[GovernedInteractionRunner, _FakeFactory]:
     return runner, factory
 
 
+@dataclass
+class _PresentationModel(Model):
+    """Exercise Agno's JSON parsing, without a provider, credentials or I/O."""
+
+    calls: int = field(default=0, repr=False)
+
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    def invoke_stream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    async def ainvoke_stream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+        yield
+
+    def _parse_provider_response(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    def _parse_provider_response_delta(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> ModelResponse:
+        self.calls += 1
+        return ModelResponse(
+            content=AgentReply(
+                answer="Una tarea completada.", proposal_text="Resumen redundante."
+            ).model_dump_json()
+        )
+
+
+async def test_real_agno_run_parses_partition_without_a_second_model_or_network() -> None:
+    model = _PresentationModel(id="synthetic-presentation")
+
+    class FakeAccess:
+        def model_for(self, route_name: str, context: ExecutionContext) -> Model:
+            return model
+
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot()),
+        factory=GovernedAgentFactory(
+            llm_access=FakeAccess(), db=None, tools=[], instructions=["Synthetic fixture"]
+        ),
+    )
+    reply = await runner.run(
+        "Consulta y propuesta sintéticas",
+        user_id="88",
+        session_id="synthetic",
+        run_id="synthetic",
+        correlation_id=uuid4(),
+        telegram_update_id=1,
+    )
+    assert reply == AgentReply(answer="Una tarea completada.", proposal_text="Resumen redundante.")
+    assert model.calls == 1
+
+
 async def test_runner_binds_context_metadata_and_returns_text() -> None:
     runner, factory = _runner()
     correlation_id = uuid4()
@@ -110,7 +170,7 @@ async def test_runner_binds_context_metadata_and_returns_text() -> None:
         telegram_message_id=9002,
     )
 
-    assert output == "respuesta gobernada"
+    assert output == AgentReply(answer="respuesta gobernada", proposal_text="")
     assert len(factory.agent.calls) == 1
     call = factory.agent.calls[0]
     assert call["input_text"] == "hola"
@@ -207,7 +267,7 @@ async def test_runner_ingests_media_before_a_text_only_agent_turn(monkeypatch) -
         ),
     )
 
-    assert output == "respuesta gobernada"
+    assert output == AgentReply(answer="respuesta gobernada", proposal_text="")
     ingest.assert_awaited_once()
     assert ingest.await_args.args[0].user_id == "88"
     assert ingest.await_args.args[1][0].filename == "factura.png"
@@ -237,7 +297,7 @@ async def test_runner_rejects_non_text_content_with_media(monkeypatch) -> None:
 
     factory.agent = _NonTextAgent()  # type: ignore[assignment]
 
-    with pytest.raises(ValueError, match="non-text"):
+    with pytest.raises(ValueError, match="invalid presentation output"):
         await runner.run(
             "He adjuntado un documento.",
             user_id="88",
@@ -268,7 +328,7 @@ async def test_runner_rejects_non_text_content() -> None:
 
     factory.agent = _NonTextAgent()  # type: ignore[assignment]
 
-    with pytest.raises(ValueError, match="non-text"):
+    with pytest.raises(ValueError, match="invalid presentation output"):
         await runner.run(
             "hola",
             user_id="88",
@@ -276,6 +336,28 @@ async def test_runner_rejects_non_text_content() -> None:
             run_id="run-42",
             correlation_id=uuid4(),
             telegram_update_id=9001,
+        )
+
+
+async def test_runner_never_forwards_unvalidated_free_form_proposal_text() -> None:
+    runner, factory = _runner()
+
+    class UnparsedAgent:
+        async def arun(self, input_text: str, **kwargs: Any) -> Any:
+            class Output:
+                content = "Propuesta y consulta mezcladas, sin contrato validado."
+
+            return Output()
+
+    factory.agent = UnparsedAgent()  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="invalid presentation output"):
+        await runner.run(
+            "Petición sintética",
+            user_id="88",
+            session_id="synthetic",
+            run_id="synthetic",
+            correlation_id=uuid4(),
+            telegram_update_id=1,
         )
 
 
@@ -475,4 +557,4 @@ async def test_runner_proceeds_when_emergency_stop_is_inactive() -> None:
         telegram_update_id=9001,
     )
 
-    assert output == "respuesta gobernada"
+    assert output == AgentReply(answer="respuesta gobernada", proposal_text="")

@@ -33,13 +33,20 @@ confirmation:
 1. Call the matching `propose_*` tool — it creates the proposal and shows it.
    **You MUST call the propose_* tool.** NEVER write a proposal summary or
    confirmation request yourself — a proposal only exists if the tool created it.
-2. Ask for "Sí" or the proposal's confirmation button.
+2. The Core presents the stored summary and Sí/No buttons. Do not repeat the
+   fields or the confirmation question in your answer.
 3. The Core resolves consent and executes the proposal; no executor is available
    to the Agent. Multiple pending proposals require "Sí <ID>" or a specific button.
 4. Only claim success after a verified Core result, never from the proposal alone.
 
 Deleting a list also deletes its tasks — the proposal shows the count.
 Mention it when relaying the proposal to the user.
+Keep a necessary safety warning that the Core block does not contain (such
+as the verified task count for list deletion) in `answer`, without repeating
+the proposal fields or confirmation question. Never hide a destructive effect.
+
+After No, do not offer to create the discarded task again unless asked.
+When listing tasks, report the requested tasks only, not proposal state.
 
 ## Disambiguation
 

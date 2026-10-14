@@ -1,7 +1,7 @@
 # AGENTS.md — Contexto para Agentes de Programación
 
 > Guía para asistentes de IA que trabajan en este repositorio.
-> Última actualización: 2026-10-13
+> Última actualización: 2026-10-14
 
 ---
 
@@ -23,8 +23,10 @@ recordatorios y eventos, con trazabilidad completa.
   subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE para TODO items y notas
   (BL-46/specs/035, ver §2.4) + tool de lectura `list_pending_proposals`
   para que el Agent nunca narre propuestas pendientes desde memoria
-  conversacional (BL-47).
-  1332 unit tests + 160 integration tests; los integration requieren
+  conversacional (BL-47) + presentación particionada `AgentReply` para un
+  único bloque Core de propuestas en Telegram (BL-48/specs/036, implementación
+  local; evaluación LLM real/E2E pendientes).
+  1368 unit tests + 160 integration tests; los integration requieren
   PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
   limpios; ambos son gates globales en CI.
 
@@ -186,7 +188,9 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             OpenRouter/OpenAILike; retirada upstream pendiente),
                             035-write-trivial-risk-tier (BL-46: subclasificación
                             WRITE_TRIVIAL/WRITE_REVIEWABLE — implementada
-                            localmente)
+                            localmente), 036-telegram-proposal-presentation
+                            (BL-48: contrato answer/proposal_text, renderer y
+                            prompts — local, sin despliegue)
 tests/unit/              ← 643 tests
 tests/integration/        ← 94 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)

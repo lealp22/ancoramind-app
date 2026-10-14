@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
+from src.domain.actions.models import payload_hash
 from src.domain.actions.presentation import (
     MAX_CALLBACK_DATA_BYTES,
     ConsentAction,
@@ -11,6 +14,7 @@ from src.domain.actions.presentation import (
     parse_consent_callback,
     render_proposal_block,
 )
+from src.notifications.markup import markdown_to_telegram_html
 
 
 def test_buttons_round_trip_and_fit_telegram_limit() -> None:
@@ -73,3 +77,62 @@ def test_block_bounds_and_flattens_long_values() -> None:
 
 def test_unknown_tool_falls_back_to_its_name() -> None:
     assert "nueva_tool" in render_proposal_block(uuid4(), "nueva_tool", {})
+
+
+@pytest.mark.parametrize(
+    "stored,display", [("high", "alta"), ("normal", "normal"), ("low", "baja")]
+)
+def test_priorities_are_translated_without_changing_payload(stored, display) -> None:
+    payload = {"title": "Seguro", "priority": stored}
+    before = payload_hash("create_todo_item", payload)
+    block = render_proposal_block(uuid4(), "create_todo_item", payload)
+    assert f"Prioridad: {display}" in block
+    assert payload["priority"] == stored
+    assert payload_hash("create_todo_item", payload) == before
+
+
+@pytest.mark.parametrize("tool", ["create_todo_item", "update_todo_item"])
+@pytest.mark.parametrize("stored", ["2026-10-20", "2026-10-20T00:00:00"])
+def test_todo_due_date_is_readable_without_mutating_payload(tool, stored) -> None:
+    payload = {"due_date": stored}
+    before = payload_hash(tool, payload)
+    block = render_proposal_block(uuid4(), tool, payload)
+    assert "Fecha límite: 20 de octubre de 2026" in block
+    assert "T00:00:00" not in block
+    assert payload["due_date"] == stored
+    assert payload_hash(tool, payload) == before
+
+
+@pytest.mark.parametrize(
+    "stored,time_text",
+    [
+        ("2026-10-20T16:30:01", "16:30:01"),
+        ("2026-10-20T00:00:00+02:00", "00:00:00+02:00"),
+        ("2026-10-20T00:00:00Z", "00:00:00+00:00"),
+        ("2026-10-20T00:00:00.000123", "00:00:00.000123"),
+    ],
+)
+def test_todo_explicit_times_and_offsets_are_preserved(stored, time_text) -> None:
+    block = render_proposal_block(uuid4(), "create_todo_item", {"due_date": stored})
+    assert f"Fecha límite: 20 de octubre de 2026, {time_text}" in block
+
+
+@pytest.mark.parametrize(
+    "tool,key", [("create_reminder", "trigger_at"), ("create_calendar_event", "start_at")]
+)
+def test_midnight_reminder_and_event_are_not_reinterpreted_as_date_only(tool, key) -> None:
+    stored = "2026-10-20T00:00:00+02:00"
+    assert stored in render_proposal_block(uuid4(), tool, {key: stored})
+
+
+def test_unexpected_values_fall_back_and_html_stays_escaped() -> None:
+    block = render_proposal_block(
+        uuid4(),
+        "create_todo_item",
+        {"title": "<script>DATA</script>", "priority": "unknown", "due_date": "not a date"},
+    )
+    assert "Prioridad: unknown" in block
+    assert "Fecha límite: not a date" in block
+    html = markdown_to_telegram_html(block)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html

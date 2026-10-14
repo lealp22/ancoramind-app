@@ -14,6 +14,7 @@ from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_model import GovernedModelMixin
 from src.agent.llm_access import AgnoLLMAccess
 from src.config import Settings
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import (
     ExecutionBudget,
     ExecutionContext,
@@ -118,6 +119,10 @@ def test_factory_creates_agent_with_snapshot_ceilings_and_zero_retries() -> None
     assert agent.telemetry is False
     assert isinstance(agent.model, OpenAIChat)
     assert agent.id == "ancoramind-governed"
+    assert agent.output_schema is AgentReply
+    assert agent.use_json_mode is True
+    assert agent.parser_model is None
+    assert agent.output_model is None
 
 
 def test_factory_uses_run_snapshot_for_tool_ceiling() -> None:

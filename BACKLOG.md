@@ -38,7 +38,7 @@
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado localmente (TODO items título-solo + completar/reabrir, notas); pendiente validación E2E Telegram — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | 🔶 implementado localmente; pendiente validación E2E Telegram |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 📝 diseño documentado; implementación y E2E pendientes — specs/036 |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración, evaluación LLM real y E2E pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests (2026-10-13): 1332 unitarias + 160 de integración (1 omitida) — Ruff y
@@ -788,7 +788,7 @@ limpios. Pendiente: validación E2E Telegram (reproducir el caso real del
 hallazgo: confirmar una propuesta, dejar caducar otra, y comprobar que la
 respuesta ya no narra ninguna de las dos como pendiente).
 
-### BL-48 · Presentación única de propuestas y respuestas acotadas tras descarte 📝 diseño documentado — 2026-10-14 — specs/036
+### BL-48 · Presentación única de propuestas y respuestas acotadas tras descarte 🔶 implementado localmente — 2026-10-14 — specs/036
 
 **Hallazgo (E2E Telegram comunicado por el propietario):** al proponer la
 tarea «Renovar el seguro» con prioridad alta y vencimiento el 20 de octubre
@@ -813,13 +813,29 @@ ni afirmaciones de pendientes desde memoria. Mantener respuestas útiles
 en mensajes mixtos y el circuito determinista de consentimiento, TTL,
 presentación verificada, auditoría y aislamiento por usuario.
 
-**Alcance autorizado ahora:** documentación previa únicamente.
+**Registro de documentación previa (2026-10-14):** autorización inicial
+limitada a documentar, antes de implementar.
 `specs/036-telegram-proposal-presentation/spec.md` fija alcance y criterios;
 `tasks.md` deja toda implementación pendiente; `verification.md` separa la
 evidencia funcional previa de la validación futura de esta mejora. Sin
 código, cambios de prompts, migraciones, despliegue ni nueva policy de
 consentimiento. Relacionado con BL-46/specs/035, BL-47 y BL-39/40/specs/023;
 no incluye confirmación por lotes (BL-45).
+
+**Implementación local posterior autorizada (2026-10-14):** contrato Pydantic
+`AgentReply(answer, proposal_text)` en la factory/runner gobernados (JSON mode,
+sin parser/modelo extra). El Core sustituye solo la narración de propuestas
+si existen filas de esa interacción/usuario; mantiene respuestas READ,
+errores y advertencias relevantes, sin regex de prosa ni descarte total.
+Renderer con prioridades españolas/fecha TODO legible conservando offsets
+y horas. Prompts alineados; cinco evals sintéticos nuevos (32 casos totales).
+Prueba con Agno real y modelo simulado confirma parsing y una sola llamada,
+no obediencia semántica. Ruff/mypy y suite unitaria global verdes; integración
+PostgreSQL omitida (sin Docker). Ver detalle en specs/036/verification.md.
+Resultado final local: **1368 unitarias superadas**, **160 integration
+omitidas**, **32 casos de catálogo válidos** (sin scoring semántico real).
+Sin despliegue, migración ni fixtures productivos. Pendientes evaluación
+LLM real, integración aislada y E2E del SHA autorizado; no se cierra BL-48.
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta

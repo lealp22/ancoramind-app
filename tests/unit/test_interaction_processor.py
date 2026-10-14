@@ -23,6 +23,7 @@ from src.domain.interactions.models import InteractionStatus, TelegramInteractio
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor, TelegramSendError
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import ExecutionBudgetExceededError
 from src.repositories.interactions import EncryptedSessionExchange, TelegramInteractionsRepository
@@ -860,6 +861,149 @@ def _consent_processor(
         sender=AsyncMock(),
         governed_consent=True,
     )
+
+
+@pytest.mark.parametrize("answer", ["", "Estas son tus tareas: Comprar café completada."])
+async def test_proposal_composition_replaces_only_proposal_narration(monkeypatch, answer) -> None:
+    actions = AsyncMock()
+    proposal_id = uuid4()
+    actions.list_created_in_interaction.return_value = [
+        {
+            "id": proposal_id,
+            "tool_name": "create_todo_item",
+            "payload": {
+                "title": "Renovar seguro",
+                "priority": "high",
+                "due_date": "2026-10-20T00:00:00",
+            },
+        },
+    ]
+    processor = _consent_processor(monkeypatch, actions)
+    reply = AgentReply(answer=answer, proposal_text="Renovar seguro, alta. ¿Confirmas?")
+    interaction = _interaction()
+    content = await processor._append_proposal_blocks(interaction, reply)
+    assert content.count("Renovar seguro") == 1
+    assert content.count("Pulsa ✅ Sí") == 1
+    assert "¿Confirmas?" not in content
+    assert "Prioridad: alta" in content
+    assert "20 de octubre de 2026" in content
+    assert content.startswith(answer) if answer else content.startswith("📋")
+    assert reply.proposal_text == "Renovar seguro, alta. ¿Confirmas?"
+    actions.list_created_in_interaction.assert_awaited_once_with(interaction.id, user_id="5")
+
+
+async def test_multiple_proposals_keep_one_block_and_button_pair_per_id(monkeypatch) -> None:
+    actions = AsyncMock()
+    ids = [uuid4(), uuid4()]
+    actions.list_created_in_interaction.return_value = [
+        {"id": pid, "tool_name": "create_todo_list", "payload": {"name": name}}
+        for pid, name in zip(ids, ["Trabajo", "Personal"], strict=True)
+    ]
+    processor = _consent_processor(monkeypatch, actions)
+    content = await processor._append_proposal_blocks(
+        _interaction(),
+        AgentReply(answer="Consulta independiente.", proposal_text="¿Confirmas ambas?"),
+    )
+    assert content.startswith("Consulta independiente.")
+    assert content.count("📋 **Propuesta**") == 2
+    assert content.count("Pulsa ✅ Sí") == 2
+    assert "ambas" not in content
+    buttons = await processor._pending_proposal_buttons(_interaction())
+    assert [pair[0].callback_data for pair in buttons] == [f"c:{pid}" for pid in ids]
+    assert [pair[1].callback_data for pair in buttons] == [f"d:{pid}" for pid in ids]
+
+
+@pytest.mark.parametrize("governed", [False, True])
+async def test_no_stored_proposal_never_replaces_an_answer_or_creates_controls(
+    monkeypatch, governed
+) -> None:
+    actions = AsyncMock()
+    actions.list_created_in_interaction.return_value = []
+    processor = _consent_processor(monkeypatch, actions)
+    processor._governed_consent = governed
+    reply = AgentReply(
+        answer="No encontré la lista.", proposal_text="No se creó ninguna propuesta."
+    )
+    assert await processor._append_proposal_blocks(_interaction(), reply) == reply.text()
+    if not governed:
+        actions.list_created_in_interaction.assert_not_awaited()
+
+
+async def test_plain_text_adapter_cannot_guess_proposal_partition(monkeypatch) -> None:
+    actions = AsyncMock()
+    actions.list_created_in_interaction.return_value = [
+        {"id": uuid4(), "tool_name": "create_todo_list", "payload": {"name": "Compras"}}
+    ]
+    processor = _consent_processor(monkeypatch, actions)
+    with pytest.raises(ValueError, match="partitioned Agent reply"):
+        await processor._append_proposal_blocks(_interaction(), "READ answer and proposal summary")
+
+
+@pytest.mark.parametrize(
+    "reply,created,expected",
+    [
+        (AgentReply(answer="", proposal_text=""), True, "Nombre: Compras"),
+        (AgentReply(answer="✅ Añadido y auditado.", proposal_text=""), False, "✅ Añadido"),
+        (AgentReply(answer="", proposal_text=""), False, None),
+        (
+            AgentReply(answer="Se borrarán 3 tareas.", proposal_text="¿Confirmas?"),
+            True,
+            "Se borrarán 3 tareas.",
+        ),
+    ],
+)
+async def test_partition_flows_through_encrypted_outbox_without_false_empty_reply(
+    monkeypatch, reply, created, expected
+) -> None:
+    from src.repositories.actions import ActionProposalsRepository
+
+    session = AsyncMock(spec=AsyncSession)
+    ledger = AsyncMock(spec=TelegramInteractionsRepository)
+    actions = AsyncMock(spec=ActionProposalsRepository)
+    actions.list_created_in_interaction.return_value = (
+        [{"id": uuid4(), "tool_name": "create_todo_list", "payload": {"name": "Compras"}}]
+        if created
+        else []
+    )
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _interaction().model_copy(
+        update={
+            "payload_ciphertext": cipher.encrypt({"text": "Petición sintética"}).ciphertext,
+        }
+    )
+    ledger.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    ledger.persist_response_ready.return_value = AsyncMock(id=uuid4())
+    ledger.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: ledger)
+    monkeypatch.setattr(processor_module, "ActionProposalsRepository", lambda _: actions)
+    runner = AsyncMock()
+    runner.run.return_value = reply
+
+    async def sessions():
+        return session
+
+    processor = InteractionProcessor(
+        session_factory=sessions,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=AsyncMock(),
+        governed_consent=True,
+    )
+    await processor._run_agent(accepted)
+    runner.run.assert_awaited_once()
+    actions.claim_confirmation.assert_not_awaited()
+    actions.mark_presented.assert_not_awaited()  # no verified Telegram delivery
+    if expected is None:
+        ledger.persist_response_ready.assert_not_awaited()
+        assert ledger.update_status.await_args.kwargs["error_class"] == "EmptyAgentResponse"
+    else:
+        stored = ledger.persist_response_ready.await_args.kwargs
+        content = cipher.decrypt(stored["content_ciphertext"])["content"]
+        assert expected in content
+        assert "¿Confirmas?" not in content
+        assert content.count("📋 **Propuesta**") == int(created)
 
 
 class TestConsentInput:

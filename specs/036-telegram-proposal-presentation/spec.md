@@ -2,9 +2,10 @@
 
 > **Backlog:** BL-48 — P1, calidad de la validación del MVP.
 > **Fecha:** 2026-10-14.
-> **Estado:** diseño documentado; implementación y validación pendientes.
-> **Autorización actual:** documentar antes de implementar. Este incremento
-> no modifica código, prompts, datos ni infraestructura.
+> **Estado:** implementado localmente; evaluación LLM real, integración
+> PostgreSQL y E2E Telegram pendientes. Ver `verification.md`.
+> **Autorización:** documentación previa y posterior implementación local
+> aprobadas el 2026-10-14. Sin despliegue ni cambios de datos/infraestructura.
 > **Relacionado:** BL-46/specs/035, BL-47 y BL-39/40/specs/023.
 
 ## 1. Problema y evidencia
@@ -119,12 +120,34 @@ del Agent deben reconocer que el Core muestra la propuesta, en vez de
 obligarlo a reproducirla. La traducción de campos vive en el renderer y
 nunca se persiste de vuelta al payload.
 
-Durante la implementación se elegirá el ajuste mínimo de composición y/o
-contrato de resultado necesario para cumplir el caso simple y el mixto.
-**No está aprobado descartar toda la respuesta del Agent ni tratar un
-prompt como garantía determinista de deduplicación.** Una prueba con runner
-simulado valida el Core, pero no demuestra que el modelo real siga el
-contrato: requiere evaluación y E2E posteriores.
+**Contrato elegido (2026-10-14):** `AgentReply` (Pydantic, dominio sin Agno)
+separa `answer` de `proposal_text`. La factory gobernada pide ese
+`output_schema` en JSON mode y el runner exige el objeto validado: salida
+libre/no validada se rechaza sin nuevo intento ni bypass. No hay parser/modelo
+secundario ni inferencia adicional. Las instrucciones de cada campo viven
+en el prompt Telegram versionado, no en descripciones Python anónimas.
+
+El Core sustituye **solo** `proposal_text` cuando encuentra propuestas de
+esa interacción y usuario. Conserva `answer` (READ, errores, resultado
+trivial y advertencias necesarias que no consten en el bloque). Sin
+propuestas, o con consentimiento OFF, une ambos campos como texto. Un
+adaptador de pruebas que devuelva texto sin propuestas sigue funcionando;
+si crea propuestas sin partición se rechaza, no se analiza prosa para
+deducir su contenido. El chequeo de respuesta vacía ocurre después de
+componer: una salida vacía del Agent es válida si existen bloques reales.
+
+**Límite explícito:** el Core garantiza la sustitución del campo correcto y
+que los bloques proceden de Postgres, pero la clasificación del texto en
+`answer`/`proposal_text` sigue siendo probabilística. Si el modelo incumple
+el contrato y duplica campos en `answer`, un esquema válido no lo detecta.
+No se afirma garantía semántica con prompts, mocks ni JSON mode: requiere
+evaluación y E2E reales. No se descarta toda la respuesta del Agent.
+
+**Vencimiento TODO:** el modelo actual no conserva un indicador fecha-sola:
+una fecha se normaliza como medianoche sin zona. El renderer adopta esa
+convención solo en `due_date` TODO; conserva horas no nulas, fracciones y
+offsets explícitos, incluida medianoche con zona. Eventos/recordatorios se
+mantienen sin reinterpretación. No hay conversión de zona ni cambio de payload.
 
 ## 5. Criterios de aceptación
 

@@ -15,6 +15,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
+from src.domain.interactions.reply import AgentReply
 from src.repositories.database import get_session
 from src.repositories.interactions import TelegramInteractionsRepository
 
@@ -258,7 +259,7 @@ class ProposingRunner:
     def __init__(self) -> None:
         self.proposal_id: UUID | None = None
 
-    async def run(self, input_text: str, **kwargs: object) -> str:
+    async def run(self, input_text: str, **kwargs: object) -> AgentReply:
         from src.domain.llm_access.context import execution_context_scope
         from src.repositories.actions import ActionProposalsRepository
 
@@ -282,7 +283,7 @@ class ProposingRunner:
         finally:
             await session.close()
         self.proposal_id = UUID(proposal["id"])
-        return "Voy a crear el recordatorio."
+        return AgentReply(answer="", proposal_text="Voy a crear el recordatorio.")
 
 
 def _fake_context(provenance: object) -> object:
@@ -440,7 +441,5 @@ async def test_governed_consent_button_claims_the_proposal_it_presented(
     confirm_reply = sender.calls[-1][1]
     assert "✅" in confirm_reply
     assert (
-        await session.scalar(text("SELECT count(*) FROM ancora.reminders WHERE user_id='88'"))
-        == 1
+        await session.scalar(text("SELECT count(*) FROM ancora.reminders WHERE user_id='88'")) == 1
     )
-

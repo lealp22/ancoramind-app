@@ -1,7 +1,7 @@
 # Verification: 036 — Evidencia previa y validación pendiente
 
 > **Fecha de registro:** 2026-10-14.
-> **Estado:** documentación únicamente. No hay implementación de BL-48.
+> **Estado:** implementado localmente; sin despliegue ni inferencia LLM real.
 > Las pruebas anteriores descritas aquí no validan la mejora de presentación.
 
 ## 1. Evidencia funcional aportada por el propietario
@@ -60,21 +60,59 @@ BL-48 ni motivo para cerrar BL-47 o todos los pendientes de specs/035.
 
 ## 3. Verificación de este incremento documental
 
-- Se crean `spec.md`, `tasks.md` y este registro; se enlazan desde BL-48.
-- Toda tarea de implementación permanece sin marcar.
+- En el incremento inicial se crearon `spec.md`, `tasks.md` y este registro,
+  enlazados desde BL-48, con toda implementación pendiente en aquel momento.
 - Lectura final revisada; UTF-8, ausencia de espacios finales, referencias
   locales, unicidad de BL-48 y tareas de implementación pendientes verificadas.
 - `git diff --check` limpio. No se ejecutan suites de código para este
   incremento exclusivamente documental.
-- Código, prompts, migraciones y configuración quedan sin cambios.
+- En ese incremento documental código, prompts, migraciones y configuración
+  quedaron sin cambios; la implementación posterior se registra en §4.
 
-## 4. Pendiente de implementar y verificar
+## 4. Implementación local (tras autorización, 2026-10-14)
+
+- Contrato `AgentReply(answer, proposal_text)`, validado por Agno/Pydantic
+  dentro del runner gobernado. JSON mode con `parser_model=None`: sin nueva
+  ruta/modelo ni inferencia extra. Una salida inválida no se envía ni reintenta.
+- Composición con propuestas reales scoped por interacción/usuario: sustituye
+  solo narración de propuestas y mantiene READ, errores y advertencias.
+  Composición anterior al chequeo de vacío permite propuesta-only sin preámbulo.
+- Prioridades en español y fecha TODO legible, con conservación de horas,
+  fracciones y offsets, payload/hash, límites y escapado de Telegram.
+- Prompts de contrato/soul/Telegram/skills alineados; no inventario espontáneo
+  de pendientes ni invitación a rehacer lo descartado. Reminders se alinea
+  sin incorporarlo al listado de skills de la factory (wiring sin ampliar).
+- Cinco casos sintéticos añadidos; catálogo total de 32. Simuladores TODO y
+  lectura de pendientes añadidos al harness sin importar I/O de producción.
+
+### Prueba y límites de evidencia
+
+- Pruebas nuevas: partición estricta, prosa no validada rechazada, composición
+  simple/mixta/múltiple, botones por ID, outbox cifrado, vacío sin propuesta,
+  fallo sin entrega confirmable, trivial sin botones, advertencia conservada,
+  fechas/horas/offsets, campos inesperados y HTML escapado.
+- Una prueba ejecuta el Agent real de Agno con modelo en memoria y fake
+  `LLMAccess`: parsea `AgentReply` con **una** llamada, sin red/credenciales.
+- Integración PostgreSQL adaptada al nuevo contrato, pero sin ejecución real
+  aquí: Docker Desktop no está disponible; las 160 pruebas se omiten.
+- `scripts/run_evals.py`: 32 casos válidos en 6 categorías; no scoring semántico.
+- `pytest tests/unit/ -q`: **1368 passed** (36 más que el baseline de 1332).
+- Ruff global y `mypy src/` (169 archivos) limpios.
+- `pytest tests/integration/ -q`: **160 skipped**, no 160 superadas.
+- Avisos de Collector local ausente en exportación de métricas, sin fallo de tests.
+- **Sin deploy, migraciones ni escritura de fixtures en Supabase/Railway.**
+
+**No se prueba obediencia semántica real:** el modelo todavía debe colocar
+correctamente cada frase en su campo y respetar las instrucciones tras No.
+No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
+
+## 5. Pendiente de verificar antes de cerrar BL-48
 
 - [ ] AC1–AC3: presentación única, respuesta mixta y varias propuestas.
 - [ ] AC4–AC6: consulta tras descarte, pendientes explícitos y nueva petición.
 - [ ] AC7: regresiones triviales (TODO/notas).
 - [ ] AC8–AC9: horas/zonas, límites, escapado, payload/hash y consentimiento.
-- [ ] Tests y gates tras la implementación.
+- [ ] Integración PostgreSQL aislada.
 - [ ] Evaluación de instrucciones y E2E real del SHA autorizado.
 
 No se marca como superado un criterio de la mejora solo porque el circuito

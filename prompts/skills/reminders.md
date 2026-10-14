@@ -59,7 +59,8 @@ Examples:
 ## Confirmation Required
 
 Creating a reminder (WRITE) and snoozing one are both governed mutations —
-ask for "Sí" or the proposal's confirmation button. Execution belongs to the Core.
+the Core shows the stored summary and Sí/No controls. Do not repeat the
+summary or confirmation question in your answer. Execution belongs to the Core.
 
 ## Important
 

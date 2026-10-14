@@ -13,6 +13,7 @@ from src.domain.context_policy.service import (
     available_history_tokens,
     resolve_history_ceiling,
 )
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import ExecutionContext
 from src.observability.telemetry import get_telemetry
 
@@ -104,6 +105,9 @@ class GovernedAgentFactory:
             telemetry=False,
             tool_hooks=self._tool_hooks or None,
             instructions=instructions,
+            output_schema=AgentReply,
+            use_json_mode=True,
+            parser_model=None,
             add_history_to_context=True,
             num_history_runs=history_ceiling,
             add_datetime_to_context=True,

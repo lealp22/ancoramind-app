@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, time
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -109,6 +110,45 @@ _FIELD_LABELS = {
 """Only these fields are shown; identifiers and internal keys stay hidden."""
 
 
+_PRIORITIES = {"high": "alta", "normal": "normal", "low": "baja"}
+_MONTHS = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+
+
+def _render_field(tool_name: str, key: str, value: Any) -> str:
+    if key == "priority" and isinstance(value, str):
+        return _PRIORITIES.get(value, value)
+    if (
+        key == "due_date"
+        and tool_name in {"create_todo_item", "update_todo_item"}
+        and isinstance(value, str)
+    ):
+        try:
+            due = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+        date_text = f"{due.day} de {_MONTHS[due.month - 1]} de {due.year}"
+        # TODO date-only input is currently persisted as naive midnight.
+        # Keep every explicit time/offset, including aware midnight; do
+        # not apply this convention to reminder/calendar timestamps.
+        if due.tzinfo is None and due.time() == time.min:
+            return date_text
+        return f"{date_text}, {due.timetz().isoformat()}"
+    return ", ".join(map(str, value)) if isinstance(value, list) else str(value)
+
+
 def render_proposal_block(proposal_id: UUID, tool_name: str, payload: dict[str, Any]) -> str:
     """Fixed, Core-generated summary of exactly what «Sí» will execute."""
     lines = [f"📋 **Propuesta**: {_TOOL_TITLES.get(tool_name, tool_name)}"]
@@ -116,7 +156,7 @@ def render_proposal_block(proposal_id: UUID, tool_name: str, payload: dict[str, 
         value = payload.get(key)
         if value is None or value == "" or value == []:
             continue
-        rendered = ", ".join(map(str, value)) if isinstance(value, list) else str(value)
+        rendered = _render_field(tool_name, key, value)
         rendered = " ".join(rendered.split())
         if len(rendered) > MAX_FIELD_CHARS:
             rendered = rendered[: MAX_FIELD_CHARS - 1] + "…"

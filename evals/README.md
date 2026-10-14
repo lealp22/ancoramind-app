@@ -80,6 +80,15 @@ confirmación). El runner comprueba que la lista existe y está bien formada,
 Agent gobernado queda pendiente; no confundir validación del catálogo con
 validación de respuestas reales.
 
+BL-48/specs/036 añade cinco casos de presentación: propuesta única, consulta
+mixta, tareas tras descarte, nueva petición explícita y lectura de pendientes.
+El catálogo tiene 32 casos, de los cuales 9 son de `response_style`. El
+adaptador físico usa el contrato `AgentReply(answer, proposal_text)` como
+producción, pero no simula la entrega/outbox del Core: revisar un texto de
+Agent no valida por sí solo la presentación final con botones en Telegram.
+Los casos TODO/pendientes usan tools en memoria, sin repositorios productivos.
+No se ejecutó inferencia real ni evaluación semántica en este incremento.
+
 ## Piloto propuesto: Jev como evaluador auxiliar (no implementado)
 
 La propuesta para el siguiente incremento de BL-8 está en

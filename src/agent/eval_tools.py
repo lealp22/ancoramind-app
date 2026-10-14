@@ -201,6 +201,60 @@ def build_eval_tools(
         proposal_id = store.create("calendar_event")
         return f"Propuesta de evento creada (`{proposal_id}`). ¿Confirmas?"
 
+    async def list_todo_lists(run_context: RunContext) -> str:
+        """List the user's TODO lists to resolve the requested list."""
+        return render_retrieved_records(
+            "list_todo_lists",
+            [
+                {
+                    "id": fixtures.get("todo_list_id", "11111111-1111-1111-1111-111111111111"),
+                    "name": "Ensayo",
+                }
+            ],
+            1,
+        )
+
+    async def list_todo_items(
+        run_context: RunContext, list_id: str, status: str | None = None
+    ) -> str:
+        """List tasks inside a TODO list with an optional status filter."""
+        return render_retrieved_records(
+            "list_todo_items",
+            [
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "title": "Revisar recibos",
+                    "status": "done",
+                    "list_id": list_id,
+                }
+            ],
+            1,
+        )
+
+    async def propose_todo_item(
+        run_context: RunContext,
+        list_id: str,
+        title: str,
+        description: str | None = None,
+        priority: str | None = None,
+        due_date: str | None = None,
+    ) -> str:
+        """Add title-only tasks immediately; extra fields require a reviewable proposal."""
+        if description is None and priority is None and due_date is None:
+            return "✅ Tarea añadida y auditada."
+        proposal_id = store.create("todo_item")
+        return f"Propuesta creada (`{proposal_id}`); pendiente de confirmación del Core."
+
+    async def list_pending_proposals(run_context: RunContext) -> str:
+        """Read proposals genuinely pending now; never infer them from conversation."""
+        if not store._pending:
+            return "No tienes ninguna propuesta pendiente de confirmar ahora mismo."
+        return render_retrieved_records(
+            "list_pending_proposals",
+            [{"id": pid, "tool_name": kind} for pid, kind in store._pending.items()],
+            len(store._pending),
+        )
+
     return proposal_only_tools(
         [
             search_notes,
@@ -213,6 +267,10 @@ def build_eval_tools(
             propose_vehicle_maintenance,
             propose_reminder,
             propose_calendar_event,
+            list_todo_lists,
+            list_todo_items,
+            propose_todo_item,
+            list_pending_proposals,
         ]
     )
 

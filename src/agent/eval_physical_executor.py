@@ -67,6 +67,7 @@ from src.agent.evals import EvalExecutionRequest, EvalObservation
 from src.agent.instructions import assemble_instructions
 from src.agent.tool_budget_hooks import build_budget_tool_hook
 from src.agent.tool_catalog import proposal_only_tools
+from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.access import LLMAccess
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import ExecutionBudget, ExecutionContext, generate_traceparent
@@ -161,13 +162,15 @@ class GovernedPhysicalEvalExecutor:
         tool_names = tuple(
             name for execution in (output.tools or []) if (name := execution.tool_name)
         )
+        if not isinstance(output.content, AgentReply):
+            raise ValueError("Eval run returned invalid presentation output")
         outcome = "tool_call" if tool_names else "no_tool_call"
 
         return EvalObservation(
             outcome=outcome,
             tool_names=tool_names,
             requires_user_confirmation=any(name.startswith("propose_") for name in tool_names),
-            response_text=output.content if isinstance(output.content, str) else None,
+            response_text=output.content.text(),
         )
 
     def _build_execution_context(self) -> ExecutionContext:
@@ -205,6 +208,9 @@ class GovernedPhysicalEvalExecutor:
             telemetry=False,
             tool_hooks=[build_budget_tool_hook(_EVAL_FINGERPRINT_KEY)],
             instructions=assemble_instructions(),
+            output_schema=AgentReply,
+            use_json_mode=True,
+            parser_model=None,
             add_history_to_context=False,
             add_datetime_to_context=True,
             markdown=True,

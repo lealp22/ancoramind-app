@@ -20,7 +20,7 @@ def test_all_repository_catalogs_are_valid_and_cover_every_category() -> None:
     summaries = validate_catalogs()
 
     assert {summary.category for summary in summaries} == CATEGORIES
-    assert sum(summary.case_count for summary in summaries) == 27
+    assert sum(summary.case_count for summary in summaries) == 32
     assert all(summary.case_count >= 3 for summary in summaries)
 
 
@@ -55,6 +55,11 @@ def test_response_style_cases_have_reviewable_criteria() -> None:
         "response_style.complex_question",
         "response_style.uncertainty",
         "response_style.pending_write",
+        "response_style.single_proposal",
+        "response_style.mixed_read_proposal",
+        "response_style.tasks_after_discard",
+        "response_style.explicit_reproposal",
+        "response_style.pending_proposals_read",
     }
     assert all(case["expected"]["response_criteria"] for case in catalog["cases"])
 

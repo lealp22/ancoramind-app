@@ -104,3 +104,35 @@ async def test_find_vehicle_returns_multiple_matches_when_fixture_says_ambiguous
 
     assert "eval-vehicle-1" in reply
     assert "eval-vehicle-2" in reply
+
+
+async def test_pending_read_reflects_the_synthetic_store_without_io() -> None:
+    store = SyntheticProposalStore()
+    tools = build_eval_tools(store)
+    read = _tool("list_pending_proposals", tools)
+    assert "ninguna propuesta" in await read(_run_context())
+    pid = store.create("todo_item")
+    result = json.loads((await read(_run_context())).split("\n", 1)[1])
+    assert result["trust"] == "untrusted_data"
+    assert result["records"] == [{"id": pid, "tool_name": "todo_item"}]
+
+
+async def test_synthetic_title_only_todo_does_not_create_a_pending_proposal() -> None:
+    store = SyntheticProposalStore()
+    tools = build_eval_tools(store)
+    add = _tool("propose_todo_item", tools)
+    reply = await add(_run_context(), list_id="synthetic-list", title="Recibos")
+    assert "auditada" in reply
+    assert store._pending == {}
+
+
+async def test_synthetic_explicit_reproposal_gets_a_new_id() -> None:
+    store = SyntheticProposalStore()
+    tools = build_eval_tools(store)
+    add = _tool("propose_todo_item", tools)
+    replies = [
+        await add(_run_context(), list_id="synthetic-list", title="Recibos", priority="high")
+        for _ in range(2)
+    ]
+    assert replies[0] != replies[1]
+    assert len(store._pending) == 2
