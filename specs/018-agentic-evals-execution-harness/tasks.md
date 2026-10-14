@@ -28,7 +28,13 @@
       fuera de CI por defecto y capturar evidencia metadata-only.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con
       etiquetas humanas sintéticas y baseline por ruta/configuración.
-- [ ] T6b · Tras el cierre legacy (BL-39/40, 2026-10-11), trasladar los casos
-      de confirmación a un harness Core y actualizar expectativas. El adaptador
-      Agent ya los rechaza antes de inferencia y no expone ejecutoras; no contar
-      ese rechazo como un éxito de la evaluación de consentimiento.
+- [x] T6b · Tras el cierre legacy (BL-39/40, 2026-10-11), trasladar los casos
+      de confirmación a `CoreConsentEvalExecutor` aislado y actualizar
+      expectativas a las mutaciones canónicas (`register_vehicle`,
+      `create_reminder`), nunca a `execute_*`. El harness modela las
+      transiciones elegibilidad/presentación/principal/expiración/descarte y
+      WRITE_TRIVIAL con estado sintético por caso y reporte metadata-only; no
+      toca repositorios, sesiones, Telegram ni ejecutores productivos. El
+      adaptador Agent sigue rechazando confirmaciones antes de inferencia y ese
+      rechazo no cuenta como éxito de consentimiento. Evidencia en
+      `verification.md`.

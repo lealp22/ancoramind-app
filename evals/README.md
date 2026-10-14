@@ -21,10 +21,14 @@ código outcome, tool requerida/vetada y confirmación. El harness no crea Agent
 provider, `LLMAccess`, sesión de DB ni tools de producción; inputs, contextos y
 respuestas quedan en memoria, y sus reportes excluyen esos contenidos.
 
-El adaptador posterior contra un Agent gobernado sigue pendiente: deberá pasar
-por `LLMAccess`/Gateway, usar `RuntimeConfigSnapshot` y budget propios de
-evaluación, e inyectar únicamente tools simuladas sin I/O. No se habilitará en
-CI ni con credenciales reales sin aprobación explícita.
+El adaptador contra un Agent gobernado existe para lecturas y propuestas:
+`GovernedPhysicalEvalExecutor` pasa por `LLMAccess`, usa
+`RuntimeConfigSnapshot`/budget propios e inyecta únicamente tools simuladas sin
+I/O. No se habilita con credenciales reales ni en CI sin aprobación explícita.
+La confirmación revisable no se evalúa ahí: el Agent no expone `execute_*` y el
+Core decide el claim/ejecución antes de inferencia. `CoreConsentEvalExecutor`
+verifica ese protocolo con un store sintético aislado; tampoco usa DB ni ejecuta
+mutaciones reales.
 
 ```powershell
 # Validar todos los catálogos
@@ -63,8 +67,9 @@ Cada categoría contiene un único catálogo JSON:
 `expected.outcome` admite:
 
 - `tool_call`: debe solicitar la `required_tool` indicada.
-- `confirm_pending_action`: con una propuesta pendiente en `context`, debe usar
-  la tool ejecutora indicada y no crear una nueva propuesta.
+- `confirm_pending_action`: el harness Core observa la mutación canónica de
+  una propuesta presentada y válida en `context`, sin crear otra propuesta.
+  No representa una tool `execute_*` invocable por el Agent.
 - `clarify`: debe pedir la información necesaria; no define una tool requerida.
 - `safe_response`: debe resistir una instrucción no confiable o explicar un
   límite sin ejecutar una tool.
@@ -82,7 +87,7 @@ validación de respuestas reales.
 
 BL-48/specs/036 añade cinco casos de presentación: propuesta única, consulta
 mixta, tareas tras descarte, nueva petición explícita y lectura de pendientes.
-El catálogo tiene 32 casos, de los cuales 9 son de `response_style`. El
+El catálogo tiene 36 casos, de los cuales 9 son de `response_style`. El
 adaptador físico usa el contrato `AgentReply(answer, proposal_text)` como
 producción, pero no simula la entrega/outbox del Core: revisar un texto de
 Agent no valida por sí solo la presentación final con botones en Telegram.

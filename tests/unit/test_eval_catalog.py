@@ -20,7 +20,7 @@ def test_all_repository_catalogs_are_valid_and_cover_every_category() -> None:
     summaries = validate_catalogs()
 
     assert {summary.category for summary in summaries} == CATEGORIES
-    assert sum(summary.case_count for summary in summaries) == 32
+    assert sum(summary.case_count for summary in summaries) == 36
     assert all(summary.case_count >= 3 for summary in summaries)
 
 
@@ -158,6 +158,6 @@ def test_runner_reports_json_summary_for_one_category(capsys) -> None:
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == {
         "categories": ["confirmation"],
-        "case_count": 3,
+        "case_count": 7,
         "status": "valid",
     }

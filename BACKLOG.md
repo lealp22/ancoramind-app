@@ -22,7 +22,7 @@
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
-| BL-8 Evals agentic | 🔶 27 casos sintéticos, runner estático, harness aislado y adaptador físico (sin inferencia real) implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
+| BL-8 Evals agentic | 🔶 36 casos sintéticos, runner estático, harness aislado del Agent y harness Core de consentimiento implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
 | BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; M3 PDF textual validado en Telegram/Railway el 2026-10-13; faltan protección de `main` (requiere plan GitHub), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
@@ -2058,7 +2058,7 @@ passing.
 
 ### BL-8 · Evals agentic 🔶 en curso — specs/014 + 018
 Base determinista implementada: contrato JSON v1, runner local sin llamadas a
-LLM/tools/servicios y 19 casos sintéticos actuales para `confirmation`,
+LLM/tools/servicios y 36 casos sintéticos actuales para `confirmation`,
 `documents`, `response_style`, `security`, `tool_selection` y `vehicle` (15 en la
 entrega inicial). El runner valida schema, cobertura, expectativas
 contradictorias y ausencia de secretos obvios; ejecutar
@@ -2084,6 +2084,16 @@ credenciales, sin red, sin coste (`tests/unit/test_eval_tools.py` +
 `no_tool_call` sustituye a `clarify`/`safe_response` cuando no se invoca
 ninguna (distinguirlos exige juzgar el texto de respuesta — eso es T8, no
 T6). Detalle en `specs/018-agentic-evals-execution-harness/verification.md`.
+
+**Actualización 2026-10-14 (specs/018 T6b):** los casos de confirmación ya no
+fingen que el Agent llama `execute_*`. `CoreConsentEvalExecutor` modela en
+memoria el camino Core de propuesta presentada → claim válido → mutación
+canónica, y los negativos de cero/múltiples propuestas, propuesta no presentada,
+expirada, principal distinto y descarte. Incluye `WRITE_TRIVIAL` fuera del
+pipeline de confirmación. No importa repositorios/SQLAlchemy/Telegram ni
+ejecutores productivos; los 7 casos de `confirmation` se ejecutan contra este
+harness y el catálogo suma 36. No sustituye integración PostgreSQL ni una
+evaluación semántica/LLM real.
 
 **Pendiente:** T7 — ejecutar la modalidad LLM real contra el adaptador físico
 ya construido, con credenciales y presupuesto explícitamente aprobados,
