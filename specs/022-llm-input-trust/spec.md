@@ -74,9 +74,11 @@ como control. Toda excepción a AGENTS.md requiere aprobación y reflejo en
 
 ### P1/P2 — siguientes incrementos
 
-- Extender procedencia/acotación al resto de resultados de tools; revisar el
-  adjunto que `GovernedInteractionRunner` pasa directamente al Agent (también
-  la ruta AgentOS legado). No afirmar que este incremento protege esas superficies.
+- Extender procedencia/acotación al resto de resultados de tools. **Resuelto
+  localmente para la ruta Telegram gobernada:** el adjunto se ingiere antes del
+  Agent y solo se anexa un sobre JSON `untrusted_data` acotado y validado; nunca
+  bytes/files/images. La ruta AgentOS legado no se registra cuando la admisión
+  gobernada está activa. No afirmar que esto mide obediencia semántica de un LLM.
 - Coordinar BL-38/specs/021 antes de exponer texto PDF adicional; BL-35 para
   límites de formatos ofimáticos. Evitar telemetría con contenido (ADR-006).
 - En BL-8/specs/018: corpus sintético ampliado (8 casos nuevos). Pendiente
@@ -100,3 +102,6 @@ como control. Toda excepción a AGENTS.md requiere aprobación y reflejo en
    salida, preservan datos canónicos y no permiten que saltos, cierres falsos
    o caracteres Unicode rompan la representación; corpus sintético ampliado
    con ataques y controles benignos (solo validación estática).
+6. Un lote de adjuntos Telegram no puede exceder el límite agregado de contexto
+   del Agent; el sobre se mantiene JSON válido y un resumen malformado no se
+   incorpora al input del Agent.

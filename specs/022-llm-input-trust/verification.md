@@ -23,6 +23,43 @@ detalle en `../023-audit-remediation/callback-acknowledgement.md`. Las referenci
 históricas inferiores a "answerCallbackQuery pendiente" quedan superadas por
 este incremento, no por una validación visual de producción.
 
+## T8 — frontera de adjuntos gobernada acotada — 2026-10-14
+
+La ruta gobernada ya archivaba y procesaba `ResolvedTelegramMedia` antes de
+crear el Agent principal; por tanto no entrega bytes, URLs ni `files=`/`images=`
+de Telegram a `agent.arun()`. La revisión local detectó que el resumen JSON
+`untrusted_data` de un lote podía todavía crecer hasta ~18 KB con diez
+extracciones máximas y se concatenaba completo al input del Agent.
+
+Se añadió un tope agregado de **6000 caracteres** exclusivamente a la proyección
+transitoria `telegram_attachment_ingestion`: se conservan sólo registros
+completos que quepan, el JSON sigue siendo parseable y `records_omitted` refleja
+los omitidos. El documento/resultado canónico ya archivado no se modifica. Como
+defensa adicional, `GovernedInteractionRunner` valida prefijo, JSON, `trust`,
+`source`, lista de records y longitud antes de anexar el bloque; un resultado
+malformado, plano o sobredimensionado se descarta del prompt, sin reenviar los
+bytes originales.
+
+Pruebas nuevas cubren un lote de diez adjuntos con filename/resumen adversarial,
+el límite agregado y los sobres inválidos (`trust` incorrecto, records no-lista,
+texto plano y tamaño excesivo). No prueba obediencia semántica de un modelo ni
+la ruta visual real de Telegram.
+
+Evidencia focalizada:
+
+```powershell
+.venv\Scripts\python.exe -m ruff check src/agent/tools/untrusted_results.py src/agent/tools/documents.py src/agent/governed_interaction_runner.py tests/unit/test_document_tools.py tests/unit/test_governed_interaction_runner.py tests/unit/test_instructions.py
+.venv\Scripts\python.exe -m mypy src/agent/tools/untrusted_results.py src/agent/tools/documents.py src/agent/governed_interaction_runner.py
+.venv\Scripts\python.exe -m pytest tests/unit/test_document_tools.py tests/unit/test_governed_interaction_runner.py tests/unit/test_instructions.py tests/unit/test_document_extraction_port.py -q
+.venv\Scripts\python.exe scripts/run_evals.py
+git diff --check
+```
+
+- 81 pruebas focalizadas superadas.
+- Ruff/mypy focalizados limpios.
+- Catálogo estático: 36 casos válidos en seis categorías.
+- Sin LLM real, red, Docker, PostgreSQL, migración ni datos productivos.
+
 ## Ejecución local
 
 ```powershell

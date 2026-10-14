@@ -50,7 +50,7 @@
       WRITE existentes, incluida TODO. Fresh/upgrade/downgrade probados en
       los tests de migración. E2E con Telegram/infraestructura real sigue
       sin ejecutarse (requiere autorización operativa aparte).
-- [ ] T8 · Segundo segmento completado (2026-10-03): `find_vehicle`,
+- [x] T8 · Segundo segmento completado (2026-10-03): `find_vehicle`,
       `get_vehicle_summary`, `get_vehicle_maintenance_history`,
       `list_reminders`, `check_calendar`, `list_todo_lists` y
       `list_todo_items` ya pasan por `src/agent/tools/untrusted_results.py`
@@ -61,13 +61,19 @@
       `prompts/tool_contract.md` actualizado — ya no afirma "never JSON"
       cuando una parte creciente de las tools ya devuelve el envoltorio JSON.
       **Fuera de alcance deliberado de este segmento:** las respuestas de
-      confirmación `propose_*`/`execute_*` (ecoan lo que el propio usuario
+       confirmación `propose_*`/`execute_*` (ecoan lo que el propio usuario
       acaba de escribir en el mismo turno — riesgo distinto a datos de
       terceros recuperados después; cambiar su formato arriesga romper el
       texto de confirmación). Pendiente: `analyze_document`, el adjunto
       original entregado directamente al Agent (no solo su extracción), la
-      ruta AgentOS legada, y ensayos multimodales reales cuando exista
-      harness apropiado (BL-8).
+       ruta AgentOS legada, y ensayos multimodales reales cuando exista
+       harness apropiado (BL-8). **Cierre local posterior (2026-10-14):** la
+       ruta gobernada ya ingiere `ResolvedTelegramMedia` antes del Agent; su
+       resumen combinado conserva el sobre JSON `untrusted_data` y queda
+       acotado a 6000 caracteres, con `records_omitted` si no caben todos los
+       adjuntos. El runner valida ese contrato antes de anexarlo al input y
+       descarta un resumen malformado/sobredimensionado. No modifica documentos
+       canónicos ni sustituye los ensayos de LLM real de T9.
 - [ ] T9 · Con BL-8, ejecutar corpus adversarial/benigno sintético sobre Agent
       gobernado, con tools sin I/O; benchmark offline de detectores opcionales.
       No registrar contenido en observabilidad ni añadir vendor sin evaluación.

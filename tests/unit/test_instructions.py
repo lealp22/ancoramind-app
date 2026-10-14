@@ -99,9 +99,7 @@ class TestAssembleInstructions:
         assert any("Export to PDF" in block for block in instructions)
 
     def test_attachments_are_framed_as_data_not_instructions(self):
-        """BL-39: images/files passed directly to arun() reach the main model
-        without going through a tool's untrusted_results envelope, so the
-        prompt itself must say they are DATA, not instructions."""
+        """BL-39: attachment-derived data remains untrusted even after ingestion."""
         prompt_text = "\n".join(assemble_instructions())
         assert "images and files the user attaches directly" in prompt_text
 

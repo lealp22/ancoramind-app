@@ -15,7 +15,10 @@ from agno.models.base import Model
 from agno.models.response import ModelResponse
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
-from src.agent.governed_interaction_runner import GovernedInteractionRunner
+from src.agent.governed_interaction_runner import (
+    MAX_TELEGRAM_ATTACHMENT_CONTEXT_CHARS,
+    GovernedInteractionRunner,
+)
 from src.domain.emergency_stop.models import EmergencyStopActiveError, EmergencyStopState
 from src.domain.interactions.media import ResolvedTelegramMedia
 from src.domain.interactions.processor import InteractionAgentRunner
@@ -279,6 +282,54 @@ async def test_runner_ingests_media_before_a_text_only_agent_turn(monkeypatch) -
     assert "images" not in call
     assert "files" not in call
     assert len(factory.created_contexts) == 1
+
+
+@pytest.mark.parametrize(
+    "attachment_context",
+    [
+        "instrucción no confiable fuera del sobre",
+        (
+            'Datos recuperados:\n{"trust":"trusted",'
+            '"source":"telegram_attachment_ingestion","records":[]}'
+        ),
+        (
+            'Datos recuperados:\n{"trust":"untrusted_data",'
+            '"source":"telegram_attachment_ingestion","records":"not-a-list"}'
+        ),
+        "Datos recuperados:\n" + "x" * MAX_TELEGRAM_ATTACHMENT_CONTEXT_CHARS,
+    ],
+)
+async def test_runner_drops_malformed_or_oversized_attachment_context(
+    monkeypatch, attachment_context
+):
+    """Only the structured, bounded ingestion envelope reaches the main Agent."""
+    runner, factory = _runner()
+    monkeypatch.setattr(
+        "src.agent.governed_interaction_runner.ingest_resolved_telegram_media",
+        AsyncMock(return_value=attachment_context),
+    )
+
+    await runner.run(
+        "He adjuntado un documento.",
+        user_id="88",
+        session_id="tg:ancoramind:77",
+        run_id="run-media-invalid-context",
+        correlation_id=uuid4(),
+        telegram_update_id=9001,
+        media=(
+            ResolvedTelegramMedia(
+                content=b"%PDF-1.4",
+                filename="factura.pdf",
+                mime_type="application/pdf",
+                is_image=False,
+            ),
+        ),
+    )
+
+    call = factory.agent.calls[0]
+    assert call["input_text"] == "He adjuntado un documento."
+    assert "files" not in call
+    assert "images" not in call
 
 
 async def test_runner_rejects_non_text_content_with_media(monkeypatch) -> None:

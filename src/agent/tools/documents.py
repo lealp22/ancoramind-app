@@ -47,6 +47,13 @@ from src.repositories.documents import DocumentsRepository
 from src.security.user_context import UserContext
 from src.storage.base import DocumentStorage
 
+MAX_TELEGRAM_ATTACHMENT_CONTEXT_CHARS = 6_000
+"""Maximum character projection of one Telegram attachment batch to the Agent.
+
+The canonical document and extraction stay intact. This only bounds the
+untrusted summary appended to a single main-Agent turn after ingestion.
+"""
+
 
 def _get_storage() -> DocumentStorage:
     """Build the configured storage backend (ADR-002)."""
@@ -96,7 +103,6 @@ async def _get_document_service() -> DocumentService:
 async def _get_actions_repo() -> ActionProposalsRepository:
     session = track_session(await get_session())
     return ActionProposalsRepository(session)
-
 
 
 @closes_sessions
@@ -185,8 +191,8 @@ def _extraction_record(extraction: AIExtraction | None) -> dict[str, object] | N
     }
     kind = extraction.extraction.get("document_type")
     if isinstance(kind, str):
-        extracted["document_type"], extracted["document_type_truncated"] = (
-            bounded_text(kind, MAX_FILENAME_CHARS)
+        extracted["document_type"], extracted["document_type_truncated"] = bounded_text(
+            kind, MAX_FILENAME_CHARS
         )
     summary = extraction.extraction.get("summary")
     if isinstance(summary, str):
@@ -433,7 +439,10 @@ async def ingest_resolved_telegram_media(
                 }
             )
     return render_retrieved_records(
-        "telegram_attachment_ingestion", records[:MAX_RESULT_RECORDS], len(records)
+        "telegram_attachment_ingestion",
+        records[:MAX_RESULT_RECORDS],
+        len(records),
+        max_chars=MAX_TELEGRAM_ATTACHMENT_CONTEXT_CHARS,
     )
 
 
@@ -509,9 +518,7 @@ async def analyze_document(
                 }
             )
 
-    return render_retrieved_records(
-        "analyze_document", records[:MAX_RESULT_RECORDS], len(records)
-    )
+    return render_retrieved_records("analyze_document", records[:MAX_RESULT_RECORDS], len(records))
 
 
 @closes_sessions
@@ -581,4 +588,3 @@ async def execute_document_delete(run_context: RunContext, proposal_id: str) -> 
         return invalid_proposal_reply("execute_document_delete", e)
     except Exception as e:
         return internal_error_reply("execute_document_delete", e)
-
