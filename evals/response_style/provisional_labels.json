@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "rubric_version": "response_style-v1",
+  "label_source": "provisional_synthetic",
+  "examples": [
+    {
+      "id": "response_style.brief_question.good",
+      "case_id": "response_style.brief_question",
+      "reply": {
+        "answer": "Una lista de tareas reúne pendientes para que puedas organizarlos y marcarlos al completarlos.",
+        "proposal_text": ""
+      },
+      "criterion_indices": [0, 1],
+      "labels": ["pass", "pass"]
+    },
+    {
+      "id": "response_style.brief_question.bad",
+      "case_id": "response_style.brief_question",
+      "reply": {
+        "answer": "# Lista de tareas\n\nUna lista de tareas reúne pendientes.\n\n- Puedes crearla\n- Puedes completarla\n- Puedes reorganizarla",
+        "proposal_text": ""
+      },
+      "criterion_indices": [0, 1],
+      "labels": ["pass", "fail"]
+    },
+    {
+      "id": "response_style.brief_question.ambiguous",
+      "case_id": "response_style.brief_question",
+      "reply": {
+        "answer": "Una lista de tareas sirve para organizar pendientes y puede incluir muchos detalles según el caso.",
+        "proposal_text": ""
+      },
+      "criterion_indices": [0, 1],
+      "labels": ["pass", "ambiguous"]
+    },
+    {
+      "id": "response_style.uncertainty.good",
+      "case_id": "response_style.uncertainty",
+      "reply": {
+        "answer": "La factura indica una revisión, pero no identifica el vehículo; no puedo asignarla a ninguno. ¿Qué matrícula o modelo aparece en la factura?",
+        "proposal_text": ""
+      },
+      "criterion_indices": [0, 1, 2],
+      "labels": ["pass", "pass", "pass"]
+    },
+    {
+      "id": "response_style.uncertainty.bad",
+      "case_id": "response_style.uncertainty",
+      "reply": {
+        "answer": "Tu coche principal necesita la revisión. La asignaré al Toyota y crearé el mantenimiento.",
+        "proposal_text": ""
+      },
+      "criterion_indices": [0, 1, 2],
+      "labels": ["fail", "fail", "fail"]
+    },
+    {
+      "id": "response_style.uncertainty.ambiguous",
+      "case_id": "response_style.uncertainty",
+      "reply": {
+        "answer": "No queda claro qué coche es; ¿te refieres al primero de los dos?",
+        "proposal_text": ""
+      },
+      "criterion_indices": [0, 1, 2],
+      "labels": ["pass", "pass", "ambiguous"]
+    },
+    {
+      "id": "response_style.single_proposal.good",
+      "case_id": "response_style.single_proposal",
+      "reply": {
+        "answer": "",
+        "proposal_text": ""
+      },
+      "criterion_indices": [1],
+      "labels": ["pass"]
+    },
+    {
+      "id": "response_style.single_proposal.bad",
+      "case_id": "response_style.single_proposal",
+      "reply": {
+        "answer": "He preparado revisar la póliza con prioridad alta y vencimiento el 20 de noviembre de 2026. ¿Confirmas añadirla?",
+        "proposal_text": "Confirma la propuesta para crear la tarea."
+      },
+      "criterion_indices": [1],
+      "labels": ["fail"]
+    },
+    {
+      "id": "response_style.single_proposal.ambiguous",
+      "case_id": "response_style.single_proposal",
+      "reply": {
+        "answer": "He preparado la propuesta.",
+        "proposal_text": ""
+      },
+      "criterion_indices": [1],
+      "labels": ["pass"]
+    }
+  ]
+}

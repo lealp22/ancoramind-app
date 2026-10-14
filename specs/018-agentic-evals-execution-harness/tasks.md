@@ -28,6 +28,17 @@
       fuera de CI por defecto y capturar evidencia metadata-only.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con
       etiquetas humanas sintéticas y baseline por ruta/configuración.
+      **Preparación local sin inferencia (2026-10-14):**
+      `src/agent/eval_semantic_scoring.py` define el puerto `SemanticJudge`,
+      juicio por criterio, estados `pass`/`fail`/`not_evaluated`, calibración y
+      comparación de baseline únicamente si coinciden ruta lógica, revisión de
+      configuración, rúbrica y versión de juez. Sus reportes son metadata-only.
+      `evals/response_style/provisional_labels.json` aporta nueve ejemplos
+      sintéticos buenos/malos/ambiguos, marcados explícitamente
+      `provisional_synthetic`; se validan por `scripts/run_evals.py`, pero el
+      código rechaza calibrar cualquier juez hasta que un revisor humano cree un
+      fixture `human_reviewed`. No existe adaptador Jev/LLM, `LLMAccess`, CLI de
+      ejecución ni llamada de red en este incremento.
 - [x] T6b · Tras el cierre legacy (BL-39/40, 2026-10-11), trasladar los casos
       de confirmación a `CoreConsentEvalExecutor` aislado y actualizar
       expectativas a las mutaciones canónicas (`register_vehicle`,

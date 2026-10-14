@@ -2095,6 +2095,13 @@ ejecutores productivos; los 7 casos de `confirmation` se ejecutan contra este
 harness y el catálogo suma 36. No sustituye integración PostgreSQL ni una
 evaluación semántica/LLM real.
 
+**Preparación T8 local (2026-10-14, sin inferencia):** contrato puro
+`eval_semantic_scoring` para juez opcional por criterio, estado explícito
+`not_evaluated`, calibración y baseline compatible por ruta/revisión/rúbrica/juez.
+Nueve ejemplos sintéticos buenos/malos/ambiguos se validan como
+`provisional_synthetic`; no pueden calibrar un juez hasta que haya etiquetas
+`human_reviewed`. El runner estático sigue sin llamar modelos ni red.
+
 **Pendiente:** T7 — ejecutar la modalidad LLM real contra el adaptador físico
 ya construido, con credenciales y presupuesto explícitamente aprobados,
 fuera de CI por defecto (bloqueado por decisión de coste del propietario, no

@@ -64,6 +64,31 @@ el contexto del catálogo.
    texto de respuesta.
 3. El reporte no contiene input, context ni respuesta.
 4. Las suites unitarias y Ruff siguen verdes.
-5. Una integración física futura requiere una task posterior: `LLMAccess`,
+5. La preparación de T8 conserva etiquetas por criterio, estado explícito
+   `not_evaluated` y baseline comparable solo para la misma ruta/revisión/
+   rúbrica/juez; ninguna proyección de reporte contiene la respuesta ni los
+   criterios.
+6. Una integración física futura requiere una task posterior: `LLMAccess`,
    snapshot/budget propios de eval, tools simuladas y autorización explícita de
    credenciales/presupuesto.
+
+## Preparación T8 sin inferencia — 2026-10-14
+
+`src/agent/eval_semantic_scoring.py` es una frontera pura e inyectable: no
+importa provider, `LLMAccess`, Agno, red, telemetría ni persistencia. El juez
+futuro recibe un `SemanticJudgeRequest` por criterio y devuelve solo
+`pass`/`fail`/`not_evaluated`; un criterio no evaluado nunca aprueba el caso.
+Los checks deterministas de tools, consentimiento y outcome siguen siendo
+previos e independientes: un juicio semántico no puede convertirlos en éxito.
+
+El fixture versionado `evals/response_style/provisional_labels.json` contiene
+nueve respuestas sintéticas buenas, malas y ambiguas para tres casos de estilo.
+Selecciona solo criterios semánticamente revisables; cualquier criterio que
+depende de que una tool/propuesta exista sigue en los checks deterministas. El
+fixture se declara `provisional_synthetic`, por lo que se puede validar su forma
+pero **no** calibrar un juez con él. La calibración exige explícitamente un
+fixture distinto con `label_source: human_reviewed` aprobado por una persona.
+
+No se implementa Jev ni otro proveedor, no se añade un comando de scoring y
+`scripts/run_evals.py` continúa sin llamar a modelos: únicamente valida el
+catálogo y el fixture.

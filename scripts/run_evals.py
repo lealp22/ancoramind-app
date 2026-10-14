@@ -15,7 +15,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-EVALS_DIR = Path(__file__).resolve().parent.parent / "evals"
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from src.agent.eval_semantic_scoring import load_calibration_labels  # noqa: E402
+
+EVALS_DIR = ROOT_DIR / "evals"
 CATEGORIES = frozenset(
     {"confirmation", "documents", "response_style", "security", "tool_selection", "vehicle"}
 )
@@ -178,6 +184,39 @@ def validate_catalogs(
     return summaries
 
 
+def validate_response_style_calibration_fixture(evals_dir: Path = EVALS_DIR) -> int:
+    """Validate optional local T8 labels without invoking a semantic judge.
+
+    The fixture may be ``provisional_synthetic`` while awaiting owner review;
+    loading it never invokes a model, provider, LLMAccess, or network call.
+    """
+
+    catalog = load_catalog(evals_dir / "response_style" / "cases.json")
+    validate_catalog(catalog, evals_dir / "response_style" / "cases.json")
+    response_style_cases = {
+        case["id"]: tuple(case["expected"]["response_criteria"]) for case in catalog["cases"]
+    }
+    path = evals_dir / "response_style" / "provisional_labels.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise CatalogValidationError(f"Semantic calibration fixture missing: {path}") from error
+    except json.JSONDecodeError as error:
+        raise CatalogValidationError(
+            f"Invalid JSON in semantic calibration fixture {path}: {error.msg}"
+        ) from error
+    if not isinstance(raw, dict):
+        raise CatalogValidationError(f"Semantic calibration fixture root must be an object: {path}")
+    _validate_catalog_content(raw, path)
+    try:
+        calibration = load_calibration_labels(raw, response_style_cases=response_style_cases)
+    except ValueError as error:
+        raise CatalogValidationError(
+            f"Invalid semantic calibration fixture {path}: {error}"
+        ) from error
+    return len(calibration.examples)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser without doing I/O, keeping it easy to test."""
     parser = argparse.ArgumentParser(
@@ -204,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         summaries = validate_catalogs(categories=categories)
+        calibration_count = validate_response_style_calibration_fixture()
     except CatalogValidationError as error:
         print(f"Evals validation failed: {error}", file=sys.stderr)
         return 1
@@ -215,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "categories": [summary.category for summary in summaries],
                     "case_count": total,
+                    "semantic_calibration_example_count": calibration_count,
                     "status": "valid",
                 },
                 ensure_ascii=False,
@@ -224,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Evals catalog valid: {total} cases across {len(summaries)} categories.")
         for summary in summaries:
             print(f"- {summary.category}: {summary.case_count} cases")
+        print(f"- semantic calibration fixture: {calibration_count} provisional examples")
     return 0
 
 

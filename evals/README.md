@@ -94,7 +94,28 @@ Agent no valida por sí solo la presentación final con botones en Telegram.
 Los casos TODO/pendientes usan tools en memoria, sin repositorios productivos.
 No se ejecutó inferencia real ni evaluación semántica en este incremento.
 
-## Piloto propuesto: Jev como evaluador auxiliar (no implementado)
+## Preparación local de scoring semántico (T8, sin juez conectado)
+
+`src/agent/eval_semantic_scoring.py` prepara un contrato opcional para juzgar
+cada `response_criteria` por separado. No es un modelo ni un cliente: define el
+puerto `SemanticJudge`, los estados `pass`, `fail` y `not_evaluated`, calibración
+y comparación con baseline versionado por ruta lógica, revisión de configuración,
+rúbrica y versión de juez. `not_evaluated` no se interpreta como aprobado.
+
+`evals/response_style/provisional_labels.json` contiene nueve respuestas
+**sintéticas** buenas, malas y ambiguas. Está marcado
+`label_source: "provisional_synthetic"`: el comando estático valida su formato,
+pero el código impide usarlo para calibrar un juez. Para ello hace falta añadir
+un fixture nuevo con `label_source: "human_reviewed"` tras revisión humana. No
+convertir ejemplos provisionales en baseline ni umbrales de CI.
+
+La calibración etiqueta únicamente criterios de texto. Las condiciones de que
+una tool se haya invocado, una propuesta exista o el Core haya confirmado una
+acción se mantienen en los checks deterministas y nunca las certifica el juez.
+Los objetos de informe exponen IDs/versiones/estados por criterio; no exponen
+respuestas, criterios, inputs ni contextos.
+
+## Piloto futuro: Jev como evaluador auxiliar (no implementado)
 
 La propuesta para el siguiente incremento de BL-8 está en
 [`specs/014-agentic-evals/jev-pilot-proposal.md`](../specs/014-agentic-evals/jev-pilot-proposal.md).
@@ -105,7 +126,7 @@ con etiquetas humanas y un baseline versionado.
 
 Jev no reemplazaría las aserciones sobre tools prohibidas, autorización o
 confirmaciones; una puntuación alta no convierte un caso fallido en aprobado.
-Antes de implementarlo hay que validar su API de decisiones a través de la
+Antes de conectarlo hay que validar su API de decisiones a través de la
 frontera gobernada `LLMAccess`/Gateway, sin bypass directo a OpenRouter. El
 comando `python scripts/run_evals.py` **sigue validando solo el catálogo**: no
 ejecuta este flujo, no llama a Jev y no evalúa respuestas del Agent.

@@ -1,9 +1,44 @@
 # Verification: 018 — Isolated Agentic Evals Execution Harness
 
-> **Fecha:** 2026-09-27 (T1–T5) / 2026-10-03 (T6) · **Estado:** ✅ T1–T6
-> verificados localmente, sin inferencia real; T7 (ejecución LLM real) y T8
-> (scoring semántico) permanecen pendientes y requieren credenciales/
-> presupuesto/etiquetado humano aprobados aparte.
+> **Fecha:** 2026-09-27 (T1–T5) / 2026-10-03 (T6) / 2026-10-14 (T6b +
+> preparación T8) · **Estado:** ✅ T1–T6/T6b y contrato local de T8
+> verificados sin inferencia real; T7 (ejecución LLM real) y la calibración T8
+> con etiquetas humanas siguen pendientes y requieren credenciales/presupuesto
+> y revisión humana aprobados aparte.
+
+## Preparación T8 sin llamadas pagadas — 2026-10-14
+
+Se preparó el contrato local para scoring semántico opcional sin conectar ningún
+proveedor. `src/agent/eval_semantic_scoring.py` define un puerto async
+`SemanticJudge` inyectable, puntuación por criterio, `not_evaluated` fail-closed
+para el score semántico, calibración y baseline versionado por ruta lógica,
+revisión de configuración, versión de rúbrica y versión de juez. Los métodos
+`metadata()` excluyen respuestas, criterios e inputs.
+
+El fixture `evals/response_style/provisional_labels.json` incluye nueve ejemplos
+sintéticos para estilo, incertidumbre y presentación de propuesta, con etiquetas
+buenas/malas/ambiguas. Se llama deliberadamente `provisional_synthetic`: sirve
+para validar forma, cobertura y ejemplos antes de la revisión humana, pero
+`calibrate_judge()` rechaza ese origen. Solo un fixture futuro explícitamente
+`human_reviewed` podrá medir acuerdo de un juez.
+
+`scripts/run_evals.py` valida el fixture y reporta únicamente su conteo. No
+crea Agent, `LLMAccess`, provider, cliente HTTP, telemetría ni una CLI de
+scoring. Las pruebas usan exclusivamente un juez fake en memoria.
+
+Evidencia focalizada:
+
+```powershell
+.venv\Scripts\python.exe -m ruff check src/agent/eval_semantic_scoring.py scripts/run_evals.py tests/unit/test_eval_semantic_scoring.py tests/unit/test_eval_catalog.py
+.venv\Scripts\python.exe -m mypy src/agent/eval_semantic_scoring.py scripts/run_evals.py
+.venv\Scripts\python.exe -m pytest tests/unit/test_eval_semantic_scoring.py tests/unit/test_eval_catalog.py tests/unit/test_governed_evals.py -q
+.venv\Scripts\python.exe scripts/run_evals.py --json
+git diff --check
+```
+
+- 20 pruebas focalizadas superadas.
+- Catálogo: 36 casos en seis categorías y 9 ejemplos provisionales validados.
+- Sin credenciales, red, coste, Docker, PostgreSQL ni datos productivos.
 
 ## Alcance
 
@@ -145,4 +180,6 @@ Ningún test de este incremento llama a un provider real, a `AgnoLLMAccess`
 con credenciales ni a infraestructura productiva. T7 (ejecutar la modalidad
 LLM real con credenciales/presupuesto aprobados, fuera de CI por defecto) y T8
 (scoring semántico opcional con etiquetas humanas) permanecen pendientes y
-bloqueados por decisiones del propietario, no por este código.
+bloqueados por decisiones del propietario, no por este código. La preparación
+local de T8 no equivale a una calibración humana ni a compatibilidad validada de
+Jev/Gateway.

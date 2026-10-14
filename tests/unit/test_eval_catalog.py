@@ -159,5 +159,6 @@ def test_runner_reports_json_summary_for_one_category(capsys) -> None:
     assert json.loads(capsys.readouterr().out) == {
         "categories": ["confirmation"],
         "case_count": 7,
+        "semantic_calibration_example_count": 9,
         "status": "valid",
     }
