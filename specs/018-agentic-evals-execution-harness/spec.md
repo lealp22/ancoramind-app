@@ -57,7 +57,8 @@ el contexto del catálogo.
 
 ## Success Criteria
 
-1. Los 19 casos actuales se materializan tras la validación existente.
+1. Los 36 casos actuales se materializan tras la validación existente; los de
+   `confirmation` se ejecutan por el harness Core, no por el Agent.
 2. Una tool prohibida, la ausencia de una requerida, outcome distinto o una
    confirmación incorrecta producen un fallo determinista independiente del
    texto de respuesta.

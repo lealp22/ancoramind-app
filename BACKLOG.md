@@ -41,8 +41,8 @@
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración, evaluación LLM real y E2E pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests (2026-10-13): 1332 unitarias + 160 de integración (1 omitida) — Ruff y
-`mypy src/` limpios en
+Tests locales (2026-10-14): 1380 unitarias superadas; integración PostgreSQL
+no ejecutada por falta de Docker. Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
 ---

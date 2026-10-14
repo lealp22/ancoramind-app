@@ -17,8 +17,8 @@ recordatorios y eventos, con trazabilidad completa.
 - **Lenguaje:** Python 3.12+
 - **Estado actual:** Milestones M1–M5 completos (ver §8) + listas TODO +
   recurrencia/snooze (BL-41/specs/024) + extracción determinista de PDF con
-  capa de texto (BL-38 Fase 1/specs/021) + adaptador físico de evals sin
-  inferencia real (BL-8/specs/018 T6) + frontera `untrusted_results`
+  capa de texto (BL-38 Fase 1/specs/021) + adaptador físico de evals y harness
+  Core de consentimiento sin inferencia real (BL-8/specs/018 T6/T6b) + frontera `untrusted_results`
   extendida a vehículos/recordatorios/calendario/TODOs (BL-39/specs/022 T8) +
   subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE para TODO items y notas
   (BL-46/specs/035, ver §2.4) + tool de lectura `list_pending_proposals`
@@ -26,7 +26,7 @@ recordatorios y eventos, con trazabilidad completa.
   conversacional (BL-47) + presentación particionada `AgentReply` para un
   único bloque Core de propuestas en Telegram (BL-48/specs/036, implementación
   local; evaluación LLM real/E2E pendientes).
-  1368 unit tests + 160 integration tests; los integration requieren
+  1380 unit tests; los integration requieren
   PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
   limpios; ambos son gates globales en CI.
 
@@ -373,7 +373,7 @@ mypy src/
 | M4 Vehicle vertical slice | ✅ |
 | M5 Calendar & Reminders | ✅ (worker outbound con FastAPI lifespan) |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada) |
-| BL-8 Evals agentic | 🔶 19 casos sintéticos, runner estático y harness aislado; pendiente adaptador contra Agent/LLM gobernado (specs/014 + 018) |
+| BL-8 Evals agentic | 🔶 36 casos sintéticos, runner estático, harness aislado del Agent y harness Core de consentimiento; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
 | BL-18 Railway como sustituto de ngrok | 🔶 Servicio/dominio/webhook/healthcheck reales validados; pendiente Wait for CI + E2E M3–M5 (specs/008) |
 | BL-25 Script E2E nativo PowerShell | ✅ `run-e2e.ps1` local/remoto con `.env` seguro (specs/015) |
 | BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T14 implementados; T14 fase 6 (cambio de modelo en caliente) validado en Railway (2026-09-19); pendientes: rollout Collector/Grafana, E2E completo y rotaciones (specs/013) |
