@@ -69,3 +69,17 @@
       `ancora.alembic_version=0015_ancora_rls_hardening`, 24/24 tablas con RLS,
       cero policies y cero grants de tabla para roles API (2026-10-15).
       El E2E funcional de Telegram permanece en BL-1/BL-48.
+
+### T9: `search_path` seguro en la función de voz (incremento local)
+
+- [x] Añadir revisión `0016_voice_guard_search_path`, sin reescribir la historia
+      de `0011_voice_preparation`: `upgrade` fija `search_path=''` y `downgrade`
+      restaura la herencia previa.
+- [x] Mantener `migrations/init.sql` equivalente a head, definiendo la función
+      con el path vacío; su referencia SQL ya está cualificada como
+      `ancora.voice_preparations`.
+- [x] Cubrir `pg_proc.proconfig`, fresh install, downgrade/upgrade e init SQL
+      contra PostgreSQL real. Unit guards, Ruff y mypy limpios.
+- [ ] Tras revisar checks del mismo SHA, aplicar a Supabase y confirmar que
+      desaparece el advisor `function_search_path_mutable`; no mezclar el
+      warning independiente de la extensión `vector` en `public`.

@@ -561,7 +561,9 @@ CREATE INDEX IF NOT EXISTS idx_voice_preparations_expiry
     WHERE transcript_ciphertext IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION ancora.voice_preparation_parent_guard()
-RETURNS trigger LANGUAGE plpgsql AS $$
+RETURNS trigger LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 DECLARE voice_status text; voice_cipher bytea; voice_expiry timestamptz;
 BEGIN
     SELECT status, transcript_ciphertext, transcript_expires_at

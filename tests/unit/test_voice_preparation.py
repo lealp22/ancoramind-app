@@ -51,5 +51,11 @@ def test_migration_bootstrap_ddl_equivalence():
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.DDL.strip() in (root / "migrations/init.sql").read_text(encoding="utf-8")
+    init_sql = (root / "migrations/init.sql").read_text(encoding="utf-8")
+    # Head intentionally hardens the historical 0011 function with an explicit
+    # empty search path (0016). Compare the shared DDL after normalising only
+    # that additive function setting; all other bootstrap SQL remains exact.
+    hardened_clause = "RETURNS trigger LANGUAGE plpgsql\nSET search_path = ''\nAS $$"
+    historical_clause = "RETURNS trigger LANGUAGE plpgsql AS $$"
+    assert module.DDL.strip() in init_sql.replace(hardened_clause, historical_clause)
     assert module.down_revision == "0010_pairing_auto_approve"

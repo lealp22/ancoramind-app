@@ -41,7 +41,7 @@
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración PostgreSQL validada, evaluación LLM real y E2E pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests locales (2026-10-15): 1421 unitarias y 159 integraciones PostgreSQL
+Tests locales (2026-10-15): 1423 unitarias y 159 integraciones PostgreSQL
 superadas; una prueba STT live omitida por diseño. Las 4 pruebas de migración
 superan fresh install, upgrade/downgrade e idempotencia. Ruff y `mypy src/`
 limpios en `src/ tests/ scripts/ migrations/`.
@@ -2278,6 +2278,17 @@ real con roles dedicados queda separado. Confirmado en producción: head 0015,
 Advisor refleja los 24 avisos informativos esperados por default-deny y dos
 warnings independientes que requieren triage separado. Integración local:
 159 superadas, una STT live omitida; las 4 pruebas de migración están verdes.
+
+**Hardening local adicional (2026-10-15):** revisión
+`0016_voice_guard_search_path` fija `search_path=''` en
+`ancora.voice_preparation_parent_guard`, cuya única relación ya está cualificada.
+Fresh install, downgrade/upgrade, equivalencia de `init.sql` y `pg_proc.proconfig`
+validados contra PostgreSQL real (**4 migration tests passed**), más unit guards,
+Ruff y mypy limpios. La suite global reprodujo el fallo de timing STT preexistente
+de 50 ms documentado en specs/034 (el mock no llega a invocarse bajo carga); el
+módulo focal pasa 4/4 y la suite sin ese único nodo pasa. Pendiente aplicar el
+mismo SHA a Supabase y confirmar que desaparece `function_search_path_mutable`;
+`vector` en `public` se triagea aparte.
 
 ---
 

@@ -30,8 +30,9 @@ recordatorios y eventos, con trazabilidad completa.
   sin JSON mode/output_schema); el Core nunca entrega `proposal_text` sin
   propuestas persistidas. La tool terminal consume presupuesto, no escribe
   datos canónicos ni concede consentimiento.
-  1421 unit tests y 159 integration PostgreSQL superados; una prueba STT live
+  1423 unit tests y 159 integration PostgreSQL superados; una prueba STT live
   se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
+  Head Alembic local: `0016_voice_guard_search_path` (rollout Supabase pendiente).
 
 ---
 

@@ -55,6 +55,7 @@ GOVERNANCE_REVISION = "0002_llm_governance"
 DOCUMENT_HASH_REVISION = "0012_document_content_hash"
 SESSION_INDEX_REVISION = "0013_session_token_index"
 WRITE_TRIVIAL_REVISION = "0014_write_trivial_consent_mode"
+RLS_REVISION = "0015_ancora_rls_hardening"
 
 BASELINE_TABLES = {
     "action_proposals",
@@ -282,6 +283,29 @@ def _note_count(database: MigrationDatabase, content: str) -> int:
     return int(row[0])
 
 
+def _function_config(
+    database: MigrationDatabase,
+    *,
+    schema: str,
+    function: str,
+) -> list[str]:
+    """Return PostgreSQL's per-function settings without relying on rendered DDL."""
+    with psycopg.connect(database.dsn) as connection:
+        row = connection.execute(
+            """
+            SELECT coalesce(p.proconfig, ARRAY[]::text[])
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = %s
+              AND p.proname = %s
+              AND pg_get_function_identity_arguments(p.oid) = ''
+            """,
+            (schema, function),
+        ).fetchone()
+    assert row is not None
+    return list(row[0])
+
+
 def test_alembic_fresh_install_and_latest_downgrade(
     migration_database: MigrationDatabase,
 ) -> None:
@@ -310,6 +334,11 @@ def test_alembic_fresh_install_and_latest_downgrade(
     assert _policies(migration_database) == set()
     assert not _has_api_access(migration_database, "anon")
     assert not _has_api_access(migration_database, "authenticated")
+    assert _function_config(
+        migration_database,
+        schema="ancora",
+        function="voice_preparation_parent_guard",
+    ) == ['search_path=""']
 
     with psycopg.connect(migration_database.dsn) as connection:
         connection.execute(
@@ -322,13 +351,24 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
+    assert _current_revision(migration_database) == RLS_REVISION
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
-    assert _rls_tables(migration_database) == set()
+    assert _rls_tables(migration_database) == _tables(migration_database)
+    assert _function_config(
+        migration_database,
+        schema="ancora",
+        function="voice_preparation_parent_guard",
+    ) == []
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
     # Check revision-owned schema changes at explicit boundaries, not relative
     # offsets from head: adding a new migration must not shift these assertions.
     command.upgrade(config, "head")
+    assert _function_config(
+        migration_database,
+        schema="ancora",
+        function="voice_preparation_parent_guard",
+    ) == ['search_path=""']
     command.downgrade(config, WRITE_TRIVIAL_REVISION)
 
     assert _current_revision(migration_database) == WRITE_TRIVIAL_REVISION
@@ -473,3 +513,8 @@ def test_init_sql_is_compatible_with_alembic_head(
     assert _policies(migration_database) == set()
     assert not _has_api_access(migration_database, "anon")
     assert not _has_api_access(migration_database, "authenticated")
+    assert _function_config(
+        migration_database,
+        schema="ancora",
+        function="voice_preparation_parent_guard",
+    ) == ['search_path=""']
