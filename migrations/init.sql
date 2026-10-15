@@ -612,3 +612,52 @@ BEGIN
         CHECK (consent_mode IN ('explicit_confirmation', 'self_authorized'));
     END IF;
 END $$;
+
+-- RLS hardening (0015_ancora_rls_hardening). The Data API roles remain
+-- default-deny: no policies or grants are created. service_role is intentionally
+-- unchanged because the server-side key is used for private Supabase Storage,
+-- while the application SQL runtime connects as postgres (BYPASSRLS).
+DO $rls$
+DECLARE table_name text;
+BEGIN
+    FOR table_name IN
+        SELECT c.relname
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'ancora' AND c.relkind IN ('r', 'p')
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY',
+            'ancora', table_name
+        );
+    END LOOP;
+END $rls$;
+
+REVOKE ALL ON SCHEMA ancora FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA ancora FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA ancora FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ancora REVOKE ALL ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ancora REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
+-- Supabase API roles are absent from plain PostgreSQL/Docker. Revoke them when
+-- present without making fresh/local bootstrap provider-specific.
+DO $api_roles$
+DECLARE api_role text;
+BEGIN
+    FOR api_role IN
+        SELECT rolname FROM pg_roles
+        WHERE rolname IN ('anon', 'authenticated')
+    LOOP
+        EXECUTE format('REVOKE ALL ON SCHEMA ancora FROM %I', api_role);
+        EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA ancora FROM %I', api_role);
+        EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA ancora FROM %I', api_role);
+        EXECUTE format(
+            'ALTER DEFAULT PRIVILEGES IN SCHEMA ancora REVOKE ALL ON TABLES FROM %I',
+            api_role
+        );
+        EXECUTE format(
+            'ALTER DEFAULT PRIVILEGES IN SCHEMA ancora REVOKE ALL ON SEQUENCES FROM %I',
+            api_role
+        );
+    END LOOP;
+END $api_roles$;

@@ -41,7 +41,7 @@
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración, evaluación LLM real y E2E pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests locales (2026-10-14): 1380 unitarias superadas; integración PostgreSQL
+Tests locales (2026-10-15): 1421 unitarias superadas; integración PostgreSQL
 no ejecutada por falta de Docker. Ruff y `mypy src/` limpios en
 `src/ tests/ scripts/ migrations/`
 
@@ -2260,6 +2260,16 @@ matrícula formateada y OpenRouter streaming listos. **Pendiente/pausado:**
 re-test Telegram de documento y búsqueda para cerrar T7, bloqueado hasta
 resolver BL-18 (alternativa autorizada a ngrok). pgvector: disponible (0.8.2),
 NO instalado — diseño solo hasta BL-6.
+
+
+**Hardening RLS local (2026-10-15, incremento 1):** revisión Alembic
+`0015_ancora_rls_hardening` habilita RLS sin policies (default deny) en todas
+las tablas `ancora` y revoca acceso actual/futuro de `PUBLIC`, `anon` y
+`authenticated`. `service_role` no se revoca: ya carece de grants SQL en
+`ancora` y la credencial server-side se usa para el bucket privado Storage.
+El runtime PostgreSQL continúa como `postgres`/`BYPASSRLS`; aislamiento backend
+real con roles dedicados queda separado. Pendiente aplicar y validar en
+producción; sin cambios remotos en este incremento.
 
 ---
 

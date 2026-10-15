@@ -51,3 +51,18 @@
       re-test Telegram pausado por BL-18
 - [x] Storage smoke test directo: upload → exists → download idéntico → delete
 - [x] Pipeline directo de imagen: Agno `Image` → tool → Storage + DB → cleanup
+
+### T8: RLS hardening del schema `ancora` (incremento 1, local)
+- [x] Añadir revisión Alembic `0015_ancora_rls_hardening` y mantener
+      `migrations/init.sql` equivalente a head.
+- [x] Habilitar RLS en todas las tablas actuales del schema, sin políticas
+      ni grants para Data API: default deny para roles no privilegiados.
+- [x] Revocar acceso actual y privilegios por defecto de `PUBLIC`, `anon` y
+      `authenticated` sobre schema/tablas/secuencias de `ancora`.
+- [x] Mantener `service_role` sin cambios: no tiene grants SQL sobre `ancora`
+      y se necesita como credencial server-side para el bucket privado Storage.
+- [x] Mantener el runtime SQL `postgres`/`BYPASSRLS`; aislamiento backend real
+      mediante rol dedicado y contexto transaccional queda para incremento 2.
+- [x] Cubrir fresh install, upgrade/downgrade, init SQL idempotente, RLS en todas
+      las tablas, cero policies, roles API cerrados y conservación de datos.
+- [ ] Aplicar a producción y ejecutar advisors/E2E solo tras revisión del SHA.

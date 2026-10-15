@@ -30,7 +30,7 @@ recordatorios y eventos, con trazabilidad completa.
   sin JSON mode/output_schema); el Core nunca entrega `proposal_text` sin
   propuestas persistidas. La tool terminal consume presupuesto, no escribe
   datos canónicos ni concede consentimiento.
-  1380 unit tests; los integration requieren
+  1421 unit tests; los integration requieren
   PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
   limpios; ambos son gates globales en CI.
 

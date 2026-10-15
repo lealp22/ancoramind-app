@@ -71,10 +71,16 @@ Usar **Supabase** como proveedor de infraestructura gestionada:
   datos futura podría copiar objetos entre buckets.
 - **Work in progress del Pro plan:** branches de Supabase (dev/prod) quedan
   fuera de alcance hasta que se pague el plan o surja necesidad.
-- Las tablas `ancora` no tienen grants para `anon`, `authenticated` ni
-  `service_role`; la app accede por conexión PostgreSQL como `postgres`. Si
-  en el futuro se expone `ancora` mediante PostgREST o se conceden grants,
-  habrá que habilitar RLS y definir políticas antes de hacerlo.
+- Las tablas `ancora` tienen RLS habilitado desde la revisión
+  `0015_ancora_rls_hardening`, sin políticas para usuarios API (default deny),
+  y no conceden acceso a `PUBLIC`, `anon` ni `authenticated`; la app continúa
+  por conexión PostgreSQL como `postgres` (`BYPASSRLS`). Esto cierra la Data API
+  sin cambiar aún el aislamiento interno del backend. `service_role` conserva
+  su situación previa sin grants sobre `ancora`: la credencial se usa solo para
+  el bucket privado de Supabase Storage (`storage.*`), por lo que no se revoca
+  en esta migración. Un futuro acceso directo con Supabase Auth requiere un
+  segundo incremento con roles sin `BYPASSRLS`, identidad transaccional y
+  políticas por usuario; nunca conceder grants antes de definirlo.
 
 ## Alternativas consideradas
 

@@ -22,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 INIT_SQL = (REPO_ROOT / "migrations" / "init.sql").read_text(encoding="utf-8")
 
+
 def _canonical_head() -> str:
     """Read the migrations head from the Alembic scripts.
 
@@ -215,6 +216,55 @@ def _constraints(database: MigrationDatabase, table: str) -> set[str]:
     return {row[0] for row in rows}
 
 
+def _rls_tables(database: MigrationDatabase) -> set[str]:
+    with psycopg.connect(database.dsn) as connection:
+        rows = connection.execute("""
+            SELECT c.relname
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'ancora'
+              AND c.relkind IN ('r', 'p')
+              AND c.relrowsecurity
+        """).fetchall()
+    return {row[0] for row in rows}
+
+
+def _policies(database: MigrationDatabase) -> set[tuple[str, str]]:
+    with psycopg.connect(database.dsn) as connection:
+        rows = connection.execute("""
+            SELECT tablename, policyname
+            FROM pg_policies
+            WHERE schemaname = 'ancora'
+        """).fetchall()
+    return {(str(row[0]), str(row[1])) for row in rows}
+
+
+def _has_api_access(database: MigrationDatabase, role: str) -> bool:
+    with psycopg.connect(database.dsn) as connection:
+        role_exists = connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = %s)", (role,)
+        ).fetchone()
+        assert role_exists is not None
+        if not bool(role_exists[0]):
+            return False
+        row = connection.execute(
+            """
+            SELECT has_schema_privilege(%s, 'ancora', 'USAGE')
+                OR EXISTS (
+                    SELECT 1
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'ancora'
+                      AND c.relkind IN ('r', 'p')
+                      AND has_table_privilege(%s, c.oid, 'SELECT,INSERT,UPDATE,DELETE')
+                )
+        """,
+            (role, role),
+        ).fetchone()
+    assert row is not None
+    return bool(row[0])
+
+
 def _current_revision(database: MigrationDatabase) -> str:
     with psycopg.connect(database.dsn) as connection:
         row = connection.execute("SELECT version_num FROM ancora.alembic_version").fetchone()
@@ -256,6 +306,10 @@ def test_alembic_fresh_install_and_latest_downgrade(
         "idx_telegram_interactions_user_accepted_at",
         "idx_telegram_interactions_accepted_queue",
     } <= _indexes(migration_database, "telegram_interactions")
+    assert _rls_tables(migration_database) == _tables(migration_database)
+    assert _policies(migration_database) == set()
+    assert not _has_api_access(migration_database, "anon")
+    assert not _has_api_access(migration_database, "authenticated")
 
     with psycopg.connect(migration_database.dsn) as connection:
         connection.execute(
@@ -269,6 +323,7 @@ def test_alembic_fresh_install_and_latest_downgrade(
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _rls_tables(migration_database) == set()
     assert _note_count(migration_database, "preserved through downgrade") == 1
 
     # Check revision-owned schema changes at explicit boundaries, not relative
@@ -414,3 +469,7 @@ def test_init_sql_is_compatible_with_alembic_head(
     assert _current_revision(migration_database) == HEAD_REVISION
     assert _note_count(migration_database, "init sql data survives alembic adoption") == 1
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
+    assert _rls_tables(migration_database) == _tables(migration_database)
+    assert _policies(migration_database) == set()
+    assert not _has_api_access(migration_database, "anon")
+    assert not _has_api_access(migration_database, "authenticated")

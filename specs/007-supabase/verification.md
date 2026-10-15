@@ -38,6 +38,30 @@
 - Si en el futuro se expone el schema `ancora` o se conceden grants, deberá
   habilitarse RLS con políticas antes de exponerlo.
 
+
+### RLS hardening — incremento 1 local (2026-10-15)
+
+- Inspección real previa: 24 tablas `ancora` sin RLS ni policies. `anon`,
+  `authenticated` y `service_role` ya carecían de `USAGE` sobre el schema y de
+  grants de tabla. El runtime SQL usa `postgres`, con `BYPASSRLS`.
+- `SUPABASE_SERVICE_ROLE_KEY` sí es necesaria: `SupabaseDocumentStorage` la usa
+  para el bucket privado `ancora-documents` (`storage.*`). No se revoca ni se
+  modifica. Tampoco se le conceden permisos sobre `ancora`.
+- Revisión local `0015_ancora_rls_hardening`: RLS en todas las tablas actuales,
+  cero policies (default deny), revocación explícita actual y futura para
+  `PUBLIC`, `anon` y `authenticated`. Downgrade deshabilita RLS pero no restaura
+  privilegios amplios que esta revisión no necesita conceder.
+- Esto protege frente a exposición accidental por Data API; no es aislamiento
+  RLS efectivo frente a las credenciales backend privilegiadas. Ese segundo
+  incremento requiere rol `NOBYPASSRLS`, propagación transaccional del
+  `UserContext` y separación de runtime/worker/admission/admin.
+- Verificación local: 1421 unitarias, Ruff global y `mypy src/` limpios;
+  revisión offline Alembic válida y head `0015_ancora_rls_hardening`.
+  Las 4 pruebas de migración PostgreSQL se omitieron porque Docker no está
+  disponible; fresh install/upgrade/downgrade quedan pendientes en CI/entorno
+  aislado. Pendiente aplicar a Supabase productivo; no se han cambiado datos,
+  roles ni Storage remotos durante la implementación local.
+
 ## Correcciones descubiertas durante la verificación
 
 1. `SUPABASE_URL` debe ser `https://<ref>.supabase.co`; el host
