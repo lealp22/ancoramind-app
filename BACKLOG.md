@@ -33,7 +33,7 @@
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
 | BL-34 Política de contexto por tokens y compactación gobernada | 🔶 implementado localmente (política + wiring en `GovernedAgentFactory`); compactación real diferida — specs/030 |
 | BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
-| BL-42 Recuperación semántica documental | 🔶 ruta Gateway productiva validada (`ancoramind-embeddings-r1`, runtime rev. 6, smoke 1536d PASS); pendientes reindexación explícita y E2E ingesta→búsqueda con aislamiento por usuario — specs/026 |
+| BL-42 Recuperación semántica documental | ✅ ruta Gateway, reindexación explícita y E2E productivo ingesta preservada→índice→búsqueda validados; aislamiento por usuario PASS, 1536d, sin contenido en logs — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado y validado con PostgreSQL (TODO items título-solo + completar/reabrir, notas); pendiente E2E Telegram — specs/035 |

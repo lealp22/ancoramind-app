@@ -1,7 +1,6 @@
 # Spec 026 — Recuperación semántica de documentos
 
-> **Status:** Implementado y ruta física validada en producción; pendiente E2E
-> funcional de ingesta, reindexación, búsqueda y aislamiento por usuario.
+> **Status:** Implementado y validado E2E en producción.
 > **Fecha:** 2026-10-04
 > **Backlog:** BL-42
 
@@ -85,7 +84,30 @@ Toda consulta vectorial requiere simultáneamente `c.user_id = :user_id` y
   `2026-10-15T21:03:56.641078+00:00`. Railway corroboró el 200 a las
   `2026-10-15T21:03:56.656247383Z`. No hubo retry, fallback ni exposición del
   vector o payload.
-- Este smoke cierra la ruta Gateway, no BL-42 completo. Permanece un chunk
-  histórico `failed/EmbeddingRouteUnavailable`; requiere reindexación explícita
-  y después un E2E funcional que demuestre recuperación e aislamiento por
-  usuario.
+- Este smoke cerró la ruta Gateway. La recuperación funcional se validó después
+  mediante la reindexación explícita descrita a continuación.
+
+### E2E funcional y aislamiento — 2026-10-15
+
+- Se añadió `DocumentService.reindex_document_for_semantic_retrieval` como
+  primitiva operativa explícita, no registrada como tool del Agent. Revalida la
+  propiedad con `UserContext`, reutiliza el documento y su última extracción y
+  no vuelve a leer el archivo ni repite extracción.
+- El script metadata-only `scripts/document_semantic_e2e.py` ejecutó las tres
+  llamadas aprobadas: reindexación del documento cuya ingesta sobrevivió al
+  fallo inicial, búsqueda como propietario y la misma búsqueda como no
+  propietario sintético. Resultado: `e2e_ok=true`, `reindex_ok=true`,
+  `owner_search_found=true`, `non_owner_isolated=true`, modelo
+  `ancoramind-embeddings-r1`, 1536 dimensiones y 2603 ms totales.
+- Railway corroboró exactamente tres `POST /v1/embeddings → 200` entre
+  `2026-10-15T21:40:38.776363236Z` y `2026-10-15T21:40:40.139861975Z`.
+  Los logs de la app no contienen coincidencias de texto indexable, query o
+  payload; no se imprimieron vectores, nombres, IDs ni secretos.
+- PostgreSQL confirma una fila `completed` con vector de 1536 dimensiones y
+  `error_class=NULL`. La fila histórica `failed/EmbeddingRouteUnavailable`
+  permanece como auditoría de la combinación anterior `model=unavailable`, tal
+  como exige el diseño versionado: reindexar con otro modelo crea su propia
+  versión y no reescribe el fallo previo.
+- Código desplegado: `b23087137a1431ae210b3ad868d5e4b185b48457`, deployment
+  Railway `019b48a3-e9f1-470c-8e71-2ac66b217127` `SUCCESS`, entorno healthy.
+  CI del mismo SHA: quality, integration y collector-config en verde.
