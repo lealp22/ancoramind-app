@@ -2,7 +2,8 @@
 
 > **Fecha:** 2026-10-14. **Estado:** implementado localmente, sin despliegue.
 > El propietario autorizó la implementación después de la documentación.
-> Integración PostgreSQL, evaluación real y E2E pendientes; ver `verification.md`.
+> Integración PostgreSQL validada; evaluación real y E2E pendientes; ver
+> `verification.md`.
 
 ## T1 — Contrato Agent/Core de presentación
 
@@ -68,8 +69,8 @@
       presupuesto, saludos, READ, trivial, propuesta y turno mixto. Los mocks
       no acreditan la selección semántica del modelo real.
 - [x] Ejecutar `pytest tests/unit/`, Ruff y `mypy src/`.
-- [ ] Verificar integración contra PostgreSQL aislado; 160 omitidas aquí
-      por Docker no disponible. Nunca con fixtures en producción.
+- [x] Verificar integración contra PostgreSQL aislado: 159 superadas y una
+      prueba STT live omitida por diseño (2026-10-15). Sin fixtures en producción.
 - [ ] Evaluar instrucciones con LLM real gobernado: no ejecutado; la prueba
       con Agno/modelo simulado verifica el protocolo de cierre, no semántica.
 - **Listo cuando:** pruebas deterministas verdes y evidencia semántica

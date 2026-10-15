@@ -39,9 +39,11 @@
   `ancora_health_component`, `ancora_health_heartbeat_total` y
   `ancora_runtime_config_revision`. `ancora_health_component` confirmó los seis
   componentes de producción en estado `1`.
-- Se encontraron HTTP `429` históricos del exporter hacia Mimir el 2026-10-09;
-  no se observó evidencia de que impidan la ingestión base actual. La revisión
-  repetible y el tratamiento de 429 viven en `docs/runbooks-013.md` §7.
+- Se encontraron HTTP `429` históricos del exporter hacia Mimir entre el 9 y
+  el 11 de octubre. El deployment actual del Collector
+  (`c26640ef-f836-423d-8050-e9d408edecda`) está online y sus logs no contienen
+  `429`, `ResourceExhausted`, `Throttle` ni `Exporting failed`; el incidente se
+  considera resuelto. La revisión repetible vive en `docs/runbooks-013.md` §7.
 
 ## Automated checks
 
@@ -106,8 +108,9 @@
 update/interacción real en Railway; C y Q combinan Railway con local; los
 otros 18 solo están cubiertos por tests unit/integration locales, nunca
 ejecutados contra el despliegue real. Esto es lo que BL-23/BACKLOG.md ya
-describía como pendiente ("rollout Railway de LiteLLM privado... validado";
-"Collector/Grafana... pendiente") — esta matriz ahora lo hace explícito caso
+describía como pendiente; el rollout de LiteLLM y la ingesta base
+Collector/Grafana ya están validados, mientras la matriz operativa sigue
+incompleta — esta tabla lo hace explícito caso
 por caso en vez de dejarlo en un ✅ ambiguo.
 
 ## Production validation

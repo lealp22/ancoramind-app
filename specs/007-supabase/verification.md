@@ -39,7 +39,7 @@
   habilitarse RLS con políticas antes de exponerlo.
 
 
-### RLS hardening — incremento 1 local (2026-10-15)
+### RLS hardening — incremento 1 desplegado (2026-10-15)
 
 - Inspección real previa: 24 tablas `ancora` sin RLS ni policies. `anon`,
   `authenticated` y `service_role` ya carecían de `USAGE` sobre el schema y de
@@ -55,12 +55,18 @@
   RLS efectivo frente a las credenciales backend privilegiadas. Ese segundo
   incremento requiere rol `NOBYPASSRLS`, propagación transaccional del
   `UserContext` y separación de runtime/worker/admission/admin.
-- Verificación local: 1421 unitarias, Ruff global y `mypy src/` limpios;
-  revisión offline Alembic válida y head `0015_ancora_rls_hardening`.
-  Las 4 pruebas de migración PostgreSQL se omitieron porque Docker no está
-  disponible; fresh install/upgrade/downgrade quedan pendientes en CI/entorno
-  aislado. Pendiente aplicar a Supabase productivo; no se han cambiado datos,
-  roles ni Storage remotos durante la implementación local.
+- Verificación local: 1421 unitarias y 159 integraciones superadas; una prueba
+  STT live omitida por diseño. Las 4 pruebas de migración PostgreSQL superan
+  fresh install, upgrade/downgrade e idempotencia. Ruff global y `mypy src/`
+  limpios; head `0015_ancora_rls_hardening`.
+- Verificación productiva de solo lectura: `ancora.alembic_version` apunta a
+  `0015_ancora_rls_hardening`; las 24 tablas tienen RLS habilitado, existen cero
+  policies y no hay grants de tabla para `PUBLIC`, `anon`, `authenticated` ni
+  `service_role`. Los tres roles Supabase tampoco tienen `USAGE` del schema.
+- Security Advisor informa los 24 avisos `rls_enabled_no_policy` esperados por
+  el diseño default-deny. Mantiene dos warnings independientes de este rollout:
+  `voice_preparation_parent_guard` sin `search_path` fijado y `vector` instalado
+  en `public`; requieren triage separado, no invalidan el hardening aplicado.
 
 ## Correcciones descubiertas durante la verificación
 

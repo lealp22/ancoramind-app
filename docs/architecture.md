@@ -165,7 +165,7 @@ flowchart TB
 | **Canal** | Telegram (private chats only) | Gestionado por AgentOS |
 | **LLM** | Rutas lógicas + LiteLLM Proxy (target specs/013) | OpenRouter upstream; config runtime versionada |
 | **Validación** | Pydantic | Schemas para extracciones estructuradas |
-| **Observabilidad** | OpenTelemetry metadata-only + Collector/Grafana Cloud | Código y manifiesto T10 listos; rollout privado Railway pendiente |
+| **Observabilidad** | OpenTelemetry metadata-only + Collector/Grafana Cloud | Collector privado desplegado y métricas base ingeridas; dashboard/alertas y matriz T7 pendientes |
 | **Despliegue** | Docker + Railway | Una réplica inicial; servicios privados para Gateway/Collector |
 | **Migraciones** | Alembic | Propiedad exclusiva de AncoraMind |
 

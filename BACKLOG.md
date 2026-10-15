@@ -26,7 +26,7 @@
 | BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; M3 PDF textual validado en Telegram/Railway el 2026-10-13; faltan protección de `main` (requiere plan GitHub), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
-| BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness, dashboard y alertas versionados); solo falta T7 (rollout Railway/Grafana Cloud real) — specs/016 |
+| BL-33 Health signals + dashboard de salud | 🔶 Collector/Grafana base desplegados y 429 resuelto; faltan import/provisioning de dashboard/alertas y matriz T7 — specs/016 |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) validada E2E por Telegram/Railway el 2026-10-13; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
 | BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto Telegram se ingiere antes del Agent y su resumen DATA queda validado/acotado; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
 | BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
@@ -36,14 +36,15 @@
 | BL-42 Recuperación semántica documental | 🔶 implementado localmente con pgvector y embeddings gobernados; pendiente publicar/autorizar `ancoramind-embeddings-r1` y validación E2E — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
-| BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado localmente (TODO items título-solo + completar/reabrir, notas); pendiente validación E2E Telegram — specs/035 |
-| BL-47 Tool de lectura `list_pending_proposals` | 🔶 implementado localmente; pendiente validación E2E Telegram |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración, evaluación LLM real y E2E pendientes — specs/036 |
+| BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado y validado con PostgreSQL (TODO items título-solo + completar/reabrir, notas); pendiente E2E Telegram — specs/035 |
+| BL-47 Tool de lectura `list_pending_proposals` | 🔶 implementado y validado con PostgreSQL; pendiente E2E Telegram |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración PostgreSQL validada, evaluación LLM real y E2E pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests locales (2026-10-15): 1421 unitarias superadas; integración PostgreSQL
-no ejecutada por falta de Docker. Ruff y `mypy src/` limpios en
-`src/ tests/ scripts/ migrations/`
+Tests locales (2026-10-15): 1421 unitarias y 159 integraciones PostgreSQL
+superadas; una prueba STT live omitida por diseño. Las 4 pruebas de migración
+superan fresh install, upgrade/downgrade e idempotencia. Ruff y `mypy src/`
+limpios en `src/ tests/ scripts/ migrations/`.
 
 ---
 
@@ -67,10 +68,14 @@ consentimiento OFF no hay mutación ni fallback LLM. Prompts/catálogo cambiados
 
 Diagnóstico remoto de solo lectura: app en `e25bfc4` (local base `9166f55`),
 health/readiness 200 y REST/admin consultadas 401; Supabase revisión runtime 2.
-Collector recibe 429 de Grafana; Gateway referencia Redis apagado (uso efectivo
+En la revisión del 2026-10-11 el Collector recibía 429 de Grafana; Gateway
+referencia Redis apagado (uso efectivo
 pendiente). Valores efectivos de secrets/flags ocultos. Wait for CI permanece
 OFF por decisión del propietario, con gate manual sobre el SHA desplegado.
 Evidencia completa: `specs/023-audit-remediation/operational-review-2026-10-11.md`.
+**Revalidación 2026-10-15:** el deployment actual del Collector está online y
+no registra nuevos `429` ni fallos de exportación; los `429` del historial
+terminan el 2026-10-11. Dashboard, alertas y matriz T7 siguen pendientes.
 Validación final: 1263 unit + 144 integration passed (1 live STT skipped),
 Ruff/mypy limpios, 27 casos de catálogo estático válidos. BL-23/39/40 abiertos.
 El harness físico rechaza casos legacy de confirmación antes de inferencia;
@@ -730,10 +735,10 @@ crear nunca un `ActionProposal` `pending_confirmation`. `propose_todo_item`
 ramifica según si vienen informados los campos opcionales;
 `propose_todo_item_complete`/`reopen` y `propose_note` ejecutan siempre
 directo. `AGENTS.md` §2.4 y `docs/governance.md` documentan la
-subclasificación. 1329 unit + 158 integration tests (los 2 nuevos de
-integración, sobre `create_self_authorized`, quedan preparados y pendientes
-de verificar contra PostgreSQL real cuando haya Docker), Ruff y `mypy src/`
-limpios. Pendiente: validación E2E Telegram.
+subclasificación. Revalidación 2026-10-15: suite global **159 integration
+passed, 1 STT live skipped**; `test_actions_repo.py` **9 passed** (incluye los
+dos casos `create_self_authorized`) y migraciones **4 passed**. Ruff y
+`mypy src/` limpios. Pendiente: validación E2E Telegram.
 
 ### BL-47 · El Agent narra el estado de propuestas pendientes desde memoria conversacional, sin fuente de verdad ✅ implementado localmente — 2026-10-13
 
@@ -781,9 +786,9 @@ envuelta en `untrusted_results` igual que el resto de tools de lectura;
 registrada en `_init_domain_tools()`. `prompts/tool_contract.md` instruye
 explícitamente al Agent a llamarla en vez de narrar desde memoria, tanto
 cuando el usuario pregunta "qué tengo pendiente" como tras un intento de
-confirmación fallido. 1332 unit + 160 integration tests (2 nuevos de
-integración sobre `list_pending`, preparados y pendientes de verificar
-contra PostgreSQL real sin Docker en esta sesión), Ruff y `mypy src/`
+confirmación fallido. Revalidación 2026-10-15: los dos tests PostgreSQL de
+`list_pending` están incluidos en `test_actions_repo.py` (**9 passed**) y la
+suite global queda en **159 passed, 1 STT live skipped**. Ruff y `mypy src/`
 limpios. Pendiente: validación E2E Telegram (reproducir el caso real del
 hallazgo: confirmar una propuesta, dejar caducar otra, y comprobar que la
 respuesta ya no narra ninguna de las dos como pendiente).
@@ -830,12 +835,12 @@ errores y advertencias relevantes, sin regex de prosa ni descarte total.
 Renderer con prioridades españolas/fecha TODO legible conservando offsets
 y horas. Prompts alineados; cinco evals sintéticos nuevos (32 casos totales).
 Prueba con Agno real y modelo simulado confirma parsing y una sola llamada,
-no obediencia semántica. Ruff/mypy y suite unitaria global verdes; integración
-PostgreSQL omitida (sin Docker). Ver detalle en specs/036/verification.md.
-Resultado final local: **1368 unitarias superadas**, **160 integration
-omitidas**, **32 casos de catálogo válidos** (sin scoring semántico real).
-Sin despliegue, migración ni fixtures productivos. Pendientes evaluación
-LLM real, integración aislada y E2E del SHA autorizado; no se cierra BL-48.
+no obediencia semántica. Ruff/mypy y suite unitaria global verdes. En esa
+sesión Docker no estaba disponible; la revalidación del 2026-10-15 ejecutó la
+integración PostgreSQL: **159 passed, 1 STT live skipped**, más **4 pruebas de
+migración**. **32 casos de catálogo válidos** (sin scoring semántico real).
+Sin fixtures productivos. Pendientes evaluación LLM real y E2E del SHA
+autorizado; no se cierra BL-48.
 
 **Corrección de regresión local (2026-10-15):** rechazar los dos campos vacíos
 no restauró la selección de herramientas: las pruebas manuales posteriores
@@ -2262,14 +2267,17 @@ resolver BL-18 (alternativa autorizada a ngrok). pgvector: disponible (0.8.2),
 NO instalado — diseño solo hasta BL-6.
 
 
-**Hardening RLS local (2026-10-15, incremento 1):** revisión Alembic
+**Hardening RLS desplegado (2026-10-15, incremento 1):** revisión Alembic
 `0015_ancora_rls_hardening` habilita RLS sin policies (default deny) en todas
 las tablas `ancora` y revoca acceso actual/futuro de `PUBLIC`, `anon` y
 `authenticated`. `service_role` no se revoca: ya carece de grants SQL en
 `ancora` y la credencial server-side se usa para el bucket privado Storage.
 El runtime PostgreSQL continúa como `postgres`/`BYPASSRLS`; aislamiento backend
-real con roles dedicados queda separado. Pendiente aplicar y validar en
-producción; sin cambios remotos en este incremento.
+real con roles dedicados queda separado. Confirmado en producción: head 0015,
+24/24 tablas con RLS, cero policies y cero grants para roles Data API. Security
+Advisor refleja los 24 avisos informativos esperados por default-deny y dos
+warnings independientes que requieren triage separado. Integración local:
+159 superadas, una STT live omitida; las 4 pruebas de migración están verdes.
 
 ---
 

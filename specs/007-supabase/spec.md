@@ -69,6 +69,8 @@ documentos, manteniendo intactas las fronteras arquitectónicas (§2.5, §2.7,
 
 - [x] Migración `ancora_baseline` aplicada (8 tablas + índices)
 - [x] Bucket `ancora-documents` creado (privado, 20 MB)
+- [x] Head `0015_ancora_rls_hardening` aplicado: 24/24 tablas `ancora` con
+  RLS, cero policies y cero grants de tabla para roles Data API
 
 ### Usuario (manual — credenciales)
 

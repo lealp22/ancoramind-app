@@ -2,8 +2,8 @@
 
 > **Backlog:** BL-48 — P1, calidad de la validación del MVP.
 > **Fecha:** 2026-10-14.
-> **Estado:** implementado localmente; evaluación LLM real, integración
-> PostgreSQL y E2E Telegram pendientes. Ver `verification.md`.
+> **Estado:** implementado localmente e integración PostgreSQL validada;
+> evaluación LLM real y E2E Telegram pendientes. Ver `verification.md`.
 > **Autorización:** documentación previa y posterior implementación local
 > aprobadas el 2026-10-14. Sin despliegue ni cambios de datos/infraestructura.
 > **Relacionado:** BL-46/specs/035, BL-47 y BL-39/40/specs/023.

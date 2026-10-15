@@ -1,7 +1,8 @@
 # ADR-005 — Acceso LLM gobernado, configuración runtime y LiteLLM
 
 > **Status:** Accepted — implementado localmente (T2–T14, diseño aprobado
-> 2026-09-13); rollout Railway completo y Collector/Grafana pendientes —
+> 2026-09-13); rollout Railway, Collector privado e ingesta Grafana base
+> validados; dashboard/alertas y matriz operativa pendientes —
 > specs/013/verification.md, BL-23. **Enmendado 2026-09-18** (ver §Enmienda):
 > fuente de verdad de las definiciones de modelo y publicación aditiva de aliases.
 > **Contexto:** provider/model físicos están acoplados hoy al Agent y a variables

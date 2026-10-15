@@ -144,12 +144,15 @@ BL-48 ni motivo para cerrar BL-47 o todos los pendientes de specs/035.
   fechas/horas/offsets, campos inesperados y HTML escapado.
 - Una prueba ejecuta el Agent real de Agno con modelo en memoria y fake
   `LLMAccess`: parsea `AgentReply` con **una** llamada, sin red/credenciales.
-- Integración PostgreSQL adaptada al nuevo contrato, pero sin ejecución real
-  aquí: Docker Desktop no está disponible; las 160 pruebas se omiten.
+- Integración PostgreSQL ejecutada contra Docker local: **159 passed, 1 skipped**;
+  la omisión corresponde a STT live y no a falta de PostgreSQL.
 - `scripts/run_evals.py`: 32 casos válidos en 6 categorías; no scoring semántico.
 - `pytest tests/unit/ -q`: **1368 passed** (36 más que el baseline de 1332).
 - Ruff global y `mypy src/` (169 archivos) limpios.
-- `pytest tests/integration/ -q`: **160 skipped**, no 160 superadas.
+- `pytest tests/integration/ -q`: **159 passed, 1 skipped** (2026-10-15).
+- Revalidación global vigente: **1421 unitarias**; Ruff global y `mypy src/`
+  limpios. Los contadores anteriores se conservan como evidencia de la sesión
+  original de implementación.
 - Avisos de Collector local ausente en exportación de métricas, sin fallo de tests.
 - **Sin deploy, migraciones ni escritura de fixtures en Supabase/Railway.**
 
@@ -163,7 +166,7 @@ No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
 - [ ] AC4–AC6: consulta tras descarte, pendientes explícitos y nueva petición.
 - [ ] AC7: regresiones triviales (TODO/notas).
 - [ ] AC8–AC9: horas/zonas, límites, escapado, payload/hash y consentimiento.
-- [ ] Integración PostgreSQL aislada.
+- [x] Integración PostgreSQL aislada: 159 superadas, una STT live omitida.
 - [ ] Evaluación de instrucciones y E2E real del SHA autorizado.
 
 No se marca como superado un criterio de la mejora solo porque el circuito

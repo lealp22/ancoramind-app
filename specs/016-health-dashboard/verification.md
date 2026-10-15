@@ -72,6 +72,14 @@ privado está desplegado junto a la app en `europe-west4-drams3a`, el datasource
 es `grafanacloud-prom` y Grafana recibe las series base. El procedimiento de
 consulta y diagnóstico queda en `docs/runbooks-013.md` §7.
 
+Revalidación de solo lectura del deployment
+`c26640ef-f836-423d-8050-e9d408edecda`: Collector online, una réplica y cero
+fallos recientes. Sus logs no contienen `429`, `ResourceExhausted`, `Throttle`
+ni `Exporting failed`. Los `429` encontrados al consultar el historial pertenecen
+a deployments anteriores y terminan el 2026-10-11. Se considera resuelto el
+incidente de exportación; esto no completa por sí solo dashboard, alertas ni la
+matriz de degradación de T7.
+
 1. Repetir las consultas base de §7.2 del runbook y registrar UTC, commit,
    deployment y resultado sin contenido personal.
 2. Importar `observability/dashboards/ancoramind-health.json` y provisionar

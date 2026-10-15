@@ -52,7 +52,7 @@
 - [x] Storage smoke test directo: upload → exists → download idéntico → delete
 - [x] Pipeline directo de imagen: Agno `Image` → tool → Storage + DB → cleanup
 
-### T8: RLS hardening del schema `ancora` (incremento 1, local)
+### T8: RLS hardening del schema `ancora` (incremento 1, desplegado)
 - [x] Añadir revisión Alembic `0015_ancora_rls_hardening` y mantener
       `migrations/init.sql` equivalente a head.
 - [x] Habilitar RLS en todas las tablas actuales del schema, sin políticas
@@ -65,4 +65,7 @@
       mediante rol dedicado y contexto transaccional queda para incremento 2.
 - [x] Cubrir fresh install, upgrade/downgrade, init SQL idempotente, RLS en todas
       las tablas, cero policies, roles API cerrados y conservación de datos.
-- [ ] Aplicar a producción y ejecutar advisors/E2E solo tras revisión del SHA.
+- [x] Aplicar a producción y ejecutar inspección/advisors tras revisión del SHA:
+      `ancora.alembic_version=0015_ancora_rls_hardening`, 24/24 tablas con RLS,
+      cero policies y cero grants de tabla para roles API (2026-10-15).
+      El E2E funcional de Telegram permanece en BL-1/BL-48.

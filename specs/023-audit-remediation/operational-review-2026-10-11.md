@@ -90,3 +90,12 @@ anulan conexiones de app, Telegram/processor y exportador OTel; smoke STT real O
    explícito; reconciliación coste y rotaciones con procedimiento por secreto.
 
 BL-23/39/40 siguen abiertos hasta el rollout y la evidencia pendiente.
+
+## Seguimiento 2026-10-15
+
+- El hallazgo histórico de exportación Grafana queda resuelto: el deployment
+  actual del Collector está online y no presenta `429`, `ResourceExhausted`,
+  `Throttle` ni `Exporting failed`; las métricas base están presentes en Grafana.
+- El punto 4 queda cerrado solo para investigación del 429 e ingesta base.
+  Privacidad remota, dashboard/alertas y matriz fail-open continúan abiertos en
+  specs/013 y specs/016.

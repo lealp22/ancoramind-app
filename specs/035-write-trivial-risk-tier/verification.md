@@ -28,6 +28,8 @@
 - `python -c "from src.main import app"` → import limpio (confirma que el
   wiring nuevo de `TrivialExecutor` dentro de `todos.py`/`notes.py` no rompe
   el arranque de la app).
+### Evidencia original — 2026-10-13
+
 - `pytest tests/integration/ --collect-only` → **158 tests** recolectados
   sin error (incluye los 2 nuevos de
   `test_actions_repo.py::test_create_self_authorized_*`). **No se ejecutaron**
@@ -44,14 +46,25 @@
   `alembic upgrade head` tampoco se verificó end-to-end
   (`test_init_sql_is_compatible_with_alembic_head` requiere Postgres).
 
-## Pendiente (requiere infraestructura — no bloqueante para esta spec)
+### Revalidación PostgreSQL — 2026-10-15
 
-- [ ] `alembic upgrade head` / `downgrade -1` contra PostgreSQL real
-  (Docker o Supabase de desarrollo), confirmando que
+- `pytest tests/integration/` → **159 passed, 1 skipped**; la omisión es STT
+  live opt-in, no falta de PostgreSQL.
+- `pytest tests/integration/test_actions_repo.py` → **9 passed**, incluidos los
+  dos casos `create_self_authorized` y los dos de `list_pending`.
+- `pytest tests/integration/test_migrations.py` → **4 passed**: fresh install,
+  upgrade con datos, downgrade de la última revisión e equivalencia de init SQL.
+- Supabase productivo está en head `0015_ancora_rls_hardening`, por lo que
+  `0014_write_trivial_consent_mode` también está aplicado.
+
+## Estado de gates
+
+- [x] `alembic upgrade head` / `downgrade -1` contra PostgreSQL real,
+  confirmando que
   `test_alembic_fresh_install_and_latest_downgrade` y
   `test_init_sql_is_compatible_with_alembic_head` pasan con la nueva
   revisión.
-- [ ] `pytest tests/integration/test_actions_repo.py` contra Postgres real,
+- [x] `pytest tests/integration/test_actions_repo.py` contra Postgres real,
   en particular los 2 tests nuevos de `create_self_authorized`.
 - [ ] Validación E2E Telegram: pedir "Añade leche a la lista Compras" (sin
   prioridad/fecha) y confirmar que el bot responde sin pedir "¿Confirmas?";
@@ -69,7 +82,7 @@
    `create_self_authorized`, 1 transacción) sin tocar
    `claim_confirmation`/`ProposalExecutor` — cubierto por
    `test_trivial_executor.py` y, para la auditoría, por
-   `test_actions_repo.py` (pendiente de verificar contra Postgres real).
+    `test_actions_repo.py` (verificado contra Postgres real).
 3. ✅ Alcance exacto implementado: `propose_todo_item` (solo título, lista
    existente), `propose_todo_item_complete`/`reopen`, `propose_note` —
    siempre triviales; `propose_todo_item` con algún campo opcional,
@@ -82,8 +95,7 @@
    `test_target_not_owned_rolls_back_and_audits_nothing`.
 5. ✅ Nombres de tool sin cambios (decisión del propietario, 2026-10-13) —
    solo cambiaron docstrings y `prompts/skills/todos.md`.
-6. ✅ `pytest`/`ruff`/`mypy` verdes (unit + lint completos; integración
-   preparada, no ejecutada por falta de infraestructura — ver sección
-   anterior).
+6. ✅ `pytest`/`ruff`/`mypy` verdes; integración y migraciones verificadas
+   contra PostgreSQL real.
 7. ✅ `AGENTS.md`/`BACKLOG.md` referencian BL-46/specs/035 con el alcance
    real entregado.

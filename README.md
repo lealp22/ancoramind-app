@@ -143,14 +143,17 @@ observability/      ← Private OpenTelemetry Collector configuration
 - [x] M5: Calendar & Reminders
 - [x] BL-21: Multi-list TODOs with governed mutations
 - [x] Strict static quality gate: Ruff + `mypy src/` in GitHub Actions
+- [x] PostgreSQL integration gate: 159 passed, 1 opt-in STT live test skipped
+- [x] Supabase `ancora` RLS hardening deployed: 24/24 tables, default-deny for Data API roles
 - [x] BL-23 T2–T14: governed LLM access, durable admission, execution budget,
       document extraction port, metadata-only OpenTelemetry, the LiteLLM
       Gateway pilot, cost/reliability governance (circuit breaker, rate
       limits, spend budgets with run-start hard stop), hot model change via
       additive versioned Gateway aliases, and local hardening
-      (load/crash/retention suite + operational runbooks) (Railway rollout of
-      Collector/Grafana/LiteLLM, benchmark with a real key and E2E remain pending;
-      BL-23 stays open)
+      (load/crash/retention suite + operational runbooks). LiteLLM and the
+      private Collector are deployed on Railway and base metrics reach Grafana;
+      dashboard/alert provisioning, controlled degradation tests, real-key
+      benchmark and remaining E2E evidence keep BL-23 open.
 - [ ] MVP: Usable personal assistant (complete Telegram E2E validation remains)
 
 ### Capabilities (Agent reads/proposes; Core executes)

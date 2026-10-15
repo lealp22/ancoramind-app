@@ -1,14 +1,11 @@
 # Tasks: 035 — Subclasificación WRITE_TRIVIAL / WRITE_REVIEWABLE
 
-> Todas las tareas son código puro + migración + tests unitarios/integración.
-> Ninguna requiere infraestructura real para implementarse; los tests de
-> integración (T3, T8) solo se **verifican** contra PostgreSQL/Docker cuando
-> esté disponible — mientras tanto quedan preparados y se omiten, igual que
-> el resto de la suite (`AGENTS.md` §1).
+> Implementación y verificación PostgreSQL completadas. El E2E Telegram se
+> mantiene separado en `verification.md`.
 
 ## T1: Migración Alembic — `consent_mode`
 
-- [ ] `migrations/versions/0014_write_trivial_consent_mode.py`
+- [x] `migrations/versions/0014_write_trivial_consent_mode.py`
       (`down_revision="0013_session_token_index"`): añade
       `ancora.action_proposals.consent_mode VARCHAR(32) NOT NULL
       DEFAULT 'explicit_confirmation'` + `CHECK` nuevo
@@ -17,30 +14,28 @@
       (`ADD COLUMN IF NOT EXISTS` + `DO $$ ... IF NOT EXISTS` para el
       constraint) que `0006_proposal_consent.py`. Sin índice nuevo: no hay
       consulta que filtre por `consent_mode` todavía.
-- [ ] `downgrade()`: `DROP CONSTRAINT IF EXISTS` + `DROP COLUMN IF EXISTS`,
+- [x] `downgrade()`: `DROP CONSTRAINT IF EXISTS` + `DROP COLUMN IF EXISTS`,
       simétrico.
-- [ ] `migrations/init.sql` actualizado para quedar equivalente a `head`
+- [x] `migrations/init.sql` actualizado para quedar equivalente a `head`
       (columna + constraint en la definición de `action_proposals`).
-- [ ] Aplicar y verificar contra PostgreSQL real cuando haya Docker
-      disponible (fresh install + upgrade sobre datos existentes +
-      downgrade), como exige `AGENTS.md` §10.5. Mientras tanto: validar que
-      `alembic upgrade head`/`downgrade -1` no lanzan error de sintaxis
-      (revisión aislada, sin aplicar).
+- [x] Aplicar y verificar contra PostgreSQL real: fresh install, upgrade sobre
+      datos existentes, downgrade e equivalencia de `migrations/init.sql`
+      cubiertos por `tests/integration/test_migrations.py` (4 passed).
 
 ## T2: Dominio — `ConsentMode`
 
-- [ ] `src/domain/actions/models.py`: nuevo
+- [x] `src/domain/actions/models.py`: nuevo
       `class ConsentMode(StrEnum): EXPLICIT_CONFIRMATION = "explicit_confirmation"`
       `SELF_AUTHORIZED = "self_authorized"`, junto a `ProposalStatus`. Sin
       cambios en `ClaimedProposal`/`ConsentClaimResult` — `consent_mode` no
       participa en el pipeline de confirmación (`claim_confirmation`,
       `ProposalExecutor`), es exclusivo de la fila de auditoría.
-- [ ] Tests: extender `tests/unit/test_proposal_consent_model.py` con el
+- [x] Tests: extender `tests/unit/test_proposal_consent_model.py` con el
       round-trip del enum (valores, `StrEnum` comparación con string plano).
 
 ## T3: Repositorio — `ActionProposalsRepository.create_self_authorized`
 
-- [ ] `src/repositories/actions.py`: nuevo método, mismo estilo que
+- [x] `src/repositories/actions.py`: nuevo método, mismo estilo que
       `create()` (L53-106) pero:
       - **no comitea** (disciplina de la "Consent API" ya documentada en
         el docstring del módulo — el llamador controla la transacción
@@ -57,18 +52,17 @@
         falta.
       Firma propuesta:
       `async def create_self_authorized(self, user_id: str, tool_name: str, payload: ProposalPayload, *, source_interaction_id: UUID | None = None, bot_id: int | None = None, chat_id: int | None = None) -> ProposalRecord`.
-- [ ] Tests de integración: nuevo caso en `tests/integration/test_actions_repo.py`
+- [x] Tests de integración: casos en `tests/integration/test_actions_repo.py`
       — inserta una fila `self_authorized`, verifica `confirming_interaction_id
       IS NULL` sin violar `uq_action_proposals_confirming_interaction`
       (dos filas `self_authorized` seguidas, ambas con `NULL`, no
-      colisionan), verifica que el método **no comitea** por sí solo
-      (la fila no es visible desde otra sesión hasta que el llamador
-      comitea). Preparado, se omite sin Docker; estructura y aserciones
-      completas desde esta iteración.
+      colisionan), y verifica que el método **no comitea** por sí solo.
+      Verificado contra PostgreSQL real dentro de los 9 tests de
+      `test_actions_repo.py` superados el 2026-10-15.
 
 ## T4: Orquestador — `TrivialExecutor`
 
-- [ ] `src/domain/actions/trivial_executor.py` (nuevo), mismo patrón que
+- [x] `src/domain/actions/trivial_executor.py` (nuevo), mismo patrón que
       `src/domain/actions/executor.py::ProposalExecutor` pero sin estado
       previo que reclamar:
       ```python
@@ -98,7 +92,7 @@
       `SUPPORTED`: no hay reclamo de confirmación que validar, y mezclar
       ambas máquinas de estado en una clase complicaría el camino auditado
       del flujo reviewable existente.
-- [ ] Tests unitarios: `tests/unit/test_trivial_executor.py` (nuevo) —
+- [x] Tests unitarios: `tests/unit/test_trivial_executor.py` (nuevo) —
       mock de `apply_mutation` y de `ActionProposalsRepository` (o sesión
       en memoria si el patrón ya usado en `test_governed_interaction_runner.py`
       lo permite): éxito (mutación + auditoría + 1 solo commit), fallo
@@ -107,7 +101,7 @@
 
 ## T5: Tools — rama trivial en `todos.py` y `notes.py`
 
-- [ ] `src/agent/tools/todos.py::propose_todo_item` (L324-387): si
+- [x] `src/agent/tools/todos.py::propose_todo_item` (L324-387): si
       `description is None and priority is None and due_date is None` →
       delega en `TrivialExecutor.execute("create_todo_item", {"list_id":
       str(list_id), "title": title.strip()}, user_ctx.user_id)` y devuelve
@@ -115,20 +109,20 @@
       **cualquier** campo opcional viene informado, sigue el camino actual
       sin cambios (crea proposal `pending_confirmation`). Docstring
       actualizado explicando ambas ramas al LLM.
-- [ ] `propose_todo_item_complete` (L452-464) / `propose_todo_item_reopen`
+- [x] `propose_todo_item_complete` (L452-464) / `propose_todo_item_reopen`
       (L467-479): ya no delegan en `_propose_todo_item_status` (crea
       proposal); delegan siempre en
       `TrivialExecutor.execute("set_todo_item_status", {"item_id": str(item_id),
       "status": "done"|"pending"}, user_ctx.user_id)`. Si
       `_propose_todo_item_status` queda sin otros llamadores, se elimina.
-- [ ] `src/agent/tools/notes.py::propose_note` (L41-69): delega siempre en
+- [x] `src/agent/tools/notes.py::propose_note` (L41-69): delega siempre en
       `TrivialExecutor.execute("remember_note", {"content": content.strip()},
       user_ctx.user_id)` en vez de crear `ActionProposal` pending. Docstring
       y texto de respuesta actualizados (ya no "¿Confirmas?").
-- [ ] Sin cambios en `propose_todo_list`, `propose_todo_item_update`,
+- [x] Sin cambios en `propose_todo_list`, `propose_todo_item_update`,
       `propose_todo_item_move`, `propose_todo_item_delete` — quedan
       `WRITE_REVIEWABLE` exactamente como hoy.
-- [ ] Tests: extender `tests/unit/test_todos_tools.py` (rama trivial vs
+- [x] Tests: extender `tests/unit/test_todos_tools.py` (rama trivial vs
       reviewable de `propose_todo_item` según campos opcionales;
       `propose_todo_item_complete`/`reopen` siempre trivial) y
       `tests/unit/test_note_tools.py` (`propose_note` siempre trivial),
@@ -182,10 +176,8 @@
       `ActionProposal` pending sin tocar `TrivialExecutor`).
 - [x] `ruff check src/ tests/ scripts/ migrations/` y `mypy src/` (167
       archivos) limpios.
-- [x] `tests/integration/` (T3): recolectados sin error (158 tests), **no
-      ejecutados** contra PostgreSQL real — sin Docker disponible en esta
-      sesión. Documentado como pendiente en `verification.md`, mismo
-      patrón que otras specs cuando no hay infraestructura.
-- [x] `verification.md` escrito, con el resumen de qué se probó y qué
-      queda pendiente de infraestructura real (migración aplicada,
-      integración, E2E Telegram).
+- [x] `tests/integration/` (T3): suite global verificada contra PostgreSQL real
+      (**159 passed, 1 STT live skipped**) y suite focal
+      `test_actions_repo.py` (**9 passed**) el 2026-10-15.
+- [x] `verification.md` actualizado con migración e integración PostgreSQL
+      verificadas; solo queda E2E Telegram.

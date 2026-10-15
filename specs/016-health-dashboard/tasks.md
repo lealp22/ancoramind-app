@@ -27,3 +27,5 @@
 - [ ] T7 · `verification.md`: matriz fail-open (Collector caído / DB caída /
       worker parado), verificación en Railway con Collector activo y captura
       del dashboard renderizado con datos reales.
+      Estado 2026-10-15: Collector activo, ingesta base confirmada y 429
+      resuelto; faltan importar/probar dashboard/alertas y ejecutar la matriz.

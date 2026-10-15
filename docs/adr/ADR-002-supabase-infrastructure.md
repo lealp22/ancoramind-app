@@ -81,6 +81,11 @@ Usar **Supabase** como proveedor de infraestructura gestionada:
   en esta migración. Un futuro acceso directo con Supabase Auth requiere un
   segundo incremento con roles sin `BYPASSRLS`, identidad transaccional y
   políticas por usuario; nunca conceder grants antes de definirlo.
+- Verificación productiva del 2026-10-15: head
+  `0015_ancora_rls_hardening`, 24/24 tablas con RLS, cero policies y cero grants
+  de tabla para `PUBLIC`, `anon`, `authenticated` o `service_role`. Los avisos
+  `rls_enabled_no_policy` del Security Advisor son esperados por este diseño
+  default-deny; otros warnings se gestionan de forma independiente.
 
 ## Alternativas consideradas
 

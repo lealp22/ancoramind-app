@@ -30,9 +30,8 @@ recordatorios y eventos, con trazabilidad completa.
   sin JSON mode/output_schema); el Core nunca entrega `proposal_text` sin
   propuestas persistidas. La tool terminal consume presupuesto, no escribe
   datos canónicos ni concede consentimiento.
-  1421 unit tests; los integration requieren
-  PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
-  limpios; ambos son gates globales en CI.
+  1421 unit tests y 159 integration PostgreSQL superados; una prueba STT live
+  se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
 
 ---
 
@@ -195,8 +194,9 @@ specs/                   ← SDD: 001-runtime, 002-notes, 003-documents, 004-veh
                             localmente), 036-telegram-proposal-presentation
                             (BL-48: contrato answer/proposal_text, renderer y
                             prompts — local, sin despliegue)
-tests/unit/              ← 643 tests
-tests/integration/        ← 94 tests (PostgreSQL dockerizado — specs/009; skip sin Docker)
+tests/unit/              ← 1421 tests
+tests/integration/        ← 160 tests recolectados (159 pasan con PostgreSQL
+                            dockerizado; 1 STT live se omite por diseño)
 evals/                   ← Catálogos sintéticos versionados (BL-8/specs/014 + 018)
 docs/                    ← architecture, governance, development, quick-start,
                            deployment-e2e, deployment-railway, runbooks-013
@@ -300,7 +300,8 @@ source .venv/Scripts/activate
 # Tests unitarios
 python -m pytest tests/unit/ -v
 
-# Integration tests (71 — PostgreSQL dockerizado; se saltan sin Docker)
+# Integration tests (160 recolectados — requieren PostgreSQL dockerizado;
+# resultado vigente: 159 passed, 1 STT live skipped por diseño)
 python -m pytest tests/integration/ -v
 
 # Lanzar la app localmente (requiere .env + PostgreSQL/Supabase; webhook solo
@@ -381,7 +382,7 @@ mypy src/
 | BL-18 Railway como sustituto de ngrok | 🔶 Servicio/dominio/webhook/healthcheck reales validados; pendiente Wait for CI + E2E M3–M5 (specs/008) |
 | BL-25 Script E2E nativo PowerShell | ✅ `run-e2e.ps1` local/remoto con `.env` seguro (specs/015) |
 | BL-23 Governed LLM Access + Telegram admission + OTel | 🔶 T2–T14 implementados; T14 fase 6 (cambio de modelo en caliente) validado en Railway (2026-09-19); pendientes: rollout Collector/Grafana, E2E completo y rotaciones (specs/013) |
-| BL-33 Health signals + dashboard de salud | 🔶 T1–T6 implementados localmente (readiness metadata-only, probes acotados, dashboard y alertas versionadas); pendiente validación real Collector/Grafana/Railway (T7, specs/016) |
+| BL-33 Health signals + dashboard de salud | 🔶 Collector/Grafana base desplegados y sin nuevos 429; pendientes dashboard/alertas y matriz de degradación T7 (specs/016) |
 | MVP usable | 🔶 E2E parcialmente validado (M1-M2 probado en Telegram; M3-M5 pendiente) |
 
 **Backlog:** la lista viva y priorizada de pendientes está en `BACKLOG.md`

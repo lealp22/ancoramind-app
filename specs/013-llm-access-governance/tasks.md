@@ -159,22 +159,23 @@ referenciar; su retiro llega con el rollout T4/T5.
 - [x] Configurar allowlist/redaction, memory limiter, batch y cola/retry acotados.
 - [x] Implementar exporter OTLP opcional al Collector y validar el manifiesto
       localmente con la imagen fijada.
-- [ ] Desplegar Collector privado en Railway y confirmar exportación real a
-      Grafana Cloud (requiere secretos y rollout explícito).
+- [x] Desplegar Collector privado en Railway y confirmar exportación real a
+      Grafana Cloud: servicio privado online, métricas base presentes y sin
+      nuevos 429 en el deployment actual (2026-10-15).
 - [x] Propagar W3C `traceparent` hacia el Gateway/provider transitorio.
 - [x] Crear tests que fallen si logs/traces contienen contenido sensible.
-- [ ] Crear dashboards y alertas iniciales (requiere instancia Grafana Cloud real).
+- [x] Crear dashboards y alertas iniciales como assets versionados; su
+      import/provisioning y prueba operativa permanecen en specs/016 T7.
 
-**Acceptance:** I, R y S implementados localmente. El provisionamiento/despliegue
-real del servicio Collector privado (checklist pendiente arriba) y
-dashboards/alertas de Grafana requieren un rollout Railway explícito y no se
-ejecutan desde el repositorio.
+**Acceptance:** I, R y S implementados localmente; Collector privado e ingesta
+base desplegados. El provisioning/prueba de dashboard y alertas y la matriz
+fail-open permanecen en specs/016 T7.
 
 ## T11: LiteLLM Proxy pilot
 
-- [ ] Provisionar PostgreSQL Railway dedicado para LiteLLM (rollout pendiente:
-      requiere aprobación de coste y creación real del servicio).
-- [ ] Desplegar LiteLLM como servicio privado en Railway. La imagen/version
+- [x] Provisionar PostgreSQL Railway para LiteLLM; el Gateway usa actualmente
+      el servicio `Postgres` privado referenciado por `DATABASE_URL`.
+- [x] Desplegar LiteLLM como servicio privado en Railway. La imagen/version
       digest ya está fijada (`gateway/Dockerfile`,
       `ghcr.io/berriai/litellm@sha256:a3715fa7…c62bf`) y validada localmente.
 - [x] Desactivar Swagger, Redoc y OpenAPI (`NO_DOCS`/`NO_REDOC`/`NO_OPENAPI`;
@@ -202,9 +203,9 @@ ejecutan desde el repositorio.
 - [ ] Revisar advisories y superficies de administración antes de producción
       (documentación ya desactivada; revisión de superficie en el rollout).
 
-**Acceptance:** Q implementado localmente (fail closed sin bypass verificado
-con el Gateway real). El despliegue Railway privado, el benchmark con clave
-real y la revisión de superficie productiva requieren un rollout explícito.
+**Acceptance:** Q implementado y Gateway privado desplegado. El benchmark con
+clave real, la caída controlada y la revisión completa de superficie productiva
+siguen pendientes.
 
 ## T12: Reliability and cost governance
 
