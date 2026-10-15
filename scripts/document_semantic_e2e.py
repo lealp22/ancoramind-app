@@ -9,19 +9,24 @@ never prints index text, query text, vectors, document names, IDs, or secrets.
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 
-from src.agent.document_embeddings import GovernedDocumentEmbeddingAdapter
-from src.config import Settings
-from src.domain.documents.service import DocumentService
-from src.repositories.database import close_database, get_session, init_database
-from src.repositories.documents import DocumentsRepository
-from src.security.user_context import UserContext
-from src.storage.base import DocumentStorage, StoredDocument
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.agent.document_embeddings import GovernedDocumentEmbeddingAdapter  # noqa: E402
+from src.config import Settings  # noqa: E402
+from src.domain.documents.service import DocumentService  # noqa: E402
+from src.repositories.database import close_database, get_session, init_database  # noqa: E402
+from src.repositories.documents import DocumentsRepository  # noqa: E402
+from src.security.user_context import UserContext  # noqa: E402
+from src.storage.base import DocumentStorage, StoredDocument  # noqa: E402
 
 
 class _UnusedStorage(DocumentStorage):
