@@ -120,27 +120,42 @@ del Agent deben reconocer que el Core muestra la propuesta, en vez de
 obligarlo a reproducirla. La traducción de campos vive en el renderer y
 nunca se persiste de vuelta al payload.
 
-**Contrato elegido (2026-10-14):** `AgentReply` (Pydantic, dominio sin Agno)
-separa `answer` de `proposal_text`. La factory gobernada pide ese
-`output_schema` en JSON mode y el runner exige el objeto validado: salida
-libre/no validada se rechaza sin nuevo intento ni bypass. No hay parser/modelo
-secundario ni inferencia adicional. Las instrucciones de cada campo viven
-en el prompt Telegram versionado, no en descripciones Python anónimas.
+**Contrato actual (corrección 2026-10-15):** `AgentReply` (Pydantic, dominio
+sin Agno) separa `answer` de `proposal_text`. Se retiran `output_schema` y JSON
+mode del bucle principal, introducidos el 2026-10-14. La partición se obtiene
+mediante `present_reply`, herramienta terminal de presentación sin I/O canónico,
+con `stop_after_tool_call=True`. Su descripción procede de
+`prompts/skills/presentation.md`. `tool_choice="required"` impide finalizar con
+un completion textual; saludos y aclaraciones terminan directamente mediante
+esta herramienta, sin lecturas personales innecesarias. No fuerza una tool de
+dominio concreta ni garantiza su elección semántica.
+
+El runner acepta solo el resultado validado de una ejecución terminal exitosa,
+única y última de `present_reply`; nunca prosa, JSON en `content` ni argumentos
+sin ejecución. No hay parser/modelo secundario, reintento ni inferencia posterior
+al cierre. La herramienta consume una llamada del presupuesto existente (12);
+no se amplía ningún límite. El harness físico usa el mismo contrato, pero excluye
+la presentación de los veredictos de tool calling de dominio.
 
 El Core sustituye **solo** `proposal_text` cuando encuentra propuestas de
 esa interacción y usuario. Conserva `answer` (READ, errores, resultado
 trivial y advertencias necesarias que no consten en el bloque). Sin
-propuestas, o con consentimiento OFF, une ambos campos como texto. Un
+propuestas, o con consentimiento OFF, descarta `proposal_text`: nunca entrega
+una narración de propuesta como evidencia de persistencia. Si no queda respuesta
+independiente, comunica que no se ha presentado ninguna propuesta. Un
 adaptador de pruebas que devuelva texto sin propuestas sigue funcionando;
 si crea propuestas sin partición se rechaza, no se analiza prosa para
-deducir su contenido. El chequeo de respuesta vacía ocurre después de
-componer: una salida vacía del Agent es válida si existen bloques reales.
+deducir su contenido. `AgentReply` exige que al menos uno de sus campos
+contenga texto no vacío: tras un `propose_*` correcto el Agent devuelve el
+texto no autoritativo como `Propuesta creada.` en `proposal_text`, que el Core
+sustituye por su bloque persistido. Un JSON con ambos campos vacíos no es una
+respuesta válida ni una forma de omitir una tool requerida.
 
 **Límite explícito:** el Core garantiza la sustitución del campo correcto y
 que los bloques proceden de Postgres, pero la clasificación del texto en
 `answer`/`proposal_text` sigue siendo probabilística. Si el modelo incumple
 el contrato y duplica campos en `answer`, un esquema válido no lo detecta.
-No se afirma garantía semántica con prompts, mocks ni JSON mode: requiere
+No se afirma garantía semántica con prompts, mocks ni `tool_choice`: requiere
 evaluación y E2E reales. No se descarta toda la respuesta del Agent.
 
 **Vencimiento TODO:** el modelo actual no conserva un indicador fecha-sola:

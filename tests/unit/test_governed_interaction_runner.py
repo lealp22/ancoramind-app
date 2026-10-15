@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 import pytest
 from agno.models.base import Model
 from agno.models.response import ModelResponse
+from agno.run.agent import RunOutput, ToolExecution
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_interaction_runner import (
@@ -68,10 +69,16 @@ class _FakeAgent:
         context = current_execution_context()  # fails closed if unbound
         self.calls.append({"input_text": input_text, "context": context, **kwargs})
 
-        class _Output:
-            content = AgentReply(answer="respuesta gobernada", proposal_text="")
-
-        return _Output()
+        return RunOutput(
+            tools=[
+                ToolExecution(
+                    tool_name="present_reply",
+                    result=AgentReply(
+                        answer="respuesta gobernada", proposal_text=""
+                    ).model_dump_json(),
+                )
+            ]
+        )
 
 
 class _FakeFactory(GovernedAgentFactory):
@@ -105,7 +112,7 @@ def _runner() -> tuple[GovernedInteractionRunner, _FakeFactory]:
 
 @dataclass
 class _PresentationModel(Model):
-    """Exercise Agno's JSON parsing, without a provider, credentials or I/O."""
+    """Exercise the terminal presentation tool without provider or I/O."""
 
     calls: int = field(default=0, repr=False)
 
@@ -128,10 +135,43 @@ class _PresentationModel(Model):
     async def ainvoke(self, *args: Any, **kwargs: Any) -> ModelResponse:
         self.calls += 1
         return ModelResponse(
-            content=AgentReply(
-                answer="Una tarea completada.", proposal_text="Resumen redundante."
-            ).model_dump_json()
+            tool_calls=[
+                {
+                    "id": "synthetic-presentation-call",
+                    "type": "function",
+                    "function": {
+                        "name": "present_reply",
+                        "arguments": AgentReply(
+                            answer="Una tarea completada.", proposal_text="Resumen redundante."
+                        ).model_dump_json(),
+                    },
+                }
+            ]
         )
+
+
+@dataclass
+class _EmptyPresentationModel(Model):
+    """Return the JSON shape that previously became a silent AgentReply."""
+
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    def invoke_stream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    async def ainvoke_stream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+        yield
+
+    def _parse_provider_response(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    def _parse_provider_response_delta(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> ModelResponse:
+        return ModelResponse(content='{"answer":"","proposal_text":""}')
 
 
 async def test_real_agno_run_parses_partition_without_a_second_model_or_network() -> None:
@@ -157,6 +197,31 @@ async def test_real_agno_run_parses_partition_without_a_second_model_or_network(
     )
     assert reply == AgentReply(answer="Una tarea completada.", proposal_text="Resumen redundante.")
     assert model.calls == 1
+
+
+async def test_real_agno_run_rejects_empty_presentation_json_without_a_network() -> None:
+    model = _EmptyPresentationModel(id="synthetic-empty-presentation")
+
+    class FakeAccess:
+        def model_for(self, route_name: str, context: ExecutionContext) -> Model:
+            return model
+
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot()),
+        factory=GovernedAgentFactory(
+            llm_access=FakeAccess(), db=None, tools=[], instructions=["Synthetic fixture"]
+        ),
+    )
+
+    with pytest.raises(ValueError, match="invalid presentation output"):
+        await runner.run(
+            "Crea una lista llamada Casa",
+            user_id="88",
+            session_id="synthetic",
+            run_id="synthetic-empty-presentation",
+            correlation_id=uuid4(),
+            telegram_update_id=1,
+        )
 
 
 async def test_runner_binds_context_metadata_and_returns_text() -> None:
@@ -407,6 +472,29 @@ async def test_runner_never_forwards_unvalidated_free_form_proposal_text() -> No
             user_id="88",
             session_id="synthetic",
             run_id="synthetic",
+            correlation_id=uuid4(),
+            telegram_update_id=1,
+        )
+
+
+async def test_runner_rejects_the_empty_agent_reply_json() -> None:
+    """A JSON-shaped blank must not become an empty Telegram response."""
+    runner, factory = _runner()
+
+    class UnparsedEmptyReplyAgent:
+        async def arun(self, input_text: str, **kwargs: Any) -> Any:
+            class Output:
+                content = '{"answer":"","proposal_text":""}'
+
+            return Output()
+
+    factory.agent = UnparsedEmptyReplyAgent()  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="invalid presentation output"):
+        await runner.run(
+            "Crea una lista llamada Casa",
+            user_id="88",
+            session_id="synthetic",
+            run_id="synthetic-empty-reply",
             correlation_id=uuid4(),
             telegram_update_id=1,
         )

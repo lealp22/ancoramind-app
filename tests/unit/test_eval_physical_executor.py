@@ -96,10 +96,10 @@ async def test_tool_call_is_observed_as_tool_call_outcome() -> None:
         id="eval-test",
         turns=(
             _tool_call_turn("call-1", "search_notes", "{}"),
-            ModelResponse(
-                content=AgentReply(
-                    answer="Aquí tienes tu nota.", proposal_text=""
-                ).model_dump_json()
+            _tool_call_turn(
+                "reply-1",
+                "present_reply",
+                AgentReply(answer="Aquí tienes tu nota.", proposal_text="").model_dump_json(),
             ),
         ),
     )
@@ -127,7 +127,11 @@ async def test_propose_tool_call_requires_user_confirmation() -> None:
                 "propose_reminder",
                 '{"title": "Llamar al dentista", "trigger_at": "2026-01-01T10:00:00"}',
             ),
-            ModelResponse(content=AgentReply(answer="", proposal_text="").model_dump_json()),
+            _tool_call_turn(
+                "reply-1",
+                "present_reply",
+                AgentReply(answer="", proposal_text="Propuesta creada.").model_dump_json(),
+            ),
         ),
     )
     executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model=model))
@@ -186,10 +190,10 @@ async def test_no_tool_call_is_a_distinct_sentinel_not_clarify_or_safe_response(
     model = _ScriptedModel(
         id="eval-test",
         turns=(
-            ModelResponse(
-                content=AgentReply(
-                    answer="No tengo esa información.", proposal_text=""
-                ).model_dump_json()
+            _tool_call_turn(
+                "reply-1",
+                "present_reply",
+                AgentReply(answer="No tengo esa información.", proposal_text="").model_dump_json(),
             ),
         ),
     )

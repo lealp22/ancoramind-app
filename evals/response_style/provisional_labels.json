@@ -68,7 +68,7 @@
       "case_id": "response_style.single_proposal",
       "reply": {
         "answer": "",
-        "proposal_text": ""
+        "proposal_text": "Propuesta creada."
       },
       "criterion_indices": [1],
       "labels": ["pass"]

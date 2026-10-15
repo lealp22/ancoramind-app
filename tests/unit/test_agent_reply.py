@@ -9,7 +9,15 @@ from src.domain.interactions.reply import AgentReply
 def test_reply_preserves_both_fields_when_there_is_no_core_block() -> None:
     reply = AgentReply(answer=" Consulta. ", proposal_text=" Propuesta. ")
     assert reply.text() == "Consulta.\n\nPropuesta."
-    assert AgentReply(answer="", proposal_text="").text() == ""
+
+
+@pytest.mark.parametrize(
+    ("answer", "proposal_text"),
+    [("", ""), ("  ", "\n\t")],
+)
+def test_reply_rejects_an_empty_final_presentation(answer: str, proposal_text: str) -> None:
+    with pytest.raises(ValidationError, match="non-empty answer or proposal_text"):
+        AgentReply(answer=answer, proposal_text=proposal_text)
 
 
 @pytest.mark.parametrize(

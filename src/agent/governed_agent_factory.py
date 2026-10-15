@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Any
 
 from agno.agent import Agent
 
+from src.agent.reply_presentation import build_reply_presentation_tool
 from src.agent.tool_budget_hooks import build_budget_tool_hook
 from src.agent.tool_catalog import proposal_only_tools
 from src.domain.context_policy.service import (
     available_history_tokens,
     resolve_history_ceiling,
 )
-from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import ExecutionContext
 from src.observability.telemetry import get_telemetry
 
@@ -99,15 +99,13 @@ class GovernedAgentFactory:
             name="AncoraMind",
             model=model,
             db=self._db,
-            tools=self._tools,
+            tools=[*self._tools, build_reply_presentation_tool()],
+            tool_choice="required",
             tool_call_limit=snapshot.config.execution_budget.max_tool_calls,
             retries=0,
             telemetry=False,
             tool_hooks=self._tool_hooks or None,
             instructions=instructions,
-            output_schema=AgentReply,
-            use_json_mode=True,
-            parser_model=None,
             add_history_to_context=True,
             num_history_runs=history_ceiling,
             add_datetime_to_context=True,

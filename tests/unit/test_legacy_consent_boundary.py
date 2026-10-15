@@ -98,7 +98,9 @@ def test_governed_agent_cannot_expose_execution_tools_even_if_injected():
         fingerprint_key="synthetic-test",
     )
     agent = factory.create_for_run(_context(_snapshot_with_window("ancoramind-default", 128_000)))
-    assert agent.tools == [notes.search_notes]
+    assert agent.tools[:-1] == [notes.search_notes]
+    assert agent.tools[-1].name == "present_reply"
+    assert agent.tools[-1].stop_after_tool_call is True
 
 
 def test_production_registration_only_exposes_reads_proposals_and_approved_exceptions(monkeypatch):

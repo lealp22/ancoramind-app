@@ -89,7 +89,10 @@ BL-48/specs/036 añade cinco casos de presentación: propuesta única, consulta
 mixta, tareas tras descarte, nueva petición explícita y lectura de pendientes.
 El catálogo tiene 36 casos, de los cuales 9 son de `response_style`. El
 adaptador físico usa el contrato `AgentReply(answer, proposal_text)` como
-producción, pero no simula la entrega/outbox del Core: revisar un texto de
+producción, ahora mediante la tool terminal `present_reply`, sin JSON mode ni
+`output_schema` en el bucle principal. La presentación no cuenta como tool de
+dominio para el veredicto, aunque consume presupuesto igual que en producción.
+No simula la entrega/outbox del Core: revisar un texto de
 Agent no valida por sí solo la presentación final con botones en Telegram.
 Los casos TODO/pendientes usan tools en memoria, sin repositorios productivos.
 No se ejecutó inferencia real ni evaluación semántica en este incremento.

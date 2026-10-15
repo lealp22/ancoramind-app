@@ -924,9 +924,24 @@ async def test_no_stored_proposal_never_replaces_an_answer_or_creates_controls(
     reply = AgentReply(
         answer="No encontré la lista.", proposal_text="No se creó ninguna propuesta."
     )
-    assert await processor._append_proposal_blocks(_interaction(), reply) == reply.text()
+    assert await processor._append_proposal_blocks(_interaction(), reply) == reply.answer
     if not governed:
         actions.list_created_in_interaction.assert_not_awaited()
+
+
+@pytest.mark.parametrize("governed", [False, True])
+async def test_unbacked_proposal_narration_is_never_delivered(monkeypatch, governed) -> None:
+    actions = AsyncMock()
+    actions.list_created_in_interaction.return_value = []
+    processor = _consent_processor(monkeypatch, actions)
+    processor._governed_consent = governed
+    content = await processor._append_proposal_blocks(
+        _interaction(),
+        AgentReply(answer="", proposal_text="He creado una propuesta para Casa. Confirma."),
+    )
+    assert content == "No se ha presentado ninguna propuesta para confirmar."
+    assert "He creado" not in content
+    assert await processor._pending_proposal_buttons(_interaction()) == ()
 
 
 async def test_plain_text_adapter_cannot_guess_proposal_partition(monkeypatch) -> None:
@@ -942,9 +957,9 @@ async def test_plain_text_adapter_cannot_guess_proposal_partition(monkeypatch) -
 @pytest.mark.parametrize(
     "reply,created,expected",
     [
-        (AgentReply(answer="", proposal_text=""), True, "Nombre: Compras"),
+        (AgentReply(answer="", proposal_text="Propuesta creada."), True, "Nombre: Compras"),
         (AgentReply(answer="✅ Añadido y auditado.", proposal_text=""), False, "✅ Añadido"),
-        (AgentReply(answer="", proposal_text=""), False, None),
+        ("", False, None),
         (
             AgentReply(answer="Se borrarán 3 tareas.", proposal_text="¿Confirmas?"),
             True,

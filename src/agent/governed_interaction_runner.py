@@ -22,6 +22,7 @@ from agno.run import RunContext
 from agno.run.agent import RunOutput
 
 from src.agent.governed_agent_factory import GovernedAgentFactory
+from src.agent.reply_presentation import reply_from_run
 from src.agent.tools.documents import (
     MAX_TELEGRAM_ATTACHMENT_CONTEXT_CHARS,
     ingest_resolved_telegram_media,
@@ -235,11 +236,7 @@ class GovernedInteractionRunner:
                         ),
                         timeout=context.budget.seconds_remaining(),
                     )
-                    if not isinstance(agent_output.content, AgentReply):
-                        raise ValueError(
-                            "Governed interaction run returned invalid presentation output"
-                        )
-                    return agent_output.content
+                    return reply_from_run(agent_output)
                 except TimeoutError as exc:
                     get_telemetry().mark_error(span, "ExecutionBudgetExceededError")
                     get_telemetry().counter(

@@ -127,6 +127,11 @@ class TestAssembleInstructions:
         prompt_text = "\n".join(assemble_instructions())
         assert "`answer` and `proposal_text`" in prompt_text
         assert "The Core replaces only `proposal_text`" in prompt_text
+        assert "calling `present_reply`" in prompt_text
+        assert "Call required domain tools and wait for their results first" in prompt_text
+        assert "Both arguments cannot be empty" in prompt_text
+        assert "otherwise discards it" in prompt_text
+        assert "both strings may be empty" not in prompt_text
         assert (
             "Do not offer to re-propose a discarded action unless the user asks anew" in prompt_text
         )
@@ -134,3 +139,15 @@ class TestAssembleInstructions:
         assert 'Ask for "Sí"' not in prompt_text
         assert "ask for explicit confirmation" not in prompt_text
         assert "Approved WRITE_TRIVIAL tools execute and audit immediately" in prompt_text
+
+    def test_prompt_has_no_accidental_source_line_number(self):
+        """A copied source-line prefix is noise, not a model instruction."""
+        assert "77 |     descriptions" not in "\n".join(assemble_instructions())
+
+    def test_terminal_tool_prompt_is_versioned_and_requires_real_domain_work(self):
+        prompt = load_prompt("skills/presentation.md")
+        assert "`list_todo_lists`" in prompt
+        assert "`list_todo_items`" in prompt
+        assert '`propose_todo_list(name="Casa")`' in prompt
+        assert "never in the same batch as another tool" in prompt
+        assert "no later background work" in prompt

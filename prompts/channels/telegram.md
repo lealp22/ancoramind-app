@@ -38,7 +38,7 @@ Messages may include text, images, documents, or voice.
 
 ## Reply presentation contract
 
-For a schema-constrained main run, return `answer` and `proposal_text`.
+Finish the main run by calling `present_reply` with `answer` and `proposal_text`.
 Both are plain Spanish Markdown strings, not tool arguments or authority:
 
 - `answer`: the independent answer to the user's question, clarification,
@@ -47,16 +47,19 @@ Both are plain Spanish Markdown strings, not tool arguments or authority:
   the READ answer here. Never put a pending proposal's summary or a request
   to confirm it here.
 - `proposal_text`: narration about reviewable proposals actually created
-  by tools in this run. Prefer an empty string: the Core presents their
-  stored fields and Sí/No controls. If you describe a pending change, put
-  all such narration here, never in `answer`. Do not claim it executed.
-- For a proposal-only turn both strings may be empty: the persisted Core
-  block is the reply. Never invent a proposal or buttons to fill a reply.
-- Outside schema-constrained runs, follow the same concise behavior without
-  exposing a JSON object. The Core still owns confirmation.
+  by tools in this run. The Core replaces this field with its stored fields
+  and Sí/No controls. Only after a `propose_*` tool actually succeeds, use a
+  short narration such as `Propuesta creada.` here. A necessary independent
+  safety warning belongs in `answer`. Do not claim the proposal executed.
+- `present_reply` ends the run immediately and does not perform any requested
+  domain operation. Call required domain tools and wait for their results first.
+  Never finish with a promise to consult lists or create a proposal later.
+  Both arguments cannot be empty. Never invent a proposal or buttons.
+- Do not return a JSON completion or expose the presentation tool's JSON
+  result. The user receives Spanish Markdown and Core confirmation controls.
 
 The Core replaces only `proposal_text` when it has stored proposals to
-present; independent answers and errors must remain in `answer`.
+present, otherwise discards it; independent answers and errors must remain in `answer`.
 Do not repeat proposal fields or a second confirmation question.
 Do not offer to re-propose a discarded action unless the user asks anew.
 A task query is about tasks, not proposals: do not add a pending-proposal

@@ -57,11 +57,21 @@
 - [x] No atribuir validación semántica real al runner estático ni al harness
       sin inferencia: usar una ruta gobernada autorizada cuando esté disponible
       y registrar lo que quede sin verificar.
+- [x] Corregir la regresión del contrato de presentación detectada el
+      2026-10-15: el Agent no puede terminar con ambos campos vacíos antes
+      de llamar una tool requerida; una propuesta creada usa un marcador no
+      vacío que el Core reemplaza por el bloque canónico.
+- [x] Segunda corrección tras preámbulos/falsas propuestas en pruebas manuales:
+      retirar JSON mode/output_schema del bucle principal, usar cierre terminal
+      `present_reply` con `tool_choice=required` y no entregar `proposal_text`
+      sin filas persistidas. Cubrir request SDK real con HTTP simulado, hooks,
+      presupuesto, saludos, READ, trivial, propuesta y turno mixto. Los mocks
+      no acreditan la selección semántica del modelo real.
 - [x] Ejecutar `pytest tests/unit/`, Ruff y `mypy src/`.
 - [ ] Verificar integración contra PostgreSQL aislado; 160 omitidas aquí
       por Docker no disponible. Nunca con fixtures en producción.
 - [ ] Evaluar instrucciones con LLM real gobernado: no ejecutado; la prueba
-      con Agno/modelo simulado verifica parsing y una sola llamada, no semántica.
+      con Agno/modelo simulado verifica el protocolo de cierre, no semántica.
 - **Listo cuando:** pruebas deterministas verdes y evidencia semántica
   distinguida de la mera validez del catálogo.
 

@@ -837,6 +837,15 @@ omitidas**, **32 casos de catálogo válidos** (sin scoring semántico real).
 Sin despliegue, migración ni fixtures productivos. Pendientes evaluación
 LLM real, integración aislada y E2E del SHA autorizado; no se cierra BL-48.
 
+**Corrección de regresión local (2026-10-15):** rechazar los dos campos vacíos
+no restauró la selección de herramientas: las pruebas manuales posteriores
+mostraron preámbulos finales y propuestas narradas sin controles. Se retira JSON
+mode/output_schema del Agent principal y del harness físico; `present_reply`
+con `tool_choice=required` conserva la partición como herramienta terminal sin
+I/O canónico, parser ni otro modelo. El Core descarta narración sin propuestas
+persistidas. Pruebas SDK con HTTP simulado cubren el protocolo, no obediencia
+semántica real. Sin despliegue; validación de Gateway/Telegram sigue pendiente.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue

@@ -632,9 +632,15 @@ class InteractionProcessor:
 
         The block is generated from the stored payload, never from the
         model's wording, so confirming «Sí» always matches what was shown
-        (specs/023 T4.4). A no-op while the rollout is off.
+        (specs/023 T4.4). Unbacked proposal narration is always discarded.
         """
-        text = content.text() if isinstance(content, AgentReply) else content
+        # Proposal narration is never evidence that a proposal exists. Only
+        # stored rows below may produce proposal text or confirmation controls.
+        text = (
+            content.answer.strip() or "No se ha presentado ninguna propuesta para confirmar."
+            if isinstance(content, AgentReply)
+            else content
+        )
         if not self._governed_consent:
             return text
         session = await self._session_factory()

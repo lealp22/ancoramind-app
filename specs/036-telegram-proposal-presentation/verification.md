@@ -85,6 +85,57 @@ BL-48 ni motivo para cerrar BL-47 o todos los pendientes de specs/035.
 - Cinco casos sintéticos añadidos; catálogo total de 32. Simuladores TODO y
   lectura de pendientes añadidos al harness sin importar I/O de producción.
 
+### Primer intento local, insuficiente (2026-10-15)
+
+- Se observó en OpenRouter una respuesta JSON válida pero vacía
+  (`{"answer":"","proposal_text":""}`) después de razonar sobre una tool,
+  sin llamada de herramienta. La causa local comprobable era que el contrato
+  `AgentReply` y el prompt permitían ambos campos vacíos; Agno aceptaba esa
+  salida final y el procesador la marcaba como `EmptyAgentResponse` si no
+  existía una propuesta persistida.
+- Se hizo que `AgentReply` rechazase ambos campos vacíos o solo con espacios. El
+  prompt ordenaba llamar la tool antes de devolver el JSON final y exigía el
+  marcador no autoritativo `Propuesta creada.` después de un `propose_*`
+  exitoso; el Core sigue sustituyéndolo por el bloque canónico.
+- Una reproducción local con Agno 2.9.0, SDK OpenAI-compatible y transporte
+  HTTP simulado confirmó que aquella request enviaba `tools` junto con
+  `response_format={"type":"json_object"}`, y que Agno antes aceptaba la
+  respuesta vacía sin ejecutar tools. No se llamó a OpenRouter, LiteLLM,
+  Supabase ni Railway durante esta corrección.
+
+### Segunda corrección local tras pruebas manuales fallidas (2026-10-15)
+
+- El propietario observó preámbulos finales («Déjame consultar tus listas») y
+  una propuesta narrada sin botones. El primer intento no restauraba el tool
+  calling: solo sustituía el vacío por texto. La causalidad semántica exacta
+  sigue sin probarse con una comparación real del mismo modelo/proveedor.
+- Se retiran `output_schema` y `use_json_mode` del Agent principal y del harness
+  físico; el request ya no lleva `response_format`. `present_reply` conserva
+  la partición como herramienta terminal (`stop_after_tool_call=True`) con
+  contrato en Git y `tool_choice=required`. No hay parser, modelo extra ni
+  request posterior al cierre. Consume presupuesto de herramienta sin ampliar
+  los límites. Saludos y aclaraciones pueden cerrarse sin llamar tools de datos.
+- El runner exige una única ejecución terminal exitosa y valida su resultado,
+  no acepta una frase/JSON en `content` como respuesta final. El Core descarta
+  `proposal_text` sin propuestas de esa interacción/usuario y no fabrica botones;
+  mantiene el `answer` de lecturas, errores y turnos mixtos.
+- SDK OpenAI-compatible real y Agno, con `httpx.MockTransport` y modelo gobernado,
+  cubren listas, tareas por ID resuelto, propuesta, saludo, turno mixto y trivial.
+  Se verifica ausencia de `response_format` y del sufijo JSON generado por Agno,
+  `tool_choice`, replay de resultados de tools, ejecución, presupuesto/hooks y
+  auditoría de uso. Los completions prematuros y resultados terminales fallidos,
+  vacíos, duplicados o no finales se rechazan. Esto prueba protocolo con un
+  proveedor simulado, **no** selección semántica del modelo real ni E2E Telegram.
+- Sin inferencia real, despliegue, migraciones, cambios de modelo/Gateway ni
+  fixtures productivos. Validación real del SHA queda pendiente antes de cierre.
+- Verificación final local de esta segunda corrección: `pytest tests/unit/ -q`
+  **1418 passed**; Ruff global limpio; `mypy src/` limpio (172 archivos).
+  `scripts/run_evals.py --json`: **36 casos válidos**, 6 categorías y 9 ejemplos
+  sintéticos de calibración; no equivale a ejecutar un juez ni un modelo real.
+  La matriz HTTP simulada incluye también not-found y error de lectura.
+  Avisos del Collector local ausente al exportar métricas, sin fallos de tests.
+  No se ejecutó integración PostgreSQL en esta corrección.
+
 ### Prueba y límites de evidencia
 
 - Pruebas nuevas: partición estricta, prosa no validada rechazada, composición

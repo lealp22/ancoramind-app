@@ -25,7 +25,11 @@ recordatorios y eventos, con trazabilidad completa.
   para que el Agent nunca narre propuestas pendientes desde memoria
   conversacional (BL-47) + presentación particionada `AgentReply` para un
   único bloque Core de propuestas en Telegram (BL-48/specs/036, implementación
-  local; evaluación LLM real/E2E pendientes).
+  local; evaluación LLM real/E2E pendientes). Corrección local del 2026-10-15:
+  el Agent principal termina mediante `present_reply` (`tool_choice=required`,
+  sin JSON mode/output_schema); el Core nunca entrega `proposal_text` sin
+  propuestas persistidas. La tool terminal consume presupuesto, no escribe
+  datos canónicos ni concede consentimiento.
   1380 unit tests; los integration requieren
   PostgreSQL/Docker (se omiten sin esa infraestructura). Ruff y `mypy src/`
   limpios; ambos son gates globales en CI.
