@@ -17,6 +17,8 @@ COPY src/ src/
 COPY prompts/ prompts/
 COPY alembic.ini ./
 COPY migrations/ migrations/
+COPY scripts/ scripts/
+COPY specs/ specs/
 RUN pip install --no-cache-dir .
 
 # Runtime directories

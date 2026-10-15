@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "routing": {
+    "default_route": "ancoramind-default",
+    "routes": {
+      "ancoramind-default": {
+        "effective_gateway_route": "ancoramind-default-r4",
+        "capabilities": ["text", "tool_calling", "structured_output"]
+      },
+      "ancoramind-fast": {
+        "effective_gateway_route": "ancoramind-fast-r1",
+        "capabilities": ["text", "tool_calling"]
+      },
+      "ancoramind-vision": {
+        "effective_gateway_route": "ancoramind-vision-r1",
+        "capabilities": ["text", "structured_output", "vision"]
+      }
+    }
+  },
+  "execution_budget": {
+    "max_runtime_seconds": 120,
+    "max_model_calls": 6,
+    "max_tool_calls": 12,
+    "max_same_tool_args_after_success": 1,
+    "max_gateway_requests": 8,
+    "max_gateway_attempts_per_model_call": 2,
+    "max_output_tokens": 1024,
+    "max_queue_wait_seconds": 30,
+    "max_estimated_cost_usd": 0.10
+  },
+  "concurrency": {
+    "per_chat": 1,
+    "per_user": 1,
+    "global": 2,
+    "queued_per_chat": 5,
+    "pending_global": 20
+  },
+  "admission": {
+    "user_burst": 5,
+    "user_requests_per_minute": 10,
+    "user_requests_per_hour": 120
+  },
+  "gateway": {
+    "request_timeout_seconds": 45,
+    "retries": 0,
+    "cross_model_fallbacks": 0,
+    "cooldown_seconds": 60,
+    "openrouter_provider_fallback": true
+  },
+  "observability": {
+    "traces_enabled": true,
+    "metrics_enabled": true,
+    "content_capture": false,
+    "trace_sample_rate": 1.0
+  },
+  "pricing": {
+    "routes": {
+      "ancoramind-default-r4": {
+        "input_cost_per_1m_usd": 0.43,
+        "output_cost_per_1m_usd": 0.87
+      }
+    }
+  },
+  "cost_governance": {
+    "external_hard_limit_usd": 20.0,
+    "alert_threshold_pct": 60,
+    "strong_alert_threshold_pct": 80,
+    "hard_stop_threshold_pct": 90,
+    "daily_budget_usd": 1.0,
+    "monthly_budget_usd": 20.0,
+    "route_monthly_budgets_usd": {
+      "ancoramind-default": 10.0
+    }
+  }
+}
