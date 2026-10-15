@@ -13,5 +13,6 @@ tmp
 tests
 docs
 evals
-specs
+# specs must be available to runtime management scripts in the production image.
+# specs
 TODO.md
