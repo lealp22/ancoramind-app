@@ -1,7 +1,9 @@
 # Verification: 016 — Health Signals and Dashboard
 
-> **Fecha:** 2026-09-24 · **Estado:** 🔶 T1–T6 implementados localmente; T7
-> requiere despliegue y evidencia en Railway/Grafana Cloud.
+> **Fecha inicial:** 2026-09-24 · **Actualizado:** 2026-10-15 · **Estado:** 🔶
+> T1–T6 implementados localmente; T7 tiene evidencia de despliegue e ingestión
+> base Railway/Grafana Cloud, pero dashboard/alertas aún requieren normalización,
+> provisioning y prueba de notificación.
 
 ## Evidencia local
 
@@ -65,29 +67,28 @@ prueba destructiva sin una ventana de mantenimiento aprobada.
 
 ## Procedimiento de cierre T7 (Railway + Grafana)
 
-1. Resolver los bloqueos anotados en `BACKLOG.md`: push autorizado del
-   `observability/Dockerfile`, alineación de región del Collector con la app y
-   creación de `GRAFANA_OTLP_ENDPOINT` y `GRAFANA_OTLP_AUTHORIZATION` como
-   secretos de Railway.
-2. Desplegar el Collector privado sin dominio público y configurar la app para
-   exportar únicamente a `http://ancoramind-otel-collector.railway.internal:4317`.
-   Verificar que el Collector valida su configuración y que la app permanece
-   disponible si el Collector está caído.
-3. Importar `observability/dashboards/ancoramind-health.json` y provisionar
+Los pasos de infraestructura 1 y 2 se validaron el 2026-10-15: el Collector
+privado está desplegado junto a la app en `europe-west4-drams3a`, el datasource
+es `grafanacloud-prom` y Grafana recibe las series base. El procedimiento de
+consulta y diagnóstico queda en `docs/runbooks-013.md` §7.
+
+1. Repetir las consultas base de §7.2 del runbook y registrar UTC, commit,
+   deployment y resultado sin contenido personal.
+2. Importar `observability/dashboards/ancoramind-health.json` y provisionar
    `observability/alerts/ancoramind-health-alerts.json` en Grafana Cloud.
-4. Consultar las series recibidas en Grafana y normalizar los nombres Prometheus
-   y labels reales antes de habilitar alertas. En particular confirmar los nombres
-   derivados de `ancora.health.component`, `ancora.health.heartbeat` y
-   `ancora.interactions.last_processed.age_seconds`; no asumir que el backend
-   conserva exactamente los nombres del JSON local.
-5. Ejecutar la matriz anterior en staging. Para cada fila conservar evidencia
+3. Consultar cada serie y label usados por los paneles/reglas, y normalizarlos
+   contra muestras reales antes de habilitar alertas. Las métricas confirmadas
+   hoy son `ancora_health_component`, `ancora_health_heartbeat_total` y
+   `ancora_runtime_config_revision`; no asumir que las métricas event-driven
+   tienen muestras cuando no hubo tráfico.
+4. Ejecutar la matriz anterior en staging. Para cada fila conservar evidencia
    con UTC, entorno, `deployment_id`, servicio, query Grafana y resultado; las
    capturas deben contener sólo metadata operacional.
-6. Probar recepción y resolución de cada alerta sin notificar durante ventanas
+5. Probar recepción y resolución de cada alerta sin notificar durante ventanas
    de mantenimiento. Silenciar explícitamente la alerta de ausencia de admissions
    cuando el webhook/admission esté intencionadamente deshabilitado o no haya
    tráfico esperado; no modificar la expresión para ocultar una incidencia.
-7. Registrar los resultados, las queries normalizadas, el UID del dashboard y
+6. Registrar los resultados, las queries normalizadas, el UID del dashboard y
    las reglas efectivamente habilitadas en esta sección. Sólo entonces marcar T7
    como completada en `specs/016-health-dashboard/tasks.md` y `BACKLOG.md`.
 

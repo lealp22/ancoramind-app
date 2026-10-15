@@ -4,9 +4,10 @@
 > Railway de LiteLLM privado y admission/processor Telegram está validado el
 > 16 de septiembre de 2026. Las pruebas de duplicados y negativas reales
 > (A/B/V/N/O) se validaron en Railway el 18 de septiembre de 2026.
-> Collector/Grafana, dashboards/alertas, benchmark
-> con clave real, rotación real y validación Railway del cambio de modelo en
-> caliente siguen pendientes. **BL-23 permanece abierto.**
+> El Collector privado y la ingesta de métricas base en Grafana Cloud se
+> validaron en producción el 2026-10-15. Quedan pendientes la normalización e
+> import/provisioning del dashboard y alertas, benchmark con clave real y
+> rotación real. **BL-23 permanece abierto.**
 > **Diseño aprobado:** 2026-09-13 · **Hardening local T13:** 2026-09-14 ·
 > **Cambio de modelo en caliente T14:** 2026-09-18 (ADR-005 enmendado)
 
@@ -16,17 +17,31 @@
 
 | Campo | Valor |
 |---|---|
-| Commit desplegado | `086f1fa2d7fec7bea14d059f024d5581593f4af4` (`fix(ledger): type nullable cost parameters`) |
+| Commit desplegado (evidencia Collector/Grafana) | `2e56037` (`main`, validado 2026-10-15) |
 | Python | 3.12.10 |
 | Agno | Baseline: 2.9.0 |
 | LiteLLM | `v1.100.1` fijado por digest `a3715fa7…c62bf` |
 | PostgreSQL | Supabase canónico `ancoramind_project` + PostgreSQL privado del Gateway Railway |
 | Railway environment | `ancoramind-app` / `production` / `europe-west4-drams3a` |
-| Grafana Cloud region | Pendiente (stack sin provisionar) |
-| Railway collector | `ancoramind-otel-collector` **staged-create** (source `main` + `observability/Dockerfile`); no desplegado — pendiente de `accept-deploy` |
-| Railway collector region | `us-west2` (staged) — **desalineada** con `europe-west4-drams3a`; alinear en el dashboard antes del deploy |
-| Collector secrets | `GRAFANA_OTLP_ENDPOINT` / `GRAFANA_OTLP_AUTHORIZATION` **sin crear** |
-| Repo push | Bloqueado: `403 Write access to repository not granted` — sin Dockerfile en `origin/main` no hay build en Railway |
+| Grafana Cloud metrics datasource | `grafanacloud-tinyvan1950-prom` (UID `grafanacloud-prom`, Prometheus/default) |
+| Railway collector | `ancoramind-otel-collector` desplegado, healthy/online, privado; source `main` + `observability/Dockerfile` |
+| Railway collector region | `europe-west4-drams3a`, alineada con la app |
+| Collector secrets | `GRAFANA_OTLP_ENDPOINT` / `GRAFANA_OTLP_AUTHORIZATION` presentes como secretos Railway (valores no inspeccionados) |
+| Repo source | `origin/main` y deployment en `2e56037`; Dockerfile disponible para build Railway |
+
+### Evidencia Railway/Grafana — 2026-10-15
+
+- El Collector corre con `otel/opentelemetry-collector-contrib:0.138.0`, sin
+  dominio público ni TCP proxy, en la misma región privada que AncoraMind.
+- La app tiene configuradas las variables OTLP hacia el Collector y el Collector
+  tiene las credenciales OTLP de Grafana como secretos.
+- Grafana Cloud contiene y devuelve muestras actuales de
+  `ancora_health_component`, `ancora_health_heartbeat_total` y
+  `ancora_runtime_config_revision`. `ancora_health_component` confirmó los seis
+  componentes de producción en estado `1`.
+- Se encontraron HTTP `429` históricos del exporter hacia Mimir el 2026-10-09;
+  no se observó evidencia de que impidan la ingestión base actual. La revisión
+  repetible y el tratamiento de 429 viven en `docs/runbooks-013.md` §7.
 
 ## Automated checks
 

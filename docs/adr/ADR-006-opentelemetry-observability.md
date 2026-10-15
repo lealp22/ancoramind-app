@@ -1,7 +1,9 @@
 # ADR-006 — OpenTelemetry como estándar de observabilidad
 
 > **Status:** Accepted; implementación base completada el 2026-09-14 (T10).
-> El despliegue real del Collector privado/Grafana sigue sujeto a rollout Railway.
+> El Collector privado y la ingesta de métricas base en Grafana Cloud se
+> validaron en Railway producción el 2026-10-15. La normalización/provisioning
+> completo de dashboard y alertas sigue pendiente en Spec-016.
 > **Contexto:** AncoraMind necesita explicar y controlar el flujo Telegram →
 > Agent → tools → Gateway → provider sin registrar indiscriminadamente datos
 > personales.

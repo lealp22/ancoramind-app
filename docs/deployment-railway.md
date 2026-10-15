@@ -4,12 +4,13 @@
 > estable para Telegram, Supabase como PostgreSQL/Storage y CI/CD desde GitHub.
 > No usar ngrok en este flujo.
 
-> **Estado BL-23 (2026-09-14):** el código de OpenTelemetry metadata-only y el
-> manifiesto del Collector están implementados y validados localmente. LiteLLM,
-> PostgreSQL dedicado del Gateway y el despliegue real del Collector/Grafana en
-> Railway siguen pendientes de un rollout explícito. Los runbooks operativos
-> están en `docs/runbooks-013.md` (T13); E2E, rotación real, dashboards y
-> benchmark con clave real son checklist pendiente, no parte de T13.
+> **Estado BL-23 (actualizado 2026-10-15):** el código OpenTelemetry
+> metadata-only, el Collector privado y la ingesta de métricas base en Grafana
+> Cloud están validados en Railway producción. LiteLLM y admission/processor
+> Telegram también cuentan con validación Railway previa. La normalización e
+> import/provisioning de dashboard/alertas, las pruebas de notificación,
+> benchmark con clave real y rotación real siguen pendientes. El procedimiento de
+> verificación y diagnóstico está en `docs/runbooks-013.md` §7.
 
 ## Arquitectura de producción
 
@@ -20,15 +21,15 @@ Telegram ── HTTPS webhook ──> Railway (AncoraMind / AgentOS)
                                      └── proveedor LLM
 ```
 
-Target aprobado, pendiente de implementación:
+Topología de producción validada para la app y el Collector:
 
 ```text
 Telegram → AncoraMind admission → Agno → LiteLLM privado → OpenRouter
                                       └→ OTel Collector → Grafana Cloud
 ```
 
-LiteLLM y el Collector se comunicarán por private networking de Railway y no
-tendrán dominio público. La caída de LiteLLM será fail closed; la caída del
+LiteLLM y el Collector se comunican por private networking de Railway y no
+tienen dominio público. La caída de LiteLLM es fail closed; la caída del
 Collector/Grafana será fail open respecto a la funcionalidad.
 
 El dominio Railway permanece estable entre deployments. El webhook se registra
@@ -167,12 +168,14 @@ almacena como original y sus primeras páginas se renderizan en memoria a PNG;
 ni bytes, nombres, páginas, prompts ni resultados completos se exportan a logs
 u OpenTelemetry.
 
-No añadas variables de LiteLLM a producción hasta completar el rollout de la
-sección 3.2. Las variables OTLP se añaden únicamente al servicio AncoraMind
-después de crear y validar el Collector privado descrito a continuación; nunca
-apuntan directamente a Grafana Cloud.
+Las variables OTLP del servicio AncoraMind apuntan únicamente al Collector
+privado; nunca directamente a Grafana Cloud. Para la configuración ya desplegada
+y la verificación repetible, consultar `docs/runbooks-013.md` §7. No copies las
+credenciales OTLP de Grafana al servicio AncoraMind.
 
-### 3.1 Collector OpenTelemetry privado (T10)
+### 3.1 Collector OpenTelemetry privado (T10) — configuración y recuperación
+
+Si hubiera que recrearlo:
 
 1. Railway → **New Service** → **GitHub Repo** → este repositorio (igual que el
    Gateway): root directory en la raíz del repo y **Dockerfile path**
@@ -197,11 +200,11 @@ apuntan directamente a Grafana Cloud.
 5. En el servicio AncoraMind, define `OTEL_EXPORTER_OTLP_ENDPOINT` con el host
    privado del Collector y las variables OTLP comentadas arriba. No copies los
    secretos de Grafana al servicio AncoraMind.
-6. Valida primero que la app sigue respondiendo a `/health` con Collector apagado
-   o con endpoint inaccesible: el pipeline es **fail-open**. Después revisa que
-   Grafana recibe sólo atributos allowlisted: rutas, status, error class, tokens,
-   coste, latencia y correlación; nunca prompts, mensajes, respuestas, documentos
-   ni argumentos/resultados de tools.
+6. Validar que la app sigue respondiendo a `/health` si el Collector es
+   inaccesible (pipeline **fail-open**) y usar el procedimiento de
+   `docs/runbooks-013.md` §7 para confirmar las series de Grafana. Nunca incluir
+   prompts, mensajes, respuestas, documentos ni argumentos/resultados de tools
+   en la evidencia operativa.
 
 El Collector aplica defensa en profundidad: `memory_limiter`, redacción de claves
 de contenido conocidas, `batch` y cola/retry acotados antes del exporter Grafana.

@@ -2,8 +2,9 @@
 
 > **Alcance:** flags, ledger/procesador Telegram, Governed LLM Access,
 > Gateway LiteLLM y observabilidad aprobados en specs/013. Comandos con
-> `<placeholders>`; sin secretos. Rollout pendiente en
-> `docs/deployment-railway.md` §3; evidencia local en
+> `<placeholders>`; sin secretos. El Collector privado y la ingesta inicial en
+> Grafana Cloud están validados en producción el 2026-10-15. La evidencia local
+> y el resto de hitos de BL-23 viven en
 > `specs/013-llm-access-governance/verification.md`.
 
 ## 0. Mapa rápido síntoma → runbook
@@ -30,7 +31,7 @@ Evidencia/pendientes: `specs/023-audit-remediation/operational-review-2026-10-11
 | `429 No deployments available` del Gateway | §3 Circuit open |
 | Runs `failed_controlled` con `CostGovernanceError` | §4 Budget exhausted |
 | Filas `failed_ambiguous` tras restart/deploy | §5 failed_ambiguous |
-| App sana pero sin trazas en Grafana | §7 Collector down |
+| App sana pero faltan métricas o trazas en Grafana | §7 Collector/Grafana |
 | Revisión runtime mala activa | §8 Rollback de config |
 | Cambio de cualquier secreto/token/key | §9.4 Rotación |
 | Alerta de salud Spec 016 | §10 Alertas de salud |
@@ -382,15 +383,89 @@ Cubierta por `tests/integration/test_hardening_013.py`:
 | Restart con `response_ready` pendiente | delivery sin rerun del Agent |
 | Retención vencida (`failed_ambiguous` + 8 días) | payload borrado, metadata conservada |
 
-## 7. Collector down (observabilidad fail open)
+## 7. Collector/Grafana: verificar ingestión y diagnosticar ausencia de señales
 
-**Señales:** app sana pero Grafana sin trazas; errores OTLP en el Collector.
+**Principio:** la observabilidad es **fail open** (acceptance R). Una caída del
+Collector o de Grafana no justifica reiniciar la app ni bloquea Telegram, Core o
+inferencia. PostgreSQL continúa siendo la fuente de verdad para auditoría.
 
-1. La funcionalidad **no se detiene** (acceptance R). No reiniciar la app.
-2. Revisar el servicio Collector (`observability/otel-collector.yaml`):
-   memoria, cola, `GRAFANA_OTLP_*` y conectividad.
-3. La auditoría sigue en PostgreSQL; Grafana nunca es fuente de verdad.
-4. Tras recuperarlo, verificar un `correlation_id` E2E (acceptance I).
+### 7.1 Baseline confirmado en producción — 2026-10-15
+
+| Elemento | Valor confirmado |
+|---|---|
+| Railway project/environment | `ancoramind-app` / `production` |
+| Región app + Collector | `europe-west4-drams3a` |
+| Servicio Collector | `ancoramind-otel-collector`, privado, sin dominio ni TCP proxy público |
+| Source desplegado | `lealp22/ancoramind-app@main`, commit `2e56037`, `observability/Dockerfile` |
+| Imagen | `otel/opentelemetry-collector-contrib:0.138.0` |
+| Datasource de métricas Grafana | `grafanacloud-tinyvan1950-prom` (UID `grafanacloud-prom`, tipo Prometheus, default) |
+| Series con muestras actuales | `ancora_health_component`, `ancora_health_heartbeat_total`, `ancora_runtime_config_revision` |
+
+El catálogo también contiene otras series `ancora_*`, incluidas métricas de
+latencia Agent/LLM/Telegram y contadores de llamadas. Que una métrica figure en
+el catálogo no significa necesariamente que tenga una muestra reciente: depende
+de que se haya producido el evento correspondiente.
+
+### 7.2 Consulta reproducible en Grafana Cloud
+
+En Grafana Cloud abrir **Explore**, elegir el datasource
+`grafanacloud-tinyvan1950-prom` y ejecutar estas consultas PromQL. Limitar la
+evidencia compartida a metadata operacional; no adjuntar secretos, payloads,
+prompts, mensajes, respuestas o IDs de Telegram.
+
+```promql
+# Prueba mínima: todos los componentes deben publicar 1 cuando están healthy.
+ancora_health_component
+
+# Prueba de actividad periódica de tasks de background.
+ancora_health_heartbeat_total
+
+# Revisión runtime activa: confirma que llegan gauges de la aplicación.
+ancora_runtime_config_revision
+
+# Descubrir nombres disponibles mediante el selector de métricas de Explore.
+{__name__=~"ancora_.*"}
+```
+
+Resultados esperados del baseline: componentes `app`, `database`, `gateway`,
+`interaction_processor`, `reminder_worker` y `runtime_config`, con
+`deployment_environment="production"`, `job="ancoramind-core"` y
+`service_name="ancoramind-core"`. Los heartbeats confirmados hoy corresponden a
+`interaction_processor` y `reminder_worker`.
+
+Para comprobar tráfico que puede no existir en una ventana sin uso, consultar un
+incremento en vez de exigir una muestra instantánea:
+
+```promql
+sum(increase(ancora_llm_calls_total[24h]))
+sum(increase(ancora_telegram_admissions_total[24h]))
+```
+
+Un resultado `0` significa que no hubo eventos del tipo durante la ventana; una
+serie vacía puede significar lo mismo si nunca se emitió desde el último restart.
+No diagnosticar una caída OTLP sólo con esas métricas event-driven.
+
+### 7.3 Si las series base no aparecen
+
+1. Confirmar en Railway que `ancoramind-app` y `ancoramind-otel-collector` están
+   `SUCCESS`, sin cambios staged, y que el Collector sigue privado y en la misma
+   región que la app.
+2. Verificar en la app únicamente la presencia de
+   `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_INSECURE` y el intervalo de
+   exportación. Verificar en el Collector únicamente la presencia de
+   `GRAFANA_OTLP_ENDPOINT` y `GRAFANA_OTLP_AUTHORIZATION`; nunca leer ni copiar
+   sus valores.
+3. Revisar logs del **deployment actual** del Collector, acotados desde su hora
+   de despliegue. Separar errores históricos de los actuales. Un HTTP `429` de
+   Grafana/Mimir indica rate limiting del exporter, no una caída funcional de la
+   app.
+4. Si hay `429` actuales persistentes, inspeccionar antes de cambiar nada
+   `observability/otel-collector.yaml`: `batch`, `sending_queue`,
+   `retry_on_failure`, `memory_limiter` y la redacción. Preparar un cambio mínimo
+   de frecuencia/agrupación, revisarlo y aprobarlo antes de desplegar producción.
+5. Tras una recuperación, repetir las tres consultas base de §7.2. Registrar
+   UTC, `deployment_id`, commit, datasource UID, consulta y resultado agregado;
+   no registrar contenido de usuario.
 
 ## 8. Rollback de configuración runtime
 
@@ -425,8 +500,11 @@ o fallback cross-model (hoy a 0 por decisión T12).
 
 ### 9.3 Grafana Cloud
 
-Stack/región, `GRAFANA_OTLP_*`, dashboards (amplificación, budget,
-fallback, circuit, latencia), alertas 60/80/90%, retención y acceso.
+El Collector/Grafana y las series base quedaron validados en producción el
+2026-10-15; el procedimiento reproducible está en §7. Aún quedan por cerrar la
+normalización de todas las queries del dashboard/alertas contra muestras reales,
+su import/provisioning y la prueba de sus destinos de notificación. No asumir que
+una métrica event-driven sin actividad reciente está rota.
 
 ### 9.4 Rotación de secretos (procedimiento)
 
@@ -443,10 +521,13 @@ Ningún secreto vive en revisiones runtime, Git, logs o telemetría.
 ## 10. Alertas de salud (Spec 016)
 
 Las definiciones versionadas viven en
-`observability/alerts/ancoramind-health-alerts.json`. Son reglas PromQL para el
-datasource de métricas OTLP de Grafana Cloud: antes de provisionarlas, confirmar
-los nombres finales exportados por el Collector con datos reales. Las alertas no
-contienen IDs, texto de Telegram, prompts, rutas privadas ni secretos.
+`observability/alerts/ancoramind-health-alerts.json`. El datasource confirmado
+es `grafanacloud-tinyvan1950-prom` (UID `grafanacloud-prom`). Antes de
+provisionar cada regla, comprobar su métrica y labels con una muestra real en
+Explore siguiendo §7.2; las métricas de salud base ya están confirmadas, pero
+las métricas event-driven y las labels de dashboard/alertas siguen requiriendo
+esa normalización individual. Las alertas no contienen IDs, texto de Telegram,
+prompts, rutas privadas ni secretos.
 
 `GET /health/readiness` es una instantánea local **informativa**: responde sin
 I/O y no sustituye `/health` de AgentOS/Railway. El monitor interno realiza los
