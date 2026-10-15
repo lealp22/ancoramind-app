@@ -109,3 +109,76 @@ async def test_semantic_query_is_user_scoped_and_uses_embedding_model_version() 
         embedding_dimensions=1536,
         limit=10,
     )
+
+
+async def test_explicit_reindex_reuses_owned_document_and_latest_extraction() -> None:
+    repo = AsyncMock(spec=DocumentsRepository)
+    document = _document()
+    extraction = AIExtraction(
+        id=uuid4(),
+        document_id=document.id,
+        provider="test",
+        model="test",
+        prompt_version="1",
+        schema_version="1",
+        extraction={"summary": "Contrato de alquiler en Murcia"},
+        confidence=0.9,
+        created_at=datetime.now(tz=UTC),
+    )
+    from src.domain.documents.models import DocumentWithExtraction
+
+    repo.get_document_with_extraction.return_value = DocumentWithExtraction(
+        document=document,
+        extraction=extraction,
+    )
+    port = _EmbeddingPort(
+        DocumentEmbeddingOutcome(
+            (0.1,) * 1536,
+            "litellm",
+            "ancoramind-embeddings-r1",
+            "completed",
+        )
+    )
+    service = _service(repo, port)
+
+    assert await service.reindex_document_for_semantic_retrieval(
+        UserContext(user_id="user-a"),
+        document.id,
+    )
+
+    repo.get_document_with_extraction.assert_awaited_once_with(
+        user_id="user-a",
+        document_id=document.id,
+    )
+    saved = repo.upsert_search_chunk.await_args.args[0]
+    assert saved.document_id == document.id
+    assert saved.user_id == "user-a"
+    assert saved.extraction_id == extraction.id
+    assert saved.status == "completed"
+    assert saved.embedding_model == "ancoramind-embeddings-r1"
+
+
+async def test_explicit_reindex_rejects_missing_or_other_user_document() -> None:
+    repo = AsyncMock(spec=DocumentsRepository)
+    repo.get_document_with_extraction.return_value = None
+    port = _EmbeddingPort(
+        DocumentEmbeddingOutcome(
+            (0.1,) * 1536,
+            "litellm",
+            "ancoramind-embeddings-r1",
+            "completed",
+        )
+    )
+    service = _service(repo, port)
+    document_id = uuid4()
+
+    assert not await service.reindex_document_for_semantic_retrieval(
+        UserContext(user_id="other-user"),
+        document_id,
+    )
+    repo.get_document_with_extraction.assert_awaited_once_with(
+        user_id="other-user",
+        document_id=document_id,
+    )
+    assert port.inputs == []
+    repo.upsert_search_chunk.assert_not_awaited()

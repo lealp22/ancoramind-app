@@ -229,6 +229,26 @@ class DocumentService:
             limit=max(1, min(limit, 20)),
         )
 
+    async def reindex_document_for_semantic_retrieval(
+        self,
+        user_context: UserContext,
+        document_id: UUID,
+    ) -> bool:
+        """Explicitly rebuild one user-owned document's semantic index.
+
+        This is an operator-facing recovery primitive, not an Agent capability:
+        ownership is revalidated from trusted context and the existing document
+        and latest extraction are reused without reading the stored file.
+        """
+        document = await self._repo.get_document_with_extraction(
+            user_id=user_context.user_id,
+            document_id=document_id,
+        )
+        if document is None:
+            return False
+        await self._index_for_semantic_retrieval(document.document, document.extraction)
+        return True
+
     async def _index_for_semantic_retrieval(
         self,
         document: Document,
