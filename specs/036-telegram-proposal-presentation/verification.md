@@ -2,9 +2,9 @@
 
 > **Fecha de registro:** 2026-10-14.
 > **Estado:** desplegado y validado E2E parcialmente hasta 2026-10-16;
-> Con runtime rev. 8 consta AC5 (lista vacía); fallo terminal seguro validado
-> previamente. AC1/AC4 tienen evidencia funcional histórica, no acreditan por
-> sí solos la presentación del baseline actual. Matriz restante pendiente.
+> Con runtime rev. 8 constan AC1/AC2 y AC5 (lista vacía); fallo terminal seguro
+> validado previamente. AC4 tiene evidencia funcional histórica, no acredita por
+> sí sola el baseline actual. Matriz restante pendiente.
 
 ## 1. Evidencia funcional aportada por el propietario
 
@@ -164,7 +164,9 @@ No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
 
 ## 5. Pendiente de verificar antes de cerrar BL-48 (actualizado 2026-10-16)
 
-- [ ] AC1–AC3: presentación única, respuesta mixta y varias propuestas.
+- [x] AC1/AC2: tarea con prioridad/fecha y respuesta mixta, bloque único sin
+  escritura previa a confirmar; campaña rev. 8/r4 del 2026-10-16 (paso 2).
+- [ ] AC3: varias propuestas y selección individual en el mismo turno.
 - [ ] AC4/AC6: consulta tras descarte y nueva petición sobre el baseline actual.
 - [x] AC5 parcial: lectura real de pendientes vacíos con rev. 8 y `r4`;
   interacción `27e99491-bed0-4399-aada-995de477963c`, dos tools y `agent_final`.
@@ -308,3 +310,79 @@ verificación visual por el propietario de la semántica y los botones. Sin retr
 automático tras fallo ambiguo: consultar estado antes de repetir.
 AC8/AC9 de fallo/OFF se verifican en entorno aislado; no se apagan controles ni
 se corta Telegram/Gateway productivo para provocar estos escenarios.
+
+### Preflight de la campaña — 2026-10-16 14:31 UTC
+
+- Railway conserva deployment `838ab705-550c-43a9-a344-5dc1450ce73b`, SHA
+  `5f0132f`, `SUCCESS`; el deployment documental `a4a69f1` sigue
+  `NEEDS_APPROVAL`, sin aprobarlo ni alterar el entorno.
+- Consulta canónica read-only: revisión activa 8, default
+  `ancoramind-default-r4`, embeddings `ancoramind-embeddings-r1`.
+- GET `/health` y `/health/readiness`: ambos 200.
+- Para el principal de la interacción E2E anterior
+  `27e99491-bed0-4399-aada-995de477963c`: cero listas con el nombre exacto
+  «Validación cierre 16 octubre» y cero propuestas confirmables del mismo
+  bot/chat a la hora del preflight. No se consultó contenido personal ni
+  se insertaron fixtures; estos recuentos son solo una foto previa.
+- Las pruebas y priorización anteriores están en commit local `c5807a4`,
+  aún no publicado. No cambia el código funcional respecto al desplegado.
+- Próximo paso requiere entrada real del propietario: pedir crear esa lista
+  y revisar el bloque/botones antes de decidir la confirmación. No hay aún
+  ejecución ni resultado E2E nuevo que marcar como superado.
+
+### Paso 1 — Lista sintética propuesta, aún sin confirmar
+
+- El propietario recibió un único bloque «Propuesta: Crear lista de tareas»,
+  nombre exacto de campaña, instrucción de confirmación y botones Sí/No; sin
+  narración duplicada del Agent según la respuesta aportada.
+- Lectura canónica a las 14:34:40 UTC: interacción
+  `e84a7b81-9068-48ee-a4f6-e80aa3b20648` `completed`, revisión 8, ruta
+  `ancoramind-default-r4`, dos llamadas LLM completadas, dos tools, cero retries.
+- Propuesta `3b7cc465-407d-4c12-b70c-5f9de39a9909` en
+  `pending_confirmation`/`explicit_confirmation`, sin confirmación atribuida.
+  Presentada a las 14:33:25 UTC, ventana hasta 14:48:25 UTC. `agent_final`
+  completada, un chunk completado con message ID; sin `failure_notice`.
+- Cero listas canónicas del mismo usuario con ese nombre: proponer no creó
+  todavía la lista. Paso de presentación superado para crear lista; no equivale
+  a AC1 (tarea con prioridad/fecha) ni valida aún ejecución o resto de campaña.
+- Pendiente: decisión real del propietario mediante el botón y verificación de
+  una única lista/auditoría ejecutada. No se confirmó mediante SQL ni herramientas.
+
+### Paso 1 — Confirmación por botón y lista creada
+
+- El propietario pulsó Sí y recibió «✅ Operación ejecutada y registrada.».
+- Lectura canónica a las 14:37:03 UTC: propuesta
+  `3b7cc465-407d-4c12-b70c-5f9de39a9909` `executed`, modo
+  `explicit_confirmation`, `completed_at=2026-10-16T14:36:11Z`.
+- Interacción confirmante `fbbcf50a-a4f5-4a6b-bb16-eab25095216d` de tipo
+  `callback_query`, `completed`, cero tools y cero llamadas LLM. Respuesta
+  lógica `agent_final` completada y un chunk completado con message ID.
+- Existe exactamente una lista canónica con el nombre de campaña para ese
+  usuario: `f2001d4b-413e-408b-9b99-ccafa33500c0`, todavía sin tareas.
+  No hay duplicación observada; este paso no prueba concurrencia/doble pulsación.
+- Preparación de campaña superada: proponer no escribió, confirmación humana
+  por botón ejecutó y auditó sin inferencia. Siguiente: AC1/AC2 con consulta
+  READ + propuesta de tarea con prioridad/fecha, sin confirmar de momento.
+
+### Paso 2 — AC1/AC2: consulta y propuesta revisable en el mismo turno
+
+- El propietario recibió «La lista no tiene tareas todavía.» y un único bloque
+  de propuesta con «Revisar seguro», prioridad «alta», vencimiento «20 de
+  octubre de 2026», una instrucción de confirmación y botones Sí/No. No hubo
+  duplicación ni se perdió la respuesta READ según el texto aportado.
+- Lectura canónica a las 14:40:20 UTC: propuesta
+  `5345640e-0af8-4790-b666-d577bee186db`, interacción origen
+  `8667dced-f658-49d2-bd50-b2d8def6fbc8` `completed`, revisión 8, ruta
+  `ancoramind-default-r4`. Tres llamadas LLM completadas, cuatro tools,
+  cero retries; los contadores no identifican por sí solos las tools concretas.
+- Payload persistido apunta a la lista de campaña
+  `f2001d4b-413e-408b-9b99-ccafa33500c0`: `priority='high'`,
+  `due_date='2026-10-20T00:00:00'`, `description=null`. Hash recalculado con
+  `payload_hash('create_todo_item', payload)` coincide con el persistido.
+- Estado `pending_confirmation`/`explicit_confirmation`, sin confirmación.
+  Presentada 14:39:13 UTC, ventana hasta 14:54:13 UTC. `agent_final` y su único
+  chunk completados con message ID, sin `failure_notice`. La lista sigue con
+  **cero tareas**: la propuesta revisable aún no ejecutó la escritura.
+- **AC1/AC2 superados para este recorrido sobre el baseline actual.** No se
+  cierra BL-48; siguiente paso AC4: propietario pulsa No y después consulta
+  todas las tareas, sin repropuesta automática ni inventario ajeno a la consulta.

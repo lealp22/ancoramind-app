@@ -38,7 +38,7 @@
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado y validado con PostgreSQL (TODO items título-solo + completar/reabrir, notas); pendiente E2E Telegram — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E parcial; con GPT-6 Luna rev. 8 consta AC5 (lista vacía); resto de escenarios requiere evidencia de versión/ruta; fronteras Core reforzadas con PostgreSQL — specs/036 |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E parcial; con GPT-6 Luna rev. 8 constan AC1/AC2 (consulta + propuesta legible sin escritura) y AC5 (lista vacía); resto de matriz pendiente; fronteras Core reforzadas con PostgreSQL — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests locales (2026-10-16): 1428 unitarias y 173 integraciones PostgreSQL

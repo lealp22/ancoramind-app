@@ -2,8 +2,8 @@
 
 > **Backlog:** BL-48 — P1, calidad de la validación del MVP.
 > **Fecha:** 2026-10-14.
-> **Estado:** desplegado, E2E parcial; AC5 vacío consta con rev. 8, resto de
-> matriz requiere evidencia del baseline. Fronteras Core reforzadas en PostgreSQL;
+> **Estado:** desplegado, E2E parcial; AC1/AC2 y AC5 vacío constan con rev. 8,
+> resto de matriz requiere evidencia del baseline. Fronteras Core reforzadas en PostgreSQL;
 > no equivalen a validación semántica. Ver `verification.md`.
 > **Autorización:** implementación, despliegue y rollout de runtime rev. 8
 > aprobados; evidencia operativa registrada hasta 2026-10-16.
