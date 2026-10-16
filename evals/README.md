@@ -99,6 +99,16 @@ No se ejecutó inferencia real ni evaluación semántica en este incremento.
 
 ## Preparación local de scoring semántico (T8, sin juez conectado)
 
+**Preparación T7 posterior (2026-10-16):** el candidato
+`response_style/bl48-campaign-plan.json` y el snapshot secret-free exportado
+`response_style/runtime-rev8-snapshot.json` permiten preflight sin inferencia
+mediante `scripts/eval_preflight.py`. Wiring Gateway-only en
+`src/agent/eval_campaign.py`, presupuesto restringido y aprobación separada
+ligada al checksum; no hay lanzador pagado ni juez conectado. Acceso privado,
+clave exclusiva y reserva candidata de 0,10 USD estimados aún no aprobados.
+Detalles/limitaciones: `specs/018-agentic-evals-execution-harness/t7-preparation.md`.
+Esto no altera el carácter estático de `scripts/run_evals.py` ni cierra BL-48.
+
 `src/agent/eval_semantic_scoring.py` prepara un contrato opcional para juzgar
 cada `response_criteria` por separado. No es un modelo ni un cliente: define el
 puerto `SemanticJudge`, los estados `pass`, `fail` y `not_evaluated`, calibración

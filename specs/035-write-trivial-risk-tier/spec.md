@@ -1,10 +1,10 @@
 # Spec: 035 — Subclasificación WRITE_TRIVIAL / WRITE_REVIEWABLE
 
 > **Backlog:** BL-46
-> **Status:** implemented and PostgreSQL-verified; camino trivial E2E Telegram
-> asistido validado (2026-10-16, runtime 8/r4). Ver `verification.md` para
-> variantes reviewable restantes y revisión final de cierre/versiones; gates
-> locales revalidados (1433 unitarias, 173 integraciones). BL-46 aún abierto.
+> **Status:** completado (2026-10-16): implementación, PostgreSQL y E2E Telegram
+> trivial/reviewable (incluidas descripción-sola y fecha-sola) superados con
+> runtime 8/r4, SHA desplegado y CI del mismo SHA comprobados. Evidencia y
+> límites en `verification.md`; BL-48 conserva su gate formal independiente.
 > **Decisiones del propietario (2026-10-13):**
 > 1. Se aprueba subclasificar `WRITE` dentro de AGENTS.md §2.4 en
 >    `WRITE_TRIVIAL` (ejecuta directo, con auditoría) y `WRITE_REVIEWABLE`

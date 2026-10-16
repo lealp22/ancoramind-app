@@ -15,10 +15,15 @@ import pytest
 from agno.models.base import Model
 from agno.models.response import ModelResponse
 
-from src.agent.eval_physical_executor import GovernedPhysicalEvalExecutor
+from src.agent.eval_physical_executor import GovernedPhysicalEvalExecutor, eval_snapshot_fingerprint
 from src.agent.evals import EvalCase, EvalExecutionRequest
 from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import ExecutionContext
+from src.domain.runtime_config.models import (
+    RuntimeConfigSnapshot,
+    bootstrap_runtime_configuration,
+    config_checksum,
+)
 
 
 @dataclass
@@ -116,6 +121,67 @@ async def test_tool_call_is_observed_as_tool_call_outcome() -> None:
     assert observation.tool_names == ("search_notes",)
     assert observation.requires_user_confirmation is False
     assert observation.response_text == "Aquí tienes tu nota."
+
+
+async def test_explicit_snapshot_identity_and_narrow_budget_are_used() -> None:
+    config = bootstrap_runtime_configuration()
+    snapshot = RuntimeConfigSnapshot(
+        revision=8, source="database", checksum=config_checksum(config), config=config
+    )
+    model = _ScriptedModel(
+        id="synthetic",
+        turns=(_tool_call_turn(
+            "reply", "present_reply",
+            AgentReply(answer="Respuesta sintética.", proposal_text="").model_dump_json()
+        ),),
+    )
+    budget = config.execution_budget.model_copy(update={"max_output_tokens": 128})
+    executor = GovernedPhysicalEvalExecutor(
+        llm_access=_FakeLLMAccess(model=model), snapshot=snapshot, budget=budget
+    )
+    request = EvalExecutionRequest(
+        case=_case(input_text="Pregunta sintética"),
+        logical_route="ancoramind-default", config_revision=8,
+    )
+    assert (await executor.execute(request)).response_text == "Respuesta sintética."
+    assert model.max_tokens == 128
+    first = executor._build_execution_context()
+    second = executor._build_execution_context()
+    assert first.config.checksum == snapshot.checksum
+    assert first.config.revision == 8
+    assert first.budget.max_model_calls == budget.max_model_calls
+    assert first.budget is not second.budget
+    assert first.correlation_id != second.correlation_id
+    assert first.provenance is None
+
+
+async def test_revision_mismatch_rejected_before_model_resolution() -> None:
+    model = _ScriptedModel(id="synthetic")
+    executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model=model))
+    with pytest.raises(ValueError, match="revision_mismatch"):
+        await executor.execute(EvalExecutionRequest(
+            case=_case(input_text="Pregunta sintética"),
+            logical_route="ancoramind-default", config_revision=8,
+        ))
+    assert model.calls == 0
+
+
+def test_bad_fingerprint_or_expanded_budget_is_rejected() -> None:
+    config = bootstrap_runtime_configuration()
+    snapshot = RuntimeConfigSnapshot(
+        revision=8, source="database", checksum=config_checksum(config), config=config
+    )
+    access = _FakeLLMAccess(model=_ScriptedModel(id="synthetic"))
+    with pytest.raises(ValueError, match="fingerprint_mismatch"):
+        GovernedPhysicalEvalExecutor(
+            llm_access=access, snapshot=snapshot.model_copy(update={"checksum": "0" * 64}),
+            snapshot_fingerprint=eval_snapshot_fingerprint(snapshot),
+        )
+    with pytest.raises(ValueError, match="may_not_expand"):
+        GovernedPhysicalEvalExecutor(
+            llm_access=access, snapshot=snapshot,
+            budget=config.execution_budget.model_copy(update={"max_output_tokens": 32768}),
+        )
 
 
 async def test_propose_tool_call_requires_user_confirmation() -> None:

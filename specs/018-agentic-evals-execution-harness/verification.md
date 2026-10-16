@@ -6,6 +6,11 @@
 > con etiquetas humanas siguen pendientes y requieren credenciales/presupuesto
 > y revisión humana aprobados aparte.
 
+**2026-10-16:** preparación T7 local autorizada y verificada; ver
+[`t7-preparation.md`](t7-preparation.md). 1465 unitarias/80,19 % cobertura,
+173 integraciones/1 STT live omitida, Ruff/mypy limpios. Candidato y preflight
+no equivalen a aprobación/acceso ni ejecución real; T7 y BL-48 siguen abiertos.
+
 ## Preparación T8 sin llamadas pagadas — 2026-10-14
 
 Se preparó el contrato local para scoring semántico opcional sin conectar ningún

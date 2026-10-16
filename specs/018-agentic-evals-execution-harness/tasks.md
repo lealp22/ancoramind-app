@@ -26,6 +26,10 @@
       T8, no T6. Detalle en `verification.md`.
 - [ ] T7 · Con credenciales y presupuesto aprobados, ejecutar la modalidad LLM
       fuera de CI por defecto y capturar evidencia metadata-only.
+      Preparación autorizada 2026-10-16: snapshot explícito, plan limitado,
+      Gateway-only y preflight sin inferencia implementados y probados;
+      `t7-preparation.md`. Candidato 0,10 USD estimados, sin aprobación de gasto,
+      credenciales/acceso ni ejecución real. BL-48 permanece abierto.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con
       etiquetas humanas sintéticas y baseline por ruta/configuración.
       **Preparación local sin inferencia (2026-10-14):**

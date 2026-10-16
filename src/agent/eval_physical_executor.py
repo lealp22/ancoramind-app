@@ -51,6 +51,9 @@ from its catalog, just like production (BL-39/40, 2026-10-11).
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -76,12 +79,29 @@ from src.domain.llm_access.access import LLMAccess
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import ExecutionBudget, ExecutionContext, generate_traceparent
 from src.domain.runtime_config.models import (
+    ExecutionBudgetConfig,
     RuntimeConfigSnapshot,
     bootstrap_runtime_configuration,
     config_checksum,
 )
 
 _EVAL_FINGERPRINT_KEY = "ancoramind-evals-synthetic-fingerprint"
+
+
+def eval_snapshot_fingerprint(snapshot: RuntimeConfigSnapshot) -> str:
+    """Bind an eval approval to exact typed content without rewriting legacy hashes.
+
+    Runtime capabilities are sets; their serialization order is not stable across
+    Python processes. The recorded runtime checksum remains a provenance reference,
+    NOT an assertion that this eval fingerprint verifies its historical algorithm.
+    """
+    raw = snapshot.model_dump(mode="json", by_alias=True)
+    for route in raw["config"]["routing"]["routes"].values():
+        route["capabilities"] = sorted(route["capabilities"])
+    return hashlib.sha256(
+        json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
 
 #: Pending-proposal kind labels seen in evals/confirmation/cases.json today,
 #: mapped to a human-readable Spanish description for the synthetic prior
@@ -108,10 +128,37 @@ def _pending_proposal_message(proposal_id: str, kind_label: str) -> Message:
 class GovernedPhysicalEvalExecutor:
     """Runs a real governed Agent, with simulated tools, for one eval case."""
 
-    def __init__(self, *, llm_access: LLMAccess) -> None:
+    def __init__(
+        self,
+        *,
+        llm_access: LLMAccess,
+        snapshot: RuntimeConfigSnapshot | None = None,
+        budget: ExecutionBudgetConfig | None = None,
+        snapshot_fingerprint: str | None = None,
+    ) -> None:
         self._llm_access = llm_access
+        if snapshot is None:
+            config = bootstrap_runtime_configuration()
+            snapshot = RuntimeConfigSnapshot(
+                revision=0, checksum=config_checksum(config), source="bootstrap", config=config
+            )
+        if snapshot_fingerprint is not None and (
+            snapshot_fingerprint != eval_snapshot_fingerprint(snapshot)
+        ):
+            raise ValueError("eval_snapshot_fingerprint_mismatch")
+        self._snapshot = snapshot
+        self._budget = budget or snapshot.config.execution_budget
+        for name, limit in self._budget.model_dump().items():
+            ceiling = getattr(snapshot.config.execution_budget, name)
+            if ceiling is not None and (limit is None or limit > ceiling):
+                raise ValueError("eval_budget_may_not_expand_snapshot")
 
     async def execute(self, request: EvalExecutionRequest) -> EvalObservation:
+        if request.config_revision != self._snapshot.revision:
+            raise ValueError("eval_request_revision_mismatch")
+        route = self._snapshot.config.routing.routes.get(request.logical_route)
+        if route is None or not {"text", "tool_calling"} <= route.capabilities:
+            raise ValueError("eval_text_tool_route_required")
         case = request.case
         if case.expected_outcome == "confirm_pending_action" or (
             case.required_tool is not None and case.required_tool.startswith("execute_")
@@ -153,14 +200,17 @@ class GovernedPhysicalEvalExecutor:
         )
 
         with execution_context_scope(context):
-            output: RunOutput = await agent.arun(
-                run_input,
-                stream=False,
-                user_id=run_context.user_id,
-                session_id=run_context.session_id,
-                run_id=run_context.run_id,
-                run_context=run_context,
-                files=files,
+            output: RunOutput = await asyncio.wait_for(
+                agent.arun(
+                    run_input,
+                    stream=False,
+                    user_id=run_context.user_id,
+                    session_id=run_context.session_id,
+                    run_id=run_context.run_id,
+                    run_context=run_context,
+                    files=files,
+                ),
+                timeout=context.budget.seconds_remaining(),
             )
 
         tool_names = tuple(
@@ -177,21 +227,14 @@ class GovernedPhysicalEvalExecutor:
         )
 
     def _build_execution_context(self) -> ExecutionContext:
-        config = bootstrap_runtime_configuration()
-        snapshot = RuntimeConfigSnapshot(
-            revision=0,
-            checksum=config_checksum(config),
-            source="bootstrap",
-            config=config,
-        )
         return ExecutionContext(
             correlation_id=uuid4(),
             telegram_update_id=0,
             agno_run_id=str(uuid4()),
             agno_session_id="eval-session",
-            config=snapshot,
+            config=self._snapshot,
             budget=ExecutionBudget.from_config(
-                config.execution_budget,
+                self._budget,
                 started_at_monotonic=time.monotonic(),
             ),
             traceparent=generate_traceparent(),
@@ -201,13 +244,14 @@ class GovernedPhysicalEvalExecutor:
         self, context: ExecutionContext, tools: list[Any], logical_route: str
     ) -> Agent:
         model = self._llm_access.model_for(logical_route, context)
+        model.max_tokens = self._budget.max_output_tokens
         return Agent(
             id="ancoramind-eval",
             name="AncoraMind (eval)",
             model=model,
             tools=[*proposal_only_tools(tools), build_reply_presentation_tool()],
             tool_choice="required",
-            tool_call_limit=context.config.config.execution_budget.max_tool_calls,
+            tool_call_limit=self._budget.max_tool_calls,
             retries=0,
             telemetry=False,
             tool_hooks=[build_budget_tool_hook(_EVAL_FINGERPRINT_KEY)],

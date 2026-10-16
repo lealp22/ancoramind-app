@@ -71,9 +71,9 @@
   Campaña asistida autorizada 2026-10-16, runtime 8/r4; evidencia debajo.
 - [x] Regresión E2E reviewable con prioridad y prioridad+fecha: propuestas
   pendientes sin escritura previa y consentimiento Core, specs/036 pasos 2/8/9.
-- [ ] Variantes E2E restantes del gate original: `description` y fecha-sola
-  informadas; regresiones independientes locales revalidadas debajo, no
-  ejecutadas por Telegram en esta campaña.
+- [x] Variantes E2E `description` y fecha-sola: campaña asistida posterior
+  2026-10-16 (sección «Cierre funcional»): propuestas revisables sin tarea previa, hashes 2/2,
+  dos descartes individuales, ningún efecto canónico. Evidencia specs/036 §13.
 - [x] Gates locales revalidados en la revisión final 2026-10-16: **1433 unitarias,
   80 % cobertura; 173 integraciones PostgreSQL, 1 STT live omitida**;
   Ruff/mypy, catálogo estático y build/validate Collector verdes. No equivalen
@@ -203,3 +203,37 @@ Estas regresiones locales no sustituyen selección de argumentos y respuesta
 semántica del modelo en Telegram. **BL-46 continúa abierto** por esas dos
 variantes y revisión de cierre/versiones; gates locales superados no autorizan
 commit, push, despliegue ni nueva campaña productiva.
+
+## Cierre funcional — variantes revisables completadas, 2026-10-16
+
+El propietario autoriza continuar la campaña anterior y sus dos variantes:
+«Validar descripción BL46» con solo descripción y «Validar fecha sola BL46» con
+solo vencimiento 20 de octubre de 2026. Evidencia detallada en specs/036
+`verification.md` §13, sin repetir aquí la auditoría completa:
+
+- Interacciones origen `b9fc85ef-ebb0-4385-a63e-5cb7f2761b7e` y
+  `70f4eba1-5c23-455f-a700-0c635c44e47e`; propuestas
+  `195dce39-69c9-4ff1-8564-545bd27bb2da` y
+  `d6c4052f-d918-45cc-a4cc-12ea59bde66f`, explicit_confirmation.
+- Un bloque legible y un par de botones por propuesta; payloads correctos,
+  hashes recalculados **2/2**, sin datos opcionales inventados ni tareas antes
+  del consentimiento. Consulta real de pendientes trazada identifica ambas.
+- No individual en cada bloque; callbacks completed sin tools/LLM, ambas
+  discarded y hashes intactos. Sin Sí, ejecución, replay o borrado.
+- Consulta final muestra solo póliza AC3 y reapertura AC7; campos/timestamps
+  intactos, nota exacta conservada, cero propuestas confirmables y ninguna
+  nueva auditoría de mutación desde preflight.
+- Versión sirviendo `838ab705-550c-43a9-a344-5dc1450ce73b`, SHA
+  `5f0132f89bde1d3287175a96d33e06e3991427d7`, runtime 8/r4. Checks CI
+  quality/integration/collector-config del mismo SHA en success, consultados
+  antes de enviar. HEAD inicial local `5df9273`, con código/prompts idénticos
+  a ese despliegue; las diferencias eran tests/docs. No se aprueba ningún
+  deployment NEEDS_APPROVAL ni se modifica Wait for CI.
+
+**BL-46 completado para el alcance aprobado.** No se amplía WRITE_TRIVIAL ni
+se acredita concurrencia/fallos inducidos en producción; esas garantías se
+validan en aislamiento. La preparación T7 posterior solo afecta al harness eval
+(specs/036 §14): **1465 unitarias, 80,19 % cobertura; 173 integraciones, 1 STT live
+omitida**, Ruff/mypy limpios. BL-48 conserva un gate separado de ejecución real
+de evals por decisión del propietario y continúa abierto. Sin commit/push/redeploy
+en esta sesión; resultados locales no se atribuyen a CI remoto del diff.

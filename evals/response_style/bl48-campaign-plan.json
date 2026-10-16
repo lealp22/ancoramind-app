@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "logical_route": "ancoramind-default",
+  "effective_gateway_route": "ancoramind-default-r4",
+  "snapshot_checksum": "e2663c6ab9e2666f41ba3d5399d05feb8a0d4141de0d2d74fdcfca19b3afdb25",
+  "snapshot_fingerprint": "a41f255f1b4022bc5ac1c7efb35a02d82fb4ec2396d71f4991fea1db15f7cccc",
+  "config_revision": 8,
+  "case_ids": [
+    "response_style.single_proposal",
+    "response_style.mixed_read_proposal",
+    "response_style.tasks_after_discard",
+    "response_style.explicit_reproposal",
+    "response_style.pending_proposals_read"
+  ],
+  "budget": {
+    "max_tool_calls": 12,
+    "max_model_calls": 6,
+    "max_output_tokens": 1024,
+    "max_runtime_seconds": 120,
+    "max_gateway_requests": 6,
+    "max_estimated_cost_usd": 0.02,
+    "max_queue_wait_seconds": 0,
+    "max_same_tool_args_after_success": 1,
+    "max_gateway_attempts_per_model_call": 1
+  },
+  "total_estimated_cost_usd": "0.10"
+}

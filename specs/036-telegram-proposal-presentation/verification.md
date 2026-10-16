@@ -5,6 +5,9 @@
 > Con runtime rev. 8 constan AC1–AC7 (AC3/AC7 asistidos); AC5 acreditado con
 > trazas recuperadas en §11. AC8–AC9 y gates locales revalidados en §12.
 > Evaluación real de instrucciones y cierre global pendientes; BL-48 abierto.
+> Actualización posterior: variantes revisables BL-46 superadas (§13); preparación
+> del harness real autorizada, preflight sin inferencia listo (§14). No se sustituye
+> su gate formal por la evaluación manual Telegram (decisión del propietario).
 
 ## 1. Evidencia funcional aportada por el propietario
 
@@ -759,3 +762,139 @@ Gates locales verdes no equivalen a checks CI remotos del diff sin commit ni
 prueban un nuevo SHA desplegado. Pendientes: E2E revisables descripción/fecha-sola
 de BL-46 con nueva autorización, evaluación de instrucciones con LLM gobernado
 y revisión final de cierre/versiones. **BL-46 y BL-48 permanecen abiertos.**
+
+## 13. Variantes revisables restantes BL-46 — E2E asistido, 2026-10-16
+
+Autorización explícita del propietario para continuar BL-46/48 y ejecutar las dos
+variantes acordadas: descripción-sola y fecha-sola en la lista existente. Solo
+crear propuestas, consultar, descartar individualmente con **No** y verificar;
+nunca Sí, ni fixtures SQL, borrado, replay automático o cambios de controles.
+
+### Preflight y versión realmente ejecutada
+
+- Árbol limpio inicial, HEAD local `5df9273115d15843a5f743b7433a65dbce39a0c4`,
+  cinco commits por delante de `origin/main`. Los resultados de §12 ya están
+  comiteados por el propietario. GitHub no conoce aún ese SHA (check-runs HTTP
+  422); no se afirma CI remoto para los commits locales.
+- Deployment **sirviendo**: `838ab705-550c-43a9-a344-5dc1450ce73b`, SUCCESS,
+  SHA `5f0132f89bde1d3287175a96d33e06e3991427d7`. GitHub check-runs de ese
+  mismo SHA: `quality`, `integration`, `collector-config` completed/success.
+  Sin diff en `src/`, `prompts/` ni assets de configuración frente a HEAD
+  inicial. Este contraste se realiza **antes** de añadir la preparación T7 de §14.
+- Railway tiene también app `7331ae20-e40f-42bb-b149-1bbc51cd5fcd` y Collector
+  `4ba745b5-2c7a-459d-a2ea-52472de15e8b` en NEEDS_APPROVAL, no sirviendo;
+  no se aprueban ni se confunden con los deployments SUCCESS. Collector activo
+  `601ce607-cfd5-47c1-922e-3679c6e07aca`. No se modifica Wait for CI.
+- Readiness 16:38:48 UTC: HTTP 200, `status=ok`, revisión 8; app, DB, Gateway,
+  processor, worker y runtime healthy; `gateway_circuit=unknown`, no se transforma
+  esa señal en healthy. Cola vacía. Ruta comprobada después en usage: r4.
+- 16:38:00 UTC: lista `f2001d4b-413e-408b-9b99-ccafa33500c0` («Validación cierre
+  16 octubre»), dos tareas originales, ningún título de las variantes y cero
+  propuestas confirmables. Nota AC7 existente. Se conservan estos datos.
+
+### Propuestas y descarte individual
+
+| Variante | Interacción / recibida UTC | Propuesta | Payload específico y presentación |
+|---|---|---|---|
+| Solo descripción | `b9fc85ef-ebb0-4385-a63e-5cb7f2761b7e` / 16:38:59 | `195dce39-69c9-4ff1-8564-545bd27bb2da` | Título «Validar descripción BL46», descripción «Caso sintético de revisión de descripción», prioridad/fecha null; presentada 16:39:12, vence 16:54:12 |
+| Solo fecha | `70f4eba1-5c23-455f-a700-0c635c44e47e` / 16:39:49 | `d6c4052f-d918-45cc-a4cc-12ea59bde66f` | Título «Validar fecha sola BL46», `due_date=2026-10-20T00:00:00`, prioridad/descripción null; presentada 16:40:04, vence 16:55:04 |
+
+Ambas `create_todo_item`, lista de campaña exacta, `explicit_confirmation` /
+`pending_confirmation`, `confirmed_at`/`executed_at` null. SQL antes de los
+callbacks: **cero tareas con los dos títulos**. DOM: un bloque Core por petición,
+título y campo opcional correctos, fecha «20 de octubre de 2026», una instrucción
+de consentimiento y un par de botones por propuesta; sin anuncio de ejecución
+ni resumen duplicado. No se deduce esa presentación solo de un schema válido.
+
+Hashes recalculados localmente mediante `payload_hash('create_todo_item', payload)`:
+
+- Descripción: `5154f7886da79b8cd8c9d5c7296b8833b22f5c38b25e25a7c0f76bec5660998c`.
+- Fecha: `3a69e8d59157c9734ef4e3769ddc33bf3c846034d64f9285ba8ec4a72d5e27e9`.
+- **2/2 coinciden**, también intactos después del descarte.
+
+Consulta explícita de pendientes `6a604f65-1b64-44aa-88a0-d573a17c9aa4`, 16:40:38
+UTC: enumera las dos propuestas y sus datos, sin añadir otras. Después:
+
+- Un clic en **No** del bloque descripción: callback
+  `522b4c29-664e-45cd-90b1-b03d65df701f`, recibido 16:41:29 UTC; `discarded`
+  a 16:41:30. Verificación intermedia: la propuesta de fecha sigue pendiente.
+- Un clic en **No** del bloque fecha: callback
+  `a3fe0b56-4492-43aa-9f89-7e7115f3d93b`, recibido 16:41:46 UTC; `discarded`
+  a 16:41:47. Ambas sin confirmación/ejecución/interacción confirmante.
+- Los dos callbacks `completed`, **cero tools/cero llamadas LLM**; DOM responde
+  «Propuesta descartada.» en ambos. Selectores acotados a un único bloque por
+  título y botón No exacto; errores de localización previos ocurrieron antes del
+  clic/envío, no son operaciones reintentadas tras resultado ambiguo.
+- Consulta posterior de todas las tareas, incluidas completadas:
+  `1b9928e5-6b0a-49a3-bafc-961d29be5c01`, 16:42:35 UTC. Muestra solo póliza
+  y reapertura pendientes, sin completadas, inventario de propuestas ni oferta
+  de reproponer lo descartado.
+
+Cuatro turnos Agent: completed, revisión 8/r4; 3+2+2+3 llamadas LLM completadas,
+cero retries; **0,01245380 USD estimados** (`pricing_snapshot`), coste real no
+reportado (`actual_cost` null en 10/10), no se afirma coste cero. Las seis
+interacciones tienen `agent_final` y un chunk completed con message ID; sin
+`failure_notice`. SQL scoped a la identidad de campaña, sin contenido interno Agno.
+
+### Trazas nominadas, no deducidas de contadores
+
+Grafana Tempo `grafanacloud-traces`, ventana 16:38–16:44 UTC; búsquedas HTTP 200,
+misma consulta de §11. `agno.run_id` coincide con ledger y revisión 8 en cada span:
+
+| Interacción | Trace ID | Tools observadas en orden |
+|---|---|---|
+| `b9fc85ef-ebb0-4385-a63e-5cb7f2761b7e` | `db48b4c826c027ae84ae36351ff8870d` | `list_todo_lists` → `propose_todo_item` → `present_reply` |
+| `70f4eba1-5c23-455f-a700-0c635c44e47e` | `99b244a4881cec12eff4c138c34a9925` | `propose_todo_item` → `present_reply` |
+| `6a604f65-1b64-44aa-88a0-d573a17c9aa4` | `291a326d682a76f2495e9c4b91b7a66b` | `list_pending_proposals` → `present_reply` |
+| `1b9928e5-6b0a-49a3-bafc-961d29be5c01` | `5c1aaf3512bba182a55253d4b01c0b8b` | `list_todo_lists` → `list_todo_items` → `present_reply` |
+
+Foto final SQL 16:44:48 UTC: exactamente dos propuestas nuevas, ambas
+descartadas; cero nuevas auditorías ejecutadas/triviales, cero confirmables,
+dos tareas originales con **mismos campos y `updated_at` que en preflight**,
+nota AC7 exacta única y revisión 8 intactas. No se crean tareas ni se eliminan
+los datos sintéticos anteriores. **Variantes pendientes BL-46 superadas**.
+
+## 14. Decisión de gate y preparación del harness real — 2026-10-16
+
+El propietario elige expresamente **ejecutar el harness real aislado**, preparando
+antes wiring/ruta/presupuesto/acceso seguro, y mantener BL-48 abierto hasta
+resultados. No se sustituye ese gate por la evidencia manual del LLM en Telegram.
+
+- `src/agent/eval_campaign.py`: plan secret-free, snapshot tipado explícito,
+  ruta/capacidades/pricing, reserva total y límites no ampliables; construcción
+  mediante `AgnoLLMAccess` Gateway-only, uso en memoria sin FK/DB productiva.
+- `GovernedPhysicalEvalExecutor` acepta snapshot/límites de campaña, rechaza
+  revisión incorrecta antes de resolver modelo, presupuestos independientes por
+  caso y deadline; envío de `max_tokens` al SDK probado con HTTP simulado.
+- `scripts/eval_preflight.py` no ejecuta inferencia; con `--check-gateway` solo
+  GET `/v1/models`, sin redirects y exige clave restringida al alias exacto.
+  Env específica, no .env ni credenciales ambiente; no se abre dominio/túnel.
+- Candidato `evals/response_style/bl48-campaign-plan.json`: cinco casos BL-48,
+  default/r4 revisión 8; hasta 6 model calls/6 requests, 12 tools, 120 s y
+  1024 tokens de salida por caso. **0,02 USD estimados/caso; 0,10 USD total**.
+  Es reserva estimada, no techo garantizado de facturación. Aprobación pendiente.
+- Snapshot exportado de solo lectura a `runtime-rev8-snapshot.json`, sin secretos
+  ni publicación/activación. Fingerprint de contenido eval
+  `a41f255f1b4022bc5ac1c7efb35a02d82fb4ec2396d71f4991fea1db15f7cccc`.
+  Plan checksum `8f3e4a51496dbbdc763fd17458e8857fe785bd8abaf6016881effe6f79bd8139`.
+- Hallazgo: checksum histórico rev. 8 `e2663c6a…db25` no reproducido localmente;
+  `config_checksum` serializa `frozenset` sin ordenar y cambia entre procesos.
+  Esa variación está probada; **no se afirma que explique por sí sola la
+  discrepancia histórica**. No se cambia el checksum/policy productivo ni se
+  simula otra revisión. El plan liga referencia histórica y fingerprint de
+  contenido estable (capacidades ordenadas), no certifica el algoritmo anterior.
+- Preflight candidato exit 0: `inference_started=false`, `gateway_access=not_checked`,
+  `approval_status=pending_separate_approval`, `semantic_status=not_evaluated`.
+  Fingerprint idéntico en tres procesos y tests con `PYTHONHASHSEED=1/2`.
+- **1465 unitarias passed, 80,19 % cobertura; 173 integraciones passed, 1 STT live
+  skipped**; Ruff global y mypy (173 archivos) limpios; catálogo estático 36 casos
+  y 9 ejemplos provisionales. 36 pruebas focales de campaña/executor superadas,
+  incluidas LLMAccess/SDK/terminal mediante HTTP mock, no proveedor real.
+
+La preparación no incluye lanzador de campaña pagada, juez calibrado, credenciales
+ni red nueva. Antes de ejecutar faltan aprobación exacta del plan/coste/privacidad,
+acceso privado autorizado, clave exclusiva con alias y presupuesto externo
+verificados y revisión del SHA evaluado. No se autoestablecen flags de aprobación
+ni se desactiva la parada productiva. No se llama directamente al provider.
+**BL-46 queda completado funcionalmente; BL-48 sigue abierto por ejecución real y
+evaluación de instrucciones**, con scoring no evaluado hasta evidencia suficiente.

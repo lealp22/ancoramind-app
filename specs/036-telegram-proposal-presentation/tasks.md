@@ -74,13 +74,19 @@
       verdes. AC8–AC9 aislados, sin fixtures ni controles OFF en producción.
 - [ ] Evaluar instrucciones con LLM real gobernado: no ejecutado; la prueba
       con Agno/modelo simulado verifica el protocolo de cierre, no semántica.
+- [x] Preparar candidato del harness real aislado con snapshot explícito,
+      límites no ampliables, plan checksum, env Gateway privada y preflight
+      sin inferencia; LLMAccess/SDK verificados con HTTP simulado (§14).
+- [ ] Aprobar plan/presupuesto/acceso privado y ejecutar campaña real, manteniendo
+      BL-48 abierto; no sustituir por E2E manual (decisión 2026-10-16).
 - **Listo cuando:** pruebas deterministas verdes y evidencia semántica
   distinguida de la mera validez del catálogo.
 
 ## T5 — E2E Telegram y cierre
 
-- [ ] Solo tras autorización de despliegue, revisar checks del mismo SHA y
-      registrar SHA/deployment. No reactivar Wait for CI automáticamente.
+- [x] Deployment sirviendo `838ab705…`, SHA `5f0132f…`: checks del mismo SHA
+      quality/integration/collector-config success antes del E2E (§13).
+      No aprobar otros deployments ni modificar Wait for CI.
 - [x] Repetir propuesta TODO con prioridad/fecha: bloque único y legible
       (AC1/AC2, paso 2).
 - [x] Pulsar No y consultar todas las tareas: la rechazada no existe; no

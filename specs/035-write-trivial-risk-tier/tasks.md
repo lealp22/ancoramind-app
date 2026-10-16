@@ -185,5 +185,6 @@
 - [x] Revisión local final 2026-10-16: regresiones independientes de descripción,
       prioridad y fecha-sola; 1433 unitarias (80 % cobertura), 173 integraciones
       y 1 STT live omitida; Ruff/mypy, catálogo estático y Collector verdes.
-- [ ] E2E Telegram de descripción-sola y fecha-sola con nueva autorización;
-      las regresiones locales no sustituyen esta evidencia ni cierran BL-46.
+- [x] E2E Telegram autorizado descripción-sola y fecha-sola: pending sin tarea,
+      hashes 2/2, consulta real y descartes individuales sin ejecución.
+      Versión sirviendo/CI verificados; BL-46 completado, ver verification final.

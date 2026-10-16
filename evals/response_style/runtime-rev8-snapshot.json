@@ -1,0 +1,88 @@
+{
+  "revision": 8,
+  "source": "database",
+  "checksum": "e2663c6ab9e2666f41ba3d5399d05feb8a0d4141de0d2d74fdcfca19b3afdb25",
+  "config": {
+    "speech": null,
+    "gateway": {
+      "retries": 0,
+      "cooldown_seconds": 60,
+      "cross_model_fallbacks": 0,
+      "request_timeout_seconds": 45,
+      "openrouter_provider_fallback": true
+    },
+    "pricing": {
+      "routes": {
+        "ancoramind-default-r4": {
+          "input_cost_per_1m_usd": 0.1,
+          "output_cost_per_1m_usd": 0.5
+        }
+      }
+    },
+    "routing": {
+      "routes": {
+        "ancoramind-fast": {
+          "capabilities": ["text", "tool_calling"],
+          "context_window_tokens": null,
+          "effective_gateway_route": "ancoramind-fast-r1"
+        },
+        "ancoramind-vision": {
+          "capabilities": ["text", "structured_output", "vision"],
+          "context_window_tokens": null,
+          "effective_gateway_route": "ancoramind-vision-r1"
+        },
+        "ancoramind-default": {
+          "capabilities": ["text", "tool_calling", "structured_output"],
+          "context_window_tokens": null,
+          "effective_gateway_route": "ancoramind-default-r4"
+        },
+        "ancoramind-embeddings": {
+          "capabilities": ["embeddings"],
+          "context_window_tokens": null,
+          "effective_gateway_route": "ancoramind-embeddings-r1"
+        }
+      },
+      "default_route": "ancoramind-default"
+    },
+    "admission": {
+      "user_burst": 5,
+      "user_requests_per_hour": 120,
+      "user_requests_per_minute": 10
+    },
+    "concurrency": {
+      "global": 2,
+      "per_chat": 1,
+      "per_user": 1,
+      "pending_global": 20,
+      "queued_per_chat": 5
+    },
+    "observability": {
+      "traces_enabled": true,
+      "content_capture": false,
+      "metrics_enabled": true,
+      "trace_sample_rate": 1
+    },
+    "context_budget": null,
+    "schema_version": 1,
+    "cost_governance": {
+      "daily_budget_usd": 1,
+      "monthly_budget_usd": 20,
+      "alert_threshold_pct": 60,
+      "external_hard_limit_usd": 20,
+      "hard_stop_threshold_pct": 90,
+      "route_monthly_budgets_usd": {"ancoramind-default": 10},
+      "strong_alert_threshold_pct": 80
+    },
+    "execution_budget": {
+      "max_tool_calls": 12,
+      "max_model_calls": 6,
+      "max_output_tokens": 1024,
+      "max_runtime_seconds": 120,
+      "max_gateway_requests": 8,
+      "max_estimated_cost_usd": 0.1,
+      "max_queue_wait_seconds": 30,
+      "max_same_tool_args_after_success": 1,
+      "max_gateway_attempts_per_model_call": 2
+    }
+  }
+}
