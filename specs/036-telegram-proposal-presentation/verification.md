@@ -2,9 +2,8 @@
 
 > **Fecha de registro:** 2026-10-14.
 > **Estado:** desplegado y validado E2E parcialmente hasta 2026-10-16;
-> Con runtime rev. 8 constan AC1/AC2 y AC5 (lista vacía); fallo terminal seguro
-> validado previamente. AC4 tiene evidencia funcional histórica, no acredita por
-> sí sola el baseline actual. Matriz restante pendiente.
+> Con runtime rev. 8 constan AC1/AC2/AC4/AC6 y AC5 (lista vacía); fallo terminal
+> seguro validado previamente. Matriz restante pendiente.
 
 ## 1. Evidencia funcional aportada por el propietario
 
@@ -166,12 +165,20 @@ No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
 
 - [x] AC1/AC2: tarea con prioridad/fecha y respuesta mixta, bloque único sin
   escritura previa a confirmar; campaña rev. 8/r4 del 2026-10-16 (paso 2).
-- [ ] AC3: varias propuestas y selección individual en el mismo turno.
-- [ ] AC4/AC6: consulta tras descarte y nueva petición sobre el baseline actual.
+- [x] AC3: varias propuestas y selección individual en el mismo turno.
+  Pasos 8/9 asistidos con delegación explícita: dos bloques, «Sí» ambiguo sin
+  ejecución, confirmación de una y descarte de otra por botones; IDs/efectos verificados.
+- [x] AC4: descarte y consulta posterior sin tarea, repropuesta ni inventario
+  no solicitado; campaña rev. 8/r4 del 2026-10-16 (paso 3).
+- [x] AC6: nueva petición explícita crea otra propuesta; anterior descartada
+  intacta y cero tareas; campaña rev. 8/r4 del 2026-10-16 (paso 4).
 - [x] AC5 parcial: lectura real de pendientes vacíos con rev. 8 y `r4`;
   interacción `27e99491-bed0-4399-aada-995de477963c`, dos tools y `agent_final`.
 - [ ] AC5 restante: lectura con propuestas realmente confirmables y exclusión
   de descartadas/ejecutadas/caducadas en campaña controlada.
+  Pasos 5–7: recuento positivo, detalle bajo petición y respuesta vacía tras
+  caducidad correctos. Falta evidencia de tool concreta; no inferirla del contador.
+  Paso 9: consulta final vacía tras ejecución/descarte; mismo límite de trazabilidad.
 - [ ] AC7: regresiones triviales (TODO/notas).
 - [ ] AC8–AC9: horas/zonas, límites, escapado, payload/hash y consentimiento.
 - [x] Integración PostgreSQL aislada: 159 superadas, una STT live omitida.
@@ -386,3 +393,202 @@ se corta Telegram/Gateway productivo para provocar estos escenarios.
 - **AC1/AC2 superados para este recorrido sobre el baseline actual.** No se
   cierra BL-48; siguiente paso AC4: propietario pulsa No y después consulta
   todas las tareas, sin repropuesta automática ni inventario ajeno a la consulta.
+
+### Paso 3 — AC4: descarte y consulta acotada, sin repropuesta
+
+- El propietario recibió «❌ Propuesta descartada.» y, tras consultar todas
+  las tareas, «La lista «Validación cierre 16 octubre» no tiene tareas.».
+  La respuesta aportada no ofrece reproponer ni inventaría otras propuestas.
+- Lectura canónica a las 14:48:20 UTC: propuesta
+  `5345640e-0af8-4790-b666-d577bee186db` `discarded`,
+  `failure_reason='user_declined'`, completada a las 14:46:23 UTC, sin
+  interacción confirmante y con el hash de payload previo intacto.
+- La lista de campaña continúa con cero tareas; cero propuestas posteriores
+  de alta de tarea en esa lista a la hora de la comprobación. No hubo escritura
+  ni repropuesta automática observada.
+- Descarte: interacción `eff73891-9077-4b76-b3e0-38bf328c5367`,
+  `callback_query` `completed`, cero tools y cero llamadas LLM.
+- Consulta: interacción `38a26d15-4b55-4ada-a0f4-141b153186e5` `completed`,
+  revisión 8, ruta `ancoramind-default-r4`, dos llamadas LLM completadas,
+  dos tools y cero retries. No creó propuestas; los contadores no identifican
+  por sí solos las tools concretas.
+- Ambas interacciones tienen `agent_final` completada y un chunk completado
+  con message ID, sin `failure_notice`. **AC4 superado para este recorrido**;
+  BL-48 permanece abierto. Siguiente AC6: nueva petición explícita, propuesta
+  con ID nuevo sin revivir la descartada ni escribir antes de confirmar.
+
+### Paso 4 — AC6: repropuesta explícita con ID nuevo, sin ejecución
+
+- El propietario pidió explícitamente volver a proponer y recibió un único
+  bloque de alta de tarea, mismos campos legibles e instrucción con botones
+  Sí/No. «Ahora sí, vuelve a proponer» no produjo ejecución ni consentimiento.
+- Lectura canónica a las 14:59:05 UTC: nueva propuesta
+  `682679c6-c66f-4b42-9770-51a436589474`, interacción origen
+  `926658af-ae42-4993-81bd-ecdfb0355095` `completed`, revisión 8, ruta
+  `ancoramind-default-r4`, dos tools, dos llamadas LLM completadas y cero
+  retries. `agent_final` y un chunk completados con message ID; sin aviso de fallo.
+- Nueva fila en `pending_confirmation`/`explicit_confirmation`, sin
+  confirmación; presentada a las 14:57:47 UTC, ventana hasta 15:12:47 UTC.
+  Payload y hash iguales a los de la propuesta anterior por ser la misma
+  petición; **ID e interacción origen diferentes**.
+- La propuesta anterior `5345640e-0af8-4790-b666-d577bee186db` permanece
+  `discarded`/`user_declined`, sin confirmación y con hash intacto. No se
+  reabrió ni reintentó. La lista sigue con cero tareas.
+- **AC6 superado para este recorrido**; BL-48 sigue abierto. Aprovechar la
+  nueva propuesta pendiente para la lectura positiva de AC5 antes de descartarla:
+  debe aparecer solo la confirmable, no la anterior descartada ni la lista
+  ya ejecutada. La consulta no confirma ni amplía su ventana de 15 minutos.
+
+### Paso 5 — AC5 positivo: recuento correcto, identificación insuficiente
+
+- El propietario mantuvo los botones sin pulsar y preguntó qué propuestas
+  tenía pendientes. Respuesta aportada: «Tienes una propuesta pendiente de
+  confirmación.». No identifica la acción solicitada: no se considera validada
+  la lista detallada de pendientes por ese texto.
+- Interacción `a55dda40-7fb9-417b-a0ea-032fd6fe0037`, recibida a las
+  15:06:09 UTC, `completed`, revisión 8, ruta `ancoramind-default-r4`, dos
+  llamadas LLM completadas, dos tools, cero retries y cero propuestas creadas.
+  `agent_final` completada y un chunk completado con message ID; sin aviso de fallo.
+- A las 15:07:56 UTC el mismo usuario tiene exactamente una propuesta
+  confirmable según los criterios de `list_pending` (scope usuario):
+  `682679c6-c66f-4b42-9770-51a436589474`, todavía pendiente, presentada y
+  válida hasta 15:12:47 UTC. La lista creada sigue ejecutada, la propuesta
+  anterior descartada y la lista de campaña con cero tareas. El recuento
+  coincide; ni esta consulta ni el texto aportado autorizan una escritura.
+- **Límite:** dos tools no prueban por sí solas que se invocó
+  `list_pending_proposals`; tampoco prueban qué registros leyó o excluyó.
+  No se inspecciona contenido conversacional de la DB interna de Agno.
+- Revisión local: la tool devuelve `tool_name`, resumen acotado de payload y
+  vencimiento en `untrusted_results`, no solo un recuento. El prompt Telegram
+  prohíbe ampliamente un resumen de propuesta pendiente dentro de `answer`,
+  mientras reserva `proposal_text` para propuestas creadas en el turno. Es una
+  posible ambigüedad de instrucciones que puede explicar la omisión; este único
+  resultado no demuestra la causa. No se cambia prompt ni modelo durante la prueba.
+- Siguiente comprobación dirigida: pedir identificar la acción pendiente sin
+  confirmarla, antes de que expire. AC5 detallado sigue pendiente; no cerrar BL-48.
+
+### Paso 6 — AC5: detalle correcto bajo petición; caducidad natural posterior
+
+- El propietario recibió «La propuesta consiste en añadir «Revisar seguro»,
+  con prioridad alta y fecha límite 20 de octubre de 2026.». Los tres campos
+  coinciden con el payload de la propuesta nueva; no pide confirmar de nuevo
+  ni afirma ejecución. Esto acredita detalle correcto al pedirlo expresamente,
+  no resuelve la omisión de detalle de la primera consulta general.
+- Interacción `cbe01267-4eed-45cf-9e4a-d6e727347c12`, recibida a las
+  15:11:38 UTC, antes del vencimiento 15:12:47 UTC. `completed`, revisión 8,
+  ruta `ancoramind-default-r4`, dos tools y dos llamadas LLM completadas,
+  cero retries. `agent_final` y un chunk completados con message ID;
+  ninguna propuesta creada ni aviso de fallo. No se deduce tool concreta
+  a partir del contador agregado.
+- A las 15:12:48 UTC la propuesta `682679c6-c66f-4b42-9770-51a436589474`
+  aún conserva estado almacenado `pending_confirmation`, pero su ventana ya
+  venció y **no es confirmable**. No se confunde el estado de fila con
+  elegibilidad: `list_pending` exige también `expires_at > now()`.
+- A las 15:13:03 UTC: cero propuestas confirmables del usuario, cero propuestas
+  nuevas de tarea en la campaña después de la repropuesta explícita y cero
+  tareas canónicas. La consulta no renovó el TTL ni autorizó ninguna escritura.
+- El siguiente paso cambia por la caducidad natural: no confirmar, no recrear
+  ni descartar antes de probar la exclusión. Pedir de nuevo pendientes y
+  comprobar respuesta vacía sin inventario desde historial. Esta consulta
+  sigue pendiente de envío real por el propietario; AC5 completo no se cierra.
+
+### Paso 7 — AC5: respuesta vacía después de caducar
+
+- El propietario preguntó de nuevo por pendientes y recibió «No tienes ninguna
+  propuesta pendiente de confirmación ahora mismo.». No muestra la propuesta
+  caducada, ni la descartada o ejecutada, ni ofrece recrearlas.
+- Interacción `4f8603d4-bd83-4522-996d-ca8705f00ba9`, recibida a las
+  15:15:09 UTC, después del vencimiento 15:12:47 UTC. `completed`, revisión 8,
+  ruta `ancoramind-default-r4`, dos tools, dos llamadas LLM completadas y cero
+  retries. Respuesta `agent_final` completada, un chunk completado con message ID.
+- Lectura canónica a las 15:18:30 UTC: cero propuestas confirmables del usuario,
+  cero propuestas creadas por esa interacción y cero tareas en la lista de
+  campaña. La propuesta caducada conserva `pending_confirmation`, sin
+  `confirming_interaction_id`: no se renovó ni ejecutó por consultar.
+- Exclusión semántica tras caducidad observada con el baseline rev. 8/r4. Sigue
+  sin demostrarse el nombre de las tools invocadas a partir de los contadores;
+  no se da por probado ese requisito de lectura real ni se cierra AC5 completo.
+- El propietario plantea automatizar la campaña mediante Playwright. Solo se
+  inspeccionaron pestañas: el servidor expone `about:blank`, no la sesión de
+  Telegram del navegador del propietario. No se enviaron mensajes ni pulsaron
+  botones. La campaña sigue siendo manual hasta acordar acceso y alcance; no se
+  mezcla evidencia manual con una eventual ejecución asistida/delegada.
+
+### Paso 8 — AC3 asistido por Playwright: dos propuestas, sin consentimiento
+
+- El propietario inicia sesión manualmente en el navegador Playwright. Se
+  comprueba el chat `ancoramind_project_bot` y la respuesta previa de pendientes
+  vacíos, sin navegar por otros chats. A las 15:22:54 UTC: lista de campaña
+  única, cero tareas y cero propuestas confirmables del usuario.
+- Se envía por la UI real una petición de dos tareas en «Validación cierre
+  16 octubre»: «Revisar póliza prueba AC3» y «Revisar recibo prueba AC3», ambas
+  con prioridad alta, indicando no confirmar ni ejecutar ninguna. Es entrada
+  asistida, no escrita personalmente por el propietario ni update fabricado.
+- El DOM del mensaje recibido muestra exactamente dos bloques «Propuesta:
+  Añadir tarea», cada uno con su título, prioridad «alta» e instrucción de
+  consentimiento. El teclado tiene dos filas, cada una con Sí/No. No hay
+  narración duplicada del Agent. La inspección visual/DOM no demuestra por sí
+  sola qué ID lleva cada callback; falta probar selección individual.
+- Interacción `3ee18d70-b71c-46db-846b-7e2710bedac2`, recibida 15:23:09 UTC,
+  `completed`, revisión 8, ruta `ancoramind-default-r4`, cuatro tools, tres
+  llamadas LLM completadas, cero retries. `agent_final` completada y un chunk
+  completado con message ID.
+- Lectura canónica 15:23:27 UTC: dos propuestas `pending_confirmation` y
+  `explicit_confirmation`, ambas para la lista de campaña, `priority='high'`,
+  sin fecha ni descripción y sin interacción confirmante:
+  - póliza: `c033f4b5-6b52-4549-b69c-2e959e18a60e`;
+  - recibo: `fdb76b52-46e9-40f5-8dc4-fc86faef33d9`.
+  Ambas presentadas 15:23:21 UTC, vencimiento 15:38:21 UTC. Cero tareas
+  canónicas: proponer no ejecutó ninguna.
+- No se pulsa Sí/No ni se envía un texto de consentimiento. El «Sí» ambiguo
+  también se trata como consentimiento para delimitar la delegación; la siguiente
+  fase requiere decisión del propietario. AC3 sigue parcial y BL-46/48 abiertos.
+
+### Paso 9 — AC3 asistido: selección individual con autorización acotada
+
+- El propietario autoriza exclusivamente enviar «Sí» ambiguo, confirmar la
+  póliza por botón, descartar el recibo por botón y consultar tareas/pendientes.
+  No autoriza otras mutaciones, limpieza ni iniciar AC7. Todo se realiza en
+  Telegram Web mediante Playwright; SQL solo de lectura. No son pulsaciones
+  personales del propietario: se registra consentimiento delegado de prueba.
+- Preflight 15:25:49 UTC: exactamente los dos IDs del paso 8 confirmables en el
+  mismo bot/chat, payloads intactos y cero tareas. No se recrean propuestas.
+- **«Sí» ambiguo:** interacción `6efa6ec2-e751-4ae3-88be-10d31e4168e2`,
+  recibida 15:26:08 UTC. Respuesta «Tienes varias propuestas pendientes.
+  Responde «Sí <ID>»:» seguida de los dos IDs. Ambas siguen pendientes, sin
+  confirmante y cero tareas. `completed`, cero tools/LLM; `agent_final` y un
+  chunk completados. No se infiere fallo de autorización de la exposición de IDs;
+  el mensaje pide selección, no concede consentimiento por lote.
+- **Confirmar póliza:** clic en Sí de la primera fila del mensaje del paso 8.
+  Respuesta «✅ Operación ejecutada y registrada.». El ID
+  `c033f4b5-6b52-4549-b69c-2e959e18a60e` pasa a `executed`, modo
+  `explicit_confirmation`, `confirmed_at=15:26:47.630249Z`,
+  `completed_at=15:26:47.819792Z`; confirmante
+  `f771bbb7-6d91-4a73-96b3-e0ef703ca35f`, recibida 15:26:46 UTC,
+  `completed`, cero tools/LLM. `agent_final` y un chunk completados.
+  Existe exactamente una tarea de campaña:
+  `0e5efc7b-b87e-43b9-bf77-746b4a8297a5`, «Revisar póliza prueba AC3»,
+  pendiente y prioridad `high`. El recibo continúa pendiente: no hubo lote.
+- **Descartar recibo:** clic en No de la segunda fila del mismo mensaje.
+  Respuesta «❌ Propuesta descartada.». El ID
+  `fdb76b52-46e9-40f5-8dc4-fc86faef33d9` pasa a `discarded`,
+  `failure_reason='user_declined'`, `completed_at=15:27:06.036395Z`,
+  sin confirmante. Interacción `40cd28ad-c120-47e6-ac41-1428a55b4d9e`,
+  recibida 15:27:05 UTC, `completed`, cero tools/LLM; `agent_final` y un
+  chunk completados. La póliza sigue ejecutada y sigue habiendo una sola tarea.
+- **Consulta de tareas:** interacción `b7c40c0b-567a-4340-a2e4-9312a5297934`,
+  recibida 15:27:30 UTC. Respuesta «En la lista aparece una tarea: Revisar
+  póliza prueba AC3 — pendiente, prioridad alta y sin fecha límite.». No narra
+  propuestas, ofrece recrearlas ni muestra la tarea descartada.
+- **Consulta de pendientes:** interacción `f8178073-7f3e-4c8c-aabe-69bd6bbff951`,
+  recibida 15:28:03 UTC. Respuesta «No tienes ninguna propuesta pendiente de
+  confirmación ahora mismo.». Ambas consultas `completed`, revisión 8, ruta
+  `ancoramind-default-r4`, dos tools/dos llamadas LLM completadas cada una,
+  cero retries y cero propuestas creadas; `agent_final` y un chunk completados.
+  El contador no identifica las tools: AC5 conserva ese límite de evidencia.
+- Foto final 15:28:22 UTC: cero propuestas confirmables del usuario y exactamente
+  la tarea de póliza pendiente; sin duplicación observada. Los callbacks quedan
+  vinculados al ID esperado por su transición/efecto, no solo por orden visual.
+  **AC3 superado en esta ejecución asistida**; no prueba doble clic/concurrencia.
+  Se conserva el dato sintético autorizado, sin borrado automático. Delegación
+  completada: detenerse antes de AC7; BL-46/48 siguen abiertos.

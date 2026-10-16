@@ -38,7 +38,7 @@
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado y validado con PostgreSQL (TODO items título-solo + completar/reabrir, notas); pendiente E2E Telegram — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E parcial; con GPT-6 Luna rev. 8 constan AC1/AC2 (consulta + propuesta legible sin escritura) y AC5 (lista vacía); resto de matriz pendiente; fronteras Core reforzadas con PostgreSQL — specs/036 |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E parcial; con GPT-6 Luna rev. 8 constan AC1/AC2, AC4, AC6 y AC3 asistido con delegación explícita (Sí ambiguo sin ejecución, confirmar una/descartar otra por botón); AC5 con respuestas coherentes y trazabilidad de tool pendiente; AC7/resto de matriz abiertos; fronteras Core reforzadas con PostgreSQL — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests locales (2026-10-16): 1428 unitarias y 173 integraciones PostgreSQL
@@ -907,6 +907,15 @@ con `tool_choice=required` conserva la partición como herramienta terminal sin
 I/O canónico, parser ni otro modelo. El Core descarta narración sin propuestas
 persistidas. Pruebas SDK con HTTP simulado cubren el protocolo, no obediencia
 semántica real. Sin despliegue; validación de Gateway/Telegram sigue pendiente.
+
+**E2E asistido autorizado (2026-10-16, specs/036 pasos 8/9):** baseline rev. 8 /
+`ancoramind-default-r4`. Dos bloques Core, «Sí» ambiguo sin ejecución, confirmar
+solo póliza y descartar solo recibo mediante sus botones: IDs y efectos
+verificados en PostgreSQL. Consentimiento sin llamadas LLM; queda una tarea
+sintética autorizada y cero propuestas confirmables. AC3 superado en esta
+ejecución delegada; no equivale a pulsación personal ni prueba de concurrencia.
+AC5 positivo/detallado/vacío coherente, pero no se deducen tools de contadores.
+AC7 y resto de matriz pendientes; sin código, despliegue ni cambios de configuración.
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
