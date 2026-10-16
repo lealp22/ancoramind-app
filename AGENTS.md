@@ -24,15 +24,18 @@ recordatorios y eventos, con trazabilidad completa.
   (BL-46/specs/035, ver §2.4) + tool de lectura `list_pending_proposals`
   para que el Agent nunca narre propuestas pendientes desde memoria
   conversacional (BL-47) + presentación particionada `AgentReply` para un
-  único bloque Core de propuestas en Telegram (BL-48/specs/036, implementación
-  local; evaluación LLM real/E2E pendientes). Corrección local del 2026-10-15:
+  único bloque Core de propuestas en Telegram (BL-48/specs/036, desplegada y
+  parcialmente validada E2E; matriz restante pendiente). Desde 2026-10-16:
   el Agent principal termina mediante `present_reply` (`tool_choice=required`,
   sin JSON mode/output_schema); el Core nunca entrega `proposal_text` sin
-  propuestas persistidas. La tool terminal consume presupuesto, no escribe
-  datos canónicos ni concede consentimiento.
-  1423 unit tests y 159 integration PostgreSQL superados; una prueba STT live
+  propuestas persistidas; una salida terminal inválida queda `failed_ambiguous`
+  y genera un aviso fijo sin retry. La tool terminal consume presupuesto, no
+  escribe datos canónicos ni concede consentimiento. BL-47 se validó E2E con
+  lectura real + `present_reply` (`tool_call_count=2`).
+  1428 unit tests y 161 integration PostgreSQL superados; una prueba STT live
   se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
-  Head Alembic local: `0016_voice_guard_search_path` (rollout Supabase pendiente).
+  Head Alembic/Supabase: `0016_voice_guard_search_path`. Runtime config activa:
+  revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.
 
 ---
 
@@ -272,8 +275,9 @@ del provider viven sólo en el Gateway (`gateway/litellm-config.yaml` no contien
 secretos). Un Gateway caído ⇒ error de inferencia, nunca fallback directo.
 
 Modelo default para acceso directo/desarrollo: `gpt-6-luna`. Con el Gateway,
-GPT-6 Luna usa el alias gobernado `ancoramind-default-r3` tras publicarlo y
-activar su revisión runtime. Los modelos free de OpenRouter caducan — si hay
+producción usa GPT-6 Luna mediante el alias gobernado `ancoramind-default-r4`
+en la revisión runtime 8; `ancoramind-default-r3` se conserva como candidato
+histórico. Los modelos free de OpenRouter caducan — si hay
 error 404, cambiar `LLM_MODEL` en `.env`.
 
 **Cambiar el modelo físico (ADR-005, enmendado 2026-09-18):** con el Gateway

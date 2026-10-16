@@ -24,7 +24,7 @@
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 36 casos sintéticos, runner estático, harness aislado del Agent y harness Core de consentimiento implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
 | BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; M3 PDF textual validado en Telegram/Railway el 2026-10-13; faltan protección de `main` (requiere plan GitHub), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
-| BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; fase 6 validada en Railway (2026-09-19); candidato GPT-6 Luna `r3` preparado localmente (2026-09-28), pendiente publicación/activación remota; además queda verificar matriz A–Y completa — specs/013 |
+| BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; default GPT-6 Luna `r4` activo en runtime rev. 8, embeddings preservados; queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 Collector/Grafana base desplegados y 429 resuelto; faltan import/provisioning de dashboard/alertas y matriz T7 — specs/016 |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) validada E2E por Telegram/Railway el 2026-10-13; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
@@ -37,8 +37,8 @@
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado y validado con PostgreSQL (TODO items título-solo + completar/reabrir, notas); pendiente E2E Telegram — specs/035 |
-| BL-47 Tool de lectura `list_pending_proposals` | 🔶 implementado y validado con PostgreSQL; pendiente E2E Telegram |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 implementado localmente; integración PostgreSQL validada, evaluación LLM real y E2E pendientes — specs/036 |
+| BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado; AC1/AC4/AC5 y fallo terminal seguro validados E2E con GPT-6 Luna rev. 8; matriz restante pendiente — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
 Tests locales (2026-10-15): 1423 unitarias y 159 integraciones PostgreSQL
@@ -468,6 +468,11 @@ fallback, propuesta ni `agent_final`; `r5` volvió a incumplir `present_reply` e
 sesión limpia. `r5` corresponde al experimento `xiaomi/mimo-v2.6-pro`; preparado
 asset aditivo para volver default a `r4`/GPT-6 Luna conservando embeddings y
 pricing canónico `0.10/0.50`. Pendiente CI y activación CAS como revisión 7.
+**Cierre operativo de este hallazgo:** SHA `5f0132f` desplegado; por doble envío
+accidental se crearon revisiones 7 y 8 idénticas (7 inactiva). Revisión 8 activa
+por CAS `6→8`, embeddings preservados. E2E BL-47 PASS: interacción completed,
+2 llamadas LLM, 2 tools, ruta r4, `agent_final` entregada, sin retries/fallback,
+propuestas nuevas ni `failure_notice`. BL-47 cerrado; BL-48 continúa parcial.
 Ver `specs/013-llm-access-governance/`.
 
 **Actualización rollout Collector/Grafana (2026-09-24):** el servicio
@@ -810,7 +815,7 @@ limpios. Pendiente: validación E2E Telegram (reproducir el caso real del
 hallazgo: confirmar una propuesta, dejar caducar otra, y comprobar que la
 respuesta ya no narra ninguna de las dos como pendiente).
 
-### BL-48 · Presentación única de propuestas y respuestas acotadas tras descarte 🔶 implementado localmente — 2026-10-14 — specs/036
+### BL-48 · Presentación única de propuestas y respuestas acotadas tras descarte 🔶 desplegado, E2E parcial — 2026-10-14 — specs/036
 
 **Hallazgo (E2E Telegram comunicado por el propietario):** al proponer la
 tarea «Renovar el seguro» con prioridad alta y vencimiento el 20 de octubre

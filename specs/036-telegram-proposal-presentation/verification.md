@@ -1,8 +1,8 @@
 # Verification: 036 — Evidencia previa y validación pendiente
 
 > **Fecha de registro:** 2026-10-14.
-> **Estado:** implementado localmente; sin despliegue ni inferencia LLM real.
-> Las pruebas anteriores descritas aquí no validan la mejora de presentación.
+> **Estado:** desplegado y validado E2E parcialmente hasta 2026-10-16;
+> AC1/AC4/AC5 y fallo terminal seguro cubiertos, matriz restante pendiente.
 
 ## 1. Evidencia funcional aportada por el propietario
 
@@ -212,3 +212,25 @@ de consentimiento anterior funcionó.
   `ancoramind-embeddings-r1` y el resto de límites. Asset:
   `configs/ancoramind-default-r4-with-embeddings.json`. Pendiente publicación en
   Git, CI y activación CAS como revisión nueva; sin inferencia adicional todavía.
+
+### Cambio de ruta y E2E BL-47 superado
+
+- Asset publicado en SHA `5f0132f`, CI completo en verde y deployment Railway
+  `838ab705-550c-43a9-a344-5dc1450ce73b` `SUCCESS`.
+- `status` confirmó revisión 6 activa y `validate` devolvió `valid=true`. El
+  operador ejecutó por error `create-revision` dos veces: revisiones 7 y 8 son
+  inmutables, válidas y byte-a-byte equivalentes (checksum
+  `e2663c6a…db25`). La 7 quedó inactiva; no se editó ni eliminó.
+- Revisión 8 activada por CAS `6 → 8`, auditada con actor
+  `assistant-r7-rollout`. Conserva `ancoramind-embeddings-r1`, cambia únicamente
+  default a `ancoramind-default-r4` (GPT-6 Luna) y pricing canónico `0.10/0.50`.
+  Readiness confirmó revisión 8 y todos los componentes healthy.
+- E2E único posterior: la consulta explícita de propuestas pendientes respondió
+  correctamente. Ledger: interacción `completed`, `config_revision=8`, dos
+  llamadas LLM, `tool_call_count=2` (lectura + `present_reply`), ruta efectiva
+  `ancoramind-default-r4`, cero retries/fallback/error. Outbox `agent_final`
+  completada y entregada en un chunk; cero propuestas nuevas y cero
+  `failure_notice` tras el switch.
+- **BL-47 queda validado E2E para la lectura sin propuestas confirmables.** BL-48
+  sigue abierto: esta evidencia cubre AC5 y el mecanismo de fallo seguro, no
+  sustituye AC2/AC3/AC6–AC9 ni la matriz trivial completa.
