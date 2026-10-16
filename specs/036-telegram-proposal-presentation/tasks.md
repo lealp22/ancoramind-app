@@ -1,9 +1,9 @@
 # Tasks: 036 — Presentación única de propuestas en Telegram
 
-> **Fecha:** 2026-10-14. **Estado:** implementado localmente, sin despliegue.
-> El propietario autorizó la implementación después de la documentación.
-> Integración PostgreSQL validada; evaluación real y E2E pendientes; ver
-> `verification.md`.
+> **Fecha:** 2026-10-14. **Estado a 2026-10-16:** desplegado, E2E AC1–AC7
+> registrado con revisión 8/r4 (AC3/AC7 asistidos). AC5 trazado y AC8–AC9
+> revalidados en aislamiento; gates locales verdes. Evaluación real de
+> instrucciones y cierre global pendientes; ver `verification.md` §§11–12.
 
 ## T1 — Contrato Agent/Core de presentación
 
@@ -69,8 +69,9 @@
       presupuesto, saludos, READ, trivial, propuesta y turno mixto. Los mocks
       no acreditan la selección semántica del modelo real.
 - [x] Ejecutar `pytest tests/unit/`, Ruff y `mypy src/`.
-- [x] Verificar integración contra PostgreSQL aislado: 159 superadas y una
-      prueba STT live omitida por diseño (2026-10-15). Sin fixtures en producción.
+- [x] Revalidar gates locales 2026-10-16: 1433 unitarias, cobertura 80 %, 173
+      integraciones y una STT live omitida; Ruff/mypy y build/validate Collector
+      verdes. AC8–AC9 aislados, sin fixtures ni controles OFF en producción.
 - [ ] Evaluar instrucciones con LLM real gobernado: no ejecutado; la prueba
       con Agno/modelo simulado verifica el protocolo de cierre, no semántica.
 - **Listo cuando:** pruebas deterministas verdes y evidencia semántica
@@ -80,13 +81,15 @@
 
 - [ ] Solo tras autorización de despliegue, revisar checks del mismo SHA y
       registrar SHA/deployment. No reactivar Wait for CI automáticamente.
-- [ ] Repetir propuesta TODO con prioridad/fecha: bloque único y legible.
-- [ ] Pulsar No y consultar todas las tareas: la rechazada no existe; no
+- [x] Repetir propuesta TODO con prioridad/fecha: bloque único y legible
+      (AC1/AC2, paso 2).
+- [x] Pulsar No y consultar todas las tareas: la rechazada no existe; no
       se ofrece automáticamente de nuevo ni se añade un inventario de propuestas.
-- [ ] Pedir pendientes explícitamente y pedir de nuevo la acción rechazada:
-      lecturas reales y una nueva propuesta, respectivamente.
-- [ ] Validar respuesta mixta y varias propuestas, y regresión de triviales
-      (incluidas completar/reabrir y nota) sin botones.
+- [x] Pedir pendientes explícitamente y pedir de nuevo la acción rechazada:
+      lecturas reales y una nueva propuesta; trazas AC5 recuperadas en §11.
+- [x] Validar respuesta mixta y varias propuestas, y regresión de triviales
+      (incluidas completar/reabrir y nota) sin botones; pasos 2/8–10,
+      distinguiendo ejecución personal de asistida autorizada.
 - [ ] Actualizar `verification.md` y el estado de BL-48 solo con evidencia;
       no reescribir el historial de tareas completadas de specs anteriores.
 - **Listo cuando:** se cumplen los criterios de cierre de `spec.md`.

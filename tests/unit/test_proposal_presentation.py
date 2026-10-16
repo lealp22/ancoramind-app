@@ -67,12 +67,15 @@ def test_block_is_built_from_the_stored_payload_only() -> None:
 
 
 def test_block_bounds_and_flattens_long_values() -> None:
-    block = render_proposal_block(uuid4(), "create_todo_item", {"title": "a\n" + "x" * 500})
+    payload = {"title": "a\n" + "x" * 500}
+    before = payload_hash("create_todo_item", payload)
+    block = render_proposal_block(uuid4(), "create_todo_item", payload)
 
     title_line = next(line for line in block.splitlines() if "Título" in line)
     assert "\n" not in title_line
     assert len(title_line) < 140
     assert title_line.endswith("…")
+    assert payload_hash("create_todo_item", payload) == before
 
 
 def test_unknown_tool_falls_back_to_its_name() -> None:
@@ -110,11 +113,17 @@ def test_todo_due_date_is_readable_without_mutating_payload(tool, stored) -> Non
         ("2026-10-20T00:00:00+02:00", "00:00:00+02:00"),
         ("2026-10-20T00:00:00Z", "00:00:00+00:00"),
         ("2026-10-20T00:00:00.000123", "00:00:00.000123"),
+        ("2026-10-20T23:59:59.999999-03:30", "23:59:59.999999-03:30"),
+        ("2026-10-20T00:00:00.000123+05:45", "00:00:00.000123+05:45"),
     ],
 )
 def test_todo_explicit_times_and_offsets_are_preserved(stored, time_text) -> None:
-    block = render_proposal_block(uuid4(), "create_todo_item", {"due_date": stored})
+    payload = {"due_date": stored}
+    before = payload_hash("create_todo_item", payload)
+    block = render_proposal_block(uuid4(), "create_todo_item", payload)
     assert f"Fecha límite: 20 de octubre de 2026, {time_text}" in block
+    assert payload["due_date"] == stored
+    assert payload_hash("create_todo_item", payload) == before
 
 
 @pytest.mark.parametrize(
@@ -122,17 +131,19 @@ def test_todo_explicit_times_and_offsets_are_preserved(stored, time_text) -> Non
 )
 def test_midnight_reminder_and_event_are_not_reinterpreted_as_date_only(tool, key) -> None:
     stored = "2026-10-20T00:00:00+02:00"
-    assert stored in render_proposal_block(uuid4(), tool, {key: stored})
+    payload = {key: stored}
+    before = payload_hash(tool, payload)
+    assert stored in render_proposal_block(uuid4(), tool, payload)
+    assert payload_hash(tool, payload) == before
 
 
 def test_unexpected_values_fall_back_and_html_stays_escaped() -> None:
-    block = render_proposal_block(
-        uuid4(),
-        "create_todo_item",
-        {"title": "<script>DATA</script>", "priority": "unknown", "due_date": "not a date"},
-    )
+    payload = {"title": "<script>DATA</script>", "priority": "unknown", "due_date": "not a date"}
+    before = payload_hash("create_todo_item", payload)
+    block = render_proposal_block(uuid4(), "create_todo_item", payload)
     assert "Prioridad: unknown" in block
     assert "Fecha límite: not a date" in block
     html = markdown_to_telegram_html(block)
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
+    assert payload_hash("create_todo_item", payload) == before

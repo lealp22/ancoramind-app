@@ -3,8 +3,9 @@
 > **Backlog:** BL-48 — P1, calidad de la validación del MVP.
 > **Fecha:** 2026-10-14.
 > **Estado:** desplegado, E2E parcial; AC1/AC2/AC4/AC6 y AC3/AC7 asistidos constan con rev. 8;
-> AC5 con respuestas coherentes, trazabilidad de tool pendiente; AC8–AC9 y cierre global abiertos. Fronteras Core reforzadas en PostgreSQL;
-> no equivalen a validación semántica. Ver `verification.md`.
+> AC5 acreditado con trazas nominadas recuperadas; AC8–AC9 superados en aislamiento
+> y gates locales verdes (1433 unitarias, 173 integraciones, 1 STT live omitida).
+> Evaluación real de instrucciones y cierre global pendientes. Ver `verification.md` §§11–12.
 > **Autorización:** implementación, despliegue y rollout de runtime rev. 8
 > aprobados; evidencia operativa registrada hasta 2026-10-16.
 > **Relacionado:** BL-46/specs/035, BL-47 y BL-39/40/specs/023.

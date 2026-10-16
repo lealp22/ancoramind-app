@@ -3,7 +3,8 @@
 > **Backlog:** BL-46
 > **Status:** implemented and PostgreSQL-verified; camino trivial E2E Telegram
 > asistido validado (2026-10-16, runtime 8/r4). Ver `verification.md` para
-> variantes reviewable restantes y revisión final de gates; BL-46 aún abierto.
+> variantes reviewable restantes y revisión final de cierre/versiones; gates
+> locales revalidados (1433 unitarias, 173 integraciones). BL-46 aún abierto.
 > **Decisiones del propietario (2026-10-13):**
 > 1. Se aprueba subclasificar `WRITE` dentro de AGENTS.md §2.4 en
 >    `WRITE_TRIVIAL` (ejecuta directo, con auditoría) y `WRITE_REVIEWABLE`

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
 from agno.run import RunContext
 
 from src.agent.tools import todos as todo_tools
@@ -67,6 +68,49 @@ async def test_propose_todo_item_records_intent_without_mutating(monkeypatch):
     service.add_item.assert_not_awaited()
     assert "proposal-1" in response
     assert "¿Confirmas" in response
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "stored"),
+    [
+        ("description", "  Caso sintético de revisión  ", "Caso sintético de revisión"),
+        ("priority", "high", "high"),
+        ("due_date", "2026-10-20", "2026-10-20T00:00:00"),
+    ],
+)
+async def test_each_optional_field_alone_requires_review_without_trivial_execution(
+    monkeypatch, field, value, stored
+):
+    """BL-46: one optional field is enough; no combined fields are needed."""
+    actions = AsyncMock()
+    actions.create.return_value = {"id": "proposal-reviewable"}
+    service = AsyncMock()
+    executor = AsyncMock()
+    monkeypatch.setattr(todo_tools, "_get_actions_repo", AsyncMock(return_value=actions))
+    monkeypatch.setattr(todo_tools, "_get_todos_service", AsyncMock(return_value=service))
+    monkeypatch.setattr(todo_tools, "_get_trivial_executor", lambda: executor)
+    list_id = uuid4()
+
+    response = await todo_tools.propose_todo_item(
+        _run_context(), str(list_id), "  Revisar variante  ", **{field: value}
+    )
+
+    payload = {
+        "list_id": str(list_id),
+        "title": "Revisar variante",
+        "description": None,
+        "priority": None,
+        "due_date": None,
+    }
+    payload[field] = stored
+    actions.create.assert_awaited_once_with(
+        user_id="452022640", tool_name="create_todo_item", payload=payload
+    )
+    service.add_item.assert_not_awaited()
+    executor.execute.assert_not_awaited()
+    assert "proposal-reviewable" in response
+    assert "¿Confirmas" in response
+    assert "✅" not in response
 
 
 async def test_propose_todo_item_title_only_executes_directly_as_write_trivial(monkeypatch):

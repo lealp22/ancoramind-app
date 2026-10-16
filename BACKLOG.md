@@ -36,12 +36,12 @@
 | BL-42 Recuperación semántica documental | ✅ ruta Gateway, reindexación explícita y E2E productivo ingesta preservada→índice→búsqueda validados; aislamiento por usuario PASS, 1536d, sin contenido en logs — specs/026 |
 | BL-43 Pantalla de administración centralizada | 🔶 implementado localmente (invitaciones, runtime-config, salud, enlaces); pendiente validación manual en Railway — specs/027 |
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
-| BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 PostgreSQL y E2E asistido trivial validados (alta título-solo, completar/reabrir, nota/búsqueda, auditoría terminal); reviewable prioridad/fecha validado; variantes description/fecha-sola y cierre de gates pendientes — specs/035 |
+| BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 PostgreSQL y E2E asistido trivial validados; reviewable prioridad/fecha validado; gates locales revalidados con regresiones por campo opcional; faltan E2E description/fecha-sola y cierre/versiones — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E parcial; con GPT-6 Luna rev. 8 constan AC1/AC2/AC4/AC6 y AC3/AC7 asistidos con delegación explícita; AC5 con respuestas coherentes y trazabilidad de tool pendiente; AC8–AC9/cierre de gates abiertos; fronteras Core reforzadas con PostgreSQL — specs/036 |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E AC1–AC7 registrado con rev. 8/r4 (AC3/AC7 asistidos); AC5 trazado en Tempo, AC8–AC9 aislados y gates locales superados; evaluación real de instrucciones y cierre/versiones pendientes — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests locales (2026-10-16): 1428 unitarias y 173 integraciones PostgreSQL
+Tests locales (2026-10-16): 1433 unitarias (80 % cobertura) y 173 integraciones PostgreSQL
 superadas; una prueba STT live omitida por diseño. Las 4 pruebas de migración
 superan fresh install, upgrade/downgrade e idempotencia. Ruff y `mypy src/`
 limpios en `src/ tests/ scripts/ migrations/`.
@@ -59,7 +59,7 @@ son historia: no implican que hoy el servicio esté pausado o el flag esté OFF.
 
 | Orden | Bloque de trabajo | Qué falta para cerrar |
 |---|---|---|
-| 1 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | AC1–AC4/AC6/AC7 constan (AC3/AC7 asistidos); faltan trazabilidad de lectura AC5, variantes reviewable de BL-46, revisión final de gates y AC8/AC9 aislados, sin desactivar controles en producción |
+| 1 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | AC5 ya trazado y AC8/AC9 aislados/gates locales superados; faltan E2E description/fecha-sola de BL-46 con nueva autorización, evaluación de instrucciones y cierre/versiones; sin desactivar controles productivos |
 | 2 | Operación gobernada (BL-23/33/44) | Degradación/circuit del Gateway sin bypass, dashboard/alertas, parada/recuperación y rotación con runbook; requieren campaña operativa autorizada, no cortes improvisados |
 | 3 | Validación MVP (BL-1/41) | M4/M5: vehículos, calendario/recordatorios, zona horaria, recurrencia y snooze; reutilizar las garantías de consentimiento anteriores |
 | 4 | Seguridad semántica (BL-8/39/48) | Ejecutar evals reales con ruta/presupuesto aprobados; catálogos y respuestas scripted no acreditan obediencia semántica |
@@ -803,8 +803,14 @@ ni preguntas de confirmación. Cuatro auditorías `self_authorized`/`executed`
 correlacionadas, hashes válidos y ninguna duplicación observada; póliza AC3
 intacta. Se conservan tarea y nota sintéticas, cero propuestas confirmables.
 Regresión reviewable con prioridad y prioridad+fecha acreditada en pasos 2/8/9;
-variantes description/fecha-sola y revisión final de gates pendientes en specs/035.
+variantes E2E description/fecha-sola y revisión de cierre/versiones pendientes en specs/035.
 Sin cambios de código, despliegue ni configuración; BL-46 no se cierra aún.
+
+**Revisión local posterior (2026-10-16):** regresiones independientes de descripción,
+prioridad y fecha-sola, sin vía trivial ni mutación previa. **1433 unitarias, 80 %
+cobertura; 173 integraciones, 1 STT live omitida**; Ruff/mypy, catálogo estático y
+build/validate Collector verdes. Solo tests/documentación, sin campaña Telegram,
+commit ni cambios productivos. No sustituye las dos variantes E2E pendientes.
 
 ### BL-47 · El Agent narra el estado de propuestas pendientes desde memoria conversacional, sin fuente de verdad ✅ implementado localmente — 2026-10-13
 
@@ -932,6 +938,16 @@ sintética. Camino trivial superado con cuatro auditorías terminales, hashes
 válidos, sin botones ni propuestas revisables. Cierre de esta fase: dos tareas
 pendientes de campaña (póliza y reapertura), una nota sintética y cero propuestas
 confirmables. AC5/trazabilidad, AC8–AC9 y cierre global siguen abiertos.
+
+**Revisión posterior de AC5/AC8–AC9 (2026-10-16, specs/036 §§11–12):** recuperadas
+las cuatro trazas Tempo de los pasos 5/6/7/9; cada una muestra
+`list_pending_proposals` → `present_reply`, con run/correlación/revisión 8
+coincidentes con el ledger. Junto con respuestas y estados canónicos previos,
+**AC5 queda superado**, sin inferir tools de contadores ni repetir mensajes.
+AC8–AC9 superados en aislamiento (temporalidad/escapado/hash, OFF, entrega fallida,
+no replay); gates locales verdes: 1433 unitarias, 173 integraciones, 1 STT live
+omitida. Pendientes evaluación real de instrucciones y cierre/versiones;
+**BL-48 sigue abierto**. No hay despliegue, cambio de controles ni nueva campaña.
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta

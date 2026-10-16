@@ -2,8 +2,9 @@
 
 > **Fecha de registro:** 2026-10-14.
 > **Estado:** desplegado y validado E2E parcialmente hasta 2026-10-16;
-> Con runtime rev. 8 constan AC1/AC2/AC4/AC6 y AC5 (lista vacía); fallo terminal
-> seguro validado previamente. Matriz restante pendiente.
+> Con runtime rev. 8 constan AC1–AC7 (AC3/AC7 asistidos); AC5 acreditado con
+> trazas recuperadas en §11. AC8–AC9 y gates locales revalidados en §12.
+> Evaluación real de instrucciones y cierre global pendientes; BL-48 abierto.
 
 ## 1. Evidencia funcional aportada por el propietario
 
@@ -174,15 +175,21 @@ No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
   intacta y cero tareas; campaña rev. 8/r4 del 2026-10-16 (paso 4).
 - [x] AC5 parcial: lectura real de pendientes vacíos con rev. 8 y `r4`;
   interacción `27e99491-bed0-4399-aada-995de477963c`, dos tools y `agent_final`.
-- [ ] AC5 restante: lectura con propuestas realmente confirmables y exclusión
+- [x] AC5 restante: lectura con propuestas realmente confirmables y exclusión
   de descartadas/ejecutadas/caducadas en campaña controlada.
   Pasos 5–7: recuento positivo, detalle bajo petición y respuesta vacía tras
-  caducidad correctos. Falta evidencia de tool concreta; no inferirla del contador.
-  Paso 9: consulta final vacía tras ejecución/descarte; mismo límite de trazabilidad.
+  caducidad correctos; entonces faltaba evidencia de tool concreta y no se
+  infirió del contador. Recuperada posteriormente en §11.
+  Paso 9: consulta final vacía tras ejecución/descarte. El límite de trazabilidad
+  de esos pasos queda resuelto por las cuatro trazas recuperadas en §11.
 - [x] AC7: alta título-solo, completar/reabrir y nota/búsqueda sin botones;
   paso 10 asistido autorizado, cuatro auditorías terminales y hashes válidos.
-- [ ] AC8–AC9: horas/zonas, límites, escapado, payload/hash y consentimiento.
-- [x] Integración PostgreSQL aislada: 159 superadas, una STT live omitida.
+- [x] AC8: horas/zonas, límites, escapado, payload/hash y rechazo de consentimiento
+  inválido; ver matriz determinista aislada en §12, no evaluación semántica LLM.
+- [x] AC9: OFF y fallo de entrega sin ejecución ni presentación ficticia;
+  cuatro variantes de fallo y regresiones terminales contra PostgreSQL en §12.
+- [x] Gates locales: 1433 unitarias, cobertura 80 %, 173 integraciones
+  PostgreSQL superadas y una STT live omitida; Ruff/mypy/Collector verdes (§12).
 - [ ] Evaluación de instrucciones y E2E real del SHA autorizado.
 
 No se marca como superado un criterio de la mejora solo porque el circuito
@@ -643,3 +650,112 @@ se corta Telegram/Gateway productivo para provocar estos escenarios.
 - **AC7 superado en esta ejecución asistida**, con datos sintéticos conservados.
   Termina la autorización; AC5/trazabilidad y AC8–AC9 siguen pendientes en sus
   respectivos alcances. BL-46/48 no se cierran por este único paso.
+
+## 11. AC5 — recuperación de trazas existentes, 2026-10-16
+
+Sin nuevos mensajes ni botones Telegram, sin modificar datos canónicos,
+configuración, despliegues o controles. El árbol inicial estaba limpio en
+`602d7ed7d47c734092e8ce0ba434b498911b1643`; la evidencia anterior ya estaba
+comiteada. La sesión Grafana requirió autenticación al comienzo y quedó
+disponible durante esta revisión; no se solicitan ni extraen secretos.
+
+- Instancia: `https://tinyvan1950.grafana.net`, datasource Tempo
+  `grafanacloud-traces` (`grafanacloud-tinyvan1950-traces`).
+- Ventana absoluta: **2026-10-16 15:04:00–15:31:00 UTC**. Búsquedas y lectura
+  de las cuatro trazas por ID: HTTP 200; solo se extrae metadata permitida.
+- Consulta TraceQL reproducible, sustituyendo el UUID por la interacción:
+
+  ```traceql
+  { name = "ancora.tool.call" && span.ancora.correlation_id = "<interaction_id>" }
+    | select(span.ancora.tool.name, span.agno.run_id, span.runtime_config.revision)
+  ```
+
+`ancora.correlation_id` es el ID de interacción (`TelegramInteraction.correlation_id`),
+no una columna adicional en DB. El `agno.run_id` de cada traza coincide con el
+persistido en `ancora.telegram_interactions`; todas las interacciones están
+`completed`, revisión 8. No se consulta la DB interna de Agno.
+
+| Caso previo | Interacción/correlación | `agno.run_id` | Trace ID | Span de `list_pending_proposals` / hora UTC |
+|---|---|---|---|---|
+| Paso 5, positivo | `a55dda40-7fb9-417b-a0ea-032fd6fe0037` | `a6b7a0dd-0407-46fb-b461-6cb412f9cf4c` | `1782bc5d6e4b31cef92724111efcc9dc` | `6a6b84a26b1907ff` / 15:06:12.862 |
+| Paso 6, detalle | `cbe01267-4eed-45cf-9e4a-d6e727347c12` | `e40a030a-a904-4803-ad78-bc51f78b5c53` | `fa48efe74726c2083c20443ef8455601` | `e357ad376fc4426f` / 15:11:43.788 |
+| Paso 7, tras caducidad | `4f8603d4-bd83-4522-996d-ca8705f00ba9` | `28281920-617d-4c71-a057-e767df9632f9` | `ccb28f0ede9b2f87c5051460857e6437` | `7e3a48d32656bfa4` / 15:15:14.725 |
+| Paso 9, tras ejecución/descarte | `f8178073-7f3e-4c8c-aabe-69bd6bbff951` | `a4725492-a2d5-4ba5-8f45-2875e3541b04` | `95646f57e0d4605769b68c8ff2c2662b` | `d6d6ee96f25148de` / 15:28:07.648 |
+
+En **4/4** se observa después `present_reply`, respectivamente en spans
+`1b179de3542333a7`, `974b6212a8662575`, `9cb779b722c5bdc6` y
+`45aa275db76f15d7`, con los mismos run/correlación/revisión. Los ocho spans
+no tienen `error.type` y muestran estado OTel sin código explícito (UNSET);
+no se describe ese estado como un OK explícito. La respuesta entregada y el
+fin del run constan por separado en el ledger y en los pasos anteriores.
+
+Contraste SQL solo de lectura, scoped al usuario de la campaña:
+
+- `5345640e-0af8-4790-b666-d577bee186db`: `discarded` desde 14:46:23 UTC.
+- `682679c6-c66f-4b42-9770-51a436589474`: presentada a 14:57:47 UTC, vence
+  a 15:12:47 UTC; cubre las dos lecturas positivas y ya no es elegible en
+  el paso 7, aunque conserve `pending_confirmation` en la fila.
+- `c033f4b5-6b52-4549-b69c-2e959e18a60e`: `executed` a 15:26:47 UTC;
+  `fdb76b52-46e9-40f5-8dc4-fc86faef33d9`: `discarded` a 15:27:06 UTC,
+  antes de la consulta vacía del paso 9.
+
+**AC5 superado para esta campaña rev. 8/r4:** la selección real de la tool
+queda demostrada por spans nominados, no por el contador. Junto con las
+respuestas y estados ya registrados se acredita lectura positiva/detallada y
+exclusión de propuestas caducadas, ejecutadas y descartadas. Las trazas no
+contienen ni se usan para reconstruir argumentos/resultados. La brevedad del
+paso 5 no se reescribe: el detalle fue comprobado bajo petición en el paso 6.
+BL-48 no se cierra por esta recuperación.
+
+## 12. AC8–AC9 y gates locales aislados — 2026-10-16
+
+Base local: SHA `602d7ed7d47c734092e8ce0ba434b498911b1643`, más el diff de
+tests/documentación de esta revisión, todavía sin commit ni despliegue.
+Python 3.12.10/Windows, PostgreSQL 16 Docker local. Fixtures únicamente en
+`localhost:5432/ancoramind_test`; las migraciones usan bases temporales
+dedicadas. Sender/runner simulados, sin inferencia ni Telegram real; exportación
+OTLP local desactivada y token Telegram sintético. Consentimiento OFF y fallos
+se inyectan en objetos de pruebas, nunca en la configuración productiva.
+
+| Gate | Resultado final comprobado |
+|---|---|
+| `python -m pytest tests/unit/ -q --cov=src --cov-report=term` | **1433 passed**, **80.00 %** (mínimo 75 %) |
+| `python -m pytest tests/integration/ -q` con DB obligatoria | **173 passed, 1 skipped**; STT live opt-in sin autorización, no falta de DB |
+| `python -m ruff check src/ tests/ scripts/ migrations/` | Limpio |
+| `python -m mypy src/` | Limpio, 172 archivos |
+| `python scripts/run_evals.py --json` | Válido: 36 casos, 9 ejemplos provisionales de calibración; solo validación estática |
+| Build `observability/Dockerfile` + `validate --config=/etc/otelcol/config.yaml` | Exit 0; imagen 0.138.0, valores dummy, `--network none` durante validate |
+
+Los comandos se ejecutan desde la raíz del repositorio; la base y secretos de
+producción no son destinos de fixtures. La suite global de integración incluye
+4 pruebas de migración (fresh/upgrade con datos/downgrade/adopción de init SQL),
+9 de repositorio actions, 18 de consentimiento, 15 de executor Core, 8 de
+presentación y 4 de executor trivial. No se suman de nuevo como suites aparte.
+
+### Matriz de evidencia determinista
+
+| Alcance | Pruebas y aserciones relevantes |
+|---|---|
+| AC8, fechas/horas/zonas | `tests/unit/test_proposal_presentation.py`: 21 casos; fecha-sola, hora explícita, medianoche con offset o Z, fracciones, offsets negativos y de 45 minutos; recordatorio/evento no reinterpretados. Hash antes/después intacto, sin conversión de zona |
+| AC8, límites/escapado | Mismo fichero y `tests/unit/test_telegram_markup.py`: truncado visual sin cambiar payload/hash, callbacks válidos y límites Telegram, payloads inválidos rechazados, HTML literal escapado y fallback seguro |
+| AC8, no bypass | `tests/integration/test_proposal_consent.py` y `test_proposal_executor.py`: expiración, falta de presentación, principal ajeno, manipulación de payload/claim, concurrencia y uso único; `test_legacy_consent_boundary.py` excluye `execute_*` y rechaza APIs legacy |
+| AC9, consentimiento OFF | `test_consent_off_preserves_read_answer_without_fictitious_presentation`: READ preservada, sin narración/botones ni presentación persistida; callback conocido no crea recordatorio ni invoca otra vez al Agent |
+| AC9, fallo de entrega | `test_failed_or_partial_delivery_never_opens_consent_or_replays_agent`: primer/segundo chunk × definitivo/ambiguo; no abre presentación/TTL, callback no ejecuta, recuperación no reenvía ni reejecuta |
+| Regresión terminal | Propuesta seguida de salida inválida no es confirmable; efecto trivial ya persistido se conserva sin duplicación/replay y se avisa consultar estado |
+
+Refuerzo mínimo de tests, sin cambiar código funcional ni prompts:
+
+- Tres variantes independientes en `tests/unit/test_todos_tools.py`: solo
+  descripción, solo prioridad y solo fecha. Cada una solicita una propuesta
+  con payload normalizado, no llama `TrivialExecutor` ni `add_item`, y no
+  anuncia ejecución. Esto no reemplaza las variantes E2E Telegram de BL-46.
+- Dos variantes temporales adicionales y aserciones de hash en el renderer:
+  `23:59:59.999999-03:30` y `00:00:00.000123+05:45`, más comprobaciones
+  de inmutabilidad en truncado, valores adversariales y timestamps existentes.
+
+**AC8 y AC9 superados en el alcance determinista aislado exigido**, sin
+demostrar resistencia semántica general del LLM mediante estos tests.
+Gates locales verdes no equivalen a checks CI remotos del diff sin commit ni
+prueban un nuevo SHA desplegado. Pendientes: E2E revisables descripción/fecha-sola
+de BL-46 con nueva autorización, evaluación de instrucciones con LLM gobernado
+y revisión final de cierre/versiones. **BL-46 y BL-48 permanecen abiertos.**

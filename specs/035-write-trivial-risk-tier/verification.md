@@ -72,7 +72,12 @@
 - [x] Regresión E2E reviewable con prioridad y prioridad+fecha: propuestas
   pendientes sin escritura previa y consentimiento Core, specs/036 pasos 2/8/9.
 - [ ] Variantes E2E restantes del gate original: `description` y fecha-sola
-  informadas; cubiertas por tests locales, no ejecutadas en esta campaña.
+  informadas; regresiones independientes locales revalidadas debajo, no
+  ejecutadas por Telegram en esta campaña.
+- [x] Gates locales revalidados en la revisión final 2026-10-16: **1433 unitarias,
+  80 % cobertura; 173 integraciones PostgreSQL, 1 STT live omitida**;
+  Ruff/mypy, catálogo estático y build/validate Collector verdes. No equivalen
+  a CI remoto del diff sin commit ni a evaluación semántica real.
 
 ## Success Criteria (spec.md) — estado
 
@@ -161,3 +166,40 @@ autorización exclusiva del propietario. Runtime revisión 8,
 guardados por decisión del propietario. No se prueba rollback/concurrencia
 en producción ni se cierra BL-46: las variantes reviewable restantes y la
 revisión final de gates siguen explícitas arriba; BL-48 conserva su matriz propia.
+
+## Revisión local de cierre — 2026-10-16
+
+Base `602d7ed7d47c734092e8ce0ba434b498911b1643` (árbol inicialmente limpio),
+más tests y documentación todavía sin commit. Sin código funcional, prompts,
+despliegue, configuración ni mensajes Telegram nuevos. Evidencia detallada
+compartida: specs/036 `verification.md` §§11–12.
+
+- `tests/unit/test_todos_tools.py` añade tres regresiones parametrizadas
+  independientes: solo `description`, solo `priority`, solo `due_date`.
+  Comprueban payload normalizado en la propuesta y ausencia de llamadas a
+  `add_item` y `TrivialExecutor`; no se anuncia ejecución. Se cubre explícitamente
+  el hueco que antes solo probaba prioridad+fecha combinadas.
+- Refuerzo del renderer para horarios, offsets y hashes inmutables: AC8
+  determinista; consentimiento OFF y errores de entrega se prueban únicamente
+  en aislamiento (AC9), sin debilitar la vía revisable productiva.
+- Suite unitaria final: **1433 passed, 80.00 % cobertura**. PostgreSQL local
+  dedicado: **173 passed, 1 STT live skipped**; incluye 4 migraciones,
+  9 pruebas actions, 18 consentimiento, 15 executor y 4 executor trivial.
+- Ruff global y mypy (172 archivos) limpios; catálogo estático válido con
+  36 casos/9 ejemplos provisionales. Collector 0.138.0 build/validate exit 0
+  con valores dummy y validación sin red. No se ejecuta inferencia real.
+- AC5 de BL-48 queda acreditado con cuatro trazas Tempo de lecturas ya
+  realizadas, no repitiendo operaciones ni deduciendo tools del contador.
+
+**Pendiente E2E con nueva autorización, no ejecutado aquí:** dos propuestas
+en la lista de campaña existente, una con descripción únicamente y otra con
+fecha 20 de octubre de 2026 únicamente; verificar bloque/payload/hash y ausencia
+de tareas antes de consentimiento. Consultar pendientes y descartar cada una
+con No, nunca Sí; comprobar después que no apareció ninguna tarea ni cambió la
+póliza/reapertura/nota conservadas. Si caducan o hay un fallo ambiguo, consultar
+estado y detenerse, sin recrear/reintentar automáticamente.
+
+Estas regresiones locales no sustituyen selección de argumentos y respuesta
+semántica del modelo en Telegram. **BL-46 continúa abierto** por esas dos
+variantes y revisión de cierre/versiones; gates locales superados no autorizan
+commit, push, despliegue ni nueva campaña productiva.

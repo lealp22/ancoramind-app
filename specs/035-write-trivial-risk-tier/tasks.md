@@ -182,3 +182,8 @@
 - [x] `verification.md` actualizado con migración e integración PostgreSQL
       verificadas. E2E asistido del camino trivial superado el 2026-10-16;
       variantes reviewable restantes y cierre de gates detallados allí.
+- [x] Revisión local final 2026-10-16: regresiones independientes de descripción,
+      prioridad y fecha-sola; 1433 unitarias (80 % cobertura), 173 integraciones
+      y 1 STT live omitida; Ruff/mypy, catálogo estático y Collector verdes.
+- [ ] E2E Telegram de descripción-sola y fecha-sola con nueva autorización;
+      las regresiones locales no sustituyen esta evidencia ni cierran BL-46.
