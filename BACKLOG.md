@@ -463,6 +463,11 @@ marcó `failed_ambiguous` y no reintentó ni entregó prosa, pero Telegram qued�
 silencio. Implementado localmente un aviso fijo mediante outbox secundaria
 idempotente `failure_notice`, sin alterar el estado terminal ni afirmar efectos.
 1428 unit + 161 integration verdes (1 STT live skipped); pendiente CI/deploy/E2E.
+**Revalidación SHA `a0ace40`:** el aviso fijo quedó entregado E2E, sin retry,
+fallback, propuesta ni `agent_final`; `r5` volvió a incumplir `present_reply` en
+sesión limpia. `r5` corresponde al experimento `xiaomi/mimo-v2.6-pro`; preparado
+asset aditivo para volver default a `r4`/GPT-6 Luna conservando embeddings y
+pricing canónico `0.10/0.50`. Pendiente CI y activación CAS como revisión 7.
 Ver `specs/013-llm-access-governance/`.
 
 **Actualización rollout Collector/Grafana (2026-09-24):** el servicio

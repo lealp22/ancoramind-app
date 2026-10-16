@@ -193,3 +193,22 @@ de consentimiento anterior funcionó.
 - Validación local: 1428 unit; 161 integration, 1 STT live omitida por diseño;
   Ruff y `mypy src/` limpios. Pendiente CI, deploy manual y nuevo E2E; BL-47/48
   no se cierran aún.
+
+### Revalidación del aviso y diagnóstico de ruta
+
+- SHA `a0ace40` desplegado. Una nueva consulta en sesión limpia volvió a ejecutar
+  dos llamadas LLM y una tool, sin retry/fallback, y terminó
+  `InvalidPresentationOutputError`; no creó propuestas ni respuesta principal.
+  La outbox secundaria `failure_notice` quedó `delivered` con message ID y el
+  usuario recibió el texto fijo previsto. El mecanismo de seguridad queda
+  validado E2E.
+- La ejecución correcta anterior y las dos fallidas usaron el mismo alias
+  `ancoramind-default-r5`. La revisión 5 introdujo `r5` para comparar
+  `xiaomi/mimo-v2.6-pro`; la revisión 6 lo conservó y añadió embeddings. El
+  incumplimiento terminal es reproducible con `r5` y no depende del historial.
+- No se relaja `present_reply`, no se acepta texto libre y no se reintenta. Se
+  prepara un candidato aditivo basado en la revisión 6 que cambia solo default
+  `r5 → r4` (GPT-6 Luna) y pricing canónico `0.10/0.50`, conservando
+  `ancoramind-embeddings-r1` y el resto de límites. Asset:
+  `configs/ancoramind-default-r4-with-embeddings.json`. Pendiente publicación en
+  Git, CI y activación CAS como revisión nueva; sin inferencia adicional todavía.
