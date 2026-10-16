@@ -32,7 +32,7 @@ recordatorios y eventos, con trazabilidad completa.
   y genera un aviso fijo sin retry. La tool terminal consume presupuesto, no
   escribe datos canónicos ni concede consentimiento. BL-47 se validó E2E con
   lectura real + `present_reply` (`tool_call_count=2`).
-  1428 unit tests y 161 integration PostgreSQL superados; una prueba STT live
+  1428 unit tests y 173 integration PostgreSQL superados; una prueba STT live
   se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
   Head Alembic/Supabase: `0016_voice_guard_search_path`. Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.

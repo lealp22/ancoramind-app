@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-14
+Última actualización: 2026-10-16
 
 ---
 
@@ -23,13 +23,13 @@
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 36 casos sintéticos, runner estático, harness aislado del Agent y harness Core de consentimiento implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
-| BL-18 Sustituir ngrok por Railway | 🔶 Wait for CI confirmado activo; servicio recuperado tras crash por migraciones pendientes y Gateway (LiteLLM) reactivado por el propietario, `/health/readiness` → healthy; M3 PDF textual validado en Telegram/Railway el 2026-10-13; faltan protección de `main` (requiere plan GitHub), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
+| BL-18 Sustituir ngrok por Railway | 🔶 gate manual por SHA (Wait for CI OFF por decisión del propietario); servicio/readiness recuperados; M3 PDF textual validado en Telegram/Railway; pendientes protección de `main` (requiere decisión de plan/visibilidad), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; default GPT-6 Luna `r4` activo en runtime rev. 8, embeddings preservados; queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 Collector/Grafana base desplegados y 429 resuelto; faltan import/provisioning de dashboard/alertas y matriz T7 — specs/016 |
 | BL-38 Conversión de documentos (texto PDF/DOCX + export Markdown→PDF) | 🔶 Fase 1 (PDF texto determinista) validada E2E por Telegram/Railway el 2026-10-13; Fases 2-3 bloqueadas por BL-35/BL-29 — specs/021 |
-| BL-39 Seguridad LLM ante prompt injection | 🔶 P0 consentimiento implementado (flag apagado en producción); frontera `untrusted_results` cubre documentos/notas/vehículos/recordatorios/calendario/TODOs/`analyze_document`; adjunto Telegram se ingiere antes del Agent y su resumen DATA queda validado/acotado; ruta AgentOS legada ya no coexiste con la gobernada; pendiente evals reales — specs/022 |
-| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 Fases 1–3 implementadas localmente (Fase 1: verificación Railway pendiente, servicio pausado); Fases 4–6 completas (consentimiento gobernado, zona horaria, sincronización documental) — specs/023 |
+| BL-39 Seguridad LLM ante prompt injection | 🔶 consentimiento Core desplegado con evidencia E2E parcial; frontera `untrusted_results` extendida y bypass legacy retirado; pendientes evals adversariales reales y matriz completa de consentimiento — specs/022–023 |
+| BL-40 Remediación de auditoría técnica (2026-10-02) | 🔶 remediaciones implementadas; GET anónimos de AgentOS protegidos (401) y health/readiness 200 revalidados el 2026-10-16; cierres por evidencia y matriz operativa restante pendientes — specs/023 |
 | BL-41 Recurrencia en calendario/recordatorios + snooze | 🔶 implementado localmente (684 unit + 94 integration verdes); pendiente validación E2E Telegram con el propietario — specs/024 |
 | BL-34 Política de contexto por tokens y compactación gobernada | 🔶 implementado localmente (política + wiring en `GovernedAgentFactory`); compactación real diferida — specs/030 |
 | BL-31 Deduplicación de documentos por hash de contenido | ✅ implementado localmente (909 unit + 141 integration verdes); desbloquea BL-35 y BL-38 Fase 2 |
@@ -38,10 +38,10 @@
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | 🔶 implementado y validado con PostgreSQL (TODO items título-solo + completar/reabrir, notas); pendiente E2E Telegram — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado; AC1/AC4/AC5 y fallo terminal seguro validados E2E con GPT-6 Luna rev. 8; matriz restante pendiente — specs/036 |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 desplegado, E2E parcial; con GPT-6 Luna rev. 8 consta AC5 (lista vacía); resto de escenarios requiere evidencia de versión/ruta; fronteras Core reforzadas con PostgreSQL — specs/036 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests locales (2026-10-15): 1423 unitarias y 159 integraciones PostgreSQL
+Tests locales (2026-10-16): 1428 unitarias y 173 integraciones PostgreSQL
 superadas; una prueba STT live omitida por diseño. Las 4 pruebas de migración
 superan fresh install, upgrade/downgrade e idempotencia. Ruff y `mypy src/`
 limpios en `src/ tests/ scripts/ migrations/`.
@@ -49,6 +49,41 @@ limpios en `src/ tests/ scripts/ migrations/`.
 ---
 
 ## P0 — Hardening transversal de ejecución e inferencia
+
+### Orden de cierre vigente — 2026-10-16
+
+GPT-6 Luna sigue como default `ancoramind-default-r4`, runtime rev. 8;
+embeddings `ancoramind-embeddings-r1` sin cambios. No abrir otro experimento
+de modelo mientras se valida este baseline. Las anotaciones fechadas debajo
+son historia: no implican que hoy el servicio esté pausado o el flag esté OFF.
+
+| Orden | Bloque de trabajo | Qué falta para cerrar |
+|---|---|---|
+| 1 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | Completar evidencia E2E del SHA/ruta: petición mixta, varias propuestas y elección individual, repropuesta explícita, reapertura y nota trivial; revisar AC8/AC9 sin desactivar controles en producción |
+| 2 | Operación gobernada (BL-23/33/44) | Degradación/circuit del Gateway sin bypass, dashboard/alertas, parada/recuperación y rotación con runbook; requieren campaña operativa autorizada, no cortes improvisados |
+| 3 | Validación MVP (BL-1/41) | M4/M5: vehículos, calendario/recordatorios, zona horaria, recurrencia y snooze; reutilizar las garantías de consentimiento anteriores |
+| 4 | Seguridad semántica (BL-8/39/48) | Ejecutar evals reales con ruta/presupuesto aprobados; catálogos y respuestas scripted no acreditan obediencia semántica |
+
+OCR, nuevas salidas y expansión de capabilities no preceden estos cierres.
+Protección de `main` sigue pendiente de decisión de plan/visibilidad, no de
+activar Wait for CI: se mantiene el gate manual acordado.
+
+**Avance local de la prioridad 1:** 12 pruebas nuevas sobre PostgreSQL aislado
+(`test_proposal_presentation.py`, `test_trivial_executor.py`) prueban respuesta
+READ + dos propuestas, «Sí» ambiguo sin ejecución, selección individual,
+doble pulsación, descarte/repropuesta, OFF, entrega parcial/fallida y cierre
+terminal inválido antes/después de una mutación trivial. Escritura y auditoría
+trivial se revierten juntas ante fallo de auditoría/commit; target ajeno no
+escribe ni audita. No se encontró fallo funcional en estas fronteras. Corregida
+una prueba STT flaky: el timeout real de asyncio se arma al entrar al proveedor
+simulado, no durante los accesos DB previos. Sin cambios de código productivo,
+prompts, configuración, migraciones, inferencia ni despliegue.
+
+**Revisión remota GET, sin credenciales (2026-10-16):** health/readiness 200;
+config/sessions/memories/agents/runs/docs/openapi 401; rutas reales de status
+runtime-config y emergency-stop 401. Pairing/requests 404: no acredita flag ni
+autenticación de un endpoint habilitado. Detalle y límites en
+`specs/023-audit-remediation/verification.md`.
 
 **Acuse botones 2026-10-11 — BL-39/40 (local, sin rollout):** `answerCallbackQuery`
 implementado; `callback_query_id` solo en payload cifrado, sin migración. Acuse

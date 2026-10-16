@@ -1,6 +1,7 @@
 """T4 PostgreSQL processor path with injected synthetic inspector/STT only."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -248,21 +249,40 @@ async def test_cancelled_stt_not_replayed(session):
 
 
 @pytest.mark.parametrize("failure", ["provider", "call_id", "empty_result", "timeout"])
-async def test_stt_errors_after_send_are_ambiguous_and_never_replayed(session, failure):
-    _, service, stt, processor, interaction, agent_factory = await setup(session)
+async def test_stt_errors_after_send_are_ambiguous_and_never_replayed(
+    session, failure, monkeypatch,
+):
+    _, _, stt, processor, interaction, agent_factory = await setup(session)
+
+    # The production deadline covers download and PostgreSQL transitions too.
+    # A 50 ms wall-clock deadline can expire before transcribe on a loaded host,
+    # so arm the real asyncio cancellation only once this post-send stub starts.
+    timeout = asyncio.timeout(None)
+    if failure == "timeout":
+        import src.domain.speech.service as speech_service
+
+        def post_send_timeout(delay):
+            assert delay > 0
+            return timeout
+
+        monkeypatch.setattr(
+            speech_service,
+            "asyncio",
+            SimpleNamespace(timeout=post_send_timeout, CancelledError=asyncio.CancelledError),
+        )
 
     async def fail(audio, *, execution_context, call_id):
         if failure == "provider":
             raise RuntimeError("private-provider-error-canary")
         if failure == "timeout":
-            await asyncio.sleep(1)
+            timeout.reschedule(asyncio.get_running_loop().time())
+            await asyncio.Event().wait()
         if failure == "empty_result":
             return None
         return SpeechToTextResult(
             text="synthetic", duration_seconds="2", call_id=uuid4(), usage_event_id=uuid4()
         )
 
-    service._timeout = 0.05 if failure == "timeout" else 60
     stt.transcribe.side_effect = fail
     assert await processor._run_agent(interaction)
     assert not await processor._run_agent(interaction)
@@ -285,6 +305,9 @@ async def test_stt_errors_after_send_are_ambiguous_and_never_replayed(session, f
     processor._sender.send_text.assert_awaited_once()
     assert "No he podido entender el audio" in processor._sender.send_text.call_args.args[1]
     assert stored["error_detail_code"] in {"stt_failed", "stt_result_invalid", "stt_timeout"}
+    if failure == "timeout":
+        assert timeout.expired()
+        assert stored["error_detail_code"] == "stt_timeout"
 
 
 async def test_restart_delivers_only_missing_voice_notice(session):

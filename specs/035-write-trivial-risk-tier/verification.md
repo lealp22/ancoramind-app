@@ -98,4 +98,29 @@
 6. ✅ `pytest`/`ruff`/`mypy` verdes; integración y migraciones verificadas
    contra PostgreSQL real.
 7. ✅ `AGENTS.md`/`BACKLOG.md` referencian BL-46/specs/035 con el alcance
-   real entregado.
+    real entregado.
+
+## Refuerzo transaccional PostgreSQL — 2026-10-16
+
+Cuatro pruebas nuevas en `tests/integration/test_trivial_executor.py` ejecutan
+`TrivialExecutor` con servicios y repositorios reales, sin simular `apply_mutation`:
+
+- Alta título-solo en lista existente, completar y reabrir, más nota: los cuatro
+  efectos se persisten con su auditoría `self_authorized`/`executed`, hash válido,
+  sin presentación ni interacción de confirmación.
+- Lista de otro usuario: no aparece tarea ni auditoría del solicitante.
+- Fallo inyectado después del INSERT real de auditoría: rollback de nota y fila
+  de auditoría, sin retry. Cubre atomicidad real, no solo `rollback.assert_awaited`.
+- Fallo inyectado antes de commit: ni la mutación ni su auditoría sobreviven.
+  No simula pérdida de conexión después de commit ni afirma resolver ambigüedad
+  de una confirmación de commit perdida.
+
+El procesador también conserva una escritura trivial ya confirmada en DB si
+posteriormente falla `present_reply`: aviso fijo sin afirmar el efecto ni
+reintentar, una sola nota y una sola auditoría tras recuperación. Cubierto en
+`tests/integration/test_proposal_presentation.py`.
+
+Validación global: **1428 unitarias; 173 integraciones PostgreSQL superadas,
+1 STT live omitida por diseño**; Ruff/mypy limpios. Sin cambios de ejecución,
+prompts ni esquema. **BL-46 sigue pendiente de matriz E2E Telegram**: estos tests
+no acreditan clasificación de riesgo ni respuesta semántica del modelo real.

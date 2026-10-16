@@ -2,7 +2,9 @@
 
 > **Status:** 🔶 en curso — Fases 1–3 implementadas localmente (2026-10-02);
 > verificación Railway de Fase 1 registrada el 2026-10-11 (GET sin credenciales);
-> cierre local del bypass legacy implementado, pendiente rollout/E2E.
+> bypass legacy retirado y rollout con E2E parcial documentado en specs/036;
+> revalidación GET anónima el 2026-10-16 y fronteras Core en PostgreSQL debajo.
+> Matriz completa y cierre por evidencia pendientes.
 > Las secciones fechadas anteriores conservan evidencia histórica, no estado actual.
 
 ## Fase 1 — Superficie REST de AgentOS
@@ -221,3 +223,46 @@ antes de persistir respuesta (no garantía durable de una sola petición de acus
 
 1300 unit passed, cobertura 79.46%, 155 integration passed/1 live STT skipped.
 Contrato, límites y checklist E2E: `callback-acknowledgement.md`.
+
+## Revisión de bloqueantes y revalidación acotada — 2026-10-16
+
+Base local `a4a69f1`. Comprobación de solo lectura, sin credenciales, redirects,
+POST, inferencia ni cambios de configuración, contra
+`https://ancoramind-app-production.up.railway.app`:
+
+| GET | Resultado |
+|---|---|
+| `/health`, `/health/readiness` | 200 |
+| `/config`, `/sessions`, `/memories`, `/agents` | 401 |
+| `/agents/ancoramind/runs`, `/docs`, `/openapi.json` | 401 |
+| `/admin/runtime-config/status`, `/admin/emergency-stop/status` | 401 |
+| `/admin/telegram-pairing/requests` | 404 |
+
+Esto supera la limitación histórica de «servicio pausado» para verificar el
+rechazo anónimo de esas rutas: **no** certifica todo método REST, accesos con
+credencial válida ni estado efectivo de flags ocultos. Los paths sin `/status`
+de runtime-config/emergency-stop también dieron 404, pero no son rutas válidas
+según el código y no se usan como evidencia de autenticación. El 404 de pairing
+no demuestra seguridad de una ruta habilitada. No reconstruir la evidencia
+pre-fix ausente ni cerrar toda Fase 1 solo por esta comprobación.
+
+Regresión de consentimiento en PostgreSQL aislado: ocho pruebas nuevas de
+procesador/presentación cubren mezcla READ/propuestas, consentimiento individual,
+doble pulsación, descarte/repropuesta, OFF, entrega fallida/parcial e invalidez
+terminal con propuesta o efecto trivial previo. Cuatro adicionales verifican
+mutación trivial + auditoría atómicas y aislamiento/rollback real. No se encontró
+fallo funcional en esas fronteras; no se cambió el producto.
+
+La suite global detectó un test STT sensible a carga: deadline de 50 ms incluía
+los round-trips PostgreSQL previos a `transcribe`, por lo que podía expirar sin
+probar la fase post-send. Se arma el timeout real de asyncio dentro del stub
+STT y se exige `stt_timeout`, sin alterar servicio ni límites productivos.
+
+Gates: **1428 unitarias; 173 integraciones PostgreSQL superadas, 1 STT live
+omitida por diseño**; Ruff/mypy limpios y 36 casos de catálogo estático válidos.
+La suite unitaria informa un exporter local OTLP ausente (`localhost:4318`);
+no fallan tests ni se infiere por ello un problema del Collector productivo.
+
+Pendiente prioritario: matriz E2E de BL-46/48 sobre GPT-6 Luna/r4 rev. 8,
+evaluación adversarial real y campaña operativa autorizada de BL-23/33
+(degradación sin bypass, alertas, rotaciones). No se cierra BL-39/40.

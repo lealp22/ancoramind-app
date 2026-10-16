@@ -2,7 +2,9 @@
 
 > **Fecha de registro:** 2026-10-14.
 > **Estado:** desplegado y validado E2E parcialmente hasta 2026-10-16;
-> AC1/AC4/AC5 y fallo terminal seguro cubiertos, matriz restante pendiente.
+> Con runtime rev. 8 consta AC5 (lista vacía); fallo terminal seguro validado
+> previamente. AC1/AC4 tienen evidencia funcional histórica, no acreditan por
+> sí solos la presentación del baseline actual. Matriz restante pendiente.
 
 ## 1. Evidencia funcional aportada por el propietario
 
@@ -160,10 +162,14 @@ BL-48 ni motivo para cerrar BL-47 o todos los pendientes de specs/035.
 correctamente cada frase en su campo y respetar las instrucciones tras No.
 No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
 
-## 5. Pendiente de verificar antes de cerrar BL-48
+## 5. Pendiente de verificar antes de cerrar BL-48 (actualizado 2026-10-16)
 
 - [ ] AC1–AC3: presentación única, respuesta mixta y varias propuestas.
-- [ ] AC4–AC6: consulta tras descarte, pendientes explícitos y nueva petición.
+- [ ] AC4/AC6: consulta tras descarte y nueva petición sobre el baseline actual.
+- [x] AC5 parcial: lectura real de pendientes vacíos con rev. 8 y `r4`;
+  interacción `27e99491-bed0-4399-aada-995de477963c`, dos tools y `agent_final`.
+- [ ] AC5 restante: lectura con propuestas realmente confirmables y exclusión
+  de descartadas/ejecutadas/caducadas en campaña controlada.
 - [ ] AC7: regresiones triviales (TODO/notas).
 - [ ] AC8–AC9: horas/zonas, límites, escapado, payload/hash y consentimiento.
 - [x] Integración PostgreSQL aislada: 159 superadas, una STT live omitida.
@@ -234,3 +240,71 @@ de consentimiento anterior funcionó.
 - **BL-47 queda validado E2E para la lectura sin propuestas confirmables.** BL-48
   sigue abierto: esta evidencia cubre AC5 y el mecanismo de fallo seguro, no
   sustituye AC2/AC3/AC6–AC9 ni la matriz trivial completa.
+
+## 7. Cierre de brechas deterministas — 2026-10-16
+
+Sin modificar código funcional, prompts ni configuración, se añaden ocho pruebas
+de integración en `tests/integration/test_proposal_presentation.py`. Usan el
+procesador, repositorios, outbox y executor Core reales contra PostgreSQL aislado;
+runner y sender son scripted, sin inferencia ni Telegram externos.
+
+- **AC2/AC3/AC6, frontera Core:** READ independiente preservada con dos bloques y
+  pares de botones para sus IDs persistidos; payload/hash intactos. Un «Sí» sin ID
+  no autoriza ninguna cuando hay varias. Elegir una escribe solo su recordatorio;
+  doble pulsación no duplica. Descartar la otra no invoca al Agent y una nueva
+  petición simulada crea nuevos IDs sin revivir ni ejecutar las anteriores.
+- **AC9:** consentimiento OFF no entrega narración ni controles ficticios y el
+  callback no ejecuta. Cuatro variantes de error de entrega (primer/segundo chunk,
+  definitivo/ambiguo) no abren `presented_at`/TTL ni permiten confirmar mediante
+  un ID conocido; recuperación no reejecuta el Agent ni reenvía chunks inciertos.
+- **Fallo terminal:** si la salida es inválida tras crear propuesta, solo se
+  entrega `failure_notice`, sin controles, `agent_final` ni confirmabilidad. Si
+  ya hubo escritura trivial, conserva el efecto y su auditoría, advierte consultar
+  estado y nunca reejecuta la mutación tras recuperación.
+- Otras cuatro pruebas en `tests/integration/test_trivial_executor.py` cubren
+  AC7 en Core: alta/completar/reabrir/nota con auditoría terminal atómica, rechazo
+  de target ajeno y rollback real ante fallo tras INSERT de auditoría o antes
+  del commit. Ver evidencia de specs/035.
+- Gates: **1428 unit passed; 173 integration passed, 1 STT live skipped**;
+  Ruff global y `mypy src/` limpios; catálogo estático válido (36 casos).
+  La suite global detectó una prueba STT con deadline de 50 ms que podía expirar
+  durante I/O DB previo al proveedor; se fija en el test armando la cancelación
+  real de asyncio dentro del stub STT. No cambia el timeout productivo.
+- **Límite:** estas pruebas no validan selección de tools, partición semántica,
+  ausencia de insistencia ni presentación real del modelo/cliente Telegram.
+  No cierran BL-46/48 ni sustituyen la matriz E2E pendiente.
+
+### Próxima campaña Telegram preparada (no ejecutada)
+
+Mantener runtime rev. 8 / `ancoramind-default-r4` y registrar SHA/deployment
+realmente activos antes de empezar. No hace falta desplegar estas pruebas para
+validar el producto actual. El propietario envía las peticiones y decide cada
+confirmación; no se fabrican updates ni se insertan fixtures productivos por SQL.
+Usar una lista sintética identificable y detener la campaña si falla un paso:
+
+1. **Preparación:** pedir crear «Validación cierre 16 octubre»; comprobar bloque
+   único y confirmar solo esa lista. Si existe, consultarla y reutilizarla sin
+   duplicarla. Nada de borrar datos previos automáticamente.
+2. **AC2:** «Muéstrame las tareas de Validación cierre 16 octubre y propón añadir
+   Revisar seguro con prioridad alta y fecha límite 20 de octubre de 2026».
+   Conservar la consulta READ y un bloque Core legible; no hay tarea canónica
+   antes de Sí. Pulsar No y consultar tareas (**AC4**): ausente y sin insistencia.
+3. **AC6:** pedir explícitamente de nuevo esa tarea con prioridad/fecha. Exigir
+   nuevo ID; descartar para no ejecutar la anterior ni dejarla pendiente.
+4. **AC3/AC5:** pedir dos tareas distintas con prioridad alta en esa misma lista.
+   Exigir dos propuestas persistidas/botones ligados a cada ID y consulta real
+   de pendientes. Un «Sí» solo pide elegir, sin escribir. Confirmar una por su
+   botón y descartar la otra; consultar tareas y pendientes. No habilitar lote.
+5. **AC7:** añadir tarea «Validar reapertura» solo título; completar, reabrir y
+   consultar. Pedir guardar una nota sintética y buscarla. Sin botones, cada
+   efecto con auditoría `self_authorized`/`executed`.
+6. **Cierre:** comprobar estados de cada propuesta/tarea, cero pendientes
+   confirmables de esta campaña y ninguna duplicación. La limpieza destructiva
+   es opcional y requiere su propia propuesta/confirmación, nunca SQL directo.
+
+Evidencia por paso: IDs de interacción/propuesta (sin texto personal en logs),
+config revision/ruta, conteos tools/LLM, outbox entregada y auditoría de mutación;
+verificación visual por el propietario de la semántica y los botones. Sin retry
+automático tras fallo ambiguo: consultar estado antes de repetir.
+AC8/AC9 de fallo/OFF se verifican en entorno aislado; no se apagan controles ni
+se corta Telegram/Gateway productivo para provocar estos escenarios.
