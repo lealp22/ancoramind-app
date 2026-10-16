@@ -10,11 +10,12 @@ or emitted reports use :meth:`EvalCaseResult.metadata` only.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 from scripts.run_evals import EVALS_DIR, CatalogValidationError, load_catalog, validate_catalogs
+from src.domain.interactions.reply import AgentReply
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,8 @@ class EvalObservation:
     outcome: str
     tool_names: tuple[str, ...] = ()
     requires_user_confirmation: bool = False
-    response_text: str | None = None
+    response_text: str | None = field(default=None, repr=False)
+    reply: AgentReply | None = field(default=None, repr=False)
 
 
 class SyntheticEvalExecutor(Protocol):
@@ -77,7 +79,7 @@ class EvalCaseResult:
     observed_requires_user_confirmation: bool
     passed: bool
     failures: tuple[str, ...]
-    response_text: str | None = None
+    response_text: str | None = field(default=None, repr=False)
 
     def metadata(self) -> dict[str, object]:
         """Return the safe report projection, deliberately excluding input/context/response."""

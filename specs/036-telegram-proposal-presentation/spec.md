@@ -4,11 +4,13 @@
 > **Fecha:** 2026-10-14.
 > **Estado:** desplegado, E2E parcial; AC1/AC2/AC4/AC6 y AC3/AC7 asistidos constan con rev. 8;
 > AC5 acreditado con trazas nominadas recuperadas; AC8–AC9 superados en aislamiento
-> y gates locales verdes (1465 unitarias, 173 integraciones, 1 STT live omitida;
+> y gates locales verdes (1503 unitarias, 173 integraciones, 1 STT live omitida;
 > incluye preparación local del harness, todavía no desplegada).
 > Variantes revisables BL-46 también superadas (§13). Por decisión del propietario,
 > BL-48 sigue abierto hasta harness real aislado: preparación/preflight sin
 > inferencia en §14; presupuesto/acceso/ejecución y evaluación aún pendientes.
+> Lanzador one-shot/revisión humana local implementados después (2026-10-17,
+> §15); no cambia el gate real pendiente.
 > **Autorización:** implementación, despliegue y rollout de runtime rev. 8
 > aprobados; evidencia operativa registrada hasta 2026-10-16.
 > **Relacionado:** BL-46/specs/035, BL-47 y BL-39/40/specs/023.

@@ -104,10 +104,20 @@ No se ejecutó inferencia real ni evaluación semántica en este incremento.
 `response_style/runtime-rev8-snapshot.json` permiten preflight sin inferencia
 mediante `scripts/eval_preflight.py`. Wiring Gateway-only en
 `src/agent/eval_campaign.py`, presupuesto restringido y aprobación separada
-ligada al checksum; no hay lanzador pagado ni juez conectado. Acceso privado,
+ligada al checksum; en ese incremento no había lanzador pagado ni juez conectado. Acceso privado,
 clave exclusiva y reserva candidata de 0,10 USD estimados aún no aprobados.
 Detalles/limitaciones: `specs/018-agentic-evals-execution-harness/t7-preparation.md`.
 Esto no altera el carácter estático de `scripts/run_evals.py` ni cierra BL-48.
+
+**Lanzador T7 posterior (2026-10-17):** `scripts/execute_eval_campaign.py` ya
+ejecuta casos serialmente **solo** con `--execute`, aprobación explícita de plan,
+SHA limpio/fuentes/rúbrica, clave Gateway exclusiva y revisor en terminal.
+Sin esa opción es preflight puro. Reserva total local/no replay, parada ante
+fallo/no evaluado, SDK sin retry/redirect/proxy env, respuesta particionada en
+memoria para revisión humana; reporte solo metadata. No es un juez automático
+calibrado, ni una evaluación realizada, ni garantía distribuida de at-most-once.
+No hay acceso/Gateway ni presupuesto nuevo aprobado: consultar el runbook citado
+antes de ejecutar. Nunca automatizar labels pass ni grabar respuestas en logs.
 
 `src/agent/eval_semantic_scoring.py` prepara un contrato opcional para juzgar
 cada `response_criteria` por separado. No es un modelo ni un cliente: define el

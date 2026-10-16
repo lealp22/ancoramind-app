@@ -15,7 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.agent.eval_campaign import EvalCampaignPlan, gateway_settings  # noqa: E402
+from src.agent.eval_campaign import (  # noqa: E402
+    EvalCampaignPlan,
+    gateway_settings,
+    verify_gateway_models,
+)
 from src.domain.runtime_config.models import RuntimeConfigSnapshot  # noqa: E402
 
 
@@ -39,16 +43,14 @@ def main(argv: list[str] | None = None) -> int:
         metadata["approval_status"] = "pending_separate_approval"
         if args.check_gateway:
             settings = gateway_settings(os.environ)
-            with httpx.Client(timeout=10, follow_redirects=False) as client:
+            with httpx.Client(timeout=10, follow_redirects=False, trust_env=False) as client:
                 response = client.get(
                     settings.litellm_proxy_base_url.rstrip("/") + "/models",
                     headers={"Authorization": "Bearer " + settings.litellm_proxy_virtual_key},
                 )
                 if response.status_code != 200:
                     raise ValueError("eval_gateway_auth_failed")
-                aliases = {item["id"] for item in response.json()["data"]}
-                if aliases != {plan.effective_gateway_route}:
-                    raise ValueError("eval_gateway_key_scope_mismatch")
+                verify_gateway_models(response.json(), plan.effective_gateway_route)
             metadata["gateway_access"] = "restricted_alias_verified"
         print(json.dumps({"status": "valid", **metadata}, ensure_ascii=False))
         return 0

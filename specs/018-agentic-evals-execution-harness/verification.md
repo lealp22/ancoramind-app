@@ -11,6 +11,32 @@
 173 integraciones/1 STT live omitida, Ruff/mypy limpios. Candidato y preflight
 no equivalen a aprobación/acceso ni ejecución real; T7 y BL-48 siguen abiertos.
 
+**2026-10-17 — lanzador T7 y revisión humana:** implementado/probado sin
+inferencia pagada, `execute_eval_campaign.py` + `eval_campaign_runner.py`.
+Reserva local exclusiva antes de red, aprobación ligada a commit/fuentes/casos,
+deadline/stop, revisión humana de `answer`/`proposal_text` en terminal, labels por
+índice y reporte metadata-only; SDK max_retries=0 probado ante HTTP 503 (un request,
+error de provider o salida terminal inválida, nunca éxito ni replay). No se altera
+el loop productivo, prompts, schema/config/aliases ni controles operativos.
+
+- `pytest tests/unit/ -q --cov=src --cov-report=term`: **1503 passed, 80,42 %**.
+- `pytest tests/integration/ -q` con PostgreSQL local obligatorio: **173 passed,
+  1 skipped**, STT live opt-in. Sin fixtures en producción.
+- Ruff global y mypy src (174 archivos) y ambos CLIs limpios; catálogo 36 casos.
+- Preflight de ambos scripts: exit 0, sin red, `inference_started=false`,
+  `semantic_status=not_evaluated`, acceso no comprobado, árbol sucio por el diff
+  de esta implementación. No se presenta como SHA listo para campaña live.
+- Pruebas de fallos, cancelación, coste parcial/excesivo, uso ausente, replay,
+  checkpoints, cambios de fuentes, scopes/consent flags y privacidad. HTTP/SDK
+  exclusivamente mockeados y review humana fake, no resultados semánticos reales.
+- Alcance del lock explícitamente local; no borrar marcadores ante ambigüedad.
+  Coste estimado no sustituye límite externo ni permite autoaprobar presupuesto.
+
+Pendiente del propietario: plan/ruta/0,10 USD estimados/procedencia del snapshot,
+acceso privado y clave exclusiva, revisor presente y commit/SHA final a aprobar.
+No se ejecuta campaña pagada en este incremento. T7/BL-48 siguen abiertos;
+runbook [`t7-preparation.md`](t7-preparation.md).
+
 ## Preparación T8 sin llamadas pagadas — 2026-10-14
 
 Se preparó el contrato local para scoring semántico opcional sin conectar ningún

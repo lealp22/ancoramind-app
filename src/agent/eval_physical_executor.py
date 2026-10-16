@@ -224,6 +224,7 @@ class GovernedPhysicalEvalExecutor:
             tool_names=tool_names,
             requires_user_confirmation=any(name.startswith("propose_") for name in tool_names),
             response_text=reply.text(),
+            reply=reply,
         )
 
     def _build_execution_context(self) -> ExecutionContext:

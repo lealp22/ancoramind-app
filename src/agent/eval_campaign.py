@@ -9,13 +9,17 @@ from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlsplit
 
+import httpx
+from agno.models.base import Model
+from agno.models.openai.chat import OpenAIChat
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.agent.eval_physical_executor import GovernedPhysicalEvalExecutor, eval_snapshot_fingerprint
 from src.agent.evals import EvalCase, load_eval_cases
 from src.agent.llm_access import AgnoLLMAccess
 from src.config import Settings
-from src.domain.llm_access.models import LlmUsageEventCreate
+from src.domain.llm_access.access import LLMAccess
+from src.domain.llm_access.models import ExecutionContext, LlmUsageEventCreate
 from src.domain.runtime_config.models import (
     ExecutionBudgetConfig,
     RuntimeConfigSnapshot,
@@ -163,11 +167,44 @@ class EvalUsageRecorder:
         return [event.model_dump(mode="json", include=fields) for event in self.events]
 
 
+class CampaignLLMAccess:
+    """Keep SDK retries/redirects disabled as well as the Agent's retry policy."""
+
+    def __init__(self, delegate: LLMAccess, client: httpx.AsyncClient | None) -> None:
+        self._delegate = delegate
+        self._client = client
+
+    def model_for(self, route_name: str, execution_context: ExecutionContext) -> Model:
+        model: Model = self._delegate.model_for(route_name, execution_context)
+        if not isinstance(model, OpenAIChat):
+            raise ValueError("eval_gateway_model_required")
+        model.max_retries = 0
+        model.timeout = execution_context.config.config.gateway.request_timeout_seconds
+        if self._client is not None:
+            model.http_client = self._client
+        return model
+
+
+def verify_gateway_models(payload: object, alias: str) -> None:
+    """Validate scope without including a remote response in error diagnostics."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        raise ValueError("eval_gateway_key_scope_mismatch")
+    data = payload["data"]
+    if (
+        not data
+        or any(not isinstance(item, dict) or not isinstance(item.get("id"), str) for item in data)
+        or {item["id"] for item in data} != {alias}
+    ):
+        raise ValueError("eval_gateway_key_scope_mismatch")
+
+
 def build_campaign_executor(
     plan: EvalCampaignPlan,
     snapshot: RuntimeConfigSnapshot,
     env: Mapping[str, str],
     recorder: EvalUsageRecorder,
+    *,
+    client: httpx.AsyncClient | None = None,
 ) -> GovernedPhysicalEvalExecutor:
     """Wire, but never execute, the approved candidate through LLMAccess only."""
     plan.validate_snapshot(snapshot)
@@ -179,7 +216,9 @@ def build_campaign_executor(
         raise ValueError("eval_campaign_explicit_approval_required")
     settings = gateway_settings(env)
     return GovernedPhysicalEvalExecutor(
-        llm_access=AgnoLLMAccess(settings=settings, usage_recorder=recorder.record),
+        llm_access=CampaignLLMAccess(
+            AgnoLLMAccess(settings=settings, usage_recorder=recorder.record), client
+        ),
         snapshot=snapshot,
         budget=plan.budget,
         snapshot_fingerprint=plan.snapshot_fingerprint,

@@ -898,3 +898,42 @@ verificados y revisión del SHA evaluado. No se autoestablecen flags de aprobaci
 ni se desactiva la parada productiva. No se llama directamente al provider.
 **BL-46 queda completado funcionalmente; BL-48 sigue abierto por ejecución real y
 evaluación de instrucciones**, con scoring no evaluado hasta evidencia suficiente.
+
+## 15. Lanzador del ensayo real y revisión humana — 2026-10-17
+
+El propietario autoriza completar la implementación y solicita indicaciones
+concretas sobre lo que requiere su intervención. Base inicial limpia en
+`4294326258c3f1c8eb6efab0a1dffbbcefed4e0f`. No se interpreta esa orden como
+aprobación de gasto/credenciales/túneles ni ejecución pagada.
+
+- Lanzador `scripts/execute_eval_campaign.py`: preflight puro por defecto;
+  `--execute` requiere plan/SHA/fuentes/casos aprobados y árbol limpio, aceptación
+  de snapshot histórico/huella separada, privacidad, presupuesto externo y
+  revisión humana. No se establecen flags automáticamente ni se hace commit.
+- Runner serial con reserva local de los cinco casos (0,10 USD estimados),
+  marcador exclusivo por plan retenido ante error/interrupción, sin resume,
+  selección de más casos ni replay. No es lock distribuido ni techo facturado.
+- SDK sin retry (HTTP 503 ⇒ un request), HTTP sin redirects/proxy de ambiente,
+  Gateway-only con comprobación del scope por GET antes de inferencia. No se
+  crea acceso ni se llama al Gateway para verificarlo en esta sesión.
+- Uso/estado/checkpoints solo metadata; respuestas `answer`/`proposal_text` en
+  memoria y consola interactiva del revisor, control chars escapados, nunca stdout
+  ni reporte. Bibliotecas silenciadas durante live para impedir captura accidental
+  de contenidos/errores; esa protección no impide grabadores externos de terminal.
+- Revisión humana por índice (`pass`/`fail`/`not_evaluated`), no juez automático
+  calibrado. Fallo determinista no puede ser aprobado por el revisor. El bloque
+  final/controles Core siguen acreditados por E2E, no se inventa una entrega real
+  dentro del harness. El cierre requiere ambos tipos de evidencia.
+- Parada ante fallo/cancelación/check determinista/no evaluado/uso inválido o
+  coste excedido/cambio de fuentes. Ningún contenido de excepción en reporte.
+- Verificación final: **1503 unitarias passed, cobertura 80,42 %; 173
+  integraciones passed, 1 STT live omitida**; Ruff global, mypy src (174 archivos)
+  y los CLIs limpios; catálogo estático válido. Dry-run nuevo exit 0,
+  `inference_started=false`, `gateway_access=not_checked` y semántica no evaluada.
+
+**BL-48 abierto:** falta revisión/commit del diff y aprobación del SHA final,
+reserva candidata 0,10 USD estimados (no máximo facturado), procedencia del
+snapshot con huella separada, acceso privado/clave exclusiva/presupuesto externo
+verificados y revisor humano presente durante los cinco casos. Instrucciones
+operativas y flags en specs/018 `t7-preparation.md`. No commit/push/redeploy,
+mensajes Telegram, credenciales nuevas ni cambios productivos en este incremento.

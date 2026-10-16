@@ -38,10 +38,10 @@
 | BL-44 Parada de emergencia manual para Agent/LLM | 🔶 implementado localmente (backend + API admin + CLI); persistencia durable diferida — specs/031 |
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | ✅ completado: PostgreSQL, trivial y reviewable (prioridad, descripción-sola, fecha-sola); ausencia de escritura previa, descartes y hashes acreditados; versión/CI comprobados — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
-| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; propietario exige harness real antes de cerrar: snapshot/ruta/budget/preflight preparados sin inferencia; acceso/aprobación/resultados pendientes — specs/036 y 018 T7 |
+| BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
 | MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
 
-Tests locales (2026-10-16): 1465 unitarias (80,19 % cobertura) y 173 integraciones PostgreSQL
+Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL
 superadas; una prueba STT live omitida por diseño. Las 4 pruebas de migración
 superan fresh install, upgrade/downgrade e idempotencia. Ruff y `mypy src/`
 limpios en `src/ tests/ scripts/ migrations/`.
@@ -974,6 +974,19 @@ varía entre procesos, aunque esto no explica por sí solo toda discrepancia.
 No alterar revisiones ni aliases activos: investigar esquema histórico antes de
 remediar. Eval usa fingerprint de contenido determinista separado y lo liga al
 plan, sin presentar esa huella como validación del checksum productivo (§14).
+
+**Lanzador T7 completado localmente (2026-10-17):** `execute_eval_campaign.py`
+es preflight puro por defecto; ejecución explícita exige commit limpio, SHA y
+huellas de plan/fuentes/casos aprobados, reserva estimada completa, clave privada
+restringida y revisor humano en terminal. Marca local exclusiva retenida ante
+fallo, serie sin retries SDK/Agent, stop ante fallo/check/no evaluado y reporte
+metadata-only. Respuestas particionadas solo en memoria/consola humana, sin logs
+de bibliotecas. **1503 unitarias, cobertura 80,42 %; 173 integraciones y 1 STT live
+omitida**, Ruff/mypy limpios. No se llama al Gateway ni se genera credencial/acceso,
+ni commit/push/deploy; reserva candidata 0,10 USD estimados aún pendiente de
+aprobación y protección externa. BL-48 abierto hasta ejecución/revisión reales.
+Runbook actualizado specs/018 `t7-preparation.md`; el bloqueo de replay es local,
+no distribuido ni garantía de facturación máxima.
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta

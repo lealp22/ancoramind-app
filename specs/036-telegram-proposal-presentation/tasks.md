@@ -79,6 +79,9 @@
       sin inferencia; LLMAccess/SDK verificados con HTTP simulado (§14).
 - [ ] Aprobar plan/presupuesto/acceso privado y ejecutar campaña real, manteniendo
       BL-48 abierto; no sustituir por E2E manual (decisión 2026-10-16).
+- [x] Completar lanzador one-shot y revisión humana de la misma ejecución
+      (2026-10-17), sin gasto/red/credenciales nuevos; pruebas aisladas.
+      Gate real anterior sigue abierto. Ver specs/018 `t7-preparation.md`.
 - **Listo cuando:** pruebas deterministas verdes y evidencia semántica
   distinguida de la mera validez del catálogo.
 

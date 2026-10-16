@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from agno.exceptions import ModelProviderError
 
 from scripts.eval_preflight import main
 from src.agent.eval_campaign import (
@@ -18,6 +19,7 @@ from src.agent.eval_campaign import (
     gateway_settings,
 )
 from src.agent.eval_physical_executor import eval_snapshot_fingerprint
+from src.domain.interactions.reply import InvalidPresentationOutputError
 from src.domain.llm_access.models import LlmUsageEventCreate
 from src.domain.runtime_config.models import (
     RuntimeConfigSnapshot,
@@ -213,8 +215,9 @@ def test_versioned_candidate_and_fingerprint_are_stable_across_processes():
         assert json.loads(result.stdout)["snapshot_fingerprint"] == plan.snapshot_fingerprint
 
 
+@pytest.mark.parametrize("http_failure", [False, True])
 async def test_real_llm_access_wiring_uses_gateway_with_simulated_tools_only(
-    plan, snapshot, monkeypatch
+    plan, snapshot, monkeypatch, http_failure
 ):
     from src.agent.ancora_agent import SafeOpenAILike
     from src.agent.evals import EvalExecutionRequest
@@ -240,6 +243,8 @@ async def test_real_llm_access_wiring_uses_gateway_with_simulated_tools_only(
             )
         )
         requests.append(body)
+        if http_failure:
+            return httpx.Response(503, json={"error": {"message": "synthetic-failure"}})
         return httpx.Response(200, json={
             "id": "synthetic", "object": "chat.completion", "created": 0, "model": "eval-test-r1",
             "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
@@ -267,7 +272,22 @@ async def test_real_llm_access_wiring_uses_gateway_with_simulated_tools_only(
             "ANCORA_EVAL_GATEWAY_URL": "http://gateway.railway.internal:4000/v1",
             "ANCORA_EVAL_GATEWAY_KEY": "synthetic-key",
         }, recorder)
+        context = executor._build_execution_context()
+        model = executor._llm_access.model_for(plan.logical_route, context)
+        assert model.max_retries == 0
+        assert model._get_client_params()["max_retries"] == 0
         case = plan.validate_snapshot(snapshot)[0]
+        if http_failure:
+            # Agno can return a failed run instead of propagating the provider
+            # error; terminal validation must reject that run just as safely.
+            with pytest.raises((ModelProviderError, InvalidPresentationOutputError)):
+                await executor.execute(EvalExecutionRequest(
+                    case=case, logical_route=plan.logical_route,
+                    config_revision=plan.config_revision,
+                ))
+            assert len(requests) == 1  # SDK and Agent must not retry HTTP 503.
+            assert len(recorder.events) == 1 and recorder.events[0].status == "error"
+            return
         observation = await executor.execute(EvalExecutionRequest(
             case=case, logical_route=plan.logical_route, config_revision=plan.config_revision
         ))

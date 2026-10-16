@@ -33,8 +33,9 @@ recordatorios y eventos, con trazabilidad completa.
   escribe datos canónicos ni concede consentimiento. BL-47 se validó E2E con
   lectura real + `present_reply` (`tool_call_count=2`).
   BL-46 completado con variantes reviewable descripción-sola/fecha-sola; BL-48
-  espera ejecución real del harness aislado (preflight sin inferencia preparado).
-  1465 unit tests y 173 integration PostgreSQL superados; una prueba STT live
+  espera ejecución real del harness aislado (lanzador one-shot y revisión humana
+  local preparados, sin aprobación de gasto ni acceso nuevo).
+  1503 unit tests y 173 integration PostgreSQL superados; una prueba STT live
   se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
   Head Alembic/Supabase: `0016_voice_guard_search_path`. Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.

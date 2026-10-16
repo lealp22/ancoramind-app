@@ -30,6 +30,12 @@
       Gateway-only y preflight sin inferencia implementados y probados;
       `t7-preparation.md`. Candidato 0,10 USD estimados, sin aprobación de gasto,
       credenciales/acceso ni ejecución real. BL-48 permanece abierto.
+- [x] T7a · Lanzador explícito serial y revisión humana en terminal (2026-10-17):
+      reserva local exclusiva/no replay, aprobación SHA+fuentes+casos+plan,
+      SDK sin retry, scope Gateway, checkpoints/reporte metadata-only y parada
+      ante fallo/cancelación/no evaluado. Pruebas sin inferencia pagada.
+- [ ] T7b · Aprobar plan/presupuesto/snapshot, acceso privado y clave exclusiva;
+      lanzar una campaña real con revisor presente y registrar los resultados.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con
       etiquetas humanas sintéticas y baseline por ruta/configuración.
       **Preparación local sin inferencia (2026-10-14):**
