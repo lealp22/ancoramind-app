@@ -23,7 +23,7 @@ from src.domain.interactions.models import InteractionStatus, TelegramInteractio
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor, TelegramSendError
-from src.domain.interactions.reply import AgentReply
+from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import ExecutionBudgetExceededError
 from src.repositories.interactions import EncryptedSessionExchange, TelegramInteractionsRepository
@@ -99,6 +99,58 @@ async def test_agent_failure_after_claim_is_marked_ambiguous(
         InteractionStatus.FAILED_AMBIGUOUS,
         error_class="AgentRunError",
         error_detail_code="agent_run_failed_after_claim",
+    )
+
+
+async def test_invalid_presentation_sends_fixed_notice_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    interaction = _interaction()
+    repo.claim_agent_start_with_run_id.return_value = interaction.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    delivery_id = uuid4()
+    repo.create_failure_notice_response.return_value = delivery_id
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = interaction.model_copy(
+        update={"payload_ciphertext": cipher.encrypt({"text": "hola"}).ciphertext}
+    )
+    runner = AsyncMock()
+    runner.run.side_effect = InvalidPresentationOutputError("invalid")
+    sender = AsyncMock()
+    sender.send_typing.return_value = None
+    sender.send_text.return_value = 123
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+    )
+
+    assert await processor._run_agent(accepted) is True
+    runner.run.assert_awaited_once()
+    repo.update_status.assert_awaited_once_with(
+        accepted.id,
+        InteractionStatus.FAILED_AMBIGUOUS,
+        error_class="InvalidPresentationOutputError",
+        error_detail_code="invalid_terminal_presentation",
+    )
+    repo.create_failure_notice_response.assert_awaited_once()
+    sender.send_text.assert_awaited_once_with(
+        accepted.chat_id, processor_module.AGENT_PRESENTATION_FAILURE_NOTICE
+    )
+    repo.mark_ack_delivery_outcome.assert_awaited_once_with(
+        delivery_id,
+        status="delivered",
+        telegram_message_id=123,
+        error_class=None,
     )
 
 

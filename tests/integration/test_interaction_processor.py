@@ -15,7 +15,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.payloads import TelegramPayloadCipher
 from src.domain.interactions.processor import InteractionProcessor
-from src.domain.interactions.reply import AgentReply
+from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 from src.repositories.database import get_session
 from src.repositories.interactions import TelegramInteractionsRepository
 
@@ -173,6 +173,74 @@ async def test_processor_does_not_replay_agent_after_post_claim_failure(
     assert row.error_detail_code == "agent_run_failed_after_claim"
     assert len(runner.calls) == 1
     assert sender.calls == []
+
+
+async def test_invalid_presentation_persists_one_secondary_failure_notice(
+    session: AsyncSession,
+) -> None:
+    cipher = _cipher()
+    interaction_id = await _accepted_interaction(session, cipher, update_id=506)
+    runner = FakeRunner()
+    runner.error = InvalidPresentationOutputError("invalid")
+    sender = FakeSender()
+    processor = InteractionProcessor(
+        session_factory=get_session,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=sender,
+    )
+
+    assert await processor.run_once() == 1
+    assert await processor.run_once() == 0
+
+    interaction = await session.execute(
+        text("""
+            SELECT status, error_class, error_detail_code
+            FROM ancora.telegram_interactions
+            WHERE id = :id
+        """),
+        {"id": interaction_id},
+    )
+    row = interaction.one()
+    assert row.status == "failed_ambiguous"
+    assert row.error_class == "InvalidPresentationOutputError"
+    assert row.error_detail_code == "invalid_terminal_presentation"
+    responses = (
+        await session.execute(
+            text("""
+                SELECT response_kind, status
+                FROM ancora.logical_responses
+                WHERE interaction_id = :id
+            """),
+            {"id": interaction_id},
+        )
+    ).fetchall()
+    assert [(item.response_kind, item.status) for item in responses] == [
+        ("failure_notice", "delivered")
+    ]
+    deliveries = (
+        await session.execute(
+            text("""
+                SELECT d.status
+                FROM ancora.telegram_response_deliveries d
+                JOIN ancora.logical_responses r ON r.id = d.logical_response_id
+                WHERE r.interaction_id = :id AND r.response_kind = 'failure_notice'
+            """),
+            {"id": interaction_id},
+        )
+    ).fetchall()
+    assert [item.status for item in deliveries] == ["delivered"]
+    duplicate = cipher.encrypt({"content": "fixed duplicate notice"})
+    assert (
+        await TelegramInteractionsRepository(session).create_failure_notice_response(
+            interaction_id,
+            content_ciphertext=duplicate.ciphertext,
+            content_key_version=duplicate.key_version,
+            content_length=len("fixed duplicate notice"),
+        )
+        is None
+    )
+    assert len(sender.calls) == 1
 
 
 async def test_recovery_marks_inflight_ambiguous_but_delivers_response_ready(

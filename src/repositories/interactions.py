@@ -695,6 +695,58 @@ class TelegramInteractionsRepository:
             raise
         return row[0] if row is not None else None
 
+    async def create_failure_notice_response(
+        self,
+        interaction_id: UUID,
+        *,
+        content_ciphertext: bytes,
+        content_key_version: int,
+        content_length: int,
+    ) -> UUID | None:
+        """Persist one idempotent notice without changing the terminal interaction.
+
+        This secondary outbox is used only after a post-claim failure. It never
+        creates or repairs an ``agent_final`` response and therefore cannot
+        replay the Agent or imply that its requested operation succeeded.
+        """
+        now = datetime.now(tz=UTC)
+        try:
+            result = await self._session.execute(
+                text("""
+                    WITH inserted AS (
+                        INSERT INTO ancora.logical_responses (
+                            interaction_id, response_kind, content_ciphertext,
+                            content_key_version, content_length, chunk_count,
+                            status, created_at
+                        ) VALUES (
+                            :interaction_id, 'failure_notice', :content_ciphertext,
+                            :content_key_version, :content_length, 1,
+                            'pending_delivery', :now
+                        )
+                        ON CONFLICT (interaction_id, response_kind) DO NOTHING
+                        RETURNING id
+                    )
+                    INSERT INTO ancora.telegram_response_deliveries (
+                        logical_response_id, chunk_index, status
+                    )
+                    SELECT id, 0, 'pending' FROM inserted
+                    RETURNING id
+                """),
+                {
+                    "interaction_id": interaction_id,
+                    "content_ciphertext": content_ciphertext,
+                    "content_key_version": content_key_version,
+                    "content_length": content_length,
+                    "now": now,
+                },
+            )
+            row = result.fetchone()
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return row[0] if row is not None else None
+
     async def mark_ack_delivery_outcome(
         self,
         delivery_id: UUID,

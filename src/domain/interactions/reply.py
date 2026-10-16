@@ -3,6 +3,10 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
 
+class InvalidPresentationOutputError(ValueError):
+    """The Agent did not produce one valid terminal presentation result."""
+
+
 class AgentReply(BaseModel):
     """Separate independent answers from replaceable proposal narration.
 

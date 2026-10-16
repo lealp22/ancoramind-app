@@ -456,6 +456,13 @@ ledger nunca persistía `tool_call_count`; todas las interacciones quedaban a
 cero. Corrección local metadata-only, idempotente y fail-open implementada y
 validada (1427 unit + 160 integration, 1 STT live skipped). Pendiente CI/deploy
 y repetir la lectura BL-47 para obtener evidencia durable del run.
+
+**Incidente E2E posterior (SHA `00f0d0f`):** la lectura BL-47 ejecutó una tool,
+pero el segundo turno no cerró con `present_reply`; el Core rechazó la salida,
+marcó `failed_ambiguous` y no reintentó ni entregó prosa, pero Telegram quedó en
+silencio. Implementado localmente un aviso fijo mediante outbox secundaria
+idempotente `failure_notice`, sin alterar el estado terminal ni afirmar efectos.
+1428 unit + 161 integration verdes (1 STT live skipped); pendiente CI/deploy/E2E.
 Ver `specs/013-llm-access-governance/`.
 
 **Actualización rollout Collector/Grafana (2026-09-24):** el servicio

@@ -17,7 +17,7 @@ from src.agent.governed_agent_factory import GovernedAgentFactory
 from src.agent.governed_model import build_governed_model
 from src.agent.instructions import assemble_instructions
 from src.agent.reply_presentation import reply_from_run
-from src.domain.interactions.reply import AgentReply
+from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import ExecutionBudget, ExecutionContext
 from src.domain.runtime_config.models import (
@@ -205,7 +205,7 @@ async def test_sdk_loop_uses_native_tools_then_terminal_presentation(scenario: s
     ],
 )
 def test_premature_completion_cannot_be_used_as_terminal_tool_result(text: str) -> None:
-    with pytest.raises(ValueError, match="invalid presentation output"):
+    with pytest.raises(InvalidPresentationOutputError, match="invalid presentation output"):
         reply_from_run(RunOutput(content=text))
 
 

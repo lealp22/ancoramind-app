@@ -6,7 +6,7 @@ from agno.run.agent import RunOutput
 from agno.tools.function import Function
 
 from src.agent.instructions import load_prompt
-from src.domain.interactions.reply import AgentReply
+from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 
 PRESENT_REPLY_TOOL = "present_reply"
 
@@ -40,7 +40,7 @@ def reply_from_run(output: RunOutput) -> AgentReply:
         or presentations[0].tool_call_error
         or not isinstance(presentations[0].result, str)
     ):
-        raise ValueError("Agent run returned invalid presentation output")
+        raise InvalidPresentationOutputError("Agent run returned invalid presentation output")
     return AgentReply.model_validate_json(presentations[0].result)
 
 

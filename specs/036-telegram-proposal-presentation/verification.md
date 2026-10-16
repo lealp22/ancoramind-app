@@ -171,3 +171,25 @@ No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
 
 No se marca como superado un criterio de la mejora solo porque el circuito
 de consentimiento anterior funcionó.
+
+## 6. E2E productivo parcial e incidente de cierre — 2026-10-16
+
+- SHA `00f0d0f` desplegado en Railway. La repetición de «¿Tengo alguna
+  propuesta pendiente de confirmación?» ejecutó dos llamadas LLM sin retry ni
+  fallback y una tool según el contador durable corregido, pero no persistió
+  respuesta lógica ni inició delivery. La interacción terminó
+  `failed_ambiguous`, con `agent_run_failed_after_claim`; Telegram quedó sin
+  respuesta.
+- Mecanismo comprobado: la lectura ocurrió (`tool_call_count=1`), pero el segundo
+  turno no cerró con una ejecución válida y terminal de `present_reply`;
+  `reply_from_run` rechazó correctamente la salida. No se entregó prosa no
+  validada, no se reintentó inferencia y no hubo mutación canónica.
+- Corrección local: error tipado `InvalidPresentationOutputError` en Core y
+  aviso fijo metadata-safe mediante outbox secundaria idempotente
+  `response_kind='failure_notice'`, sin cambiar `failed_ambiguous`, crear
+  `agent_final`, reejecutar el Agent ni afirmar el resultado de una acción.
+  Texto: indica que no hubo respuesta válida, que no habrá retry automático y
+  que se consulte el estado antes de repetir una acción.
+- Validación local: 1428 unit; 161 integration, 1 STT live omitida por diseño;
+  Ruff y `mypy src/` limpios. Pendiente CI, deploy manual y nuevo E2E; BL-47/48
+  no se cierran aún.

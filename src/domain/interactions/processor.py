@@ -50,7 +50,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
-from src.domain.interactions.reply import AgentReply
+from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import (
     ExecutionBudgetExceededError,
@@ -66,6 +66,11 @@ from src.repositories.interactions import TelegramInteractionsRepository
 from src.repositories.llm_usage import LlmUsageRepository
 
 logger = logging.getLogger(__name__)
+
+AGENT_PRESENTATION_FAILURE_NOTICE = (
+    "No pude completar una respuesta válida y no reintentaré automáticamente. "
+    "Si pediste una acción, consulta primero su estado antes de repetirla."
+)
 VOICE_NOT_UNDERSTOOD_REPLY = (
     "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
 )
@@ -510,6 +515,16 @@ class InteractionProcessor:
                     error_detail_code=exc.limit,
                 )
                 return True
+            except InvalidPresentationOutputError:
+                get_telemetry().mark_error(span, "InvalidPresentationOutputError")
+                await self._mark_terminal(
+                    interaction.id,
+                    InteractionStatus.FAILED_AMBIGUOUS,
+                    error_class="InvalidPresentationOutputError",
+                    error_detail_code="invalid_terminal_presentation",
+                )
+                await self._send_failure_notice(interaction)
+                return True
             except Exception:
                 get_telemetry().mark_error(span, "AgentRunError")
                 await self._mark_terminal(
@@ -764,6 +779,50 @@ class InteractionProcessor:
             )
         except Exception:
             logger.warning("Fast-ack failed for interaction %s", interaction.id, exc_info=True)
+
+    async def _send_failure_notice(self, interaction: TelegramInteraction) -> None:
+        """Best-effort notice after a terminal presentation failure.
+
+        The interaction is already ``failed_ambiguous``. This secondary outbox
+        never changes that state, retries the Agent or claims an operation result.
+        """
+        if interaction.chat_id is None:  # pragma: no cover - validated before claim
+            return
+        try:
+            encrypted = self._payload_cipher.encrypt(
+                {"content": AGENT_PRESENTATION_FAILURE_NOTICE}
+            )
+            session = await self._session_factory()
+            try:
+                delivery_id = await TelegramInteractionsRepository(
+                    session
+                ).create_failure_notice_response(
+                    interaction.id,
+                    content_ciphertext=encrypted.ciphertext,
+                    content_key_version=encrypted.key_version,
+                    content_length=len(AGENT_PRESENTATION_FAILURE_NOTICE),
+                )
+            finally:
+                await session.close()
+            if delivery_id is None:
+                return
+            try:
+                message_id = await self._sender.send_text(
+                    interaction.chat_id, AGENT_PRESENTATION_FAILURE_NOTICE
+                )
+            except Exception as exc:
+                await self._record_ack_outcome(
+                    delivery_id, status="failed", error_class=type(exc).__name__
+                )
+                return
+            await self._record_ack_outcome(
+                delivery_id, status="delivered", telegram_message_id=message_id
+            )
+        except Exception:
+            logger.warning(
+                "Agent presentation failure notice could not be delivered",
+                exc_info=True,
+            )
 
     async def _record_ack_outcome(
         self,
