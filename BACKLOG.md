@@ -451,6 +451,11 @@ Pendientes: caída/circuit del Gateway en Railway, Collector/Grafana +
 dashboards/alertas, benchmark con clave real, reconciliación de costes y
 rotación real. **BL-23 permanece abierto**
 hasta verificar la matriz A–Y completa.
+**Hallazgo E2E 2026-10-16:** el presupuesto contaba tools en memoria, pero el
+ledger nunca persistía `tool_call_count`; todas las interacciones quedaban a
+cero. Corrección local metadata-only, idempotente y fail-open implementada y
+validada (1427 unit + 160 integration, 1 STT live skipped). Pendiente CI/deploy
+y repetir la lectura BL-47 para obtener evidencia durable del run.
 Ver `specs/013-llm-access-governance/`.
 
 **Actualización rollout Collector/Grafana (2026-09-24):** el servicio

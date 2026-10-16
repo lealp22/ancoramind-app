@@ -305,6 +305,58 @@ async def test_runner_scope_is_released_after_run() -> None:
         current_execution_context()
 
 
+async def test_runner_records_final_tool_count_without_content() -> None:
+    recorder = AsyncMock()
+    factory = _FakeFactory()
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot()),
+        factory=factory,
+        tool_call_count_recorder=recorder,
+    )
+    correlation_id = uuid4()
+
+    original_arun = factory.agent.arun
+
+    async def arun_with_count(*args: Any, **kwargs: Any) -> RunOutput:
+        context = current_execution_context()
+        context.budget.tool_calls = 2
+        return await original_arun(*args, **kwargs)
+
+    factory.agent.arun = arun_with_count
+    await runner.run(
+        "hola",
+        user_id="88",
+        session_id="tg:ancoramind:77",
+        run_id="run-tool-count",
+        correlation_id=correlation_id,
+        telegram_update_id=9003,
+    )
+
+    recorder.assert_awaited_once_with(correlation_id, 2)
+
+
+async def test_tool_count_recorder_failure_does_not_replace_agent_reply() -> None:
+    recorder = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    factory = _FakeFactory()
+    runner = GovernedInteractionRunner(
+        config_manager=_FakeManager(_snapshot()),
+        factory=factory,
+        tool_call_count_recorder=recorder,
+    )
+
+    reply = await runner.run(
+        "hola",
+        user_id="88",
+        session_id="tg:ancoramind:77",
+        run_id="run-tool-count-failure",
+        correlation_id=uuid4(),
+        telegram_update_id=9004,
+    )
+
+    assert reply == AgentReply(answer="respuesta gobernada", proposal_text="")
+    recorder.assert_awaited_once()
+
+
 async def test_runner_ingests_media_before_a_text_only_agent_turn(monkeypatch) -> None:
     """Telegram bytes stay out of the main Agent and its provider request."""
     runner, factory = _runner()

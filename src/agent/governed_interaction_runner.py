@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -55,6 +56,8 @@ from src.security.user_context import UserContext
 
 _UNTRUSTED_DATA_PREFIX = "Datos recuperados:\n"
 _TELEGRAM_ATTACHMENT_SOURCE = "telegram_attachment_ingestion"
+ToolCallCountRecorder = Callable[[UUID, int], Awaitable[None]]
+logger = logging.getLogger(__name__)
 
 
 def _attachment_context_for_agent(value: str) -> str:
@@ -95,11 +98,13 @@ class GovernedInteractionRunner:
         factory: GovernedAgentFactory,
         spend_reader: LlmSpendReader | None = None,
         stop_reader: EmergencyStopReader | None = None,
+        tool_call_count_recorder: ToolCallCountRecorder | None = None,
     ):
         self._config_manager = config_manager
         self._factory = factory
         self._spend_reader = spend_reader
         self._stop_reader = stop_reader
+        self._tool_call_count_recorder = tool_call_count_recorder
 
     async def prepare_execution_context(
         self,
@@ -249,6 +254,17 @@ class GovernedInteractionRunner:
                         "Agent run cancelled after the approved runtime budget",
                     ) from exc
                 finally:
+                    if self._tool_call_count_recorder is not None:
+                        try:
+                            await self._tool_call_count_recorder(
+                                context.correlation_id, context.budget.tool_calls
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Tool call count audit failed (interaction_id=%s)",
+                                context.correlation_id,
+                                exc_info=True,
+                            )
                     get_telemetry().duration_ms(
                         "ancora.agent.run.duration",
                         (time.perf_counter() - started) * 1000,

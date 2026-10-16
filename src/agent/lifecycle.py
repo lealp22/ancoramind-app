@@ -153,9 +153,10 @@ def install_interaction_processor_lifespan(
         settings.telegram_payload_encryption_key,
         settings.telegram_payload_key_version,
     )
+    usage_recorder = LlmUsageRecorder(get_session)
     llm_access = AgnoLLMAccess(
         settings=settings,
-        usage_recorder=LlmUsageRecorder(get_session).record,
+        usage_recorder=usage_recorder.record,
         stop_reader=emergency_stop_manager,
     )
     agent_factory = GovernedAgentFactory(
@@ -170,6 +171,7 @@ def install_interaction_processor_lifespan(
         factory=agent_factory,
         spend_reader=SessionSpendReader(get_session),
         stop_reader=emergency_stop_manager,
+        tool_call_count_recorder=usage_recorder.record_tool_call_count,
     )
     context_compaction_summarizer = (
         GovernedContextCompactionAdapter(

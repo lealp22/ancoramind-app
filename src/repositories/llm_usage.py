@@ -102,6 +102,28 @@ class LlmUsageRepository:
             await self._session.rollback()
             raise
 
+    async def record_tool_call_count(self, interaction_id: UUID, tool_call_count: int) -> None:
+        """Persist the run's metadata-only tool count idempotently.
+
+        Tool hooks count attempts in the in-memory execution budget. The runner
+        records the final observed value once; ``GREATEST`` prevents retries of
+        this audit write from incrementing the durable summary twice.
+        """
+        await self._session.execute(
+            text("""
+                UPDATE ancora.telegram_interactions
+                SET tool_call_count = GREATEST(tool_call_count, :tool_call_count),
+                    updated_at = :updated_at
+                WHERE id = :interaction_id
+            """),
+            {
+                "interaction_id": interaction_id,
+                "tool_call_count": max(0, tool_call_count),
+                "updated_at": datetime.now(tz=UTC),
+            },
+        )
+        await self._session.commit()
+
     async def finish_speech_call(
         self, interaction_id: UUID, call_id: UUID, *, status: str, latency_ms: int
     ) -> None:

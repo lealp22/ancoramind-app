@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,6 +57,27 @@ class LlmUsageRecorder:
                     await session.close()
                 except SQLAlchemyError:  # pragma: no cover - close rarely fails
                     logger.warning("LLM usage session close failed", exc_info=True)
+
+    async def record_tool_call_count(self, interaction_id: UUID, tool_call_count: int) -> None:
+        """Persist a metadata-only run summary; audit failure remains fail-open."""
+        session: AsyncSession | None = None
+        try:
+            session = await self._session_factory()
+            await LlmUsageRepository(session).record_tool_call_count(
+                interaction_id, tool_call_count
+            )
+        except Exception:
+            logger.warning(
+                "Tool call count could not be persisted (interaction_id=%s)",
+                interaction_id,
+                exc_info=True,
+            )
+        finally:
+            if session is not None:
+                try:
+                    await session.close()
+                except SQLAlchemyError:  # pragma: no cover - close rarely fails
+                    logger.warning("Tool usage session close failed", exc_info=True)
 
 
 class AgnoLLMAccess:

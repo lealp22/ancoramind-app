@@ -172,6 +172,14 @@ por caso en vez de dejarlo en un ✅ ambiguo.
   cero; no se reescribió retrospectivamente para preservar la auditoría. El
   fix posterior sincroniza usage y summary en una transacción y está cubierto
   por integración PostgreSQL en CI.
+- **Hallazgo E2E 2026-10-16:** `ExecutionBudget.tool_calls` aplicaba correctamente
+  el límite y los fingerprints, pero ninguna frontera copiaba ese contador al
+  resumen durable: incluso runs que creaban propuestas persistían
+  `tool_call_count=0`. Corregido localmente al final del run con una escritura
+  metadata-only idempotente/monotónica (`GREATEST`), sin nombres, argumentos ni
+  resultados de tools. La auditoría es fail-open y está cubierta por tests de
+  runner, repositorio PostgreSQL y suites globales (1427 unit; 160 integration,
+  1 STT live omitida por diseño). Pendiente CI/deploy y repetición E2E de BL-47.
 
 ## T2 — Migration strategy verification (2026-09-13)
 

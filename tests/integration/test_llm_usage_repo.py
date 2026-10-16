@@ -145,6 +145,27 @@ async def test_usage_event_round_trip_contains_metadata_not_personal_content(
     assert float(aggregated_summary.actual_cost) == pytest.approx(0.0004)
 
 
+async def test_tool_call_count_summary_is_idempotent_and_monotonic(
+    session: AsyncSession,
+) -> None:
+    interaction_id = await _interaction_id(session)
+    repository = LlmUsageRepository(session)
+
+    await repository.record_tool_call_count(interaction_id, 3)
+    await repository.record_tool_call_count(interaction_id, 3)
+    await repository.record_tool_call_count(interaction_id, 2)
+
+    count = await session.scalar(
+        text("""
+            SELECT tool_call_count
+            FROM ancora.telegram_interactions
+            WHERE id = :interaction_id
+        """),
+        {"interaction_id": interaction_id},
+    )
+    assert count == 3
+
+
 async def test_usage_event_llm_call_id_is_unique(session: AsyncSession) -> None:
     manager = RuntimeConfigManager(
         session_factory=get_session,
