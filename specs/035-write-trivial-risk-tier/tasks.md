@@ -180,4 +180,5 @@
       (**159 passed, 1 STT live skipped**) y suite focal
       `test_actions_repo.py` (**9 passed**) el 2026-10-15.
 - [x] `verification.md` actualizado con migración e integración PostgreSQL
-      verificadas; solo queda E2E Telegram.
+      verificadas. E2E asistido del camino trivial superado el 2026-10-16;
+      variantes reviewable restantes y cierre de gates detallados allí.

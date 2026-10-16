@@ -179,7 +179,8 @@ No se marca AC1/AC4 como E2E superado por haber validado mocks o catálogos.
   Pasos 5–7: recuento positivo, detalle bajo petición y respuesta vacía tras
   caducidad correctos. Falta evidencia de tool concreta; no inferirla del contador.
   Paso 9: consulta final vacía tras ejecución/descarte; mismo límite de trazabilidad.
-- [ ] AC7: regresiones triviales (TODO/notas).
+- [x] AC7: alta título-solo, completar/reabrir y nota/búsqueda sin botones;
+  paso 10 asistido autorizado, cuatro auditorías terminales y hashes válidos.
 - [ ] AC8–AC9: horas/zonas, límites, escapado, payload/hash y consentimiento.
 - [x] Integración PostgreSQL aislada: 159 superadas, una STT live omitida.
 - [ ] Evaluación de instrucciones y E2E real del SHA autorizado.
@@ -592,3 +593,53 @@ se corta Telegram/Gateway productivo para provocar estos escenarios.
   **AC3 superado en esta ejecución asistida**; no prueba doble clic/concurrencia.
   Se conserva el dato sintético autorizado, sin borrado automático. Delegación
   completada: detenerse antes de AC7; BL-46/48 siguen abiertos.
+
+### Paso 10 — AC7 asistido: cuatro escrituras triviales y dos consultas
+
+- El propietario autoriza exclusivamente crear «Validar reapertura AC7» solo
+  título en la lista de campaña, completarla, reabrirla, consultar la lista,
+  guardar la nota sintética acordada y buscarla. Se conservan los datos.
+  Ejecución asistida por Telegram Web/Playwright; SQL solo de lectura, sin
+  botones, reenvíos, borrado ni cambios de configuración.
+- Preflight 15:33:15 UTC: lista existente, solo la póliza de AC3 pendiente,
+  ninguna tarea con el título AC7 en ella, cero notas con el contenido exacto
+  autorizado y cero propuestas confirmables. Runtime activo 8 y default
+  `ancoramind-default-r4`, embeddings `ancoramind-embeddings-r1` verificados.
+- Peticiones y evidencia durable (horas UTC, 2026-10-16):
+
+  | Paso | Interacción | Recibida | Auditoría | Tools / LLM |
+  |---|---|---|---|---|
+  | Crear título-solo | `59c7c657-cf00-4e50-b22d-eea51b1ebbf1` | 15:33:40 | `940bf75a-0764-430e-a5c3-2ef58868b196` | 2 / 2 |
+  | Completar | `18ef6ff6-8758-4504-967e-305266341ce8` | 15:34:24 | `cf6dd134-547f-4e5b-a1ff-d8e3fb770a76` | 4 / 4 |
+  | Reabrir | `751395e6-6c46-4930-996d-47c41dc07128` | 15:35:01 | `bf571553-b8ba-4dd2-bfeb-9681a518f794` | 4 / 4 |
+  | Consultar lista | `0920cd15-d798-42f9-bbf5-f6e4737b60b4` | 15:35:27 | ninguna | 3 / 3 |
+  | Guardar nota | `3c95c1ae-7508-4fe0-b407-4ccc0d5a395b` | 15:35:48 | `b5426857-22c3-41f9-80bf-2ae68b903b4b` | 2 / 2 |
+  | Buscar nota | `94d41296-25f2-4a43-99ea-b7d3694cb63d` | 15:36:33 | ninguna | 2 / 2 |
+
+- Las seis interacciones: `completed`, revisión 8, llamadas LLM completadas
+  en `ancoramind-default-r4`, cero retries, `agent_final` completada y un
+  chunk completado con message ID cada una, sin aviso de fallo. No se deducen
+  nombres de tools de lectura del contador agregado.
+- Respuestas de mutación observadas en DOM: tarea añadida, marcada como
+  completada, reabierta y «Nota guardada.». Ninguna pide confirmar ni tiene
+  botones. La consulta muestra dos tareas pendientes (póliza y reapertura);
+  la búsqueda devuelve exactamente «Prueba sintética AC7 del 16 de octubre de
+  2026: comprobar memoria de notas», también sin botones ni repropuestas.
+- Tarea nueva `db15bec2-e8c4-4928-a9fe-afee85260a89`: único ejemplar en la
+  lista `f2001d4b-413e-408b-9b99-ccafa33500c0`, sin prioridad, descripción ni
+  fecha. Estado observado tras cada mutación: `pending` → `done` → `pending`.
+  La nota exacta es única: `0f4bf955-0fb1-4ea7-b761-6cdb8ed494b3`.
+- Las cuatro auditorías tienen `self_authorized`/`executed`, origen en su
+  interacción y bot/chat correctos, `executed_at`/`completed_at` presentes,
+  sin `presented_at`, `confirmed_at` ni `confirming_interaction_id`. Sus
+  payloads son solo título/lista, item/status (`done` o `pending`) y contenido
+  de nota, respectivamente. Recalculados localmente con `payload_hash` del
+  dominio: **4/4 coinciden** con los hashes persistidos. La atomicidad ante
+  fallo está cubierta por integración aislada, no se induce un fallo en producción.
+- Foto final 15:37:01–15:37:23 UTC: exactamente cuatro filas de auditoría desde
+  preflight, todas triviales; cero propuestas confirmables, una nota de campaña y
+  dos tareas pendientes. La póliza AC3 conserva sus campos anteriores; sin
+  duplicación observada ni mutaciones adicionales. Runtime sigue en revisión 8.
+- **AC7 superado en esta ejecución asistida**, con datos sintéticos conservados.
+  Termina la autorización; AC5/trazabilidad y AC8–AC9 siguen pendientes en sus
+  respectivos alcances. BL-46/48 no se cierran por este único paso.

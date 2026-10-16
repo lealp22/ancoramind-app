@@ -66,12 +66,13 @@
   revisión.
 - [x] `pytest tests/integration/test_actions_repo.py` contra Postgres real,
   en particular los 2 tests nuevos de `create_self_authorized`.
-- [ ] Validación E2E Telegram: pedir "Añade leche a la lista Compras" (sin
-  prioridad/fecha) y confirmar que el bot responde sin pedir "¿Confirmas?";
-  marcar una tarea como completada y confirmar lo mismo; pedir "Recuerda que
-  ..." y confirmar que la nota queda guardada sin botones Sí/No. Repetir con
-  `description`/`priority`/`due_date` informados y confirmar que **sí** pide
-  confirmación (regresión del camino reviewable).
+- [x] Validación E2E Telegram del camino trivial: alta título-solo en lista
+  existente, completar/reabrir y guardar/buscar nota sin confirmación ni botones.
+  Campaña asistida autorizada 2026-10-16, runtime 8/r4; evidencia debajo.
+- [x] Regresión E2E reviewable con prioridad y prioridad+fecha: propuestas
+  pendientes sin escritura previa y consentimiento Core, specs/036 pasos 2/8/9.
+- [ ] Variantes E2E restantes del gate original: `description` y fecha-sola
+  informadas; cubiertas por tests locales, no ejecutadas en esta campaña.
 
 ## Success Criteria (spec.md) — estado
 
@@ -124,3 +125,39 @@ Validación global: **1428 unitarias; 173 integraciones PostgreSQL superadas,
 1 STT live omitida por diseño**; Ruff/mypy limpios. Sin cambios de ejecución,
 prompts ni esquema. **BL-46 sigue pendiente de matriz E2E Telegram**: estos tests
 no acreditan clasificación de riesgo ni respuesta semántica del modelo real.
+
+## E2E Telegram asistido autorizado — 2026-10-16
+
+AC7 de specs/036, paso 10, ejecutado mediante UI Telegram Web/Playwright con
+autorización exclusiva del propietario. Runtime revisión 8,
+`ancoramind-default-r4`; sin cambios de código/configuración ni fixtures SQL.
+
+- Alta título-solo: interacción `59c7c657-cf00-4e50-b22d-eea51b1ebbf1`,
+  auditoría `940bf75a-0764-430e-a5c3-2ef58868b196`, crea exactamente una tarea
+  `db15bec2-e8c4-4928-a9fe-afee85260a89` («Validar reapertura AC7»), sin
+  prioridad, descripción ni fecha en la lista de campaña existente.
+- Completar: `18ef6ff6-8758-4504-967e-305266341ce8`, auditoría
+  `cf6dd134-547f-4e5b-a1ff-d8e3fb770a76`, estado `done` verificado.
+- Reabrir: `751395e6-6c46-4930-996d-47c41dc07128`, auditoría
+  `bf571553-b8ba-4dd2-bfeb-9681a518f794`, mismo ID vuelve a `pending`.
+- Guardar nota: `3c95c1ae-7508-4fe0-b407-4ccc0d5a395b`, auditoría
+  `b5426857-22c3-41f9-80bf-2ae68b903b4b`. Una sola nota canónica
+  `0f4bf955-0fb1-4ea7-b761-6cdb8ed494b3` con contenido exacto «Prueba
+  sintética AC7 del 16 de octubre de 2026: comprobar memoria de notas».
+- Consulta lista `0920cd15-d798-42f9-bbf5-f6e4737b60b4` muestra las dos tareas
+  pendientes (póliza AC3 intacta y reapertura). Búsqueda
+  `94d41296-25f2-4a43-99ea-b7d3694cb63d` devuelve el contenido exacto de nota;
+  ninguna consulta crea auditoría. No se infieren tools concretas del contador.
+- Cuatro mutaciones, cuatro auditorías `self_authorized`/`executed`, origen
+  en su interacción y bot/chat correctos, timestamps terminales y hashes
+  recalculados con `payload_hash` **4/4 válidos**; sin presentación ni
+  confirmación. Respuestas DOM sin petición de consentimiento ni botones.
+- Las seis interacciones `completed`, ruta r4/revisión 8, cero retries;
+  `agent_final` y un chunk completados con message ID, sin aviso de fallo.
+  Foto final 15:37:23 UTC: una tarea AC7 y una nota, sin duplicación, cero
+  propuestas confirmables y ninguna auditoría reviewable nueva.
+
+**Camino trivial E2E superado en esta ejecución asistida**. Los datos quedan
+guardados por decisión del propietario. No se prueba rollback/concurrencia
+en producción ni se cierra BL-46: las variantes reviewable restantes y la
+revisión final de gates siguen explícitas arriba; BL-48 conserva su matriz propia.
