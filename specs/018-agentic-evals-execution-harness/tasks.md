@@ -52,6 +52,11 @@
       Dockerfile contradice configuración: último deployment CRASHED, proceso
       falla cerrado sin inferencia. No listo para shell/campaña. Ver
       `railway-provisioning.md`; clave/TTY/scope y corrección pendientes.
+      **Recuperación posterior:** contexto privado con Dockerfile eval en raíz,
+      mismos fuentes/huella db0c59b CI-verde; deployment `54892e8d…` SUCCESS,
+      idle_manual_only y 1 running/0 crashed. Defecto de ruta GitHub no corregido;
+      empaquetado reproducible local `prepare_eval_build.py`. Sin keys/inferencia;
+      preflight/mount/TTY remotos, scope/budget y campaña siguen pendientes.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

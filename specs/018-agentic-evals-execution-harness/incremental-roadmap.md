@@ -44,8 +44,11 @@ Operación prevista, todavía no aprovisionada:
 
 Preparación local implementada: imagen exclusiva con catálogo y manifiesto
 sellado contrastable con checkout Git/CI externo; no copia `.git` ni secretos.
-Arranque idle y estado exigido en mount real. Pendientes despliegue, volumen
-exclusivo, clave limitada al alias, acceso interactivo y revisión efectiva.
+Arranque idle y estado exigido en mount real. Servicio y volumen exclusivos ya
+creados con autorización posterior; arranque remoto recuperado por contexto
+privado explícito (no selección de ruta GitHub corregida). Pendientes verificación
+preflight/mount/TTY remotos, clave limitada al alias y revisión efectiva.
+Evidencia y límite de rebuild en [aprovisionamiento](railway-provisioning.md).
 La reserva protege el mismo volumen, no es distribuida.
 Sin dominio público, cron ni ejecución pagada en comandos de arranque/reinicio.
 Acceso SSH no implica túnel de puertos, pero debe ser permitido en el entorno

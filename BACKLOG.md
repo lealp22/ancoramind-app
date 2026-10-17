@@ -1437,6 +1437,20 @@ no lo corrigen. Último deployment `a308909d-760b-436e-80c6-3ee58cc5365f` CRASHE
 no seguir relanzando sin causa demostrada. Bot/Gateway intactos, sin staged changes
 al control. Evidencia specs/018 `railway-provisioning.md`; T7 y BL-48 abiertos.
 
+**Recuperación del evaluador (2026-10-17):** ruta GitHub sigue sin respetarse;
+no era JSON legacy activo. Build directo y V2 reprodujeron fallo. Contexto privado
+explícito, mismos fuentes/huella de db0c59b CI-verde y Dockerfile eval en raíz,
+desplegado `54892e8d-84be-422a-b5a4-e4a2f4dfc7b9`: COPY evals + sello completados,
+idle_manual_only/sin inferencia, **1 running/0 crashed**. Subida autenticada, no
+GitHub deploy ni registry público; sin CLI/túneles/keys, bot/Gateway intactos.
+Utilidad local reproducible `scripts/prepare_eval_build.py` sin upload; no está en
+imagen db0c59b. Servicio queda encendido idle; no reconstruir por GitHub a ciegas.
+Pendientes preflight/mount/TTY remotos y clave/scope/budget/campaña humana, BL-48
+abierto. Evidencia y hashes diferenciados de paquete manual/utilidad en specs/018.
+Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
+catálogo estático válido; paquete reproducible build/preflight local sin red
+superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue

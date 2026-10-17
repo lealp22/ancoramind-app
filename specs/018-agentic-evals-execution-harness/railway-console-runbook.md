@@ -1,7 +1,7 @@
 # T7 — Servicio temporal privado y revisión por shell
 
 > Implementación local 2026-10-17. Servicio/volumen creados posteriormente;
-> arranque bloqueado por selección de Dockerfile, sin clave nueva ni inferencia.
+> arranque recuperado con paquete de build explícito, sin clave nueva ni inferencia.
 > El propietario ha pedido avanzar con incrementos 1–2; eso no genera etiquetas
 > humanas ni elimina los gates de SHA/CI, snapshot, presupuesto externo y acceso.
 > Estado/evidencia: [aprovisionamiento inicial](railway-provisioning.md).
@@ -12,8 +12,9 @@
   **Corrección tras aprovisionar:** Railway rechaza activar `/evals/railway.json`
   para servicios nuevos por deprecación de Config as Code. Se aplican ajustes
   directamente al servicio separado; el JSON queda como referencia, no contrato
-  de aprovisionamiento automático. No reutilizar config del bot. El build aún
-  no respeta el Dockerfile solicitado: no continuar a campaña; ver evidencia.
+  de aprovisionamiento automático. No reutilizar config del bot. Build GitHub
+  no respeta la ruta personalizada; la instancia actual usa paquete privado
+  explícito y está idle. No reconstruir desde GitHub sin resolver ese fallo.
 - `scripts/eval_service.py` verifica identidad y espera SIGTERM/SIGINT, sin
   importar el Agent, abrir puertos ni consultar el Gateway. Una réplica,
   restart `NEVER`, sin cron, dominio, TCP proxy ni healthcheck HTTP.
@@ -46,7 +47,28 @@ Dockerfile de eval y su ignore específico.
    cada caso detiene la campaña. Este incremento cambia la huella de fuentes:
    volver a aprobarla después del commit, no reutilizar huellas anteriores.
 
-## Preparación Railway — aprovisionada parcialmente, arranque pendiente
+## Preparación Railway — arranque recuperado, campaña pendiente
+
+**Actualización:** arranque validado y réplica running en deployment
+`54892e8d-84be-422a-b5a4-e4a2f4dfc7b9` mediante contexto explícito. Pendientes
+preflight/mount/TTY remotos y acceso al Gateway. No ejecutar campaña todavía.
+
+Para reconstruir un paquete sin cambios no comiteados ni inferencia, usar la
+utilidad local (no incluida en la imagen db0c59b) y SHA/huella previamente validados:
+
+```powershell
+$root = 'c:\Users\0020572\Documents\Formación\TheBridge\ancoramind-core'
+python "$root\scripts\prepare_eval_build.py" `
+  --sha db0c59be0b2eeb807d4222aeb5a62b622d90b200 `
+  --source-fingerprint 108c410d26149cd5e3946e15d16f728fdfbdd4f6a8553fef1ec787df271e6c82 `
+  --output "$root\tmp\eval-build.tar.gz"
+```
+
+No sube ni despliega: la subida privada autenticada es una operación separada,
+autorizada por servicio, sin publicar un registry ni instalar CLI automáticamente.
+El paquete deja el Dockerfile de evals en raíz y conserva su ruta original para
+la huella; excluye receta/config raíz del bot. Ver evidencia/provenance del
+artefacto realmente desplegado en `railway-provisioning.md`.
 
 En el proyecto/entorno autorizado que contiene el Gateway, servicio temporal
 separado del bot. Sin cambios en `ancoramind-app`, Gateway, BD ni runtime config.

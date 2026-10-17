@@ -6,9 +6,11 @@ El propietario autorizó explícitamente crear el servicio temporal separado y s
 volumen, aceptando el coste de Railway. No autoriza por este paso claves Gateway,
 inferencias, etiquetas humanas ni cambios en bot/Gateway/BD/runtime config.
 
-**Resultado parcial:** servicio y volumen creados; arranque idle **no validado**.
-Último despliegue `CRASHED`, sin bucle de reinicio ni inferencia. No declarar el
-evaluador listo por la existencia del servicio o un estado anterior `SUCCESS`.
+**Resultado actualizado:** arranque idle validado mediante paquete privado con
+Dockerfile de evals en la raíz, deployment `54892e8d-84be-422a-b5a4-e4a2f4dfc7b9`
+`SUCCESS`, **1 running / 0 crashed**. El fallo de selección de ruta desde GitHub
+no está corregido internamente: se evita con contexto explícito (detalle al final).
+Pendientes TTY del propietario, preflight remoto y clave/scope/budget/campaña.
 
 ## Identidad y recursos
 
@@ -27,7 +29,9 @@ evaluador listo por la existencia del servicio o un estado anterior `SUCCESS`.
 
 Configuración del nuevo servicio, verificada por API y vista de detalles:
 
-- Dockerfile path actual `/evals/Dockerfile`.
+- Dockerfile path actual `evals/Dockerfile`; variable de selección conserva
+  `/evals/Dockerfile`. Entorno de build actual V2 (la prueba V3 → V2 no corrigió
+  la ruta GitHub; se conserva tras el despliegue manual, no se atribuye el éxito a V2).
 - Start `python /app/scripts/eval_service.py`, restart `NEVER`, una réplica.
 - Límites por réplica: 1 vCPU, 1 GB; sin cron ni healthcheck HTTP.
 - Sin dominio público, TCP proxy, tracing ni claves/cadenas de conexión del bot.
@@ -42,7 +46,7 @@ después source/config. Antes de cada apply se revisó el diff: sólo recursos d
 evaluador, ninguna eliminación ni cambio en otros servicios. Sin CLI/SSH nuevos,
 túneles, claves o secretos consultados. No se ejecutó una shell en el servicio.
 
-## Bloqueo y evidencia
+## Bloqueo inicial y evidencia histórica
 
 1. Asignar `railwayConfigFile=/evals/railway.json` fue **rechazado** por la API:
    Config as Code deprecado, servicios nuevos no pueden activarlo. Confirmado en
@@ -80,14 +84,100 @@ Bot conserva deployment `a23f2892-0f00-4d74-a1d3-4cd0f704eae2`; Gateway conserva
 Sin staged changes al último control. El volumen sigue aprovisionado y puede
 generar coste aunque el proceso esté detenido; no borrarlo automáticamente.
 
-## Continuación acotada
+## Recuperación: contexto de build explícito, sin cambiar el código bajo prueba
+
+Continuación autorizada por el propietario para resolver el Dockerfile:
+
+- Se comprobó por GitHub API que `evals/Dockerfile` del commit fijado existe y es
+  idéntico al local. Snapshot de variables confirma ruta/SHA/huella correctos.
+- Consulta directa `ServiceInstance.builder` devuelve `RAILPACK`, mientras config
+  de entorno/manifiesto muestra `DOCKERFILE`. **No es prueba causal suficiente**:
+  el Collector operativo presenta también `RAILPACK` internamente. Enum legacy de
+  API no admite `DOCKERFILE`; intentar ese valor devuelve error. No se modifican
+  servicios ajenos para forzar ese campo.
+- `railwayConfigFile=null`, `resolvedFileConfig.configFile=null` y
+  `fileManifest={}`: no hay evidencia de JSON legacy activo en el evaluador.
+  Cambios exploratorios del selector/ruta se revirtieron antes de desplegar;
+  sin cambios pendientes ajenos ni selección temporal Railpack aplicada.
+- Un build explícito por `serviceInstanceDeployV2`, mismo SHA,
+  `2ee8cea6-1d8f-4d27-a312-08f8ad6603a6`, repitió las instrucciones raíz y
+  `eval_service_blocked`. Sólo cambiar buildEnvironment V3 → V2 produjo
+  `fe8616cd-ab48-4ce3-87a3-2eab9076d61c`, mismo fallo. No hacer más variaciones.
+- La frontera reproducible del fallo queda en **despacho/contexto de build**:
+  fuente/ruta/config son correctos, pero se analiza la receta raíz del bot.
+  La causa interna concreta de Railway sigue sin confirmarse; no atribuirla a
+  `.dockerignore`, caché, CaC o builder legacy sin evidencia adicional.
+
+Solución alternativa aplicada:
+
+1. Crear archivo privado desde `git archive db0c59b…`, sólo `src/`, `scripts/`,
+   `prompts/`, `evals/`, `pyproject.toml` y `README.md`. Sin `.git`, `.env`, datos,
+   credenciales, tests ni `railway.json` raíz del bot. Añadir **copias exactas**
+   de `evals/Dockerfile` y su ignore como `Dockerfile` / `.dockerignore` raíz.
+   No se modifica ningún archivo de código/config bajo evaluación.
+2. Recalcular huella en el paquete antes del build: coincide exactamente con
+   `108c410d…71e6c82`, fuentes del SHA CI-verde `db0c59b…`. Build y preflight local
+   sin red superados; log idle con identidad correcta y proceso vivo.
+3. Enviar ese archivo al endpoint autenticado privado `/project/.../environment/.../up`,
+   mismo usado por CLI, exclusivamente para `ancoramind-evals`. Se utilizó sesión
+   autorizada del navegador, **sin instalar CLI, abrir puertos locales, crear
+   túneles, extraer tokens ni publicar código/imágenes**.
+4. Artefacto realmente desplegado: 236 archivos, 312867 bytes, SHA-256
+   `8298a1fed8c235d22f727b13ac97603de47b7474d6ab757c55d7fbfbce6c760f`.
+   Deployment **`54892e8d-84be-422a-b5a4-e4a2f4dfc7b9`**, subida manual, no GitHub:
+   su metadata no aporta commitHash; la correlación al commit se demuestra por
+   paquete/huella/sello y log runtime, no se inventa provenance GitHub.
+5. Logs Railway: `COPY evals/` y `RUN ... eval_source.py` completados; log runtime
+   `idle_manual_only`, `inference_started=false`, SHA `db0c59b…` y huella esperada.
+   Estado estable `SUCCESS`, **1 running / 0 crashed**, sin pending work.
+   Digest imagen: `sha256:83e82168dd00840633ee7c1ec34f5d6f7a92b9355d34505c730823de556bebe4`.
+
+Preparación reproducible añadida localmente: `scripts/prepare_eval_build.py`.
+Acepta commit completo, huella externa y output absoluto; allowlist de tipos de
+fuentes, archivos regulares, sin traversal/symlinks/overwrite. Tar/gzip determinista;
+no sube, conecta ni concede aprobación. Es una versión más estricta del paquete
+manual: excluye Markdown auxiliares de `evals/` que no usa el runtime. Por ello
+su hash binario no equivale al desplegado, aunque conserva la misma huella de
+fuentes: ejemplo db0c59b → 297024 bytes,
+`0f5e60c48210aebd0cc13748bf94d0cafc1b8833115871b3cba2f27ba9b7c4f5`.
+La nueva utilidad **no está en el contenedor db0c59b**. No actualizar el sello
+del contenedor al SHA local de documentación/herramientas ni marcarlo GitHub.
+
+Validación de la continuación: **1660 unitarias passed**, cobertura **80,58 %**,
+Ruff global y mypy (175 fuentes) limpios; catálogos válidos 36 casos/9 ejemplos
+provisionales. Build del paquete de la utilidad y preflight `--network none`
+superados con huella original; 13 pruebas nuevas de empaquetado (determinismo,
+allowlist, traversal/symlink, identidad y no overwrite). No se repitieron
+integraciones PostgreSQL en esta continuación (sin cambios de dominio/BD);
+última evidencia anterior 207 passed/1 STT live skipped, no resultado nuevo.
+Avisos de Collector local ausente en tests, sin fallos ni cambio de telemetry.
+Sin commit/push del agente; nuevo script/docs locales no están desplegados.
+
+## Continuación y límite operativo
+
+No utilizar un nuevo build GitHub o aplicar cambios a ciegas: el source del
+servicio sigue fijado al commit antiguo y la ruta personalizada puede reproducir
+el fallo. Para reconstruir, utilizar paquete explícito verificado o resolver antes
+el defecto de plataforma. Redeploy que reutilice la imagen correcta debe comprobar
+deployment/digest; no seleccionar una imagen de los intentos fallidos.
+
+Bot y Gateway conservan los deployments registrados arriba. Sin dominio/keys,
+flags de inferencia o secretos nuevos. Servicio queda **encendido idle**, con coste
+de cómputo y volumen, no apagado automáticamente. No se han ejecutado evals LLM.
+
+Comprobar preflight/mount efectivos y TTY real desde una sesión autorizada; no se
+han verificado por shell remota. Después preparar clave restringida, scope/budget
+y aprobación ligada a la identidad desplegada, sólo entonces campaña humana.
+**T7c-remoto, T7b y BL-48 permanecen abiertos**.
+
+### Plan anterior (superado parcialmente por la recuperación)
 
 Resolver primero selección real de Dockerfile con metadata de build/plataforma
 o soporte Railway. Si requiere cambiar layout/config del repo, preparar un
 incremento explícito y CI del nuevo SHA, no mutar el candidato ni migrar el bot
 silenciosamente. No publicar imagen/código del repo como atajo.
 
-Después: comprobar build con `COPY evals/` y sellado, log `idle_manual_only` con
-SHA/huella correctos y réplica running; verificar mount/preflight y TTY autorizado.
+Build con `COPY evals/`, sellado, log `idle_manual_only` con SHA/huella correctos y
+réplica running ya comprobados; verificar mount/preflight y TTY autorizado.
 Sólo entonces preparar clave restringida, scope/budget y campaña humana, con gates
 separados. **T7c-remoto, T7b y BL-48 permanecen abiertos**.

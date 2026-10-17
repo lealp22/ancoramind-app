@@ -21,6 +21,11 @@ creados con CI db0c59b verde; arranque todavía bloqueado (Dockerfile real disti
 del configurado). Sin clave/TTY/inferencia. No se migra bot/Gateway ni se admite
 campaña por esta autorización. Estado preciso: [evidencia Railway](railway-provisioning.md).
 
+**Recuperación posterior:** idle validado en `54892e8d…`, 1 running/0 crashed,
+paquete privado de fuentes db0c59b con igual huella y receta eval en raíz.
+No se ha corregido el selector de rutas GitHub ni ejecutado campaña/preflight
+remoto. No regenerar desde GitHub a ciegas; seguir evidencia/runbook actualizado.
+
 ## Incremento implementado
 
 - `src/agent/eval_campaign.py`: candidato validado, aprobación ligada al checksum
