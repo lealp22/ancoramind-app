@@ -10,7 +10,7 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 |---|---|---|
 | 1. Recordatorios (BL-1/M5) | Petición → propuesta → Sí → fila canónica → aviso recibido → consulta `fired`; fecha/hora local y ausencia de repetición observada | PASS: circuito local y E2E Telegram autorizado de un recordatorio no recurrente; consulta final por SELECT, sin nueva inferencia |
 | 2. Vehículos/mantenimiento (BL-1/M4) | Registrar vehículo → confirmar → mantenimiento → confirmar → recuperar historial | PASS para alta e historial manual sin importe/factura; dos escrituras confirmadas y consulta real en Telegram |
-| 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | Pendiente; calendario canónico, no sincronización externa |
+| 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido: serie diaria limitada, dos avisos + snooze entregados; presentación incompleta pendiente BL-49, no UX family&friends validada |
 | 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | Pendiente; no habilitar rutas ni gastar inferencia adicional implícitamente |
 | Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | Pruebas locales verdes; configuración y E2E Railway pendientes |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
@@ -155,6 +155,87 @@ regresión adversarial completa. No se cierra toda la vertical documental M4.
 Observación UX no bloqueante: el bloque de mantenimiento no muestra el nombre
 del vehículo objetivo; aquí se verificó su FK por SELECT antes de confirmar.
 Se registra el hallazgo sin ampliar gobernanza ni cambiar código en esta ventana.
+
+## Entrega 3: calendario/recurrencia/snooze — 2026-10-17
+
+**PASS funcional asistido**, con limitaciones de presentación registradas en
+BL-49: no es un PASS de revisión humana autosuficiente de la propuesta Telegram.
+El propietario autorizó continuar con este flujo y se anunció su alcance antes
+de empezar: una serie diaria de dos ocurrencias (ayer/hoy) y un snooze de 5 min
+del aviso de ayer, sin repetición indefinida ni calendario externo.
+
+### Baseline y alcance
+
+- App Railway continúa en `b104d8f`, deployment
+  `61c687a0-a856-4fbd-86ff-215ee9acf1aa` SUCCESS, CI del mismo SHA verde.
+  HEAD local `9eb97fe` contiene la documentación/pruebas de la preparación y
+  no está publicado; no se confundió su SHA con el código servido.
+- Readiness inicial HTTP 200, revisión 8, DB/Gateway/processor/worker sanos.
+- Cero eventos/recordatorios coincidentes con el título de prueba antes de
+  empezar, verificados por SELECT parametrizado scoped al propietario.
+- Se solicitaron fechas/offset explícitos: ancla `2026-10-16T02:43:00+02:00`,
+  fin un minuto después, `daily`, intervalo 1 y `until` inclusivo
+  `2026-10-17T02:43:00+02:00`. Aviso vinculado con antelación cero.
+- Se comprobó el payload persistido antes del Sí: evento aún no escrito,
+  frecuencia/límite/aviso correctos. Las escrituras se realizaron exclusivamente
+  mediante el Core por botones Telegram, nunca por SQL. El provider persistido
+  es `noop:…` (marcador sintético), no una sincronización externa.
+
+### Recorrido y auditoría
+
+| Paso | Evidencia |
+|---|---|
+| Crear evento con aviso | Origen `13dd6340-e933-4ce1-beed-c8bb8c2676be`; propuesta `2990107e-38db-42cb-8f9f-cdd11f665d94`; confirmación `8a002479-1bad-46ed-ad96-aaeae1701080` |
+| Ejecución Core | Propuesta `executed`, `executed_at=00:38:14.726685Z`; evento `f799f761-c9b3-443a-a046-fa624f7577cd`, una sola fila anclada al 16/10 |
+| Primer aviso, atrasado a propósito | Raíz `b400e668-0fc0-4558-ba59-54044a34d360`, `fired_at=00:38:54.422342Z`; aviso observado en mensaje `14423` |
+| Avance de recurrencia | Hijo `ea84b794-adba-443d-aeec-bde297fbfbf4`, inicialmente `pending`, `trigger_at=00:43:00Z`, parent=raíz y misma regla/source_action_id |
+| Consulta por rango 16–18/10 | Interacción `f0a3ae21-72aa-43b5-b739-e1e4f8ec64c9`, `completed`; respuesta `14425`: ocurrencias 16/17 a 02:43–02:44, ninguna el 18; sigue una sola fila de evento |
+| Proponer snooze de raíz disparada | Origen `471e3ea2-e78d-4618-9451-a74900e0223d`; propuesta `565e79cd-3cc5-40d7-bfd8-ab3c0ce06dda`, target raíz y `minutes=5` verificados; sin copia canónica antes del Sí |
+| Confirmar snooze | Confirmación `e061d5ff-b62e-45f8-9491-61934781c4e7`; propuesta `executed`, `executed_at=00:40:57.245380Z` |
+| Copia snoozed | `8c78f37f-aa8a-42be-beb3-a5c0a6d18df9`, `trigger_at=00:45:57.315321Z`, parent=raíz, source_action_id=snooze, recurrence_rule=NULL |
+| Segundo aviso de serie | `fired_at=00:43:55.391523Z`, **55,391523 s** tras su trigger, dentro de un polling de 60 s; mensaje `14429` |
+| Aviso de snooze | `fired_at=00:46:55.954530Z`, **58,639209 s** tras su trigger; mensaje `14430` |
+
+Los mensajes `14420–14422` corresponden a petición/propuesta/acuse del evento;
+`14424–14425` a consulta/respuesta; `14426–14428` a snooze/propuesta/acuse.
+Se observaron los tres avisos previstos. Al consultar a `00:47:13.489645Z`, las
+tres filas estaban `fired`, sin cuarta ocurrencia ni recordatorio futuro.
+El snooze no cambió el trigger del hijo diario ni la regla del evento.
+
+### Consumo y pruebas
+
+| Interacción | Model / Gateway / tools | Estimado USD |
+|---|---|---|
+| Proponer evento | 2 / 2 / 2 | 0,00252150 |
+| Consultar calendario | 2 / 2 / 2 | 0,00253020 |
+| Solicitar snooze | 4 / 4 / 5 | 0,00512830 |
+| Dos confirmaciones | 0 / 0 / 0 cada una | Sin inferencia |
+
+Total **0,01018000 USD estimados**; coste real no informado. Rev. 8/r4 en los
+eventos de uso, retry_count=0, fallback_used=false. Cinco interacciones
+`completed` sin error registrado; ninguna propuesta adicional de la lectura.
+69 unitarias focales y 18 integraciones PostgreSQL loopback/base `_test`
+superadas. Un preflight local sin `ANCORA_TEST_ADMIN_DSN` se detuvo antes de
+ejecutar tests; se repitió usando los defaults locales comprobados del harness,
+sin alterar el destino productivo. No cambios de código, flags, migraciones,
+provider, despliegue, webhook ni límites de inferencia.
+
+### Hallazgos y límites
+
+- **BL-49, presentación pendiente:** el bloque Core del evento no muestra
+  recurrencia/until/aviso; el snooze sólo muestra `snooze_reminder`, sin target
+  ni minutos. Se informó del defecto y se confirmó sólo tras revisar el payload
+  real por SELECT, dentro del alcance de prueba autorizado. Esto no es el flujo
+  normal que debe exigirse al usuario family&friends: falta validarlo/corregirlo
+  antes de declarar estas confirmaciones listas para participantes.
+- El aviso vinculado duplica «Recordatorio:» y el mensaje atrasado atribuye el
+  retraso a parada/reinicio, aunque aquí se programó un pasado deliberado.
+  Observaciones de texto, no prueba de caída del servicio.
+- Se valida recurrencia diaria acotada y expansión desde un ancla pasada;
+  no es E2E de yearly/monthly, salto DST, retención a 90 días, aislamiento
+  entre personas ni comportamiento exactamente una vez bajo red/crash.
+- Los registros ficticios quedan persistidos para trazabilidad, sin avisos
+  futuros de esta serie. No se ejecutó eliminación ni limpieza implícita.
 
 ## Invitaciones y administración: preparación paralela
 

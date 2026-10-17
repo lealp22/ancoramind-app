@@ -1,5 +1,32 @@
 # Verification: 024 — Eventos recurrentes, recordatorios recurrentes y snooze
 
+## E2E Telegram autorizado — 2026-10-17
+
+**PASS funcional asistido**, no cierre de toda la spec ni de la UX de confirmación.
+Serie diaria de dos ocurrencias, anclada al día anterior y con `until` explícito:
+
+- Evento + recordatorio vinculados creados por una sola confirmación Core.
+- `check_calendar` devuelve el 16 y 17/10 a 02:43–02:44 Europe/Madrid,
+  no el 18; expansión virtual, una fila de evento.
+- Aviso atrasado recibido; raíz `fired` y siguiente ocurrencia `pending`
+  con parent/regla correctos, después también recibida y `fired`.
+- Snooze de la raíz por 5 min crea una copia sin recurrencia, preserva la
+  serie y se entrega; tres avisos previstos, sin pendientes ni cuarta ocurrencia.
+- Ambas propuestas `executed`, cinco interacciones `completed`, confirmaciones
+  sin LLM; rev. 8/r4, sin retry/fallback. Coste estimado 0,01018000 USD,
+  real no informado. Sin escrituras SQL ni cambios operativos.
+- 69 unitarias focales y 18 integraciones en PostgreSQL local `_test`: verdes.
+
+El bloque Telegram omite recurrencia/aviso; el snooze omite target/duración.
+Se contrastó cada payload por SELECT antes del Sí autorizado. **BL-49 registra
+la presentación pendiente antes de declarar esta UX lista para family&friends**;
+el éxito funcional asistido no la subsana. Yearly/monthly/DST/retención no
+se revalidaron con E2E real. Sincronización externa fuera de alcance (`noop`).
+
+IDs, timestamps, límites y evidencia en
+`specs/008-railway-deployment/mvp-release-campaign.md`, entrega 3.
+El registro fechado a continuación se conserva como histórico anterior.
+
 > Fecha: 2026-10-03
 
 ## Automatizada

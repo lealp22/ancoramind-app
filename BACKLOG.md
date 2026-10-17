@@ -165,6 +165,17 @@ nombre del target; FK verificada por SELECT, sin cambio de gobernanza ahora.
 Evidencia en `specs/008-railway-deployment/mvp-release-campaign.md`, entrega 2.
 Siguiente flujo acordado: calendario, recurrencia y snooze.
 
+**E2E calendario/recurrencia/snooze (2026-10-17): PASS funcional asistido.**
+Serie diaria limitada a 16–17/10 con aviso vinculado y un snooze de 5 minutos:
+una fila de evento, dos ocurrencias virtuales, tres avisos recibidos y tres
+recordatorios `fired`, sin ocurrencia del 18 ni avisos futuros. Ambas propuestas
+`executed`; confirmaciones sin LLM, cinco interacciones `completed`, rev. 8/r4
+sin retry/fallback. Estimación 0,01018000 USD; real no informado. 69 unitarias
+focales y 18 integraciones PostgreSQL local superadas. Presentación incompleta
+registrada en BL-49: payload comprobado por SELECT antes del Sí autorizado;
+no equivale a confirmar UX lista para family&friends ni cerrar toda BL-41.
+Evidencia: registro de campaña, entrega 3. Siguiente flujo: imagen/PDF escaneado.
+
 | Orden | Bloque de trabajo | Qué falta para cerrar |
 |---|---|---|
 | 1 | **Validación MVP (BL-1/41) + invitaciones y administración family&friends (BL-24/43) + dashboard visual Grafana (BL-33, alcance acotado arriba)** | Recordatorios → vehículos+mantenimiento → calendario, zona horaria, recurrencia/snooze → imagen/PDF escaneado (BL-6); en paralelo, validar onboarding/revocación, panel protegido y aislamiento antes del primer participante, más Collector desplegado + dashboard importado como evidencia visual de demo; reutilizar las garantías de consentimiento ya implementadas, sin ampliar gobernanza nueva |
@@ -819,6 +830,29 @@ que el turno persistido conserva el resumen canónico `untrusted_data` sin
 reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
+
+### BL-49 · Completar presentación de calendario y snooze antes del piloto 🆕 registrado — 2026-10-17
+
+Hallazgo del E2E de calendario/recurrencia/snooze (BL-1/41): el bloque Core
+de `create_calendar_event` muestra título/inicio/fin, pero no frecuencia,
+intervalo, límite `until`, creación de aviso ni antelación. El bloque de
+`snooze_reminder` sólo muestra el identificador técnico, sin recordatorio
+objetivo ni duración. No es un fallo de ejecución observado: los payloads
+persistidos eran correctos y el flujo autorizado pasó tras revisión asistida
+por SELECT; un participante normal no dispone de esa revisión.
+
+**Trabajo propuesto, no implementado en esta ventana:** presentar campos
+canónicos relevantes, nombre legible de operación y target/duración de snooze;
+añadir regresión del renderer y revalidación Telegram. No dar por lista para
+family&friends la confirmación de estas capacidades hasta resolver esta
+carencia de revisión. Mantener confirmaciones Core y alcance de BL-48 sin
+ampliarlo implícitamente; tratar esto como entrada separada según la decisión
+de priorización vigente. No se desactivó ningún control para pasar el E2E.
+
+Observaciones relacionadas a priorizar por separado si procede: doble prefijo
+«Recordatorio:» en avisos vinculados, y texto de retraso que atribuye siempre
+parada/reinicio aunque el trigger se creó deliberadamente en el pasado.
+Evidencia en `specs/008-railway-deployment/mvp-release-campaign.md`, entrega 3.
 
 ### BL-45 · Confirmación por lote para múltiples propuestas pendientes simultáneas 🆕 propuesto — 2026-10-13
 
@@ -2106,7 +2140,7 @@ consulta READ y propuesta/confirmación WRITE; duplicados ejecutan el Agent como
 máximo una vez; otro usuario no puede leer estado, respuesta, adjuntos ni
 propuestas; tests contract/unit/integration y E2E sobre Railway.
 
-### BL-41 · Recurrencia en calendario/recordatorios + snooze 🔶 implementado localmente — specs/024
+### BL-41 · Recurrencia en calendario/recordatorios + snooze 🔶 E2E diario acotado superado; presentación pendiente — specs/024
 
 Hoy `calendar_events` y `reminders` solo soportan ocurrencias únicas: no existe
 "cada año", "cada semana" ni "cada mes", y un evento de calendario nunca
@@ -2126,7 +2160,10 @@ independiente de su recurrencia. **Prioridad P2.**
 
 **Estado:** implementado localmente — 684 unit + 94 integration tests verdes,
 Ruff y `mypy src/` limpios; migración `0007_recurrence_snooze` aplicada.
-Pendiente con el propietario: validación E2E real por Telegram (ver
+**Actualización 2026-10-17:** E2E Telegram autorizado diario con fin explícito,
+avance de ocurrencia y snooze entregados: PASS funcional asistido. 69 unitarias
+focales y 18 integraciones locales verdes. Presentación incompleta pendiente
+BL-49; yearly/monthly/DST/retención no revalidados E2E (ver
 `specs/024-recurring-events-reminders/verification.md`). **Criterio de
 cierre:** ver `specs/024-recurring-events-reminders/spec.md` §Success Criteria.
 
