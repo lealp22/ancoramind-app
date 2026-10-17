@@ -1,6 +1,14 @@
 # Preparación local de onboarding/admin — BL-24/43
 
 Fecha: 2026-10-17. **No autoriza rollout ni incorporación de participantes.**
+Actualización: posteriormente se autorizó y ejecutó **sólo el circuito manual
+remoto sin LLM** en el servicio actual, con segunda cuenta `account=2`; passed,
+autorización revocada y tres flags OFF al cierre. No es apertura del piloto ni
+matriz completa. También se ejecutó después el circuito autoaprobado sin LLM:
+mensaje de acceso concedido, ayuda inmediata y revocación correctos; flags OFF
+al cierre. No requiere aprobación manual. Silencio de cuentas sin acceso
+registrado BL-52, no implementado. Registro de cambios/deployments/incidencia de redacción de
+código agotado en la campaña, «E2E manual remoto autorizado, sin LLM».
 Complementa `runbooks-017-telegram-pairing.md`, `runbooks-027-admin-dashboard.md`
 y la campaña en `specs/008-railway-deployment/mvp-release-campaign.md`.
 
@@ -83,7 +91,7 @@ este circuito. No convertir fixtures de integración en registros productivos.
 - [ ] Inventariar invitaciones/autorizaciones previas antes de la prueba; no
   revocar las de otros usuarios durante el cierre ni tocar el webhook por defecto.
 
-## 4. Guion remoto preparado, todavía NO ejecutado
+## 4. Guion remoto (circuitos manual/auto ejecutados; resto pendiente)
 
 1. Panel habilitado: HTML shell/login accesible; JSON sin token o con token
    erróneo → 401. Login correcto permite listar. Flag OFF → rutas ausentes/404.
@@ -115,8 +123,9 @@ su campaña y permiso propios. No ampliar ahora botones/roles/capabilities.
 
 ## 5. Condiciones de salida y límites del piloto
 
-- Preparación local terminada ≠ BL-24/43 cerrados: falta E2E Telegram/Railway,
-  navegador/HTTPS y aislamiento real de las dos cuentas.
+- Preparación y circuitos manual/auto remotos terminados ≠ BL-24/43 cerrados:
+  se probaron HTTPS/login/emisión/logout y ayuda sin LLM; faltan resto de matriz
+  remota, timeout real e aislamiento de datos entre cuentas.
 - BL-49, BL-50 y BL-51 siguen documentados y abiertos en `BACKLOG.md`: no
   ofrecer calendario/snooze con confirmación incompleta, no declarar completa
   la consulta documental ni ampliar inferencia visual sin resolver/decidir sus

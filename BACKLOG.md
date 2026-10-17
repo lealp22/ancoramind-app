@@ -681,6 +681,30 @@ supera su budget, LiteLLM falla cerrado, la interacción es trazable por
 
 ### BL-24 · Onboarding de usuarios Telegram mediante invitaciones gobernadas 🔶 en curso — specs/017
 
+**E2E autoaprobado remoto 2026-10-17: PASS acotado.** Segunda cuenta, invitación
+opt-in de un uso/5 min: canje crea solicitud approved y autorización activa en
+el mismo instante; Telegram responde «Acceso concedido. Ya puedes escribir con
+normalidad.»; `/help` funciona sin aprobar manualmente. Revocación API bloquea
+el siguiente update sin reinicio. Tres interacciones, cero Agent/model/Gateway/
+tools/usage LLM. Cierre `13cf938f-595c-4509-be0d-463fceae1b95` SUCCESS, mismo
+SHA `bee0062`, tres flags OFF, servicio sano/rev.8; sin secretos nuevos ni
+cambio de allowlist/webhook/runtime. Falta resto de matriz/aislamiento real.
+Mensaje libre del propietario tras revocar quedó rejected sin outbox: aviso
+genérico de acceso no activo propuesto en BL-52, no implementado.
+
+**E2E manual remoto 2026-10-17: PASS acotado, no cierre global.** Segunda cuenta
+fuera de allowlist: pending bloquea; aprobar admite `/help` sin Agent/LLM;
+revocar bloquea el siguiente update sin reinicio. Un uso/TTL 5 min, dos entregas
+outbox, cinco interacciones con cero model/Gateway/tools y sin usage LLM.
+Autorización revocada, invitación agotada y tres flags OFF al cierre; servicio
+sano/rev.8. CI verde SHA `bee0062`; deployment cierre
+`5b7c5d96-30e1-42d6-9503-5aaff8924157` SUCCESS. Se añadieron secretos panel/pepper
+preparados localmente, sin rotar el CLI previo; conservados según runbook.
+Pendientes autoaprobación/matriz remota e aislamiento real de datos. Incidencia:
+filtro de lectura del agente devolvió código ya agotado por whitespace Unicode;
+no copiado en documentos, acceso revocado. No afirmar evidencia íntegramente
+metadata-only. Registro completo: campaña MVP, «E2E manual remoto autorizado».
+
 **Preparación local 2026-10-17:** siete integraciones nuevas conectan panel →
 emisión persistida → canje/outbox sin Agent → aprobación manual o autoaprobación
 opt-in → admisión → revocación/rechazo, con servicios/repos reales en PostgreSQL
@@ -856,6 +880,32 @@ que el turno persistido conserva el resumen canónico `untrusted_data` sin
 reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
+
+### BL-52 · Aviso determinista y acotado para cuentas sin acceso 🆕 propuesto — 2026-10-17
+
+Observación del propietario tras el E2E manual: escribir desde la segunda
+cuenta no obtiene respuesta. Verificado en producción por metadata scoped:
+interacción `8625d9b1-068f-4d0d-85ec-7844b2b68380` rejected por
+`user_not_allowlisted`, cero LLM y sin logical_response. No es fallo de Telegram
+ni del modelo: admission rechaza y el processor sólo consume accepted/
+response_ready. Estado actual intencional de la implementación; UX insuficiente.
+
+**Propuesta, no implementada ni desplegada:** aviso fijo del Core en chat
+privado autenticado, por ejemplo «Tu acceso no está activo. Contacta con quien
+te invitó o con el administrador.» No distinguir desconocido/pending/revocado
+ni revelar validez/cupo/TTL de códigos, no prometer activación por invitación
+cuando pairing está OFF. No responder a secretos webhook inválidos, grupos,
+updates sin identidad o descartes de spam/rate limit con un nuevo bucle.
+
+Requiere un camino de notificación de rechazo que conserve la denegación y
+cero Agent/LLM, idempotencia durable y outbox sin replay. **No basta añadir el
+texto al service ni cambiar rejected a accepted**: los límites actuales sólo
+se evalúan para accepted; añadir límites durables por usuario/chat y globales
+para esos avisos, sin amplificación ante flood. Definir cuota/cooldown y flags
+antes de implementar; no nueva excepción de autorización. Tests de ráfaga,
+duplicados, private-only, secretos, pending/revocado, flag OFF, fallos de entrega
+y regresión de admisión/consentimiento. Trabajo separado de BL-48; evidencia
+en campaña MVP, «E2E autoaprobado remoto».
 
 ### BL-50 · Conservar campos documentales estructurados al consultar 🆕 registrado — 2026-10-17
 
@@ -2655,6 +2705,14 @@ mismo SHA a Supabase y confirmar que desaparece `function_search_path_mutable`;
 ---
 
 ### BL-43 · Pantalla de administración centralizada 🔶 implementado localmente — specs/027
+
+**E2E remoto parcial 2026-10-17:** panel HTTPS, auth/separación token CLI,
+login, emisión/listado de invitación manual, sessionStorage sin localStorage y
+logout validados. Cuenta evaluadora completó circuito manual sin inferencia.
+Flags temporales cerrados y acceso revocado, sin cambio runtime-config. Falta
+timeout real por inactividad y resto de matriz; no cierre global de BL-43.
+Incidencia acotada de redacción de código agotado en salida diagnóstica del
+agente documentada en campaña. Evidencia en specs/027 y campaña MVP.
 
 **Preparación onboarding 2026-10-17:** reforzada autenticación de las ocho rutas
 JSON, separación token panel/CLI y actor/motivo con 32 unitarias; 7 integraciones

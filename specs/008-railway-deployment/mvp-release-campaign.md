@@ -12,7 +12,7 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 | 2. Vehículos/mantenimiento (BL-1/M4) | Registrar vehículo → confirmar → mantenimiento → confirmar → recuperar historial | PASS para alta e historial manual sin importe/factura; dos escrituras confirmadas y consulta real en Telegram |
 | 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido: serie diaria limitada, dos avisos + snooze entregados; presentación incompleta pendiente BL-49, no UX family&friends validada |
 | 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | PDF sintético PASS; imagen parcial: fecha extraída pero omitida al consultar (BL-50). Dos originales y extracciones verificados; coste visual no disponible (BL-51) |
-| Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | Preparación local reforzada: 7 integraciones conjuntas y 32 unitarias nuevas; checklist listo. HTTPS/navegador/segunda cuenta y E2E Railway pendientes |
+| Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | E2E manual y auto sin LLM PASS con account=2; mensaje automático correcto y revocación inmediata; panel HTTPS/auth/logout comprobados. Flags OFF al cierre. Aislamiento/inactividad/resto matriz pendientes; silencio sin acceso → BL-52 |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
 
 ## Baseline observado, sin desplegar desde esta sesión
@@ -363,6 +363,174 @@ con este ledger incompleto. No se inició otra prueba inferencial.
   Sin commit ni despliegue desde esta entrega.
 
 ## Invitaciones y administración: preparación paralela
+
+### E2E autoaprobado remoto autorizado, sin LLM — 2026-10-17
+
+**PASS acotado de autoactivación**, pedido expresamente por el propietario.
+Misma cuenta `account=2`/usuario `8887598395`, misma app/SHA `bee0062`. Se
+preservan los cambios documentales del E2E manual; no implica cierre global.
+
+#### Síntoma previo del propietario: no recibió respuesta
+
+SELECT de metadata, sin leer el contenido del mensaje: interacción
+`8625d9b1-068f-4d0d-85ec-7844b2b68380`, message_id `487`, recibida
+`09:37:43.726371Z`, rejected/user_not_allowlisted; sin logical_response,
+model/Gateway/tools=0. El acceso estaba revocado y los flags OFF tras la
+ventana manual. No se reinyectó ni procesó ese mensaje libre tras el alta.
+
+Causa verificada: la política de admisión rechaza sin autorización; el service
+no crea respuesta para ese rechazo y el processor sólo reclama accepted/
+response_ready. No demuestra fallo del modelo ni de entrega Telegram. Aviso
+genérico Core propuesto en **BL-52**, no implementado. Debe preservar rechazo,
+outbox/idempotencia y límites de notificación propios: los límites actuales
+sólo se evalúan para accepted. No activar un Agent para responder a rechazados.
+
+#### Habilitación, ejecución y cierre
+
+- Baseline `5b7c5d96-30e1-42d6-9503-5aaff8924157` SUCCESS, tres flags false,
+  cero pending/autorizaciones activas del evaluador, dos invitaciones existentes.
+  Checks quality/integration/collector-config del SHA completo
+  `bee00628841225c87721cc95cc8d5760abd7f9e9` success, revalidados.
+- Reutilizados los secretos de la ventana anterior sin leerlos en outputs ni
+  crear/rotar otros; tres flags temporalmente true. Habilitación deployment
+  `ed35acaf-4777-4174-9391-4e3b9c5bcf98`, SUCCESS `09:42:59.420Z`.
+- Login del panel, **Auto-aprobar marcado explícitamente**; emisión una vez y
+  transferencia directa al chat sin imprimir código ni leer texto crudo del
+  DOM. Invitación `ce9260d4-4436-436b-9c4b-ce930ab8d3c0`, max_uses=1,
+  auto_approve=true, expires_at `09:48:27.031672Z`; termina exhausted, un uso.
+- Solicitud `47cf9262-fe2f-452b-a5eb-5cedb837f3d0` approved desde su creación;
+  requested_at=decided_at=authorized_at=`09:43:27.425177Z`, actor `lealp22` y
+  motivo heredados de la invitación. **Ninguna llamada de aprobación manual.**
+- Telegram mostró exactamente «✅ Acceso concedido. Ya puedes escribir con
+  normalidad.»; `/help` posterior devolvió ayuda fija. No el texto de pending.
+- Revocación API `09:44:30.120088Z`; siguiente `/help` rejected
+  `09:44:30.504698Z`, antes del redeploy, sin reinicio.
+- Logout borra sessionStorage; tres flags false. Deployment de cierre
+  `13cf938f-595c-4509-be0d-463fceae1b95`, SUCCESS `09:45:31.843Z`, mismo SHA y
+  una réplica. Allowlist comprobada igual; sin cambios webhook/modelo/runtime/
+  Gateway/Collector. No se modificaron invitaciones ajenas ni el código previo.
+- Cierre `09:46:15.953339Z`: readiness 200, rev.8, DB/Gateway/processor/worker
+  sanos, circuit unknown; panel/APIs 404. Cuenta revocada, sin pending; código
+  agotado. Por eso volver a escribir libremente en esa cuenta seguirá sin
+  respuesta hasta alta nueva o implementación de BL-52. No dejarla activa para
+  evitar silencio, ni ampliar acceso de forma implícita.
+
+| Paso | Interacción | update_id / message_id Telegram | Estado |
+|---|---|---|---|
+| Canje auto | `68389d60-a1db-4743-9ba7-50ea50b322f7` | `978199103` / `488` | completed `09:43:29.358507Z` |
+| `/help` inmediato | `e528d5e5-b100-4a63-a36a-7e55023ec236` | `978199104` / `490` | completed `09:43:57.812474Z` |
+| `/help` revocado | `dc623e06-94cd-48a8-994c-c87ec49c3696` | `978199105` / `492` | rejected, user_not_allowlisted |
+
+Tres interacciones: agent_started_at NULL, model/Gateway/tools=0 y cero
+llm_usage_events. Dos outbox/entregas completed, un chunk cada una, message_id
+`489` (acceso concedido) y `491` (ayuda). Sin inferencias, ningún coste LLM del
+circuito. En el navegador IDs visuales `53–57`; no confundirlos con Bot API.
+Después de revocar sólo aparece el `/help` propio, no respuesta adicional;
+borrador vacío. No se volvió a analizar/capturar el comando con el código.
+
+65 unitarias focales passed; suite global **1536 passed**, Ruff/mypy (174
+módulos) limpios. Advertencia OTLP local sin Collector localhost:4318 no
+invalida aserciones ni observa Collector remoto. Sin nueva ejecución de
+integración local (la evidencia anterior 183/1 skipped sigue histórica).
+Sólo documentación versionada, sin commit ni código de producto.
+
+Pendientes: expiración/cupo/replay remoto, aislamiento real entre cuentas,
+timeout del panel, aviso sin acceso BL-52 y demás gates del piloto. BL-49/50/51
+continúan abiertos. No se incorporó un participante con datos personales.
+
+### E2E manual remoto autorizado, sin LLM — 2026-10-17
+
+**PASS del circuito manual; BL-24/43 no cerrados globalmente.** El propietario
+facilitó `https://web.telegram.org/a/?account=2` y autorizó expresamente el
+servicio actual, habilitación temporal y cierre posterior. Sólo comandos
+deterministas `/start`, `/pair` y `/help`, sin datos documentales ni Agent.
+
+#### Baseline, cambios temporales y cierre
+
+- HEAD/producción al iniciar: `bee00628841225c87721cc95cc8d5760abd7f9e9`;
+  deployment `aec207ca-6930-4e3c-b9d6-600d39bd06d3`, SUCCESS. Checks del mismo
+  SHA `quality`, `integration`, `collector-config`: success, verificados por API.
+  Wait for CI sigue desactivado y no se cambió.
+- Tres flags ausentes (defaults OFF), panel y APIs pairing → 404. Admission y
+  processor activos, allowlist técnica con un solo usuario, evaluador fuera.
+  Runtime rev. 8 sin cambios. Inventario previo: cero solicitudes/autorizaciones;
+  una invitación antigua `5826bff0-b642-4d57-93c8-5e4d5c1fa619`, vencida por
+  fecha (05/10) aunque su estado siga `active`, sin usos; **no se tocó**.
+- `RUNTIME_CONFIG_ADMIN_TOKEN` existente preservado. Añadidos sólo
+  `ADMIN_DASHBOARD_TOKEN` y `TELEGRAM_PAIRING_CODE_PEPPER` ya preparados en el
+  entorno local, comprobados distintos entre sí y del token CLI. Se transfirieron
+  sin imprimir sus valores, mediante un puente temporal loopback cerrado tras
+  usarse; no se subió `.env` ni se guardaron credenciales en Git/evidencia.
+- Habilitados `TELEGRAM_PAIRING_ENABLED`, `TELEGRAM_PAIRING_ADMIN_ENABLED` y
+  `ADMIN_DASHBOARD_ENABLED`; redeploy del mismo SHA
+  `d4567737-ec8c-4fc1-b16a-099dd6259103`, SUCCESS `09:10:45.820Z`.
+- Tras revocar el acceso, los tres flags quedan explícitamente **false** (antes
+  ausentes). Redeploy de cierre `5b7c5d96-30e1-42d6-9503-5aaff8924157`, SUCCESS
+  `09:15:14.507Z`, mismo SHA, una réplica. Secretos añadidos conservados según
+  runbook; no rotados ni borrados. Sin cambios en webhook/allowlist/modelo,
+  revisión runtime, Gateway o Collector.
+- Cierre `09:15:57.731492Z`: readiness 200 y DB/Gateway/processor/worker sanos,
+  revisión 8; circuit `unknown`. Panel y ambas APIs pairing/panel → 404.
+
+#### Cuenta y auditoría de acceso
+
+Identidad evaluadora observada desde el update autenticado: `8887598395`,
+chat privado del mismo ID, no suministrada al LLM ni añadida a allowlist.
+Operador de las decisiones: `lealp22`; motivos de prueba/cierre explícitos.
+
+- Invitación emitida mediante el panel: `3cff13d0-cfad-4a27-b2ee-8298d8cb7f33`,
+  un uso, manual (`auto_approve=false`), TTL 5 min, caduca `09:17:17.307893Z`.
+  Se consumió una vez y terminó `exhausted`, use_count=max_uses=1.
+- Solicitud `d1320fec-db10-44a3-a334-0c032d75ea96`: pending `09:12:17.777186Z`,
+  approved por API administrativa protegida `09:13:12.414108Z`. El panel no
+  tiene botón de aprobación; no se añadió uno ni se escribió SQL.
+- Autorización revocada por API a `09:13:47.956743Z`; siguiente update rechazado
+  sin reinicio, antes del redeploy de cierre. Cero solicitudes pending y cero
+  autorizaciones activas del evaluador al terminar.
+
+| Paso | Interacción | update_id / message_id Telegram | Resultado UTC |
+|---|---|---|---|
+| `/start` antes del alta | `1e1a2134-79c6-454c-b0ae-600e08df6a30` | `978199097` / `480` | rejected `09:06:32.405848`, user_not_allowlisted |
+| Canje privado | `9d0b273f-7648-4de9-a71a-394f6ce6650f` | `978199098` / `481` | completed `09:12:20.007688`, respuesta fija de solicitud recibida |
+| `/help` pending | `4a608602-5655-404c-be31-e347384c9bfb` | `978199099` / `483` | rejected `09:12:43.254004`, sin autorización |
+| `/help` approved | `f856f68f-604e-47e1-9e2b-19af12066fac` | `978199100` / `484` | completed `09:13:22.440368`, ayuda fija recibida |
+| `/help` tras revocar | `a9b5626c-abbc-49cc-a437-5cf83c9cb1e6` | `978199101` / `486` | rejected `09:13:48.447550`, sin reinicio |
+
+Las cinco interacciones: agent_started_at NULL, model/Gateway/tools=0, cero
+llm_usage_events. Coste inferencial de este circuito: **sin inferencias**, no
+estimación de precio desconocido. Dos respuestas/outbox y dos entregas
+`completed`, un chunk cada una, message_id `482` y `485`; ninguna respuesta
+extra tras los rechazos. IDs visuales del navegador distintos de message_id
+del Bot API, no intercambiarlos. Cero documentos/propuestas del evaluador.
+
+#### Panel y límites de la evidencia
+
+- Shell por HTTPS 200; JSON sin token, incorrecto o token CLI → 401; API CLI con
+  token del panel → 401 y con token CLI → 200. Login correcto, tabla de
+  invitaciones y revisión 8 visibles; no-store, DENY y CSP comprobados.
+- Token presente en sessionStorage, no en localStorage; cierre explícito borra
+  token/actor y vuelve al login. Se vació también el input oculto del token.
+  No se esperaron 30 min: expiración por inactividad **no validada en real**.
+- Incidencia de manejo de evidencia del agente: un filtro de diagnóstico para
+  `/pair ` no reconoció el espacio no separable del DOM de Telegram y devolvió
+  el código en una salida de herramienta. No se copia ese valor aquí. El código
+  era de un uso y ya estaba agotado; autorización posteriormente revocada y
+  flags OFF. Las lecturas posteriores reconocen whitespace Unicode o extraen
+  sólo metadata. Esto no acredita ausencia absoluta de credenciales en el
+  transcript y no debe describirse como ejecución íntegramente metadata-only.
+- La redacción del payload durable fue comprobada localmente; no se verificó
+  descifrado productivo en esta ventana (clave no disponible localmente). No
+  se solicitó ni expuso esa clave para ampliar el ensayo.
+- No se ejecutaron autoaprobación remota, expiración/cupo/replay remoto,
+  aislamiento de datos/consentimiento entre dos cuentas, LLM ni benchmark. Se
+  conserva la evidencia local previa; no cerrar T4 completo ni BL-24/43.
+- Registros de acceso/interacciones conservados según política existente; no
+  limpieza SQL, eliminación de chats ni revocación de invitaciones ajenas.
+- Verificación local tras la ventana: 1536 unitarias passed, Ruff global y
+  `mypy src/` (174 módulos) limpios, diff check limpio. No se repitió integración
+  PostgreSQL en esta ventana; resultado previo 183/1 skipped no es una ejecución
+  nueva. Se cerró pestaña admin; puente local detenido/eliminado; sin staged
+  changes Railway. Cambios versionados sólo docs, sin commit en esta ventana.
 
 ### Preparación local autorizada — 2026-10-17
 

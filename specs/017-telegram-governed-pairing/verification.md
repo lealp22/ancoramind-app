@@ -1,6 +1,51 @@
 # Verification: 017 — Governed Telegram Pairing
 
-> **Status:** 🔶 T1–T4 local implementation complete as of 2026-09-27; controlled Telegram/Railway E2E remains pending.
+> **Status:** 🔶 Implementación local completa; E2E manual y autoaprobado
+> Telegram/Railway sin LLM superados el 2026-10-17. Aislamiento y resto de matriz
+> remota pendientes; no cierre global de BL-24.
+
+## E2E autoaprobado con segunda cuenta — 2026-10-17
+
+Pedido expresamente por el propietario. Un uso/TTL 5 min/Auto-aprobar=true
+emitido desde panel; cuenta revocada previamente, fuera de allowlist. Canje
+crea approved+autorización en el mismo instante y Telegram muestra «✅ Acceso
+concedido. Ya puedes escribir con normalidad.»; `/help` funciona sin aprobación
+manual. Revocar bloquea siguiente update sin reinicio. Tres interacciones sin
+Agent/LLM, dos entregas completadas. Sin reenviar mensaje libre previo.
+
+Habilitación `ed35acaf-4777-4174-9391-4e3b9c5bcf98`, cierre
+`13cf938f-595c-4509-be0d-463fceae1b95`, SUCCESS, SHA `bee0062` con CI verde.
+Tres flags false/cuenta revocada/código exhausted/ningún pending; readiness
+200/rev.8, rutas admin 404. Secretos previos preservados y sin cambios de
+allowlist/webhook/modelo/runtime. UUIDs y tiempos en campaña, sección
+«E2E autoaprobado remoto autorizado, sin LLM». Sin código de invitación en
+outputs de esta ventana. 1536 unitarias/Ruff/mypy limpios; no nueva integración.
+
+Falta de respuesta al mensaje del propietario reproducida por metadata:
+rejected/user_not_allowlisted sin outbox. Mejora genérica sin LLM registrada
+BL-52, no implementada; mantener denegación/idempotencia y límites propios.
+
+## E2E manual con segunda cuenta — 2026-10-17
+
+Servicio actual y flags temporales autorizados expresamente. Cuenta fuera de
+allowlist: `/start` rechazado → canje privado → pending bloquea `/help` →
+aprobación API → ayuda recibida → revocación API → siguiente `/help` rechazado
+sin reinicio. Cinco interacciones, cero Agent/model/Gateway/tools/usage LLM.
+Invitación de un uso agotada, autorización revocada, sin pending al terminar.
+Dos entregas outbox completadas. Cambios SQL sólo mediante APIs de producto;
+SELECTs de verificación scoped/read-only, sin fixtures productivos.
+
+SHA `bee0062` con CI verde; habilitación deployment `d4567737-ec8c-4fc1-b16a-099dd6259103`,
+cierre `5b7c5d96-30e1-42d6-9503-5aaff8924157`, ambos SUCCESS. Tres flags OFF,
+readiness 200/rev.8, panel/APIs 404 al cierre. Secretos nuevos de panel/pepper
+conservados; token CLI previo, allowlist y webhook preservados.
+
+**Límites:** sin autoaprobación/replay/expiración remotos ni aislamiento de datos.
+Un filtro diagnóstico del agente devolvió el código agotado al no reconocer
+whitespace Unicode; no se incluye su valor en docs. Acceso ya revocado; no se
+declara evidencia íntegramente metadata-only. Payload cifrado productivo no
+descifrado en esta ventana. Evidencia/IDs/incidencia: campaña MVP, sección
+«E2E manual remoto autorizado, sin LLM».
 
 ## Preparación conjunta onboarding/admin — 2026-10-17
 
@@ -56,7 +101,11 @@ ruff check src/ tests/ scripts/ migrations/
   admin API; mutations require an auditable actor and reason, without direct SQL
   access or code arguments. CLI hardening tests cover actor requirements,
   non-2xx exit status and bearer non-disclosure.
-- [ ] Controlled Railway E2E preserves Telegram update idempotency and outbox delivery.
+- [x] Controlled manual Railway E2E delivers pairing/help via outbox without LLM
+  (2026-10-17); temporary evaluator access and flags closed afterwards.
+- [x] Remote opt-in auto-approval returns granted reply and immediately admits
+  `/help`, with no manual approval/LLM; revoked/flags OFF afterwards (2026-10-17).
+- [ ] Remote duplicate-update/replay and full controlled matrix.
 
 ## Evidence (local, 2026-09-27)
 

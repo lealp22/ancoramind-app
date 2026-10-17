@@ -1,7 +1,41 @@
 # Verification: 027 — Pantalla de administración centralizada
 
 > **Status:** 🔶 implementación local completa (2026-10-05); validación manual
-> en Railway pendiente.
+> en Railway parcial: login/HTTPS, emisión manual y logout validados 2026-10-17;
+> inactividad, runtime-config completo y resto de matriz pendientes.
+
+## Emisión autoaprobada desde panel — 2026-10-17
+
+Segunda ventana remota autorizada: Auto-aprobar marcado al emitir un uso/TTL
+5 min; el mismo evaluador fuera de allowlist recibe acceso concedido y ayuda
+sin llamada de aprobación manual ni LLM. Emisión/canje confirmados por DB.
+No cambio de producto/runtime-config. Logout/sessionStorage y flags OFF al
+cierre, cuenta revocada, servicio sano/rev.8; deployment final
+`13cf938f-595c-4509-be0d-463fceae1b95` SUCCESS, SHA `bee0062`. Sin secretos
+nuevos ni valores/código en evidencia de esta ventana. Detalle en campaña.
+Timeout real y resto de matriz siguen pendientes; silencio sin acceso
+registrado BL-52, no corregido. 1536 unitarias/Ruff/mypy superados.
+
+## Panel real en ventana autorizada — 2026-10-17
+
+Mismo SHA `bee0062`, CI verde. Habilitación temporal, shell HTTPS 200;
+API sin token/incorrecto/token CLI → 401; token del panel no sirve para API CLI.
+Login correcto, emisión de invitación manual de un uso/TTL 5 min, listado y
+salud/revisión visibles. Token en sessionStorage, ausente de localStorage;
+logout borra token/actor y vuelve al login. Input oculto vaciado al cerrar.
+Cabeceras no-store/DENY/CSP comprobadas. No esperar 30 min ≠ validar timeout.
+
+Invitación canjeada por segunda cuenta fuera de allowlist; aprobación/revocación
+mediante API CLI, sin botones nuevos. Sin LLM/runtime-config ni escrituras SQL.
+Deployments temporales `d4567737-ec8c-4fc1-b16a-099dd6259103` y cierre
+`5b7c5d96-30e1-42d6-9503-5aaff8924157`, SUCCESS. Tres flags false, rutas
+administrativas de pairing/panel 404, servicio sano/rev.8; acceso evaluador revocado.
+
+Incidencia de transcript: filtro de diagnóstico no reconoció whitespace Unicode
+en `/pair` y devolvió código ya agotado. No se copia aquí; acceso cerrado.
+No generalizar a garantía absoluta de metadata-only. Detalle y UUIDs en campaña
+MVP «E2E manual remoto autorizado, sin LLM». BL-43 sigue parcial: falta matriz
+restante, no se modificó runtime-config para probar onboarding.
 
 ## Preparación local para onboarding — 2026-10-17
 
@@ -58,7 +92,7 @@ mypy src/
   `Cache-Control: no-store`.
 - [x] El JS cierra la sesión (borra `sessionStorage`, pide el token de nuevo)
   tras 30 minutos sin actividad del ratón/teclado/scroll/touch.
-- [ ] Confirmar en Railway que el dominio del dashboard es HTTPS (no hay
+- [x] Confirmar en Railway que el dominio del dashboard es HTTPS (2026-10-17; no hay
   enforcement a nivel de aplicación todavía — ver nota abajo).
 - [ ] Validación manual en Railway: abrir `/admin/dashboard`, iniciar sesión,
   crear una invitación de prueba, hacer un ciclo completo de runtime-config

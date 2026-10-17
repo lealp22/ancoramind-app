@@ -26,5 +26,10 @@
 ## T4: Operations and closure
 
 - [x] Add administrative CLI/runbook and production rollout flags.
+- [x] Manual subset on current Railway service with second evaluator account,
+  no LLM: pending/approve/help/revoke, outbox and flags/access closure (2026-10-17).
+- [x] Auto-approved subset with same evaluator, no LLM: opt-in issue, granted
+  reply, immediate help, revoke and flags/access closure (2026-10-17).
+- [ ] Complete remaining remote matrix; manual subset is not full T4 closure.
 - [ ] Execute controlled Railway E2E with a non-production evaluator account.
 - [ ] Record evidence with metadata only and update BACKLOG.md on closure.
