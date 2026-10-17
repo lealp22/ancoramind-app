@@ -388,6 +388,9 @@ CREATE TABLE IF NOT EXISTS ancora.logical_responses (
 );
 CREATE INDEX IF NOT EXISTS idx_logical_responses_interaction
     ON ancora.logical_responses(interaction_id);
+CREATE INDEX IF NOT EXISTS idx_access_notice_created
+    ON ancora.logical_responses(created_at)
+    WHERE response_kind = 'access_denied_notice';
 
 CREATE TABLE IF NOT EXISTS ancora.telegram_response_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

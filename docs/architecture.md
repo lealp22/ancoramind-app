@@ -90,6 +90,15 @@ Esta sección describe arquitectura aprobada **pendiente de implementación**. E
 runtime actual continúa usando provider/model de environment y OpenRouter
 directo hasta completar specs/013.
 
+### 2.5 Notificación de acceso rechazado (BL-52, local 2026-10-17)
+
+El rechazo de admisión puede producir un aviso fijo del Core en outbox
+secundario, no una admisión al Agent. `telegram_interactions.status` conserva
+`rejected` y ningún payload del usuario; el worker entrega sólo la constante,
+sin tools/LLM. Flag OFF por defecto y cuotas durables por usuario/chat/global,
+TTL y claim antes de envío, sin replay ambiguo (ADR-004/specs/037).
+No requiere cambiar allowlist ni activar pairing; rollout pendiente.
+
 ---
 
 ## 3. Diagrama de arquitectura

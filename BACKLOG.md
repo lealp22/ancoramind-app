@@ -881,7 +881,24 @@ reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
 
-### BL-52 · Aviso determinista y acotado para cuentas sin acceso 🆕 propuesto — 2026-10-17
+### BL-52 · Aviso determinista y acotado para cuentas sin acceso 🔶 implementado localmente — 2026-10-17
+
+**Incremento autorizado:** aviso fijo «🔒 Tu acceso no está activo. Contacta
+con quien te invitó o con el administrador.» para nuevos mensajes privados
+autenticados completos, sin contenido del usuario. Interacción permanece
+rejected y sin Agent/LLM; outbox secundario cifrado, dedup/claim durable y cero
+reenvío tras fallo ambiguo. Flag propio `TELEGRAM_ACCESS_NOTICE_ENABLED=false`
+por defecto, independiente de pairing; requiere admission+processor existentes.
+Cooldown 300 s por bot/usuario o chat, 20 reservas/min global, 20 pendientes y
+TTL 300 s. Callback/grupo/edit/rate-limit/secret inválido no notifican.
+
+Alembic local `0017_access_notice_index` (sólo índice parcial) e init.sql
+equivalente; sin modificar datos. 17 unitarias y 20 integraciones nuevas:
+global 1553 unitarias/203 integraciones passed, 1 live skipped, Ruff/mypy limpios.
+Especificación/evidencia en `specs/037-access-denied-notice/`. **Sin despliegue,
+migración o activación productiva; E2E real pendiente de autorización.**
+Los párrafos siguientes conservan hallazgo/propuesta de origen, no el estado
+actual de implementación local.
 
 Observación del propietario tras el E2E manual: escribir desde la segunda
 cuenta no obtiene respuesta. Verificado en producción por metadata scoped:

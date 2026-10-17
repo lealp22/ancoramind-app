@@ -50,6 +50,7 @@ from src.domain.interactions.models import (
 )
 from src.domain.interactions.outbox import split_telegram_message
 from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.interactions.rejection_notice import ACCESS_DENIED_REPLY
 from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import (
@@ -181,6 +182,7 @@ class InteractionProcessor:
         voice_preparation: VoicePreparationService | None = None,
         voice_maintenance: Callable[[], Awaitable[int]] | None = None,
         fast_ack_enabled: bool = False,
+        access_notice_enabled: bool = False,
         summarizer: SessionSummarizationPort | None = None,
         context_compaction_enabled: bool = False,
         context_compaction_token_threshold: int = 60_000,
@@ -203,6 +205,7 @@ class InteractionProcessor:
         self._voice_maintenance = voice_maintenance
         self._fast_ack_enabled = fast_ack_enabled
         """BL-32: best-effort, off by default; a failure never blocks the run."""
+        self._access_notice_enabled = access_notice_enabled
         """specs/023 T4.3-T4.4: off by default; when off, behaviour is unchanged."""
         self._summarizer = summarizer
         self._context_compaction_enabled = context_compaction_enabled
@@ -222,6 +225,8 @@ class InteractionProcessor:
         session = await self._session_factory()
         try:
             repository = TelegramInteractionsRepository(session)
+            if self._access_notice_enabled:
+                await repository.maintain_access_notices(recovering=True)
             return await repository.mark_inflight_as_ambiguous()
         finally:
             await session.close()
@@ -265,7 +270,47 @@ class InteractionProcessor:
                 logger.exception("Interaction chat queue failed", exc_info=result)
             else:
                 processed += result
+        if self._access_notice_enabled:
+            processed += await self._deliver_access_notices()
         return processed
+
+    async def _deliver_access_notices(self) -> int:
+        """Drain bounded secondary outbox, never process rejected input or tools."""
+        session = await self._session_factory()
+        try:
+            repo = TelegramInteractionsRepository(session)
+            await repo.maintain_access_notices()
+            notices = await repo.list_access_notices(self._batch_size)
+        finally:
+            await session.close()
+        sent = 0
+        for interaction, delivery_id in notices:
+            if interaction.chat_id is None:  # defensive; admission requires identity
+                continue
+            session = await self._session_factory()
+            try:
+                claimed = await TelegramInteractionsRepository(session).claim_access_notice(
+                    delivery_id
+                )
+            finally:
+                await session.close()
+            if not claimed:
+                continue
+            try:
+                message_id = await self._sender.send_text(interaction.chat_id, ACCESS_DENIED_REPLY)
+            except asyncio.CancelledError:
+                # Claim is durable: recovery records ambiguity and never resends.
+                raise
+            except Exception as exc:
+                await self._record_ack_outcome(
+                    delivery_id, status="failed", error_class=type(exc).__name__
+                )
+            else:
+                await self._record_ack_outcome(
+                    delivery_id, status="delivered", telegram_message_id=message_id
+                )
+            sent += 1
+        return sent
 
     async def run_forever(self, interval_seconds: float) -> None:
         """Poll recoverable work; errors do not terminate the lifecycle task."""

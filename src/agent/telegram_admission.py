@@ -177,6 +177,7 @@ def _service_factory(settings: Settings) -> ServiceFactory:
             pairing_repository=pairing_repository,
             pairing_service=pairing_service,
             pairing_enabled=settings.telegram_pairing_enabled,
+            access_notice_enabled=settings.telegram_access_notice_enabled,
         )
 
     return create

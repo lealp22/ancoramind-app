@@ -56,6 +56,7 @@ DOCUMENT_HASH_REVISION = "0012_document_content_hash"
 SESSION_INDEX_REVISION = "0013_session_token_index"
 WRITE_TRIVIAL_REVISION = "0014_write_trivial_consent_mode"
 RLS_REVISION = "0015_ancora_rls_hardening"
+VOICE_GUARD_REVISION = "0016_voice_guard_search_path"
 
 BASELINE_TABLES = {
     "action_proposals",
@@ -315,6 +316,7 @@ def test_alembic_fresh_install_and_latest_downgrade(
     command.upgrade(config, "head")
 
     assert _current_revision(migration_database) == HEAD_REVISION
+    assert "idx_access_notice_created" in _indexes(migration_database, "logical_responses")
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES | PAIRING_TABLES
     assert "voice_preparations" in _tables(migration_database)
     assert "transcript_ciphertext" in _columns(migration_database, "voice_preparations")
@@ -351,7 +353,12 @@ def test_alembic_fresh_install_and_latest_downgrade(
 
     # Revision-relative on purpose: a new head must not need editing here.
     assert _current_revision(migration_database) == _down_revision(HEAD_REVISION)
-    assert _current_revision(migration_database) == RLS_REVISION
+    assert _current_revision(migration_database) == VOICE_GUARD_REVISION
+    assert "idx_access_notice_created" not in _indexes(migration_database, "logical_responses")
+    assert _note_count(migration_database, "preserved through downgrade") == 1
+    command.upgrade(config, "head")
+    assert "idx_access_notice_created" in _indexes(migration_database, "logical_responses")
+    command.downgrade(config, RLS_REVISION)
     assert _tables(migration_database) >= BASELINE_TABLES | GOVERNANCE_TABLES
     assert _rls_tables(migration_database) == _tables(migration_database)
     assert _function_config(

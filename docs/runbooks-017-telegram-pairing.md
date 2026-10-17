@@ -167,6 +167,21 @@ arrancar una app local de prueba; las pruebas ASGI usan PostgreSQL aislado.
 
 ## 6. Triage seguro
 
+### Aviso de acceso no activo (BL-52/specs/037)
+
+Independiente del pairing: `TELEGRAM_ACCESS_NOTICE_ENABLED=false` por defecto.
+Para un rollout autorizado, aplicar Alembic head `0017_access_notice_index`,
+verificar CI del mismo SHA y habilitar ese flag con admission/processor/cifrado
+existentes. No encender pairing/admin ni cambiar allowlist para que haya aviso.
+En chats privados autenticados sin acceso, la notificación es fija y no
+enumerante; rejected permanece rechazado. Una reserva/300 s por bot/usuario
+o chat, 20/min global, 20 pendientes. TTL 300 s; no retry tras envío incierto.
+
+Flag OFF deja pendientes sin enviar (caducan antes de un reencendido tardío).
+Rollback del comportamiento: flag OFF y redeploy autorizado; no borrar ledger,
+reinyectar updates ni forzar un aviso por SQL. El índice no requiere borrarse
+para desactivar la función. Ver `specs/037-access-denied-notice/verification.md`.
+
 | Señal | Acción |
 |---|---|
 | `503 Telegram admission temporarily unavailable` | Tratar como fail-closed; revisar conectividad/health de PostgreSQL sin reenviar el update. |

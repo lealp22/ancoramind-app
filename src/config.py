@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     telegram_admission_user_requests_per_hour: int = Field(default=120, ge=1)
     telegram_admission_pending_global: int = Field(default=20, ge=1)
     telegram_admission_queued_per_chat: int = Field(default=5, ge=1)
+    telegram_access_notice_enabled: bool = False
+    """BL-52: bounded deterministic notice for rejected private users, without Agent/LLM.
+    Independent of pairing; off by default until an explicit rollout.
+    """
     telegram_processor_enabled: bool = False
     telegram_voice_enabled: bool = False
     """Voice rollout gate; requires FFmpeg, private Gateway and versioned speech config."""

@@ -19,6 +19,14 @@ from src.domain.interactions.models import (
     TelegramInteractionCreate,
     TelegramResponseDelivery,
 )
+from src.domain.interactions.rejection_notice import (
+    ACCESS_DENIED_REPLY,
+    ACCESS_DENIED_RESPONSE_KIND,
+    NOTICE_COOLDOWN_SECONDS,
+    NOTICE_GLOBAL_PER_MINUTE,
+    NOTICE_MAX_PENDING,
+    NOTICE_TTL_SECONDS,
+)
 
 
 @dataclass(frozen=True)
@@ -133,6 +141,8 @@ class TelegramInteractionsRepository:
         deterministic_reply_key_version: int | None = None,
         deterministic_reply_length: int | None = None,
         deterministic_reply_chunk_count: int | None = None,
+        access_notice_ciphertext: bytes | None = None,
+        access_notice_key_version: int | None = None,
     ) -> TelegramAdmissionResult:
         """Atomically deduplicate, apply durable admission limits, and audit delivery.
 
@@ -222,11 +232,78 @@ class TelegramInteractionsRepository:
                     chunk_count=deterministic_reply_chunk_count,
                     now=now,
                 )
+            if (
+                access_notice_ciphertext is not None
+                and access_notice_key_version is not None
+                and parsed.status is InteractionStatus.REJECTED
+                and parsed.error_detail_code == "user_not_allowlisted"
+                and parsed.update_type == "message"
+                and parsed.telegram_user_id is not None
+                and parsed.telegram_user_id > 0
+                and parsed.chat_id == parsed.telegram_user_id
+                and parsed.telegram_message_id is not None
+                and parsed.telegram_message_id > 0
+                and await self._access_notice_capacity(parsed, now)
+            ):
+                await self._create_pending_response(
+                    interaction_id=parsed.id,
+                    content_ciphertext=access_notice_ciphertext,
+                    content_key_version=access_notice_key_version,
+                    content_length=len(ACCESS_DENIED_REPLY),
+                    chunk_count=1,
+                    response_kind=ACCESS_DENIED_RESPONSE_KIND,
+                    now=now,
+                )
             await self._session.commit()
         except Exception:
             await self._session.rollback()
             raise
         return TelegramAdmissionResult(interaction=parsed, duplicate=False)
+
+    async def _access_notice_capacity(
+        self, interaction: TelegramInteraction, now: datetime
+    ) -> bool:
+        """Reserve under the admission lock; all outcomes consume the cooldown.
+
+        Quotas count reservations, not only successful sends. A restart or failed
+        send cannot bypass them. A partial outbox index keeps the lookback
+        bounded without a new table or mutation of canonical user data.
+        """
+        counts = (
+            await self._session.execute(
+                text("""
+                    SELECT count(*) FILTER (
+                        WHERE r.created_at > :cooldown_since AND i.bot_id = :bot
+                          AND (i.telegram_user_id = :uid OR i.chat_id = :chat)
+                    ) AS recent_user,
+                    count(*) FILTER (WHERE r.created_at > :minute_since) AS recent_global,
+                    count(*) FILTER (
+                        WHERE r.status IN ('pending_delivery', 'sending')
+                          AND r.created_at > :ttl_since
+                    ) AS pending
+                    FROM ancora.logical_responses r
+                    JOIN ancora.telegram_interactions i ON i.id = r.interaction_id
+                    WHERE r.response_kind = 'access_denied_notice'
+                      AND r.created_at > :oldest
+                """),
+                {
+                    "bot": interaction.bot_id,
+                    "uid": interaction.telegram_user_id,
+                    "chat": interaction.chat_id,
+                    "cooldown_since": now - timedelta(seconds=NOTICE_COOLDOWN_SECONDS),
+                    "minute_since": now - timedelta(minutes=1),
+                    "ttl_since": now - timedelta(seconds=NOTICE_TTL_SECONDS),
+                    "oldest": now - timedelta(
+                        seconds=max(NOTICE_COOLDOWN_SECONDS, NOTICE_TTL_SECONDS, 60)
+                    ),
+                },
+            )
+        ).one()
+        return bool(
+            counts.recent_user == 0
+            and counts.recent_global < NOTICE_GLOBAL_PER_MINUTE
+            and counts.pending < NOTICE_MAX_PENDING
+        )
 
     async def _limit_rejection(
         self,
@@ -344,6 +421,7 @@ class TelegramInteractionsRepository:
         content_length: int,
         chunk_count: int,
         now: datetime,
+        response_kind: str = "agent_final",
     ) -> LogicalResponse:
         """Create deterministic outbox data inside the caller's open transaction."""
         created = await self._session.execute(
@@ -352,7 +430,7 @@ class TelegramInteractionsRepository:
                     interaction_id, response_kind, content_ciphertext,
                     content_key_version, content_length, chunk_count, status, created_at
                 ) VALUES (
-                    :interaction_id, 'agent_final', :content_ciphertext,
+                    :interaction_id, :response_kind, :content_ciphertext,
                     :content_key_version, :content_length, :chunk_count,
                     'pending_delivery', :now
                 )
@@ -361,6 +439,7 @@ class TelegramInteractionsRepository:
             """),
             {
                 "interaction_id": interaction_id,
+                "response_kind": response_kind,
                 "content_ciphertext": content_ciphertext,
                 "content_key_version": content_key_version,
                 "content_length": content_length,
@@ -638,6 +717,113 @@ class TelegramInteractionsRepository:
             await self._session.rollback()
             raise
         return response
+
+    async def list_access_notices(
+        self, limit: int = 20
+    ) -> list[tuple[TelegramInteraction, UUID]]:
+        """Secondary outbox only: never expose rejected work to the Agent queue."""
+        result = await self._session.execute(
+            text("""
+                SELECT i.*, d.id AS notice_delivery_id
+                FROM ancora.logical_responses r
+                JOIN ancora.telegram_interactions i ON i.id = r.interaction_id
+                JOIN ancora.telegram_response_deliveries d ON d.logical_response_id = r.id
+                WHERE r.response_kind = 'access_denied_notice' AND r.status = 'pending_delivery'
+                  AND d.status = 'pending' AND i.status = 'rejected'
+                  AND i.error_detail_code = 'user_not_allowlisted'
+                  AND r.created_at > :expiry
+                ORDER BY r.created_at LIMIT :limit
+            """),
+            {
+                "expiry": datetime.now(tz=UTC) - timedelta(seconds=NOTICE_TTL_SECONDS),
+                "limit": limit,
+            },
+        )
+        return [
+            (self._interaction_from_row(row), row.notice_delivery_id)
+            for row in result.fetchall()
+        ]
+
+    async def claim_access_notice(self, delivery_id: UUID) -> bool:
+        """Commit the send claim before network I/O; at most one sender wins."""
+        now = datetime.now(tz=UTC)
+        try:
+            claimed = await self._session.execute(
+                text("""
+                    UPDATE ancora.telegram_response_deliveries d
+                    SET status = 'sending', started_at = :now
+                    FROM ancora.logical_responses r, ancora.telegram_interactions i
+                    WHERE d.id = :id AND d.logical_response_id = r.id
+                      AND i.id = r.interaction_id AND r.response_kind = 'access_denied_notice'
+                      AND d.status = 'pending' AND r.status = 'pending_delivery'
+                      AND r.created_at > :expiry AND i.status = 'rejected'
+                      AND i.error_detail_code = 'user_not_allowlisted'
+                      AND i.agent_started_at IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ancora.telegram_pairing_authorizations a
+                          WHERE a.telegram_user_id = i.telegram_user_id AND a.status = 'active'
+                      )
+                    RETURNING r.id
+                """),
+                {
+                    "id": delivery_id, "now": now,
+                    "expiry": now - timedelta(seconds=NOTICE_TTL_SECONDS),
+                },
+            )
+            response_id = claimed.scalar_one_or_none()
+            if response_id is not None:
+                await self._session.execute(
+                    text("UPDATE ancora.logical_responses SET status = 'sending' WHERE id = :id"),
+                    {"id": response_id},
+                )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return response_id is not None
+
+    async def maintain_access_notices(self, *, recovering: bool = False) -> None:
+        """Expire unsent notices; never retry claims left ambiguous after restart.
+
+        This updates only the secondary response/delivery, not the rejection.
+        Recovering is called before the sole processor begins polling.
+        """
+        now = datetime.now(tz=UTC)
+        try:
+            await self._session.execute(
+                text("""
+                    WITH closed AS (
+                        UPDATE ancora.logical_responses r
+                        SET status = CASE WHEN r.status = 'sending' THEN 'failed' ELSE 'expired' END
+                        WHERE r.response_kind = 'access_denied_notice' AND (
+                            (:recovering AND r.status = 'sending') OR (
+                                r.status = 'pending_delivery' AND (
+                                    r.created_at <= :expiry OR EXISTS (
+                                        SELECT 1 FROM ancora.telegram_interactions i
+                                        JOIN ancora.telegram_pairing_authorizations a
+                                          ON a.telegram_user_id = i.telegram_user_id
+                                        WHERE i.id = r.interaction_id AND a.status = 'active'
+                                    )
+                                )
+                            )
+                        ) RETURNING r.id, r.status
+                    )
+                    UPDATE ancora.telegram_response_deliveries d
+                    SET status = closed.status, completed_at = :now,
+                        error_class = CASE WHEN closed.status = 'failed'
+                            THEN 'AccessNoticeRecovery' ELSE 'AccessNoticeExpired' END
+                    FROM closed WHERE d.logical_response_id = closed.id
+                      AND d.status IN ('pending', 'sending')
+                """),
+                {
+                    "recovering": recovering,
+                    "expiry": now - timedelta(seconds=NOTICE_TTL_SECONDS), "now": now,
+                },
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
 
     async def create_ack_response(
         self,

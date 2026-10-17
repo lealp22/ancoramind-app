@@ -364,6 +364,18 @@ con este ledger incompleto. No se inició otra prueba inferencial.
 
 ## Invitaciones y administración: preparación paralela
 
+### BL-52 implementado localmente tras los E2E — 2026-10-17
+
+Autorizada implementación, **no despliegue**. Aviso Core fijo de acceso no
+activo, independiente de pairing con flag OFF por defecto; interacción rejected
+intacta y outbox secundario con límites durables/no replay. Especificación 037.
+17 unitarias/20 integraciones nuevas, suites 1553 unitarias y 203 integraciones
+passed, 1 STT live skipped. Ruff/mypy limpios. Migración local
+`0017_access_notice_index` sólo índice parcial e init.sql equivalente; pruebas
+fresh/upgrade/downgrade. Sin tocar producción, secretos, modelo ni inferencia.
+El silencio remoto observado debajo conserva su validez histórica: requiere
+rollout del SHA/migración/flag y nuevo E2E para verificar el aviso en Telegram.
+
 ### E2E autoaprobado remoto autorizado, sin LLM — 2026-10-17
 
 **PASS acotado de autoactivación**, pedido expresamente por el propietario.

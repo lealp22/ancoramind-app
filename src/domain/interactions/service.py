@@ -20,6 +20,7 @@ from src.domain.interactions.models import (
 from src.domain.interactions.pairing import PairingRedemptionStatus
 from src.domain.interactions.pairing_service import TelegramPairingService
 from src.domain.interactions.payloads import TelegramPayloadCipher
+from src.domain.interactions.rejection_notice import ACCESS_DENIED_REPLY, permits_access_notice
 from src.repositories.interactions import TelegramInteractionsRepository
 from src.repositories.pairing import TelegramPairingRepository
 
@@ -42,12 +43,14 @@ class TelegramInteractionService:
         pairing_repository: TelegramPairingRepository | None = None,
         pairing_service: TelegramPairingService | None = None,
         pairing_enabled: bool = False,
+        access_notice_enabled: bool = False,
     ):
         self._repository = repository
         self._payload_cipher = payload_cipher
         self._pairing_repository = pairing_repository
         self._pairing_service = pairing_service
         self._pairing_enabled = pairing_enabled
+        self._access_notice_enabled = access_notice_enabled
 
     async def record_accepted_update(
         self,
@@ -153,6 +156,12 @@ class TelegramInteractionService:
             error_detail_code=decision.error_detail_code,
         )
         reply = self._payload_cipher.encrypt({"content": pairing_reply}) if pairing_reply else None
+        notice = (
+            self._payload_cipher.encrypt({"content": ACCESS_DENIED_REPLY})
+            if self._access_notice_enabled
+            and permits_access_notice(normalized, decision.status, decision.error_detail_code)
+            else None
+        )
         return await self._repository.admit_with_limits(
             interaction,
             TelegramDeliveryCreate(
@@ -165,6 +174,8 @@ class TelegramInteractionService:
             deterministic_reply_key_version=reply.key_version if reply else None,
             deterministic_reply_length=len(pairing_reply) if pairing_reply else None,
             deterministic_reply_chunk_count=1 if pairing_reply else None,
+            access_notice_ciphertext=notice.ciphertext if notice else None,
+            access_notice_key_version=notice.key_version if notice else None,
         )
 
     async def claim_agent_start(self, correlation_id: UUID) -> TelegramInteraction | None:

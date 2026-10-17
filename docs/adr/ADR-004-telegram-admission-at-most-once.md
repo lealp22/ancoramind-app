@@ -53,6 +53,15 @@ continúe siendo el runtime del Agent.
 
 ## Consecuencias
 
+### Enmienda local BL-52 — 2026-10-17
+
+Un aviso fijo de acceso no activo puede persistir en el outbox secundario
+`access_denied_notice` sin cambiar el estado `rejected` de la interacción.
+No concede autorización ni llama al Agent/LLM. Flag OFF por defecto; cuotas
+durables, TTL y claim previo a cualquier envío, sin replay después de sending.
+Duplicados no reservan ni reenvían avisos. Detalle: specs/037. No cambia la
+semántica at-most-once del Agent ni permite grupos/rechazos no autenticados.
+
 ### Positivas
 
 - El mismo update no puede disparar varias ejecuciones Agent bajo la topología
