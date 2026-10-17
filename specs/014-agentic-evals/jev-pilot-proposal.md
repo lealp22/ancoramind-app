@@ -5,6 +5,12 @@
 > sintéticos y validación determinista. No modificar `tasks.md` histórico para
 > presentar este piloto como realizado.
 
+> Continuidad acordada 2026-10-17: primero preparar ejecución puntual privada y
+> completar T7 con revisión humana; este piloto no bloquea esa campaña. Golden
+> set revisado, validación separada, Jev como segunda opinión y automatización
+> posterior quedan en [camino incremental BL-8](../018-agentic-evals-execution-harness/incremental-roadmap.md).
+> El adaptador Jev no está implementado ni autorizado para inferencia por ese acuerdo.
+
 ## Objetivo y límites
 
 Investigar si Jev aporta una señal útil y económica para detectar regresiones

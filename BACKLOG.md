@@ -1382,11 +1382,14 @@ aprobación de gasto ni acceso de red creado: **BL-48 continúa abierto** hasta
 aprobación concreta/acceso privado/ejecución y evaluación; semántica not_evaluated.
 
 **Hallazgo de trazabilidad para BL-23/specs/013:** el checksum histórico rev. 8
-no se reproduce con el código local; la serialización de capacidades frozenset
-varía entre procesos, aunque esto no explica por sí solo toda discrepancia.
-No alterar revisiones ni aliases activos: investigar esquema histórico antes de
-remediar. Eval usa fingerprint de contenido determinista separado y lo liga al
-plan, sin presentar esa huella como validación del checksum productivo (§14).
+no se reprodujo en la investigación inicial; la serialización de capacidades
+frozenset varía entre procesos. **Actualización 2026-10-17:** una de las 72
+combinaciones de orden sobre la representación canónica del snapshot local
+reproduce exactamente `e2663c6a…db25` con igual configuración tipada. El orden
+explica la discrepancia local; no se ha contrastado vigencia con producción ni
+identificado el proceso histórico. Remediación compatible pendiente, sin alterar
+revisiones ni aliases activos. Eval mantiene su fingerprint separado; detalle y
+límites en specs/018 `t7-preparation.md`.
 
 **Lanzador T7 completado localmente (2026-10-17):** `execute_eval_campaign.py`
 es preflight puro por defecto; ejecución explícita exige commit limpio, SHA y
@@ -1400,6 +1403,16 @@ ni commit/push/deploy; reserva candidata 0,10 USD estimados aún pendiente de
 aprobación y protección externa. BL-48 abierto hasta ejecución/revisión reales.
 Runbook actualizado specs/018 `t7-preparation.md`; el bloqueo de replay es local,
 no distribuido ni garantía de facturación máxima.
+
+**Decisión incremental del propietario (2026-10-17):** primero conservar motor
+compartido y preparar uso puntual por shell en servicio temporal privado Railway,
+separado del bot; después campaña humana existente de cinco casos. Sin túneles,
+ngrok ni inferencia al arrancar/reiniciar. Reserva estimada 0,10 USD aceptada,
+propietario como revisor; no autoriza recursos, claves, despliegue o ejecución.
+Preparación de imagen/TTY/estado anti-replay, procedencia del snapshot y aprobación
+concreta SHA/plan/huellas pendientes. Web opcional, golden set humano, Jev calibrado,
+segunda opinión y automatización quedan diferidos, sin bloquear T7. Registro
+completo: specs/018 `incremental-roadmap.md`. **BL-48 sigue abierto**.
 
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
@@ -2682,11 +2695,21 @@ Nueve ejemplos sintéticos buenos/malos/ambiguos se validan como
 `human_reviewed`. El runner estático sigue sin llamar modelos ni red.
 
 **Pendiente:** T7 — ejecutar la modalidad LLM real contra el adaptador físico
-ya construido, con credenciales y presupuesto explícitamente aprobados,
-fuera de CI por defecto (bloqueado por decisión de coste del propietario, no
-por código). T8 — acordar scoring semántico y baseline por ruta lógica con
+ya construido, con credenciales, acceso y campaña explícitamente aprobados,
+fuera de CI por defecto. Reserva estimada 0,10 USD aceptada, no autorización de
+inferencia ni recursos Railway; preparación remota y gates concretos pendientes.
+T8 — acordar scoring semántico y baseline por ruta lógica con
 etiquetas humanas (bloqueado por etiquetado manual del propietario). No
 almacenar contenido personal en datasets, outputs ni telemetría.
+
+**Secuencia acordada (2026-10-17):** incrementos inmediatos 1–2: motor único
+reutilizable por consola/futura web y campaña humana puntual en servicio privado
+temporal separado. Después: golden set revisado (casos del Agent y ejemplos para
+validar al juez separados), piloto Jev con Decisions API compatible con Gateway,
+calibración/validación independiente, segunda opinión y solo entonces automatización
+acotada/gates si se aprueban. Nueve ejemplos provisionales no son golden set; web
+no implementada ni requisito de T7, sin CI pagada ni ampliación de cinco casos.
+Ver specs/018 `incremental-roadmap.md` y `tasks.md` T7c–T7d. BL-8 continúa abierto.
 
 **Propuesta para el siguiente incremento (2026-09-26; no implementada):** probar
 Jev como juez semántico *opcional* de los casos sintéticos de `response_style`,

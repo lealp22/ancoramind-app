@@ -28,14 +28,24 @@
       fuera de CI por defecto y capturar evidencia metadata-only.
       Preparación autorizada 2026-10-16: snapshot explícito, plan limitado,
       Gateway-only y preflight sin inferencia implementados y probados;
-      `t7-preparation.md`. Candidato 0,10 USD estimados, sin aprobación de gasto,
-      credenciales/acceso ni ejecución real. BL-48 permanece abierto.
+      `t7-preparation.md`. Reserva de 0,10 USD estimados aceptada posteriormente;
+      sin aprobación de ejecución, credenciales/acceso ni inferencia real.
+      BL-48 permanece abierto. Secuencia acordada en `incremental-roadmap.md`.
 - [x] T7a · Lanzador explícito serial y revisión humana en terminal (2026-10-17):
       reserva local exclusiva/no replay, aprobación SHA+fuentes+casos+plan,
       SDK sin retry, scope Gateway, checkpoints/reporte metadata-only y parada
       ante fallo/cancelación/no evaluado. Pruebas sin inferencia pagada.
 - [ ] T7b · Aprobar plan/presupuesto/snapshot, acceso privado y clave exclusiva;
       lanzar una campaña real con revisor presente y registrar los resultados.
+- [ ] T7c · Preparar operación puntual en servicio temporal privado Railway,
+      separado del bot: no ejecutar al arrancar/reiniciar, shell con TTY probado
+      sin modelo, assets/procedencia verificables y conservación de reporte y
+      reserva entre contenedores. Mantener motor único; abreviaturas p/f/x
+      propuestas, aún no implementadas. Aprovisionamiento/ejecución por separado.
+- [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
+      compartido/operación por consola y campaña humana de cinco casos; web,
+      golden set humano, piloto/calibración Jev, segunda opinión y automatización
+      quedan diferidos en `incremental-roadmap.md`, sin gasto/CI nuevos.
 - [ ] T8 · Definir/calibrar scoring semántico opcional (Jev u otro juez) con
       etiquetas humanas sintéticas y baseline por ruta/configuración.
       **Preparación local sin inferencia (2026-10-14):**

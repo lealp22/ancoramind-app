@@ -5,6 +5,12 @@ todavía:** ejecutar inferencia pagada con el candidato, crear claves o túneles
 exponer Gateway, mutar configuración/revisiones o desplegar. BL-48 permanece
 abierto hasta resultados reales; no se sustituye por la matriz manual Telegram.
 
+**Decisión posterior (2026-10-17):** reserva estimada de 0,10 USD aceptada;
+ejecución elegida dentro de Railway mediante servicio temporal separado y
+revisión humana puntual por shell, sin túneles. No autoriza aprovisionamiento,
+claves, despliegue ni inferencia; siguen pendientes los gates concretos.
+Alcance inmediato y continuación futura en [camino incremental](incremental-roadmap.md).
+
 ## Incremento implementado
 
 - `src/agent/eval_campaign.py`: candidato validado, aprobación ligada al checksum
@@ -57,10 +63,10 @@ permisos/costes reales ni comportamiento del LLM.
 
 1. Aprobar plan/ruta/coste/privacidad sintética y SHA concreto a evaluar; revisar
    candidatos y permitir como máximo esos cinco casos, una vez cada uno.
-2. Escoger ejecución en entorno privado autorizado o túnel loopback administrado
-   por el operador hacia el Gateway existente. No dominio público ni provider
-   directo. La CLI Railway no está instalada en este entorno; no se instala ni
-   aprovisiona acceso automáticamente.
+2. Preparar, tras autorización específica, ejecución dentro de la red privada
+   Railway en servicio temporal separado del bot. Sin túneles ni dominio público
+   para esta fase. Comprobar terminal interactiva y conservar estado anti-replay;
+   no instalar CLI ni aprovisionar acceso automáticamente. Ver camino incremental.
 3. Configurar solo en el entorno seguro `ANCORA_EVAL_GATEWAY_URL` y
    `ANCORA_EVAL_GATEWAY_KEY` (no pegarlas en chat, argv, Git o reportes). La clave
    debe estar restringida al alias r4 y presupuesto externo verificado; no master
@@ -79,13 +85,22 @@ permisos/costes reales ni comportamiento del LLM.
 
 El checksum canónico recalculado para rev. 8 cambia entre procesos porque
 `capabilities` es frozenset y `canonical_config_json` no ordena sus elementos.
-Además, el hash almacenado no se reprodujo con el contenido/código actuales.
-**No está probado que el orden de sets explique la discrepancia histórica**.
+La investigación inicial no reprodujo el hash almacenado. **Actualización local
+2026-10-17:** enumeradas las 72 combinaciones de orden de capacidades sobre la
+representación canónica del archivo preparado, una reproduce exactamente
+`e2663c6ab9e2666f41ba3d5399d05feb8a0d4141de0d2d74fdcfca19b3afdb25`.
+La configuración tipada de esa combinación es igual a la del snapshot; no se
+cambian valores, solo el orden serializado. Se aplica la omisión canónica ya
+existente de bloques/campos opcionales nulos; hashear el JSON exportado bruto no
+es el mismo algoritmo. El orden explica la discrepancia **del artefacto local**.
+Esto no verifica vigencia/igualdad con producción, que no se consultó, ni prueba
+qué proceso histórico generó la huella. Prueba ejecutada sin red ni inferencia.
 No se cambia el algoritmo productivo, una revisión existente ni se atribuye
 el fingerprint de eval al control plane. El fingerprint de eval ordena capacidades
 y liga toda la estructura tipada (incluidos revisión y checksum histórico) al plan
 aprobado, por lo que un cambio de contenido requiere otra aprobación.
-Queda investigación de compatibilidad/esquema histórico en BL-23/specs/013.
+Queda remediar la inestabilidad con compatibilidad histórica en BL-23/specs/013;
+no aceptar silenciosamente el snapshot ni reescribir checksums existentes.
 
 ## Evidencia local
 
@@ -183,7 +198,9 @@ no puede impedir capturas externas. Si no hay revisor presente, **no ejecutar**.
    Después inspeccionar el reporte metadata-only y registrar resultado, incluido
    parcial/not_evaluated; BL-48 solo cierra si cumple todos sus gates.
 
-Pendiente del propietario: aprobación de reserva estimada/ruta/cinco casos y
-procedencia del snapshot con huella separada; autorización para preparar el acceso
-privado y clave exclusiva, y presencia para revisar la ejecución. No se pide
-pegar secretos. Hasta entonces: `gateway_access=not_checked`, sin inferencia.
+Reserva estimada aceptada y propietario dispuesto a revisar. Pendientes:
+procedencia del snapshot, plan/ruta/cinco casos ligados al SHA y huellas vigentes,
+autorización de recursos/acceso privado/clave exclusiva, límites externos
+verificados y sesión interactiva acordada. No se pide pegar secretos. Hasta
+entonces: `gateway_access=not_checked`, sin inferencia. La aceptación del enfoque
+incremental no sustituye estas aprobaciones.
