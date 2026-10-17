@@ -11,7 +11,7 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 | 1. Recordatorios (BL-1/M5) | Petición → propuesta → Sí → fila canónica → aviso recibido → consulta `fired`; fecha/hora local y ausencia de repetición observada | PASS: circuito local y E2E Telegram autorizado de un recordatorio no recurrente; consulta final por SELECT, sin nueva inferencia |
 | 2. Vehículos/mantenimiento (BL-1/M4) | Registrar vehículo → confirmar → mantenimiento → confirmar → recuperar historial | PASS para alta e historial manual sin importe/factura; dos escrituras confirmadas y consulta real en Telegram |
 | 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido: serie diaria limitada, dos avisos + snooze entregados; presentación incompleta pendiente BL-49, no UX family&friends validada |
-| 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | Pendiente; no habilitar rutas ni gastar inferencia adicional implícitamente |
+| 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | PDF sintético PASS; imagen parcial: fecha extraída pero omitida al consultar (BL-50). Dos originales y extracciones verificados; coste visual no disponible (BL-51) |
 | Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | Pruebas locales verdes; configuración y E2E Railway pendientes |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
 
@@ -236,6 +236,131 @@ provider, despliegue, webhook ni límites de inferencia.
   entre personas ni comportamiento exactamente una vez bajo red/crash.
 - Los registros ficticios quedan persistidos para trazabilidad, sin avisos
   futuros de esta serie. No se ejecutó eliminación ni limpieza implícita.
+
+## Entrega 4: imagen/PDF escaneado — 2026-10-17
+
+**PDF sintético PASS; imagen parcial.** El propietario autorizó el siguiente
+flujo acordado. Alcance anunciado: un PNG y un PDF raster de una página, sin
+datos personales, envío único de cada uno y una consulta conjunta posterior.
+Se pidió sólo archivo/resumen/consulta; ninguna acción derivada.
+
+### Preparación y ruta existente
+
+- Git limpio al empezar, HEAD local `b8170a4`; sus diferencias con el SHA
+  servido no afectan la ingesta documental. Deployment app sigue en
+  `61c687a0-a856-4fbd-86ff-215ee9acf1aa`, SHA `b104d8f`, SUCCESS.
+  La consulta nueva de GitHub no devolvió evidencia utilizable de checks;
+  el resultado verde anterior consta en el baseline de esta campaña.
+- Readiness `00:55:25.613090Z`, HTTP 200, DB/Gateway/processor/worker sanos,
+  revisión 8. Cero documentos de estos nombres antes de empezar; borrador vacío.
+- Snapshot real: `ancoramind-vision` → **`ancoramind-vision-r1`**, capacidades
+  vision/structured_output; default r4; embeddings r1. No se publicó r2 ni se
+  cambió modelo, configuración, webhook, flags o despliegue.
+- Límites activos por ejecución: 6 model calls, 8 Gateway requests, 12 tool
+  calls, 120 s y 0,10 USD estimados. Pricing sólo incluye default-r4: no se
+  infiere que la visión sea gratuita ni que el límite monetario cubra costes
+  no medidos. Se acotó el ensayo a una página por adjunto.
+- Fixtures generados con PyMuPDF ya instalado bajo
+  `tmp/visual-e2e-20261017/` (ignorado por Git), etiquetas SIN VALIDEZ/datos
+  ficticios. El PDF tiene sólo una imagen, `has_extractable_text=False`, y
+  produce una página visual con el preparador real.
+- Se envió el PNG como archivo, sin compresión Telegram: se valida imagen
+  adjunta (`image/png`), **no** el camino de foto comprimida.
+- El selector Playwright rechazó el primer path local antes de subir;
+  se copiaron ambos fixtures a su raíz permitida `.playwright-mcp`, conservando
+  hashes. No se repitió ningún envío al bot por ese ajuste local.
+
+### Origen sintético y conservación
+
+| Archivo | Bytes | SHA-256 |
+|---|---|---|
+| `ancora-visual-e2e-20261017-image.png` | 52254 | `2fbe54cd6b4c2c48b64357ffba056b147298411fd9c85f5a45b4943b606b0f06` |
+| `ancora-visual-e2e-20261017-scan.pdf` | 56715 | `982b997332576c520772172ad2ad7ac1cddc1ba4ab938af764db6e98e465058a` |
+
+- PNG: ficha de inventario; referencia IMG-ZAFIRO-731, fecha 17/10/2026,
+  carpetas verdes, 7 unidades, estante azul. Estos valores no se dieron en
+  la caption: debían leerse de los píxeles.
+- PDF: recibo ficticio PDF-CORAL-946, 17/10/2026, material de demostración,
+  2 unidades a 12,40 EUR, total 24,80 EUR. La caption tampoco incluía valores.
+- Ambos originales se descargaron mediante lectura autenticada de Storage
+  tras resolver sus filas scoped al propietario; los hashes coinciden con
+  los fixtures y la DB. El PDF conservado sigue sin texto embebido. No se
+  generaron URLs públicas ni se expusieron storage keys/credenciales.
+
+### Interacciones y resultados
+
+| Paso | Interacción | Mensajes Telegram | Resultado |
+|---|---|---|---|
+| PNG | `ecd6a642-27cb-4cd9-a533-610358315f69` | `14431–14432` | `completed` 00:57:28.034939–00:57:47.002593Z; archivo/extracción correctos, fecha ausente en respuesta |
+| PDF raster | `88171316-8bbc-4cfb-b0e9-53bf68f1f3d4` | `14433–14434` | `completed` 00:59:09.441469–00:59:24.459411Z; todos los campos pedidos correctos |
+| Consulta de ambos archivados | `4dff7922-9dcc-425c-a597-bae91457e107` | `14435–14436` | `completed` 01:00:37.376947–01:00:50.334270Z; nombres/IDs y datos recuperados, persiste omisión de fecha del PNG |
+
+- Documento PNG `0c65df4b-c2f5-47a8-bcf5-90f4a1f2b4fd`, extracción
+  `eed2f7bd-0c74-488a-9139-3b1ba515a17c`.
+- Documento PDF `07dcb981-1789-446a-b9d0-e38c55865c4b`, extracción
+  `eeccad07-f2e5-4f59-a2e0-b4d614b265a8`.
+- Dos extracciones estructuradas correctas, modelo auditado como alias
+  `ancoramind-vision-r1`, provider de adaptador `OpenAI`, prompt 1.2/schema 1.1.
+  No se deduce de esa etiqueta el proveedor/modelo físico upstream.
+- Ambas confianzas declaradas 0,99, **no precisión calibrada**. Suggested actions
+  vacías. Dos índices `completed`, embeddings r1 de 1536 dimensiones.
+- Final de lectura: siguen dos documentos/dos extracciones, cero propuestas
+  creadas desde el comienzo del flujo. No hubo confirmaciones: adjuntar es
+  intención de ingesta según la excepción documental existente.
+- Consulta posterior: tres llamadas default-r4 y ninguna visión; no se volvió
+  a hacer OCR. Cinco tools registradas, sin nuevas escrituras documentales.
+
+### Hallazgo reproducido sin cambio de producto — BL-50
+
+La extracción del PNG contiene `document_date=2026-10-17`, pero su `summary`
+no incluye la fecha. `_extraction_record` sólo transmite tipo/resumen/confianza,
+no campos estructurados como `document_date`, `entities` o `amounts`. Se pasó
+la extracción persistida por ese helper local: la fecha desaparece del record.
+Lo usan tanto la ingesta como `get_document`; explica que la fecha se pierda
+en la respuesta inicial y la consulta. En el PDF todos los datos pedidos sí
+están en el resumen y llegan correctamente. No es un fallo demostrado de OCR
+ni se debe resolver inventando la fecha desde el filename/historial.
+
+### Uso, coste y límites — BL-51
+
+| Paso | Model / Gateway / tools del ledger | Visión | Estimado default USD |
+|---|---|---|---|
+| PNG | 3 / 3 / 2 | 1 llamada, 4887 ms | 0,00261610 |
+| PDF | 3 / 3 / 2 | 1 llamada, 3457 ms | 0,00269750 |
+| Consulta posterior | 3 / 3 / 5 | 0 llamadas | 0,00414860 |
+
+Rev. 8 en los nueve eventos de uso, todos `completed`, retry_count=0,
+fallback_used=false. **0,00946220 USD es sólo el subtotal estimado conocido
+de conversación, no el total del flujo.** Ambas llamadas visuales tienen
+estimated_cost/actual_cost NULL; las nueve no informan coste real.
+Además, el índice confirma embeddings completados, pero el adaptador actual
+no reserva esos HTTP en ExecutionBudget ni escribe LlmUsageRecorder; los
+contadores model/Gateway anteriores no incluyen embeddings y no prueban el
+total de solicitudes upstream. Brecha de contabilidad/gobernanza registrada
+separadamente en BL-51; no hubo bypass ni modificación desde esta sesión.
+No hacer un benchmark económico ni declarar cobertura completa del presupuesto
+con este ledger incompleto. No se inició otra prueba inferencial.
+
+### Verificación y alcance residual
+
+- 53 unitarias documentales focales, **1504 unitarias globales**, y 7
+  integraciones de repositorio documental contra PostgreSQL local `_test`:
+  superadas. Advertencia OTLP local sin Collector `localhost:4318` al terminar
+  la suite, no evidencia de caída del Collector productivo.
+- No es benchmark representativo: fuentes sintéticas nítidas, español impreso,
+  una página; no valida manuscritos, fotos degradadas, PDFs mixtos/largos,
+  límite multipágina, aislamiento con segunda cuenta ni seguridad semántica.
+- BL-6 no se cierra: falta resolver pérdida de campos (BL-50), contabilidad
+  completa (BL-51) y acordar benchmark con ruta/precio/presupuesto. La migración
+  a otro alias/modelo no forma parte de esta autorización.
+- Los dos originales y extracciones quedan persistidos para trazabilidad;
+  sin limpieza implícita ni mutaciones de vehículo/calendario/recordatorios.
+  Cambios versionados de esta entrega: sólo documentación.
+- Cierre a `01:04:51.887574Z`: readiness HTTP 200, revisión 8 y componentes
+  DB/Gateway/processor/worker sanos; circuit sigue `unknown`. Dos documentos,
+  dos extracciones y cero propuestas; último mensaje `14436`, borrador vacío.
+  Ruff global, `mypy src/` (174 módulos) y `git diff --check` limpios.
+  Sin commit ni despliegue desde esta entrega.
 
 ## Invitaciones y administración: preparación paralela
 

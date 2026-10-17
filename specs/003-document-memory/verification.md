@@ -1,5 +1,32 @@
 # Verification: 003 — Document Memory
 
+## E2E visual autorizado — 2026-10-17
+
+**PDF raster sintético PASS; PNG parcial (consulta de fecha, BL-50).**
+Un envío por formato, más una consulta conjunta posterior por Telegram:
+
+- Dos originales conservados en Storage y cotejados por SHA-256 con fixtures
+  y filas canónicas. PDF de una página sólo imagen, sin texto embebido.
+- Dos extracciones estructuradas por `ancoramind-vision-r1` ya activo,
+  revisión 8, sin habilitar rutas ni desplegar. Referencias/fechas/cantidades
+  extraídas correctamente; precio/total del PDF también correctos.
+- Respuestas con procedencia y advertencia de extracción automática; consulta
+  posterior devuelve nombres/IDs correctos sin nueva llamada visual.
+- Fecha del PNG persistida pero ausente en la respuesta inicial y posterior:
+  `_extraction_record` transmite sólo tipo/resumen/confianza, omitiendo campos
+  estructurados. Reproducido con la extracción real, sin corregir producto.
+- Dos documentos/dos extracciones al final, índices de búsqueda completados,
+  cero propuestas. No prueba de aislamiento real con segunda cuenta.
+- Coste **parcial**: 0,00946220 USD de conversación estimados; visión sin
+  coste informado y embeddings fuera de contadores/ledger LLM actuales (BL-51).
+  No es un total ni un benchmark de coste; no repetir inferencia para completarlo.
+- 53 unitarias focales, 1504 unitarias globales y 7 integraciones documentales
+  en PostgreSQL local `_test` superadas. Cambios de esta entrega sólo docs.
+
+Evidencia/IDs/hashes/limitaciones:
+`specs/008-railway-deployment/mvp-release-campaign.md`, entrega 4.
+Lo que sigue conserva el registro histórico de verificaciones anteriores.
+
 > Especificación retroactiva (BL-9). Verificación reconstruida a partir del
 > código y los tests existentes. El E2E de PDF textual y su consulta de
 > seguimiento se validó en Telegram/Railway el 2026-10-13; los demás E2E de

@@ -176,6 +176,19 @@ registrada en BL-49: payload comprobado por SELECT antes del Sí autorizado;
 no equivale a confirmar UX lista para family&friends ni cerrar toda BL-41.
 Evidencia: registro de campaña, entrega 3. Siguiente flujo: imagen/PDF escaneado.
 
+**E2E imagen/PDF escaneado autorizado (2026-10-17): PDF PASS; imagen parcial.**
+PNG y PDF raster sintéticos, una página, un envío cada uno y una consulta
+posterior: dos originales verificados por hash, dos extracciones visuales
+correctas con r1 ya activo, índices completados, cero propuestas. La fecha de
+la imagen se extrae bien pero desaparece antes del Agent: BL-50. Tres
+interacciones `completed`, sin retry/fallback registrado, rev. 8. Subtotal
+conversacional estimado 0,00946220 USD, **no coste total**: visión sin precio
+informado y embeddings fuera del ledger/budget actuales (BL-51). 1504 unitarias
+y 7 integraciones documentales locales superadas. Sin cambios operativos ni
+de producto; registros sintéticos conservados. Evidencia: campaña, entrega 4.
+No cerrar BL-6 ni readiness family&friends; próximos trabajos requieren alcance
+propio (hallazgos y/o invitaciones/admin), no otra prueba inferencial implícita.
+
 | Orden | Bloque de trabajo | Qué falta para cerrar |
 |---|---|---|
 | 1 | **Validación MVP (BL-1/41) + invitaciones y administración family&friends (BL-24/43) + dashboard visual Grafana (BL-33, alcance acotado arriba)** | Recordatorios → vehículos+mantenimiento → calendario, zona horaria, recurrencia/snooze → imagen/PDF escaneado (BL-6); en paralelo, validar onboarding/revocación, panel protegido y aislamiento antes del primer participante, más Collector desplegado + dashboard importado como evidencia visual de demo; reutilizar las garantías de consentimiento ya implementadas, sin ampliar gobernanza nueva |
@@ -831,6 +844,41 @@ reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
 
+### BL-50 · Conservar campos documentales estructurados al consultar 🆕 registrado — 2026-10-17
+
+E2E visual de BL-1/6: fecha `2026-10-17` correctamente persistida en
+`ai_extractions.extraction.document_date` del PNG, pero el bot dice que no
+está disponible tanto tras adjuntar como tras consultar el archivo. Causa
+reproducida: `_extraction_record` en tools/documentos sólo entrega
+tipo/resumen/confianza; elimina fechas/importes/entidades estructuradas y
+depende de que el resumen las repita. El PDF del mismo ensayo sí responde
+todos los datos porque su resumen los incluye. No es un fallo probado de OCR.
+
+Pendiente, sin implementación en esta ventana: exponer campos relevantes
+acotados como datos no confiables, conservando procedencia y límites;
+regresión de ingesta/`get_document` con fecha no repetida en summary y E2E
+posterior. No recuperar la fecha del filename ni añadir instrucciones crudas
+del documento. La consulta documental queda parcial hasta resolverlo.
+Evidencia y IDs en campaña, entrega 4. No amplía gobernanza BL-48.
+
+### BL-51 · Completar presupuesto/auditoría de visión y embeddings 🆕 registrado — 2026-10-17
+
+El E2E visual usa r1 activo: dos llamadas `ancoramind-vision-r1` completadas,
+sin estimated_cost/actual_cost y sin pricing para ese alias en la revisión 8.
+El subtotal default-r4 no representa el coste total ni permite acreditar que
+el techo monetario cubre lo no medido. Índices documentales con embeddings r1
+completados; `GovernedDocumentEmbeddingAdapter` resuelve snapshot/Gateway y
+emergency-stop, pero sus HTTP no reservan ExecutionBudget ni registran
+LlmUsageRecorder. Los contadores model/Gateway del ledger no los incluyen.
+
+Pendiente: acordar precio/ruta y cobertura de presupuesto de esas capabilities,
+integrar contabilidad correlacionada (incluido coste desconocido), regresiones
+y validación acotada. **No resuelto por este E2E ni autorizado implícitamente
+un cambio de configuración o modelo.** Registrar separado, sin nuevo benchmark
+inferencial hasta acordar alcance; no declarar garantía completa de coste con
+el ledger parcial. No se desactivó ningún control desde esta sesión.
+Evidencia en campaña, entrega 4; marco existente specs/013/026, no BL-48.
+
 ### BL-49 · Completar presentación de calendario y snooze antes del piloto 🆕 registrado — 2026-10-17
 
 Hallazgo del E2E de calendario/recurrencia/snooze (BL-1/41): el bloque Core
@@ -1267,7 +1315,19 @@ cierre T7".
 
 ## P2 — Funcionalidad para "usable de verdad"
 
-### BL-6 · OCR/vision real para extracción de documentos 🔶 en curso
+### BL-6 · OCR/vision real para extracción de documentos 🔶 E2E sintético parcial — 2026-10-17
+
+**Actualización vigente:** la ruta ya activa `ancoramind-vision-r1` funcionó
+en Telegram para PNG y PDF raster de una página: originales/extracciones
+verificados y consulta posterior sin nuevo OCR. PDF PASS; imagen parcial por
+pérdida de fecha al proyectar la extracción al Agent (BL-50), no error visual.
+Coste visual desconocido y embeddings sin contabilidad completa (BL-51).
+No se publicó r2 ni se cambió runtime. No exigir ese cambio para acreditar
+lo probado con r1, ni declarar benchmark/cierre global de BL-6. Pendientes
+BL-50/51 y benchmark representativo autorizado. Evidencia en campaña entrega 4
+y `specs/003-document-memory/verification.md`.
+
+**Antecedente de implementación/plan, no estado de la ruta activa actual:**
 La extracción visual está implementada localmente: imagen directa o PDF renderizado
 con PyMuPDF (máximo 3 páginas) → ruta lógica `ancoramind-vision` → salida
 estructurada. Los contenidos siguen siendo DATA, no INSTRUCTIONS. Pendiente:
