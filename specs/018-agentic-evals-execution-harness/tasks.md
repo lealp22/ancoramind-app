@@ -37,11 +37,16 @@
       ante fallo/cancelación/no evaluado. Pruebas sin inferencia pagada.
 - [ ] T7b · Aprobar plan/presupuesto/snapshot, acceso privado y clave exclusiva;
       lanzar una campaña real con revisor presente y registrar los resultados.
-- [ ] T7c · Preparar operación puntual en servicio temporal privado Railway,
+- [x] T7c-local · Preparar operación puntual en servicio temporal privado Railway,
       separado del bot: no ejecutar al arrancar/reiniciar, shell con TTY probado
       sin modelo, assets/procedencia verificables y conservación de reporte y
-      reserva entre contenedores. Mantener motor único; abreviaturas p/f/x
-      propuestas, aún no implementadas. Aprovisionamiento/ejecución por separado.
+      reserva sobre mount persistente entre contenedores. Motor único; p/f/x,
+      repregunta ante errata y `--check-console` implementados. Imagen sin Git ni
+      secretos con sello/huella contrastados con Git/CI externo; no firma.
+      Runbook `railway-console-runbook.md`. Sin aprovisionamiento/ejecución real.
+- [ ] T7c-remoto · CI/commit aprobados, coste/ventana Railway acordados, desplegar
+      servicio temporal sin dominio, mount exclusivo `/eval-state`, clave eval
+      restringida/expirable, scope/budget y TTY real del operador verificados.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

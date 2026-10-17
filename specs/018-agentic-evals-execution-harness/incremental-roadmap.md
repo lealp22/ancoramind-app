@@ -17,6 +17,10 @@
   resolverse. No crear recursos, claves, despliegues ni inferencias por esta nota.
 - BL-8/T7 y BL-48 siguen abiertos; resultados semánticos `not_evaluated`.
 
+**Continuación solicitada después:** el propietario pide avanzar incrementos 1–2.
+Implementación local iniciada; no elimina aprobación exacta de SHA/huellas, CI,
+límites externos ni presencia del revisor. Operación remota todavía no realizada.
+
 ## Ahora: incrementos 1 y 2
 
 ### 1. Conservar un motor compartido y preparar la operación puntual por shell
@@ -38,18 +42,19 @@ Operación prevista, todavía no aprovisionada:
 5. Conservar reporte metadata-only y estado anti-replay antes de apagar el
    servicio. No relanzar ante resultado incierto ni borrar la reserva para repetir.
 
-Preparación pendiente: imagen con catálogo y procedencia Git verificable
-(la imagen actual del bot no incluye `evals/` ni `.git`), dependencias, clave
-Gateway limitada al alias, configuración sin secretos del bot/DB y conservación
-del estado entre contenedores. La reserva actual es local, no distribuida.
+Preparación local implementada: imagen exclusiva con catálogo y manifiesto
+sellado contrastable con checkout Git/CI externo; no copia `.git` ni secretos.
+Arranque idle y estado exigido en mount real. Pendientes despliegue, volumen
+exclusivo, clave limitada al alias, acceso interactivo y revisión efectiva.
+La reserva protege el mismo volumen, no es distribuida.
 Sin dominio público, cron ni ejecución pagada en comandos de arranque/reinicio.
 Acceso SSH no implica túnel de puertos, pero debe ser permitido en el entorno
 del operador; no instalar herramientas ni registrar claves automáticamente.
 
-Interfaz propuesta: `p` / `f` / `x` más etiquetas completas, valorando **cada
-criterio**, no confirmando acciones del bot. Aún no implementada: hoy solo
-`pass` / `fail` / `not_evaluated`; cualquier otra entrada queda no evaluada y
-detiene la campaña. Valorar repreguntar ante errata sin inferencia adicional.
+Interfaz implementada: `p` / `f` / `x` más etiquetas completas, por **criterio**,
+sin confirmar acciones del bot. Repregunta ante errata sin inferencia adicional;
+vacío/EOF detiene. `--check-console` ejercita el revisor sin modelo ni aprobación.
+Procedimiento y límites: [runbook Railway](railway-console-runbook.md).
 
 ### 2. Ejecutar y revisar la campaña humana existente
 

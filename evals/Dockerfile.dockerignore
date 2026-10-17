@@ -1,0 +1,19 @@
+# This Dockerfile-specific allowlist overrides the production .dockerignore.
+**
+!pyproject.toml
+!README.md
+!src/
+!src/**
+!scripts/
+!scripts/**
+!prompts/
+!prompts/**
+!evals/
+!evals/**
+**/__pycache__/
+**/*.py[cod]
+**/.env
+**/.env.*
+**/*.local
+**/*.db
+**/*.sqlite3

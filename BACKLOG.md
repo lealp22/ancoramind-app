@@ -1414,6 +1414,19 @@ concreta SHA/plan/huellas pendientes. Web opcional, golden set humano, Jev calib
 segunda opinión y automatización quedan diferidos, sin bloquear T7. Registro
 completo: specs/018 `incremental-roadmap.md`. **BL-48 sigue abierto**.
 
+**Incrementos 1–2 solicitados posteriormente:** preparación local del servicio
+temporal implementada: `evals/Dockerfile`/config propia, arranque idle sin red ni
+Agent, fuentes selladas sin copiar Git/secretos y huella contrastable externamente,
+mount obligatorio para estado, revisor p/f/x con repregunta y prueba TTY sin modelo.
+No cambia bot/Gateway/prompts ni cinco casos. Runbook specs/018
+`railway-console-runbook.md`. Incremento 2 pendiente de CI/SHA y aprobación
+concreta, recursos/clave exclusiva/acceso y etiquetas del propietario. Sin
+despliegue ni inferencia; Jev sigue en propuesta existente, no duplicada.
+Verificación: **1647 unitarias (80,58 % cobertura), 207 integraciones y 1 STT
+live omitida**, Ruff/mypy limpios. Docker sin red: preflight, arranque idle,
+SIGTERM, PTY real y protección de reserva entre contenedores con mismo volumen
+superados. Imagen de desarrollo, no SHA aprobado; evidencia/límites en el runbook.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue

@@ -301,6 +301,54 @@ async def test_blank_console_input_is_not_approval(campaign):
     assert await review.review(case, observation(case)) == ("not_evaluated", "not_evaluated")
 
 
+@pytest.mark.parametrize("text,expected", [
+    ("p\nP\n", ("pass", "pass")),
+    (" PASS \np\n", ("pass", "pass")),
+    ("F\n", ("fail", "not_evaluated")),
+    ("x\n", ("not_evaluated", "not_evaluated")),
+    ("unknown\np\np\n", ("pass", "pass")),
+    ("unknown\n", ("not_evaluated", "not_evaluated")),
+])
+async def test_console_shortcuts_and_typos_do_not_infer(campaign, text, expected):
+    case = campaign[0].validate_snapshot(campaign[1])[0]
+    writer = Console()
+    reviewer = TerminalCampaignReviewer(Console(text), writer)
+    assert await reviewer.review(case, observation(case)) == expected
+    assert ("Entrada no válida" in writer.getvalue()) == text.startswith("unknown")
+
+
+async def test_failure_preserved_when_later_criteria_not_evaluated(campaign):
+    run, _, _ = runner(campaign, labels=["fail", "not_evaluated"])
+    report = await run.run()
+    assert report["results"][0]["semantic_status"] == "failed"
+    assert report["status"] == "stopped"
+
+
+def test_console_check_has_no_source_network_reservation_or_approval(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "open_review_console", lambda: (Console("p\n"), Console()))
+    monkeypatch.setattr(cli, "source_identity", lambda: pytest.fail("source not needed"))
+    monkeypatch.setattr(cli, "execute_approved", lambda *a: pytest.fail("no execution"))
+    assert cli.main(["--check-console"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report == {
+        "status": "console_ready", "inference_started": False, "approval_granted": False,
+    }
+
+
+def test_console_check_cannot_be_combined_with_execution(capsys):
+    assert cli.main(["--check-console", "--execute"]) == 1
+    assert json.loads(capsys.readouterr().out)["semantic_status"] == "not_evaluated"
+
+
+async def test_remote_missing_volume_stops_before_reservation_or_network(campaign, tmp_path):
+    plan, snapshot = campaign
+    identity, env = approval(plan, snapshot)
+    env["ANCORA_EVAL_REQUIRE_VOLUME"] = "1"
+    with pytest.raises(ValueError, match="persistent_state"):
+        await cli.execute_approved(plan, snapshot, identity, env, tmp_path)
+    assert not list(tmp_path.iterdir())
+
+
 def test_cli_default_never_needs_secrets_console_or_gateway(campaign, monkeypatch, capsys):
     monkeypatch.setattr(cli, "source_identity", lambda: {
         "code_sha": "a" * 40, "source_fingerprint": "b" * 64, "worktree": "dirty",

@@ -75,13 +75,20 @@ class TerminalCampaignReviewer:
         for index, criterion in enumerate(case.response_criteria):
             self._writer.write(
                 f"Criterio {index}: " + json.dumps(criterion, ensure_ascii=True)
-                + "\nEscribe pass / fail / not_evaluated (vacío = detener): "
+                + "\n[p] pass / [f] fail / [x] not_evaluated (vacío = detener): "
             )
             self._writer.flush()
-            raw = (await asyncio.to_thread(self._reader.readline)).strip()
-            label: ReviewLabel = "pass" if raw == "pass" else (
-                "fail" if raw == "fail" else "not_evaluated"
-            )
+            choices: dict[str, ReviewLabel] = {
+                "p": "pass", "pass": "pass", "f": "fail", "fail": "fail",
+                "x": "not_evaluated", "not_evaluated": "not_evaluated", "": "not_evaluated",
+            }
+            while True:
+                raw = (await asyncio.to_thread(self._reader.readline)).strip().casefold()
+                if raw in choices:
+                    label = choices[raw]
+                    break
+                self._writer.write("Entrada no válida. Usa p / f / x (vacío = detener): ")
+                self._writer.flush()
             labels.append(label)
             if label != "pass":
                 labels.extend("not_evaluated" for _ in case.response_criteria[index + 1:])
@@ -201,8 +208,8 @@ class EvalCampaignRunner:
                         {"index": i, "label": label} for i, label in enumerate(labels)
                     ]
                     result["semantic_status"] = (
-                        "not_evaluated" if "not_evaluated" in labels
-                        else "failed" if "fail" in labels else "passed"
+                        "failed" if "fail" in labels
+                        else "not_evaluated" if "not_evaluated" in labels else "passed"
                     )
                     if result["semantic_status"] != "passed":
                         raise ValueError("eval_review_not_passed")

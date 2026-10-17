@@ -5,12 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import hashlib
 import json
 import logging
 import os
-import shutil
-import subprocess
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -22,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.eval_source import source_identity as read_source_identity  # noqa: E402
 from src.agent.eval_campaign import (  # noqa: E402
     EvalCampaignPlan,
     EvalUsageRecorder,
@@ -38,29 +36,7 @@ from src.domain.runtime_config.models import RuntimeConfigSnapshot  # noqa: E402
 
 
 def source_identity(root: Path = ROOT) -> dict[str, str]:
-    """Read local code identity without logging git output or loading credentials."""
-    git = shutil.which("git")
-    if git is None:
-        raise ValueError("eval_git_required")
-    sha = subprocess.run(  # noqa: S603 - fixed git subcommand, no shell/user arguments
-        [git, "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
-        timeout=10, check=True,
-    ).stdout.strip()
-    dirty = subprocess.run(  # noqa: S603 - fixed git subcommand, no shell/user arguments
-        [git, "status", "--porcelain"], cwd=root, capture_output=True, text=True,
-        timeout=10, check=True,
-    ).stdout.strip()
-    digest = hashlib.sha256()
-    for folder, pattern in (("src", "*.py"), ("scripts", "*.py"),
-                            ("prompts", "*.md"), ("evals", "*.json")):
-        for path in sorted((root / folder).rglob(pattern)):
-            digest.update(path.relative_to(root).as_posix().encode())
-            digest.update(b"\0")
-            # Stable across Git autocrlf checkout, but not changes of content.
-            digest.update(path.read_text(encoding="utf-8").replace("\r\n", "\n").encode())
-            digest.update(b"\0")
-    return {"code_sha": sha, "source_fingerprint": digest.hexdigest(),
-            "worktree": "dirty" if dirty else "clean"}
+    return read_source_identity(root)
 
 
 def validate_live_approval(
@@ -96,6 +72,43 @@ def open_review_console() -> tuple[TextIO, TextIO]:
     return reader, writer
 
 
+def validate_state_directory(
+    state_dir: Path, env: Mapping[str, str], *, sealed_image: bool = False,
+) -> None:
+    """Remote evals require an actual mounted directory, not ephemeral storage."""
+    if (
+        not state_dir.is_absolute()
+        or any(path.is_symlink() for path in (state_dir, *state_dir.parents))
+        or (sealed_image and state_dir != Path("/eval-state"))
+        or ((sealed_image or env.get("ANCORA_EVAL_REQUIRE_VOLUME") == "1")
+            and (state_dir == Path(state_dir.anchor) or not state_dir.is_mount()))
+    ):
+        raise ValueError("eval_persistent_state_directory_required")
+
+
+async def check_console() -> dict[str, object]:
+    """Exercise the same human reviewer without model, key, approval or reservation."""
+    from src.agent.evals import EvalCase, EvalObservation
+    from src.domain.interactions.reply import AgentReply
+
+    case = EvalCase(
+        case_id="console_check.synthetic", category="console_check",
+        input_text="Comprobar teclado sin llamar al modelo.", synthetic_context={},
+        expected_outcome="safe_response", required_tool=None, forbidden_tools=frozenset(),
+        requires_user_confirmation=False,
+        response_criteria=("La respuesta indica que no se ha llamado al modelo.",),
+    )
+    reader, writer = open_review_console()
+    with reader, writer:
+        labels = await TerminalCampaignReviewer(reader, writer).review(
+            case, EvalObservation(outcome="safe_response", reply=AgentReply(
+                answer="Prueba de consola: no se ha llamado al modelo.", proposal_text="",
+            )),
+        )
+    return {"status": "console_ready" if labels == ("pass",) else "console_stopped",
+            "inference_started": False, "approval_granted": False}
+
+
 async def execute_approved(
     plan: EvalCampaignPlan, snapshot: RuntimeConfigSnapshot, identity: dict[str, str],
     env: Mapping[str, str], state_dir: Path,
@@ -105,9 +118,12 @@ async def execute_approved(
     case_hash = campaign_cases_fingerprint(cases)
     validate_live_approval(plan, identity, case_hash, env)
     settings = gateway_settings(env)
+    validate_state_directory(
+        state_dir, env, sealed_image=identity.get("identity_source") == "sealed_image",
+    )
     # Settings validation does not perform I/O. Check private access only after
     # approval and local anti-replay reservation; unknown result consumes the run.
-    state_dir.mkdir(parents=True, exist_ok=True)
+    state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     if state_dir.is_symlink():
         raise ValueError("eval_state_directory_invalid")
     marker = state_dir / (plan.checksum() + ".reserved.json")
@@ -172,11 +188,21 @@ async def execute_approved(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--snapshot", type=Path, required=True)
-    parser.add_argument("--plan", type=Path, required=True)
+    parser.add_argument("--snapshot", type=Path)
+    parser.add_argument("--plan", type=Path)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--state-dir", type=Path)
+    parser.add_argument("--check-console", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.check_console:
+            if args.execute or args.snapshot or args.plan or args.state_dir:
+                raise ValueError("eval_console_check_is_separate")
+            result = asyncio.run(check_console())
+            print(json.dumps(result))
+            return 0 if result["status"] == "console_ready" else 1
+        if args.snapshot is None or args.plan is None:
+            raise ValueError("eval_snapshot_and_plan_required")
         if not args.snapshot.is_absolute() or not args.plan.is_absolute():
             raise ValueError("eval_absolute_paths_required")
         snapshot = RuntimeConfigSnapshot.model_validate_json(
@@ -203,7 +229,10 @@ def main(argv: list[str] | None = None) -> int:
                 contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink),
             ):
                 report = asyncio.run(execute_approved(
-                    plan, snapshot, identity, dict(os.environ), ROOT / "tmp" / "eval-campaigns"
+                    plan, snapshot, identity, dict(os.environ),
+                    args.state_dir or Path(os.environ.get(
+                        "ANCORA_EVAL_STATE_DIR", str(ROOT / "tmp" / "eval-campaigns")
+                    )),
                 ))
         finally:
             logging.disable(disabled)

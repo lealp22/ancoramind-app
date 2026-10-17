@@ -11,6 +11,11 @@ revisión humana puntual por shell, sin túneles. No autoriza aprovisionamiento,
 claves, despliegue ni inferencia; siguen pendientes los gates concretos.
 Alcance inmediato y continuación futura en [camino incremental](incremental-roadmap.md).
 
+**Incremento local posterior:** servicio temporal idle e imagen dedicada,
+procedencia sellada sin copiar Git, mount persistente obligatorio, p/f/x y
+prueba de consola sin modelo. Ver [runbook Railway](railway-console-runbook.md).
+Preparación local no equivale a despliegue ni campaña revisada.
+
 ## Incremento implementado
 
 - `src/agent/eval_campaign.py`: candidato validado, aprobación ligada al checksum
@@ -154,6 +159,9 @@ Autorizado completar código y avisar de lo necesario por parte del propietario;
 guarda respuestas para revisión posterior. Muestra datos sintéticos, `answer`,
 `proposal_text`, tools observadas y criterios, escapando secuencias de control.
 El humano escribe `pass`, `fail` o `not_evaluated` por criterio; vacío/EOF para.
+Ahora también admite `p/f/x`, mayúsculas y espacios; una entrada desconocida
+repregunta sin inferencia adicional. `--check-console` permite verificar TTY
+con texto fijo sin key, red, reserva ni concesión de aprobación.
 Reporte guarda solo índice/label, método `human_console_v1` y checks técnicos.
 
 No es un juez LLM calibrado ni baseline T8; no reemplaza los checks técnicos por
@@ -167,6 +175,8 @@ no puede impedir capturas externas. Si no hay revisor presente, **no ejecutar**.
 
 1. Revisar y comitear el incremento; volver a ejecutar gates/checks para ese SHA.
    No hace falta redeploy del bot. El lanzador rechaza árbol sucio.
+   En imagen eval, contrastar SHA/huella sellados con checkout limpio y CI externo;
+   `identity_source=sealed_image` no demuestra por sí mismo procedencia Git.
 2. Ejecutar **sin `--execute`** usando rutas absolutas:
 
    ```powershell
