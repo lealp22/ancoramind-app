@@ -37,14 +37,16 @@ recordatorios y eventos, con trazabilidad completa.
   local preparados, sin aprobación de gasto ni acceso nuevo).
   1582 unit tests y 207 integration PostgreSQL superados; una prueba STT live
   se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
-  BL-52/specs/037 implementado localmente: aviso Core acotado para cuentas sin
-  acceso, rejected intacto/sin IA, flag `TELEGRAM_ACCESS_NOTICE_ENABLED` OFF por
-  defecto. Head Alembic local `0017_access_notice_index`; Supabase observado
-  sigue `0016_voice_guard_search_path` (sin migración ni rollout BL-52).
-  BL-49/specs/038 implementado localmente: bloque Core de calendario con
+  BL-52/specs/037 desplegado y validado E2E acotado: primer aviso, cooldown,
+  renovación y `/help` autorizado; rejected intacto/sin IA. Flag
+  `TELEGRAM_ACCESS_NOTICE_ENABLED` ON en producción (default en código OFF).
+  Head Alembic local/Supabase `0017_access_notice_index`. Panel y pairing
+  permanecen ON por decisión del propietario, sin apagado automático post-E2E.
+  BL-49/specs/038 desplegado: bloque Core de calendario con
   recurrencia/límite/aviso/antelación y snooze con título canónico scoped al
   usuario y duración. Sin cambios de payload/hash, consentimiento ni ejecución;
-  despliegue y revalidación Telegram pendientes.
+  presentación/descarte Telegram superados en SHA `65295ac`. Primera petición
+  natural de recurrencia rechazada sin propuesta, diagnóstico pendiente BL-54.
   Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.
 

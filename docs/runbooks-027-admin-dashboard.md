@@ -5,6 +5,11 @@
 > convive con `scripts/runtime_config.py`/`scripts/telegram_pairing.py` sin
 > reemplazarlos.
 
+**Estado operativo acordado 2026-10-17:** panel y pairing permanecen habilitados
+en Railway tras las pruebas. El default OFF no implica apagarlos al cerrar un
+E2E; cualquier desactivación global requiere acuerdo explícito. Revocar un
+evaluador no exige quitar el panel ni las APIs al operador.
+
 ## 1. Invariantes operativos
 
 - **Sólo detrás de HTTPS.** El token viaja como `Authorization: Bearer` sin

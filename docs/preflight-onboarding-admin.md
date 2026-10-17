@@ -7,7 +7,11 @@ autorización revocada y tres flags OFF al cierre. No es apertura del piloto ni
 matriz completa. También se ejecutó después el circuito autoaprobado sin LLM:
 mensaje de acceso concedido, ayuda inmediata y revocación correctos; flags OFF
 al cierre. No requiere aprobación manual. Silencio de cuentas sin acceso
-registrado BL-52, no implementado. Registro de cambios/deployments/incidencia de redacción de
+registrado BL-52. **Actualización posterior:** BL-52 desplegado y E2E de
+aviso/cooldown/renovación superado; panel y pairing permanecen ON por decisión
+del propietario, sin rollback automático. La cuenta evaluadora sigue revocada.
+Evidencia en specs/037 y campaña. Los flags OFF anteriores son históricos,
+no el estado live actual. Registro de cambios/deployments/incidencia de redacción de
 código agotado en la campaña, «E2E manual remoto autorizado, sin LLM».
 Complementa `runbooks-017-telegram-pairing.md`, `runbooks-027-admin-dashboard.md`
 y la campaña en `specs/008-railway-deployment/mvp-release-campaign.md`.

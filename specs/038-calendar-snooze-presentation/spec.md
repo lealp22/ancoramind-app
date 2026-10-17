@@ -1,6 +1,7 @@
 # Spec 038 — Presentación revisable de calendario y snooze (BL-49)
 
-Estado: implementado y validado localmente el 2026-10-17; rollout/E2E pendiente.
+Estado: desplegado; E2E Telegram de presentación y descarte superado el
+2026-10-17. Primera petición natural de recurrencia rechazada: hallazgo BL-54.
 Alcance local autorizado por el propietario. Evidencia en `verification.md`.
 
 ## Requisito y diseño
@@ -42,4 +43,5 @@ Las propuestas antiguas usan los defaults de ejecución existentes (intervalo
 No cambios de permisos, consentimiento, tools/prompts, cálculo de fechas,
 ejecución, recurrencia, notificaciones outbound, contabilidad ni migraciones.
 No despliegue, inferencia real, activación de flags ni E2E Telegram implícitos.
-El cierre operativo requiere revalidación Telegram autorizada por separado.
+Revalidación Telegram autorizada ejecutada para presentación/descarte; no
+certifica ejecución nueva ni toda la UX natural (BL-54). Ver `verification.md`.

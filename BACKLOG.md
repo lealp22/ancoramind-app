@@ -896,7 +896,50 @@ reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
 
-### BL-52 · Aviso determinista y acotado para cuentas sin acceso 🔶 implementado localmente — 2026-10-17
+### BL-54 · Investigar rechazo de recurrencia en petición natural de calendario 🆕 registrado — 2026-10-17
+
+Durante E2E de presentación BL-49, petición natural con inicio/fin y límite
+inclusivo timezone-aware `+01:00`, frecuencia semanal cada 2 semanas y aviso
+90 min antes: respuesta de rechazo de regla de recurrencia, sin propuesta ni
+evento creado. Interacción `46021851-1eb1-49d3-bf61-d608a5086577`, completed,
+2 model/2 Gateway/2 tools. Los valores de referencia son válidos al probar
+`recurrence_rule_from_flat` localmente; no se inspeccionaron los argumentos
+efectivos privados de la tool y no hay causa demostrada de parsing/modelo/DST.
+
+Una petición nueva explícita con parámetros UTC equivalentes sí generó el
+bloque correcto; no convierte la primera en PASS ni justifica exigir nombres
+técnicos a usuarios. Pendiente diagnóstico mínimo sin nueva inferencia ni
+captura de contenido personal indiscriminada; regresión cuando se localice
+el mecanismo. No retries/fallbacks ni cambio de timezone/prompts implícitos.
+Evidencia en specs/038 y campaña de liberación, E2E BL-49/52. Registro sólo,
+sin ampliar el alcance implementado de BL-49 ni el congelado de BL-48.
+
+### BL-53 · Ocultar IDs técnicos documentales en respuestas de uso normal 🆕 registrado — 2026-10-17
+
+Preferencia explícita del propietario al revisar el E2E visual de BL-1/6:
+los UUIDs internos de documentos añaden ruido y pueden confundir al usuario.
+Mostrar por defecto el nombre del documento y una referencia legible suficiente
+para atribuir los datos, sin volcar identificadores técnicos en el mensaje.
+Conservar los IDs en tools, persistencia y auditoría para trazabilidad y scope;
+no eliminarlos del contrato interno ni sustituirlos por nombres al autorizar.
+Reservar su presentación para petición explícita del usuario o diagnóstico
+solicitado, no como parte rutinaria de una respuesta documental.
+
+**Evidencia histórica, no nueva prueba:** la consulta de los fixtures
+`ancora-visual-e2e-20261017-image.png` y `ancora-visual-e2e-20261017-scan.pdf`
+incluyó nombre e ID en la respuesta. El guion pedía expresamente ambos, por lo
+que ese ensayo no demuestra incumplimiento del Agent: registra una mejora de
+UX para el uso normal y para futuros guiones de validación. La procedencia
+técnica puede comprobarse aparte sin exigir UUIDs en la respuesta visible.
+
+**Pendiente, no implementado:** revisar las instrucciones de presentación y
+añadir regresiones para consulta normal sin IDs y petición explícita de ID,
+preservando nombre/procedencia y resolución inequívoca del documento. No
+repetir ingesta ni inferencia para registrar este hallazgo. Separado de BL-50
+(campos estructurados omitidos) y sin ampliar implícitamente BL-48 ni la campaña
+autorizada BL-49/52. Ningún cambio de código/prompts o despliegue en este registro.
+
+### BL-52 · Aviso determinista y acotado para cuentas sin acceso ✅ desplegado; E2E acotado superado — 2026-10-17
 
 **Incremento autorizado:** aviso fijo «🔒 Tu acceso no está activo. Contacta
 con quien te invitó o con el administrador.» para nuevos mensajes privados
@@ -910,8 +953,15 @@ TTL 300 s. Callback/grupo/edit/rate-limit/secret inválido no notifican.
 Alembic local `0017_access_notice_index` (sólo índice parcial) e init.sql
 equivalente; sin modificar datos. 17 unitarias y 20 integraciones nuevas:
 global 1553 unitarias/203 integraciones passed, 1 live skipped, Ruff/mypy limpios.
-Especificación/evidencia en `specs/037-access-denied-notice/`. **Sin despliegue,
-migración o activación productiva; E2E real pendiente de autorización.**
+Especificación/evidencia en `specs/037-access-denied-notice/`.
+**Rollout autorizado posterior:** Alembic canónico 0016→0017 aplicado y
+verificado; flag de aviso ON en deployment `a20e86e1-93b1-4949-82e1-663ae290e162`,
+SHA `65295ac` y CI del mismo SHA verde. Telegram account=2 revocada: primer
+aviso recibido, silencio a +75 s y nuevo aviso tras cooldown; tres rejected,
+payload NULL y 0 Agent/model/Gateway/tools/usage. `/help` autorizado correcto
+sin IA. Panel y pairing permanecen ON por decisión del propietario, sin
+rollback automático; navegador abierto. PASS del guion acotado, no E2E de
+presión global/crash ni toda la matriz de onboarding. Evidencia specs/037.
 Los párrafos siguientes conservan hallazgo/propuesta de origen, no el estado
 actual de implementación local.
 
@@ -974,7 +1024,7 @@ inferencial hasta acordar alcance; no declarar garantía completa de coste con
 el ledger parcial. No se desactivó ningún control desde esta sesión.
 Evidencia en campaña, entrega 4; marco existente specs/013/026, no BL-48.
 
-### BL-49 · Completar presentación de calendario y snooze antes del piloto 🔶 implementado localmente — 2026-10-17
+### BL-49 · Completar presentación de calendario y snooze antes del piloto ✅ desplegado; presentación/descarte E2E superados — 2026-10-17
 
 Hallazgo del E2E de calendario/recurrencia/snooze (BL-1/41): el bloque Core
 de `create_calendar_event` muestra título/inicio/fin, pero no frecuencia,
@@ -993,8 +1043,15 @@ título del modelo. Payload/hash, botones, consentimiento y ejecución intactos.
 Sin migraciones ni cambios de tools/prompts. 29 unitarias y 4 integraciones
 nuevas; gates globales: 1582 unitarias, 207 integraciones passed y 1 STT live
 skipped, Ruff/mypy limpios. Evidencia: `specs/038-calendar-snooze-presentation/verification.md`.
-**Pendiente:** despliegue y revalidación Telegram con autorización propia;
-no dar por validada la UX family&friends ni ampliar el alcance de BL-48.
+**E2E autorizado posterior:** SHA `65295ac`/CI verde, deployment
+`a20e86e1-93b1-4949-82e1-663ae290e162`. Bloques de calendario semanal cada
+2 semanas con límite/aviso de 90 min y snooze de 90 min con título canónico
+observados en Telegram. Ambos descartados por No, hash intacto y cero nuevas
+filas canónicas; no ejecución nueva ni avisos programados. Primera petición
+natural rechazó recurrencia sin propuesta: se registra BL-54, no se oculta
+con el PASS posterior parametrizado. 6/6/6 model/Gateway/tools entre tres
+peticiones, 0,00805790 USD estimados, coste real desconocido; descartes sin IA.
+PASS de presentación/descarte acotado, no de toda UX family&friends ni BL-48.
 
 Observaciones relacionadas a priorizar por separado si procede: doble prefijo
 «Recordatorio:» en avisos vinculados, y texto de retraso que atribuye siempre

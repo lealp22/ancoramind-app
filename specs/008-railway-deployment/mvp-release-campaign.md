@@ -10,20 +10,102 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 |---|---|---|
 | 1. Recordatorios (BL-1/M5) | Petición → propuesta → Sí → fila canónica → aviso recibido → consulta `fired`; fecha/hora local y ausencia de repetición observada | PASS: circuito local y E2E Telegram autorizado de un recordatorio no recurrente; consulta final por SELECT, sin nueva inferencia |
 | 2. Vehículos/mantenimiento (BL-1/M4) | Registrar vehículo → confirmar → mantenimiento → confirmar → recuperar historial | PASS para alta e historial manual sin importe/factura; dos escrituras confirmadas y consulta real en Telegram |
-| 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido: serie diaria limitada, dos avisos + snooze entregados; presentación incompleta pendiente BL-49, no UX family&friends validada |
+| 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido previo; BL-49 desplegado y presentación/descarte superados después. Primer intento natural rechazado (BL-54), no toda UX family&friends validada |
 | 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | PDF sintético PASS; imagen parcial: fecha extraída pero omitida al consultar (BL-50). Dos originales y extracciones verificados; coste visual no disponible (BL-51) |
-| Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | E2E manual y auto sin LLM PASS con account=2; mensaje automático correcto y revocación inmediata; panel HTTPS/auth/logout comprobados. Flags OFF al cierre. Aislamiento/inactividad/resto matriz pendientes; silencio sin acceso → BL-52 |
+| Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | E2E manual/auto sin LLM PASS previos; flags OFF sólo en aquellos cierres. Propietario mantiene panel/pairing ON; BL-52 activo y aviso/cooldown/renovación PASS. Aislamiento/inactividad/resto matriz pendientes |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
 
-## Seguimiento local BL-49 (2026-10-17, sin rollout)
+## E2E BL-49/52 autorizado — 2026-10-17, 11:15–11:40Z
+
+### Publicación y decisión operativa
+
+- El propietario dejó panel y pairing activos de forma continuada; no repetir
+  el apagado global de las ventanas anteriores. Revocación del evaluador
+  conservada. Navegador Playwright abierto con ambas cuentas, borradores vacíos.
+- Código servido: `65295ac02b32728d9c4207ecee64e980d6fb3c06`, deployment
+  inicial `2ced2ad2-f912-4846-81d8-19d096198cd8` SUCCESS, una réplica.
+  `quality`, `integration`, `collector-config` success del mismo SHA revalidados.
+  Sin staged changes iniciales; Wait for CI no se cambió.
+- Alembic canónico contra proyecto Supabase verificado: `0016 → 0017`, sólo
+  índice parcial `idx_access_notice_created`. Head/índice comprobados después.
+- Única variable modificada: `TELEGRAM_ACCESS_NOTICE_ENABLED=true`; patch
+  `02778d20-d912-40e0-98c6-cf8a6810fa43` revisado, aplicado con autorización.
+  Deployment `a20e86e1-93b1-4949-82e1-663ae290e162` SUCCESS en el mismo SHA.
+  No cambio de allowlist, secretos, webhook, modelo, Gateway o runtime rev.8.
+
+### BL-52: rechazo con aviso, sin IA
+
+Account=2, autorización ya revocada, tres mensajes nuevos sintéticos:
+
+| Paso | Interacción | Entrada/salida Bot API | Resultado |
+|---|---|---|---|
+| Primer mensaje | `7ab1eac0-6900-4ec3-9d65-a7a0fad5501a` | 494 / 495 | aviso fijo recibido, delivered |
+| +75,449229 s | `dd8a28c3-6788-4307-8591-1b56b2ed7d00` | 498 / ninguna | silencio dentro de cooldown, sin outbox nuevo |
+| Después de 300 s | `20ecfdbe-ba3f-49fb-9f72-b41046a87774` | 505 / 506 | segundo aviso fijo recibido, delivered |
+
+Todos `rejected/user_not_allowlisted`, payload NULL, agent_started_at NULL,
+0 model/Gateway/tools/usage. Sin reinyectar updates ni conceder autorización.
+Renovación a 11:37:43Z, no prueba del borde exacto 300 s. Control positivo
+`/help` autorizado: `56215b95-a23a-4750-b725-25256564f1c7`, 507/508,
+completed sin IA ni aviso de rechazo. Evidencia completa en specs/037.
+
+### BL-49: revisar y descartar, sin escrituras canónicas
+
+Primera petición natural con offset `+01:00`: interacción
+`46021851-1eb1-49d3-bf61-d608a5086577`, 496/497, respuesta de rechazo de
+recurrencia y cero propuestas/eventos. Los valores de referencia pasan el helper
+local, pero los argumentos reales no se inspeccionaron; causa no determinada.
+Se registra **BL-54**, sin cambiar código/prompts ni ocultar el fallo.
+
+Nueva petición explícita anunciada con parámetros UTC equivalentes:
+`4dfbebb5-fda9-418b-a98c-5be23b5680d7`, propuesta
+`35e8adac-2491-45e8-a1fb-d82a01acca52`, salida `500`. Bloque observado en
+Telegram con cada 2 semanas, until inclusivo 15/11, aviso sí y 1 h 30 min antes
+del inicio. No por botón → `9cab05c4-4347-49e8-a42b-76a21e4a6b11`, salida
+`501`, discarded sin IA.
+
+Snooze de fixture previo propio: `792e94cb-88d5-451f-86ee-43032a8d88e5`,
+propuesta `d887083a-f278-4de1-9182-03b7b0f78539`, salida `503`. Bloque
+observado: Posponer recordatorio, título canónico y 1 h 30 min desde la
+confirmación, sin UUID en el bloque del bot. No por botón →
+`b3387df8-d61e-415b-9eac-3f8d7b9c8d7d`, salida `504`, discarded sin IA.
+Se conserva doble prefijo «Recordatorio:» ya conocido, no bloqueante.
+
+Hashes originales comprobados, executed_at NULL, cero eventos nuevos y cero
+recordatorios asociados a ambas propuestas. No se pulsó Sí ni se programaron
+avisos. Botones y bloques preservados; navegador principal IDs visuales
+`14437–14446`, distintos de Bot API. Capturas acotadas locales de bloques;
+no revisión humana formal de toda la UX ni matriz completa por automatizar DOM.
+
+Tres peticiones Agent (incluida la rechazada): total 6 model calls / 6 Gateway
+requests / 6 tools, rev.8/r4. **0,00805790 USD estimados**, coste real NULL,
+retry_count=0 y sin fallback. Descartes, `/help` y BL-52 sin inferencias.
+Ninguna ejecución del harness T7 de cinco casos: requiere aprobación separada.
+
+### Cierre
+
+Readiness 200 a 11:38:38Z, DB/Gateway/processor/worker/runtime healthy,
+circuit unknown; panel HTTPS 200 y JSON panel/API pairing sin token 401.
+Una réplica online, cero staged changes; Alembic 0017, cero propuestas de la
+ventana pendientes y cuenta evaluadora revocada verificados a 11:40Z.
+El aviso, panel y pairing quedan ON. Registros conservados, sin limpieza SQL,
+no replays, sin rotaciones, sin nuevo commit desde esta ventana.
+Validación local tras la ventana: 115 unitarias focales passed (presentación,
+processor y aviso), Ruff global/mypy src (175 módulos) limpios y diff check
+limpio. No nueva suite completa/integración: conservan su evidencia local
+previa 1582/207, no una ejecución en esta ventana documental/operativa.
+PASS acotado de aviso/cooldown y presentación/descarte; no toda M5, BL-24/43,
+BL-48, fallo natural BL-54 ni seguridad/coste completo de visión BL-51.
+
+## Seguimiento local BL-49 (anterior al rollout, 2026-10-17)
 
 La carencia de presentación de la entrega 3 tiene corrección local en
 `specs/038-calendar-snooze-presentation`: bloque Core con recurrencia/límite,
 aviso/antelación y snooze con objetivo canónico scoped al usuario y duración.
 Gates: 1582 unitarias y 207 integraciones passed, 1 STT live skipped,
 Ruff/mypy limpios. Sin cambiar payload/hash, consentimiento ni ejecución.
-La evidencia E2E anterior sigue siendo asistida: no acredita este nuevo bloque
-hasta desplegar y revalidar visualmente en una ventana autorizada.
+En aquella fase la evidencia E2E anterior seguía siendo asistida. La ventana
+autorizada posterior de arriba añade evidencia de estos nuevos bloques.
 
 ## Baseline observado, sin desplegar desde esta sesión
 

@@ -1,6 +1,7 @@
 # Spec 037 — Aviso de acceso no activo (BL-52)
 
-Estado: implementado localmente, 2026-10-17. Sin despliegue ni activación remota.
+Estado: desplegado y activo, 2026-10-17; E2E Telegram de aviso/cooldown y
+usuario autorizado superado. Evidencia y límites en `verification.md`.
 
 ## Contrato
 

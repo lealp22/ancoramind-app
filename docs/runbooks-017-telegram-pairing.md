@@ -147,15 +147,23 @@ arrancar una app local de prueba; las pruebas ASGI usan PostgreSQL aislado.
    para esta prueba, decidir explícitamente si se conserva o se elimina; no
    borrarlo de manera implícita.
 
-## 5. Rollback obligatorio tras un E2E
+## 5. Cierre de E2E y rollback según alcance autorizado
+
+**Decisión operativa 2026-10-17:** el propietario mantiene panel y pairing
+habilitados de forma continuada. No desactivar `ADMIN_DASHBOARD_ENABLED`,
+`TELEGRAM_PAIRING_ADMIN_ENABLED` ni `TELEGRAM_PAIRING_ENABLED` automáticamente
+al terminar una prueba. Revocar sólo accesos/invitaciones de prueba incluidos
+en su alcance; un rollback global exige acuerdo explícito independiente.
 
 1. Listar solicitudes pendientes y decidirlas explícitamente; no dejar
    solicitudes ambiguas para la siguiente ventana.
 2. Revocar cada autorización del cohort con un motivo que identifique el cierre
    del E2E. Confirmar que un update **nuevo** de cada cuenta ya no es admitido.
 3. Revocar las invitaciones activas restantes para impedir canjes tardíos.
-4. En Railway, establecer `TELEGRAM_PAIRING_ENABLED=false` y
+4. Sólo si se acordó volver al estado OFF tras una habilitación temporal, en
+   Railway establecer `TELEGRAM_PAIRING_ENABLED=false` y
    `TELEGRAM_PAIRING_ADMIN_ENABLED=false`; redesplegar y comprobar `/health`.
+   Si se mantiene el servicio operativo, conservar los flags ON.
    No borrar `TELEGRAM_PAIRING_CODE_PEPPER` durante el incidente: conservarlo
    hasta haber revisado la auditoría y completar la política de retención.
 5. Registrar evidencia exclusivamente metadata-only: UUIDs de invitación y
@@ -170,6 +178,8 @@ arrancar una app local de prueba; las pruebas ASGI usan PostgreSQL aislado.
 ### Aviso de acceso no activo (BL-52/specs/037)
 
 Independiente del pairing: `TELEGRAM_ACCESS_NOTICE_ENABLED=false` por defecto.
+Rollout del 2026-10-17: aviso activo y Alembic 0017 aplicado; E2E acotado
+superado, evidencia en specs/037. No confundir el default con el estado live.
 Para un rollout autorizado, aplicar Alembic head `0017_access_notice_index`,
 verificar CI del mismo SHA y habilitar ese flag con admission/processor/cifrado
 existentes. No encender pairing/admin ni cambiar allowlist para que haya aviso.
