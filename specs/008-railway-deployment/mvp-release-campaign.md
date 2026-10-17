@@ -10,10 +10,43 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 |---|---|---|
 | 1. Recordatorios (BL-1/M5) | Petición → propuesta → Sí → fila canónica → aviso recibido → consulta `fired`; fecha/hora local y ausencia de repetición observada | PASS: circuito local y E2E Telegram autorizado de un recordatorio no recurrente; consulta final por SELECT, sin nueva inferencia |
 | 2. Vehículos/mantenimiento (BL-1/M4) | Registrar vehículo → confirmar → mantenimiento → confirmar → recuperar historial | PASS para alta e historial manual sin importe/factura; dos escrituras confirmadas y consulta real en Telegram |
-| 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido previo; BL-49 desplegado y presentación/descarte superados después. Primer intento natural rechazado (BL-54), no toda UX family&friends validada |
+| 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido previo; BL-49 presentación/descarte superados. BL-54 corregido y una regresión natural con zona/límite explícitos PASS en 778c5a3; no toda UX family&friends validada |
 | 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | PDF sintético PASS; imagen parcial: fecha extraída pero omitida al consultar (BL-50). Dos originales y extracciones verificados; coste visual no disponible (BL-51) |
 | Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | E2E manual/auto sin LLM PASS previos; flags OFF sólo en aquellos cierres. Propietario mantiene panel/pairing ON; BL-52 activo y aviso/cooldown/renovación PASS. Aislamiento/inactividad/resto matriz pendientes |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
+
+## Regresión natural BL-54 autorizada — 2026-10-17, 12:24–12:26Z
+
+- Propietario confirma cambios desplegados y autoriza prueba. HEAD limpio y
+  código servido `778c5a3ec0d7dd929585b2a45151357dbb1cba13`; app deployment
+  `1193d431-a2f8-4536-ba73-0c1c7895e865` SUCCESS. Checks del mismo SHA
+  quality/integration/collector-config verdes, una réplica, sin staged changes.
+- Una petición natural, sin parámetros técnicos: evento sintético «Prueba
+  natural BL54 20261017» el 1/11/2026 10:00–10:01, cada dos semanas hasta
+  15/11/2026 10:00 inclusive, todas las horas UTC+01:00, aviso 90 min antes.
+  Una sola llamada de entrada; no se repitió el mensaje ni se ejecutó el evento.
+- Origen `c6e99224-8bdf-4a7d-994f-481958949610`, update `978199116`, entrada
+  Bot API `509`, completed; propuesta `07fb5ef6-ed21-4ef1-ad4e-4c5b321a670e`,
+  salida `510`. Telegram mostró +01:00 intacto, weekly cada 2 semanas,
+  límite inclusivo con hora/zona, aviso sí y antelación 1 h 30 min.
+- No por botón: `100291fc-a0c1-43cf-a404-50fa3ba2f367`, callback update
+  `978199117`, salida `511`, completed. Respuesta visible «Propuesta descartada».
+  Propuesta discarded, executed_at NULL y hash coincidente; cero eventos con
+  el título y cero recordatorios de esa propuesta, antes y después.
+- Uso origen 2 model / 2 Gateway / 2 tools, dos usage completed, rev.8/r4,
+  retry_count=0 y sin fallback; **0,00249900 USD estimados**, real NULL.
+  Descarte 0/0/0 y cero uso LLM. Navegador IDs visuales 14447–14449,
+  distintos del Bot API, ambas pestañas conservadas y borrador vacío.
+- Cierre a 12:26:03Z: head 0017, una propuesta del origen y cero pending;
+  readiness 200 (12:25:56Z), componentes healthy salvo circuit unknown.
+  Panel 200, API pairing sin token 401, app online y una réplica. No se
+  cambiaron flags, secretos, allowlist, webhook, runtime, modelo ni se lanzó
+  despliegue/migración desde esta ventana; panel/pairing/aviso conservados ON.
+- 93 unitarias focales passed, Ruff/mypy/diff limpios. Gates completos
+  1626 unitarias/207 integraciones + 1 skipped mantienen ejecución local previa.
+  Evidencia detallada specs/039. Cierre BL-54 acotado a contrato y regresión:
+  no atribuye causa exacta al fallo histórico ni garantiza todos los casos,
+  no nueva ejecución/entrega de avisos ni cinco evals T7. Sin commit nuevo.
 
 ## E2E BL-49/52 autorizado — 2026-10-17, 11:15–11:40Z
 

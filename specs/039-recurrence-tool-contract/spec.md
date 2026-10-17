@@ -1,18 +1,18 @@
 # Spec 039 — Contrato de recurrencia coherente (BL-54)
 
-Estado: contradicción reproducida y corrección mínima implementada localmente,
-2026-10-17. Causa histórica no confirmada; sin rollout ni E2E nuevo.
-Alcance autorizado: investigar sin inferencia ni operaciones remotas; corregir
-únicamente un mecanismo demostrado con regresiones.
+Estado: corrección desplegada y regresión natural E2E acotada superada el
+2026-10-17 en SHA `778c5a3`. Causa histórica exacta no confirmada.
+Alcance inicial: diagnóstico/corrección local. El propietario autorizó después
+una petición natural Telegram y descarte, sin crear eventos ni avisos.
 
 ## Evidencia y límite causal
 
-El schema real obtenido con `agno.tools.function.Function.from_callable`
-describe `recurrence_until` como «ISO 8601 date» en calendario/recordatorios.
-El prompt de calendario también recomienda una fecha final, sin exigir hora
+Antes de corregirlo, el schema real obtenido con `Function.from_callable`
+describía `recurrence_until` como «ISO 8601 date» en calendario/recordatorios.
+El prompt de calendario también recomendaba una fecha final, sin exigir hora
 ni zona. Sin embargo `RecurrenceRule` rechaza cualquier `until` naive:
-`2026-11-15` y `2026-11-15T10:00:00` no sirven. Ambas tools capturan esos
-errores y responden con un mensaje orientado a frecuencia aunque `weekly`
+`2026-11-15` y `2026-11-15T10:00:00` no sirven. Ambas tools capturaban esos
+errores y respondían con un mensaje orientado a frecuencia aunque `weekly`
 sea válida; un intervalo inválido produce el mismo diagnóstico engañoso.
 
 Reproducción sintética sin DB/proveedor: fecha-hora `+01:00` y UTC aceptadas;
@@ -43,8 +43,10 @@ No relajar validación ni convertir naive/date-only automáticamente. Sin
 cambios en parser/expansión, payload/hash, permisos, consentimiento, ejecución,
 zonas horarias, registro de tools, configuración ni observabilidad.
 Cambio de descripciones/prompts evaluable: debe identificarse en el commit.
-No despliegues, nuevas inferencias, Telegram ni lectura de runtime personal.
+La fase local no autorizaba despliegues, inferencias ni lectura de runtime
+personal. La validación posterior autorizada figura en `verification.md`.
 
-Gates: unitarias e integración local globales, Ruff global, mypy src y diff. E2E natural nuevo sólo
-tras autorización propia. BL-54 no se cierra como causa histórica confirmada
-ni éxito semántico sólo por pasar tests deterministas.
+Gates locales superados: unitarias/integración globales, Ruff, mypy y diff.
+E2E natural autorizado superado para una petición con zona/límite explícitos
+y descarte. Cierre acotado del defecto de contrato y su regresión, no causa
+histórica confirmada ni garantía de toda recurrencia/obediencia semántica.

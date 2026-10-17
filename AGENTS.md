@@ -47,10 +47,12 @@ recordatorios y eventos, con trazabilidad completa.
   usuario y duración. Sin cambios de payload/hash, consentimiento ni ejecución;
   presentación/descarte Telegram superados en SHA `65295ac`. Primera petición
   natural de recurrencia rechazada sin propuesta. BL-54/specs/039: corregida
-  localmente contradicción de contrato `recurrence_until` (datetime con zona,
+  contradicción de contrato `recurrence_until` (datetime con zona,
   no fecha sola), rango de intervalo y error fijo sin eco en ambas tools;
-  parser intacto. Sin inferencia/rollout; causa histórica exacta no confirmada
-  y E2E natural pendiente. Cambio de prompts/descripciones evaluable.
+  parser intacto. SHA `778c5a3` desplegado por el propietario y CI verde:
+  petición natural con zona/límite explícitos y descarte E2E superados;
+  cero eventos/avisos nuevos. Cierre acotado, causa histórica exacta no
+  confirmada ni garantía semántica general. Cambio evaluable documentado.
   Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.
 

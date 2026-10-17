@@ -896,7 +896,40 @@ reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
 
-### BL-54 · Investigar rechazo de recurrencia en petición natural de calendario 🔶 contrato corregido localmente; E2E pendiente — 2026-10-17
+### BL-55 · Fechas legibles en mensajes y propuestas, sin ISO técnico 🆕 registrado — 2026-10-17
+
+Preferencia explícita del propietario al revisar la propuesta natural BL-54:
+`2026-11-01T10:00:00+01:00` añade ruido. Formato visible deseado:
+**`YYYY-MM-DD`** si sólo corresponde una fecha y **`YYYY-MM-DD HH:MM`** si
+también corresponde hora; ejemplos `2026-11-01` y `2026-11-01 10:00`.
+Aplicar a mensajes de uso normal, empezando por bloques Core de calendario
+(inicio/fin/límite inclusivo) y recordatorios; revisar después otras salidas
+deterministas y respuestas del Agent para no tener formatos contradictorios.
+
+**Evidencia:** propuesta sintética de BL-54 observada en Telegram, mensaje
+visual `14448` / Bot API `510`, origen `c6e99224-8bdf-4a7d-994f-481958949610`.
+El renderer `src/domain/actions/presentation.py` muestra start_at/end_at/
+trigger_at y recurrence_until como valores almacenados; las fechas límite
+TODO ya tienen otro formato legible. No es un fallo de parsing o ejecución.
+
+**Pendiente, no implementado:** definir presentación consistente usando la
+resolución de timezone existente, sin cambiar el instante ni ocultar una
+zona relevante para confirmar. No basta sustituir `T` y cortar el offset:
+cuando sea necesario, indicar la zona de forma legible aparte en vez de un
+sufijo ISO por campo. No inferir fecha sola por tener hora 00:00 en eventos
+o recordatorios ni convertir naive a UTC silenciosamente; preservar precisión
+significativa (segundos/fracciones no cero) mediante una regla explícita,
+sin redondear u ocultar diferencias entre lo mostrado y lo que se ejecuta.
+Payload/hash, parser, consentimiento y ejecución deben quedar intactos.
+
+Añadir regresiones de fecha sola, hora, medianoche, offset distinto de la
+zona del usuario, UTC y cambio horario; conservar fallback seguro para valores
+inválidos y procedencia. Si se cambian prompts/descripciones, tratar como
+cambio evaluable. Revalidación Telegram sólo en ventana autorizada; no repetir
+inferencias para registrar este hallazgo ni reabrir el cierre acotado BL-54.
+Registro documental únicamente; se conserva pendiente para priorización.
+
+### BL-54 · Investigar rechazo de recurrencia en petición natural de calendario ✅ contrato corregido y regresión natural E2E acotada superada — 2026-10-17
 
 Durante E2E de presentación BL-49, petición natural con inicio/fin y límite
 inclusivo timezone-aware `+01:00`, frecuencia semanal cada 2 semanas y aviso
@@ -925,9 +958,21 @@ incluido rango 1–365, preservación de hora/zona y aclaración natural si falt
 error fijo sin eco de entradas. Parser/semántica/permisos/ejecución intactos.
 44 regresiones nuevas; 1626 unitarias, 207 integraciones locales passed y 1
 STT live skipped; Ruff/mypy limpios. Sin inferencia ni acceso remoto, flags o
-despliegue. **Abierto:** commit de cambio evaluable, CI/SHA y E2E natural
+despliegue en aquella fase. **Pendiente al cerrar la fase local:** commit evaluable, CI/SHA y E2E natural
 autorizado; no exigir parámetros técnicos ni declarar retrospectivamente
 corregida la interacción fallida. T7 no se amplía ni se ejecuta en este cambio.
+
+**Validación posterior autorizada:** SHA `778c5a3` desplegado por el propietario,
+deployment `1193d431-a2f8-4536-ba73-0c1c7895e865` SUCCESS y CI del mismo SHA
+verde. Una petición natural sin parámetros técnicos, con UTC+01:00 y límite
+inclusivo explícitos, produjo weekly/2/until correctos y aviso de 90 min al
+primer intento. Propuesta `07fb5ef6-ed21-4ef1-ad4e-4c5b321a670e` observada en
+Telegram y descartada por No; hash intacto, cero eventos/avisos nuevos.
+Origen `c6e99224-8bdf-4a7d-994f-481958949610`, 2/2/2 model/Gateway/tools,
+0,00249900 USD estimados (real desconocido); descarte sin IA. 93 unitarias
+focales superadas. Evidencia specs/039. Cierre de contrato/regresión acotado,
+no causa histórica exacta, garantía general semántica ni toda M5. Sin cambiar
+flags/desplegar desde esta ventana; navegador conservado. Evals T7 pendientes.
 
 ### BL-53 · Ocultar IDs técnicos documentales en respuestas de uso normal 🆕 registrado — 2026-10-17
 
