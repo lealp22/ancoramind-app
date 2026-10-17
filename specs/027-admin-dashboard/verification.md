@@ -3,6 +3,26 @@
 > **Status:** 🔶 implementación local completa (2026-10-05); validación manual
 > en Railway pendiente.
 
+## Preparación local para onboarding — 2026-10-17
+
+- 32 casos añadidos en `tests/unit/test_admin_dashboard.py`: las ocho rutas
+  JSON rechazan credenciales ausentes/incorrectas/token CLI (401, no-store),
+  y las cuatro mutaciones exigen actor/motivo (422). Requests de esquema
+  válido para comprobar autenticación; validación de config no es mutación.
+- Settings del helper unitario sin lectura de `.env`. Sin cambios de producto.
+- `tests/integration/test_onboarding_admin_flow.py`: 7 casos nuevos con
+  panel/API CLI/admisión y servicios/repos PostgreSQL reales, sólo loopback
+  `_test`; emisión del panel y decisiones CLI actúan sobre las mismas filas.
+  Código de un uso, manual/auto, rechazo/expiración/revocación/cupo, auditoría,
+  redacción y revocación efectiva en update nuevo; sin Agent/LLM/Telegram.
+- 70 unitarias focales, 1536 globales; integración completa 183 passed,
+  1 live STT skipped. Ruff global y `mypy src/` (174 módulos) limpios.
+- Pruebas ASGI, no navegador: no afirman login/inactividad/sessionStorage/HTTPS
+  reales. El HTML shell es público; datos JSON protegidos. El panel no incluye
+  aprobar/rechazar/revocar, que se operan por CLI/API protegida.
+- Checklist: `docs/preflight-onboarding-admin.md`. E2E remoto y apertura del
+  piloto siguen pendientes; no se activaron flags ni cambió runtime-config.
+
 ## Local verification required
 
 ```powershell

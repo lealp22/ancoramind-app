@@ -12,7 +12,7 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 | 2. Vehículos/mantenimiento (BL-1/M4) | Registrar vehículo → confirmar → mantenimiento → confirmar → recuperar historial | PASS para alta e historial manual sin importe/factura; dos escrituras confirmadas y consulta real en Telegram |
 | 3. Calendario/recurrencia/snooze (BL-1/41) | Evento con aviso → confirmar → consulta por rango → entrega → siguiente ocurrencia → aplazamiento confirmado | PASS funcional asistido: serie diaria limitada, dos avisos + snooze entregados; presentación incompleta pendiente BL-49, no UX family&friends validada |
 | 4. Imagen/PDF escaneado (BL-1/6) | Adjuntar → conservar → extracción visual → resumen/consulta con procedencia | PDF sintético PASS; imagen parcial: fecha extraída pero omitida al consultar (BL-50). Dos originales y extracciones verificados; coste visual no disponible (BL-51) |
-| Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | Pruebas locales verdes; configuración y E2E Railway pendientes |
+| Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | Preparación local reforzada: 7 integraciones conjuntas y 32 unitarias nuevas; checklist listo. HTTPS/navegador/segunda cuenta y E2E Railway pendientes |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
 
 ## Baseline observado, sin desplegar desde esta sesión
@@ -363,6 +363,37 @@ con este ledger incompleto. No se inició otra prueba inferencial.
   Sin commit ni despliegue desde esta entrega.
 
 ## Invitaciones y administración: preparación paralela
+
+### Preparación local autorizada — 2026-10-17
+
+- Partida limpia en `bbed7bf` (la documentación de la entrega 4 ya estaba
+  registrada en ese commit). Se confirmaron BL-49/50/51 documentados y abiertos.
+- Sin consultas a infraestructura remota, nuevos secretos, allowlist, flags,
+  despliegues, inferencia ni mensajes a participantes. Cambios sólo tests/docs.
+- `tests/integration/test_onboarding_admin_flow.py` añade 7 casos ASGI reales
+  contra PostgreSQL loopback/base dedicada `_test`, no DBs productivas. Conecta
+  emisión/listado del panel, pairing privado, aprobación/rechazo CLI y admisión.
+  Manual/auto, duplicado, redacción del código descifrado, HMAC, auditoría y
+  revocación en update nuevo; los estados denegados no autorizan. Sender
+  simulado y runner que falla si se invoca; cero uso LLM en estos casos.
+- `tests/unit/test_admin_dashboard.py`: 32 casos nuevos (43 del fichero)
+  cubren todas las ocho rutas JSON frente a token ausente/incorrecto/CLI,
+  no-store y actor/motivo requerido en las cuatro mutaciones. Se desactiva
+  lectura de `.env` en su helper. No se modificó implementación productiva.
+- 70 unitarias focales passed; global **1536 passed**. Suite PostgreSQL local
+  completa **183 passed, 1 STT live skipped** (opt-in forzado OFF). Las pruebas
+  existentes de documentos/propuestas cubren aislamiento de repositorios;
+  todavía no aislamiento E2E con dos cuentas. Ruff global/mypy src (174 módulos)
+  limpios. Advertencia OTLP local sin Collector no demuestra caída remota.
+- Checklist y comando reproducible con guard loopback/_test:
+  `docs/preflight-onboarding-admin.md`, enlazado desde ambos runbooks.
+- No cierre de BL-24/43: quedan navegador/HTTPS/sessionStorage/temporizador
+  reales, cuenta evaluadora fuera de allowlist, alcance/retención/privacidad,
+  secretos por canal seguro y ventana de rollout explícita. La prueba de
+  admisión llega a `accepted`, no ejecuta el Agent tras aprobar ni promete
+  cancelar trabajo anterior al revocar. No se amplió la campaña runtime-config.
+
+### Observación remota previa (no revalidada en la preparación local)
 
 La inspección de nombres de variables Railway no encontró
 `TELEGRAM_PAIRING_ENABLED`, `TELEGRAM_PAIRING_ADMIN_ENABLED`,

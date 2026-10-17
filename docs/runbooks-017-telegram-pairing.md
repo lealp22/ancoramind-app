@@ -123,6 +123,11 @@ código efímero: no redirigir stdout a archivos, CI o herramientas de transcrip
 
 ## 4. E2E controlado pendiente de aprobación
 
+Preparación local y guion sin inferencia para una segunda cuenta:
+`docs/preflight-onboarding-admin.md` (2026-10-17). Esa preparación no activa
+flags ni autoriza esta ventana remota. No usar el `.env` operativo para
+arrancar una app local de prueba; las pruebas ASGI usan PostgreSQL aislado.
+
 1. Confirmar un servicio y una cuenta evaluadora **no productivos**. Aplicar las
    variables de §2 y esperar un deployment `SUCCESS`.
 2. Ejecutar `alembic upgrade head` por el proceso de migración aprobado; no hacer

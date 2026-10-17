@@ -55,6 +55,12 @@ pedir el token nuevo); no afecta a `RUNTIME_CONFIG_ADMIN_TOKEN` ni a los CLI.
 
 ## 3. Arrancar y acceder
 
+Para **preparación local de onboarding sin arranque operativo**, usar
+`docs/preflight-onboarding-admin.md`: pruebas ASGI/DB dedicada, sin Telegram,
+LLM ni `.env` de producción. El arranque siguiente corresponde a un entorno
+de desarrollo previamente aislado y configurado, no a reutilizar secretos/BD
+productivos para probar el panel.
+
 **Local (desarrollo):**
 
 ```powershell

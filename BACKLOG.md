@@ -680,6 +680,19 @@ supera su budget, LiteLLM falla cerrado, la interacción es trazable por
 `correlation_id` y no se exporta contenido personal.
 
 ### BL-24 · Onboarding de usuarios Telegram mediante invitaciones gobernadas 🔶 en curso — specs/017
+
+**Preparación local 2026-10-17:** siete integraciones nuevas conectan panel →
+emisión persistida → canje/outbox sin Agent → aprobación manual o autoaprobación
+opt-in → admisión → revocación/rechazo, con servicios/repos reales en PostgreSQL
+loopback `_test`. Incluyen código redactado/HMAC, replay y estados no admitidos.
+32 unitarias nuevas del panel prueban todas sus rutas JSON contra token
+ausente/erróneo/CLI y exigen actor/motivo en mutaciones. Resultado: 70 unitarias
+focales, 1536 globales y 183 integraciones passed/1 STT live skipped; Ruff/mypy
+limpios. Checklist operativo en `docs/preflight-onboarding-admin.md`. Sin
+producto/flags/allowlist/secretos operativos nuevos ni inferencia/contacto externo.
+No cierra BL-24/43: faltan HTTPS/navegador y segunda cuenta real autorizada,
+retención/gates de privacidad y ventana remota. BL-49/50/51 siguen abiertos.
+
 `ALLOWED_TELEGRAM_USER_IDS` permite una allowlist técnica, pero no es un proceso
 práctico de alta para un grupo de evaluadores aún no definido: no se debe abrir
 el bot a cualquier usuario ni pedir a cada persona que averigüe su Telegram ID.
@@ -2642,6 +2655,14 @@ mismo SHA a Supabase y confirmar que desaparece `function_search_path_mutable`;
 ---
 
 ### BL-43 · Pantalla de administración centralizada 🔶 implementado localmente — specs/027
+
+**Preparación onboarding 2026-10-17:** reforzada autenticación de las ocho rutas
+JSON, separación token panel/CLI y actor/motivo con 32 unitarias; 7 integraciones
+reales nuevas prueban emisión del panel más decisiones CLI sobre la misma DB
+aislada. Validación global: 1536 unitarias, 183 integraciones/1 live omitida,
+Ruff/mypy limpios. Evidencia en specs/027 y guion en
+`docs/preflight-onboarding-admin.md`. Sin arranque operativo ni activación remota;
+no se añaden botones de aprobación/revocación ni se declara cierre de BL-43.
 
 AncoraMind depende hoy de varias piezas externas (Railway, Supabase,
 OpenRouter, LiteLLM Gateway, Grafana) además de dos superficies HTTP de

@@ -2,6 +2,30 @@
 
 > **Status:** 🔶 T1–T4 local implementation complete as of 2026-09-27; controlled Telegram/Railway E2E remains pending.
 
+## Preparación conjunta onboarding/admin — 2026-10-17
+
+- Baseline local limpio `bbed7bf`. Sin cambio de código de producto, migraciones,
+  flags, allowlist ni secretos operativos; no acceso a producción en esta ventana.
+- Nuevo `tests/integration/test_onboarding_admin_flow.py`: 7 casos ASGI con
+  servicios/repos reales y PostgreSQL loopback/base `_test`. Panel emite/lista
+  invitación, `/pair` redacta código y entrega outbox sin Agent, pendiente bloquea,
+  CLI aprueba/rechaza/revoca, update nuevo refleja autorización o revocación.
+- Manual y autoaprobación opt-in validados; código HMAC al persistir, listado sin
+  código/hash, duplicado exacto, auditoría actor/motivo y estados rechazado,
+  invitación revocada/expirada/agotada/código inválido sin acceso. Expiración usa
+  sólo reloj de fixture SQL local, nunca el de producción.
+- El sender es simulado y el runner falla si se invoca: sin Telegram ni LLM.
+  Se comprueba admisión tras aprobar; no ejecución/cancelación del Agent.
+- Unitarias focales admin/pairing/CLI/runtime: **70 passed** (incluidas 32 nuevas).
+  Integración conjunta nueva + pairing repo/admission existente: **27 casos**,
+  incluidos en suite completa **183 passed, 1 STT live skipped** (forzado OFF).
+  Unitarias globales **1536 passed**; Ruff global, `mypy src/` (174 módulos)
+  limpios. Advertencia OTLP local `localhost:4318` sin Collector al terminar
+  unitarias; no invalida las aserciones ni observa el Collector productivo.
+- Preparación y guion remoto en `docs/preflight-onboarding-admin.md`.
+  Pendientes T4 y segunda cuenta real; el verde local no cierra BL-24/43 ni
+  autoriza un rollout. BL-49/50/51 permanecen registrados y abiertos.
+
 ## Local verification required
 
 ```powershell

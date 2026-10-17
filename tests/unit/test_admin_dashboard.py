@@ -41,7 +41,7 @@ def _settings(**overrides: object) -> Settings:
         "telegram_pairing_code_pepper": "pairing-pepper",
     }
     values.update(overrides)
-    return Settings(**values)
+    return Settings(_env_file=None, **values)
 
 
 def _manager() -> RuntimeConfigManager:
@@ -162,6 +162,66 @@ async def test_api_routes_reject_missing_or_wrong_token() -> None:
     assert (
         await _get(app, "/admin/dashboard/api/runtime-config/status", token=None)
     ).status_code == 401
+
+
+_API_CASES = [
+    ("GET", "/invitations", None),
+    ("GET", "/links", None),
+    ("GET", "/runtime-config/status", None),
+    ("POST", "/invitations", {"reason": "synthetic evaluator"}),
+    ("POST", "/runtime-config/validate", {"config": {}}),
+    ("POST", "/runtime-config/revisions", {"config": {}, "reason": "local test"}),
+    (
+        "POST",
+        "/runtime-config/revisions/1/activate",
+        {"expected_current_revision": 1, "reason": "local test"},
+    ),
+    (
+        "POST",
+        "/runtime-config/rollback",
+        {"revision": 1, "expected_current_revision": 2, "reason": "local test"},
+    ),
+]
+
+
+@pytest.mark.parametrize("method,path,payload", _API_CASES)
+@pytest.mark.parametrize("token", [None, "wrong", "cli-secret"])
+async def test_every_dashboard_api_rejects_absent_wrong_or_cli_token(
+    method: str, path: str, payload: dict | None, token: str | None
+) -> None:
+    app = _install(_settings(runtime_config_admin_token="cli-secret"))
+    headers = {"authorization": f"Bearer {token}"} if token else {}
+    headers["x-ancora-admin-actor"] = "operator@example.invalid"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://localhost"
+    ) as client:
+        response = await client.request(
+            method, "/admin/dashboard/api" + path, json=payload, headers=headers
+        )
+    assert response.status_code == 401
+    assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        (path, payload) for method, path, payload in _API_CASES
+        if method == "POST" and path != "/runtime-config/validate"
+    ],
+)
+@pytest.mark.parametrize("missing", ["actor", "reason"])
+async def test_dashboard_mutations_require_actor_and_reason(
+    path: str, payload: dict, missing: str
+) -> None:
+    app = _install(_settings())
+    body = {**payload, **({"reason": ""} if missing == "reason" else {})}
+    response = await _post(
+        app,
+        "/admin/dashboard/api" + path,
+        body,
+        actor=None if missing == "actor" else "operator@example.invalid",
+    )
+    assert response.status_code == 422
 
 
 async def test_links_endpoint_hides_empty_urls_and_attaches_health_status() -> None:
