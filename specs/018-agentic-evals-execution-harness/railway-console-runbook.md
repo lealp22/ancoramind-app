@@ -1,13 +1,19 @@
 # T7 — Servicio temporal privado y revisión por shell
 
-> Implementación local 2026-10-17. No desplegado, sin clave nueva ni inferencia.
+> Implementación local 2026-10-17. Servicio/volumen creados posteriormente;
+> arranque bloqueado por selección de Dockerfile, sin clave nueva ni inferencia.
 > El propietario ha pedido avanzar con incrementos 1–2; eso no genera etiquetas
 > humanas ni elimina los gates de SHA/CI, snapshot, presupuesto externo y acceso.
+> Estado/evidencia: [aprovisionamiento inicial](railway-provisioning.md).
 
 ## Qué arranca
 
-- Imagen `evals/Dockerfile`, configuración **`/evals/railway.json`**, raíz del
-  repositorio como build context. No reutilizar el `railway.json` del bot.
+- Imagen prevista `evals/Dockerfile`, raíz del repositorio como build context.
+  **Corrección tras aprovisionar:** Railway rechaza activar `/evals/railway.json`
+  para servicios nuevos por deprecación de Config as Code. Se aplican ajustes
+  directamente al servicio separado; el JSON queda como referencia, no contrato
+  de aprovisionamiento automático. No reutilizar config del bot. El build aún
+  no respeta el Dockerfile solicitado: no continuar a campaña; ver evidencia.
 - `scripts/eval_service.py` verifica identidad y espera SIGTERM/SIGINT, sin
   importar el Agent, abrir puertos ni consultar el Gateway. Una réplica,
   restart `NEVER`, sin cron, dominio, TCP proxy ni healthcheck HTTP.
@@ -40,7 +46,7 @@ Dockerfile de eval y su ignore específico.
    cada caso detiene la campaña. Este incremento cambia la huella de fuentes:
    volver a aprobarla después del commit, no reutilizar huellas anteriores.
 
-## Preparación Railway pendiente
+## Preparación Railway — aprovisionada parcialmente, arranque pendiente
 
 En el proyecto/entorno autorizado que contiene el Gateway, servicio temporal
 separado del bot. Sin cambios en `ancoramind-app`, Gateway, BD ni runtime config.

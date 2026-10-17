@@ -47,6 +47,11 @@
 - [ ] T7c-remoto · CI/commit aprobados, coste/ventana Railway acordados, desplegar
       servicio temporal sin dominio, mount exclusivo `/eval-state`, clave eval
       restringida/expirable, scope/budget y TTY real del operador verificados.
+      **Parcial 2026-10-17:** coste/creación inicial autorizados; CI db0c59b verde,
+      servicio/volumen 100 MB creados sin dominio ni secretos. Selección real de
+      Dockerfile contradice configuración: último deployment CRASHED, proceso
+      falla cerrado sin inferencia. No listo para shell/campaña. Ver
+      `railway-provisioning.md`; clave/TTY/scope y corrección pendientes.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

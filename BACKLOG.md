@@ -1427,6 +1427,16 @@ live omitida**, Ruff/mypy limpios. Docker sin red: preflight, arranque idle,
 SIGTERM, PTY real y protección de reserva entre contenedores con mismo volumen
 superados. Imagen de desarrollo, no SHA aprobado; evidencia/límites en el runbook.
 
+**Aprovisionamiento inicial autorizado (2026-10-17):** propietario acepta coste
+Railway. CI `db0c59b` verde; creados `ancoramind-evals` y volumen exclusivo 100 MB
+en `/eval-state`, sin dominio/secretos/clave Gateway. Config directo porque API
+rechaza nuevo Config as Code; no se migra el bot. **Bloqueado:** build selecciona
+Dockerfile raíz pese a path evals en metadata; variable documentada y ruta absoluta
+no lo corrigen. Último deployment `a308909d-760b-436e-80c6-3ee58cc5365f` CRASHED,
+`eval_service_blocked`/sin inferencia, restart NEVER. Servicio existe pero no listo;
+no seguir relanzando sin causa demostrada. Bot/Gateway intactos, sin staged changes
+al control. Evidencia specs/018 `railway-provisioning.md`; T7 y BL-48 abiertos.
+
 ### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue

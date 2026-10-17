@@ -16,6 +16,11 @@ procedencia sellada sin copiar Git, mount persistente obligatorio, p/f/x y
 prueba de consola sin modelo. Ver [runbook Railway](railway-console-runbook.md).
 Preparación local no equivale a despliegue ni campaña revisada.
 
+**Aprovisionamiento posterior autorizado:** servicio separado y volumen 100 MB
+creados con CI db0c59b verde; arranque todavía bloqueado (Dockerfile real distinto
+del configurado). Sin clave/TTY/inferencia. No se migra bot/Gateway ni se admite
+campaña por esta autorización. Estado preciso: [evidencia Railway](railway-provisioning.md).
+
 ## Incremento implementado
 
 - `src/agent/eval_campaign.py`: candidato validado, aprobación ligada al checksum
