@@ -1,5 +1,24 @@
 # Verification: 016 — Health Signals and Dashboard
 
+## Incremento demo — 2026-10-17 (no cierra T7)
+
+Reutilizado el Collector privado existente y confirmado el datasource
+`grafanacloud-prom`. Dashboard `ancoramind-health` **v1 importado**, 11 paneles,
+con salud/revisión/heartbeats reales visibles. Corregidos en el JSON versionado
+los contadores `ancora_health_heartbeat_total` y `ancora_telegram_admissions_total`,
+con regresión en `tests/unit/test_health_dashboard.py`.
+
+Las 17 expresiones responden 200/success; ello no demuestra que todas tengan
+muestras. Circuit/budget-exceeded/coste real/tokens no tienen muestras en 24 h;
+no se sustituyen por cero. Las señales event-driven dependen del tráfico.
+Alertas, degradación y rotación siguen pendientes, sin cambios en esta sesión.
+
+Dashboard: https://tinyvan1950.grafana.net/d/ancoramind-health/ancoramind-c2b7-salud-operativa
+
+Detalle de SHA/checksum, entorno, límites y gates locales:
+`specs/008-railway-deployment/mvp-release-campaign.md`.
+El estado fechado debajo es el histórico anterior a esta importación.
+
 > **Fecha inicial:** 2026-09-24 · **Actualizado:** 2026-10-15 · **Estado:** 🔶
 > T1–T6 implementados localmente; T7 tiene evidencia de despliegue e ingestión
 > base Railway/Grafana Cloud, pero dashboard/alertas aún requieren normalización,

@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-16
+Última actualización: 2026-10-17
 
 ---
 
@@ -50,19 +50,134 @@ limpios en `src/ tests/ scripts/ migrations/`.
 
 ## P0 — Hardening transversal de ejecución e inferencia
 
-### Orden de cierre vigente — 2026-10-16
+### Decisión del propietario — 2026-10-17: priorizar cierre de MVP por plazo de presentación
+
+**Contexto:** queda poco tiempo para presentar el MVP. El patrón de las últimas
+rondas (BL-45→46→47→48, todas sobre el mismo flujo TODO) ha sido: cada E2E de
+BL-1 destapa un hallazgo de gobernanza nuevo, y el trabajo se reinvierte en
+profundizar gobernanza en vez de avanzar a los flujos de BL-1 todavía sin
+probar (vehículo+mantenimiento, recordatorio, calendario, imagen/PDF
+escaneado). Es una elección de calidad legítima, pero alarga el camino al MVP
+más de lo que el plazo permite.
+
+**Decisión:** congelar la apertura de nueva gobernanza más allá de lo ya
+comprometido, y mover **BL-1 (validación E2E de M4/M5)** al primer puesto del
+orden de cierre, junto con **invitaciones + administración (BL-24/43)** para
+preparar las pruebas family&friends. BL-48 no se abandona ni se cierra
+artificialmente — sigue abierto con su alcance actual (harness real +
+evaluación de instrucciones) —
+pero no se amplía con nuevos hallazgos derivados de BL-1 mientras dure esta
+ventana: un hallazgo de gobernanza encontrado durante BL-1 en este periodo se
+**registra como entrada nueva de backlog, no se investiga ni implementa en el
+momento**, salvo que sea un fallo de seguridad que bloquee ejecutar una
+mutación no autorizada (ese tipo de fallo nunca se aplaza).
+
+**Qué sigue igual:** ningún control existente se desactiva, relaja ni se
+expone el Gateway para acelerar esto (AGENTS.md §2 sigue mandando). Esto es
+una decisión de **orden de trabajo**, no de alcance de seguridad.
+
+**Vigencia:** esta prioridad aplica a cualquier sesión de trabajo —incluida
+una nueva conversación con un agente que no haya visto esta decisión— hasta
+que el propietario la revierta explícitamente aquí o el MVP quede presentado.
+
+**Excepción acotada (2026-10-17): dashboard de Grafana visual para la demo.**
+El propietario quiere mostrar en la presentación un dashboard real como
+evidencia visual de lo que se audita/observa detrás — mover esto al orden 1
+también. Alcance exacto de la excepción, para no colarse hacia todo BL-33/T7:
+desplegar el Collector privado en Railway, crear los secretos
+`GRAFANA_OTLP_ENDPOINT`/`GRAFANA_OTLP_AUTHORIZATION` e importar el dashboard
+ya versionado (`observability/dashboards/ancoramind-health.json`) para que
+Grafana muestre tráfico/salud real. **No incluye** alertas, la matriz de
+degradación (Postgres/Gateway/worker caídos) ni rotación — eso sigue en BL-33
+orden 3 tal cual, no se adelanta. Si surge un hallazgo de gobernanza al
+desplegar esto, aplica la misma regla: se documenta como entrada nueva de
+backlog, no se investiga en el momento, salvo fallo de seguridad real.
+
+**Ampliación acordada (2026-10-17): invitaciones + administración para
+family&friends (BL-24/43), dentro del primer grupo.** Es un requisito para
+que otras personas puedan probar la aplicación, no una mejora posterior.
+Se conserva el orden funcional acordado: recordatorios → vehículos y
+mantenimiento → calendario, recurrencia y snooze → imagen/PDF escaneado.
+BL-24/43 se prepara en paralelo y debe validarse antes de incorporar al
+primer participante; el dashboard de Grafana mantiene su alcance acotado.
+
+**Criterios de salida BL-24/43:** invitación temporal con TTL/cupo, canje
+en chat privado y validación de los dos modos existentes por invitación:
+**manual** (`auto_approve=false`, predeterminado), con solicitud pendiente
+hasta aprobación/rechazo desde administración; y **automático**
+(`auto_approve=true`, opt-in explícito al emitir), cuyo canje válido aprueba
+la solicitud y crea la autorización activa atómicamente, sin revisión
+manual posterior. La autoaprobación conserva TTL/cupo, auditoría y revocación;
+el código se comparte sólo por canal privado con las personas previstas.
+Verificar en ambos modos la revocación efectiva en el siguiente update,
+sin reinicio, y el rechazo de códigos inválidos/expirados/agotados/revocados.
+Con cuentas distintas, verificar que una solicitud pendiente/rechazada o
+una autorización revocada no permite llegar al Agent y que los datos y
+propuestas están aislados por usuario. Validar
+en Railway el panel protegido y el rechazo de acceso administrativo sin
+credenciales, sin exponer secretos/códigos en logs y con auditoría de las
+operaciones. Los participantes no reciben acceso administrativo.
+
+Esta prioridad **no autoriza** por sí sola despliegues, activación de flags
+ni nuevas inferencias. Antes de invitar a terceros, concretar el alcance
+del piloto y revisar los gates aplicables de seguridad/privacidad de
+`docs/production-security-privacy.md`: family&friends no es una exención.
+No se considera una apertura pública ni se dan por cerrados BL-23/39/40/48.
+
+**Primer incremento ejecutado (2026-10-17):** recordatorios con tool real,
+consentimiento/ejecutor/worker y PostgreSQL local aislado: 3 integraciones nuevas
+superadas (confirmar/entregar, 503→entrega y descarte; no duplica en ciclos
+posteriores ni con segunda pulsación). Telegram y selección LLM simulados:
+recepción humana E2E sigue pendiente. Grafana demo importado, UID
+`ancoramind-health` v1, 11 paneles; salud/revisión/heartbeats reales confirmados.
+Corregidos dos nombres de contadores; 17 queries válidas no equivalen a 17
+series con muestras. Sin alertas, cortes, rotaciones ni cambios Railway.
+Pairing/admin: pruebas locales verdes, variables de habilitación aún no
+configuradas en Railway; aprobación/rechazo/revocación son CLI/API, el panel
+emite/lista y permite autoaprobar al emitir. Gates: 1504 unit + 176 integration
+PostgreSQL (1 STT live skipped), Ruff/mypy limpios. Evidencia y siguiente campaña:
+`specs/008-railway-deployment/mvp-release-campaign.md`.
+
+**E2E recordatorio real autorizado (2026-10-17): PASS.** Una única petición
+automatizada por Playwright y confirmación explícitamente autorizada: propuesta
+`executed`, un recordatorio no recurrente `fired` y un aviso recibido en Telegram.
+Programado `00:18:50Z`, entregado/marcado `00:18:51.955389Z` (+1,955389 s);
+sin segundo aviso observado durante más de dos ciclos. Origen rev. 8/r4 con
+3 model calls / 3 Gateway requests / 3 tool calls; confirmación 0/0/0,
+sin retry/fallback. Estimación total 0,00378450 USD; coste real no informado.
+SELECT final de auditoría, sin nueva inferencia ni escrituras directas. No
+cierra recurrencia/snooze, toda M5 ni garantiza exactly-once ante crash/timeout.
+Evidencia correlacionada en el registro de campaña; siguiente flujo: vehículos
+y mantenimiento (requiere su propio alcance autorizado).
+
+**E2E vehículo + mantenimiento autorizado (2026-10-17): PASS manual.**
+Playwright: un vehículo ficticio sin matrícula/VIN, un mantenimiento sin
+importe/documento y consulta posterior del historial. Cada escritura mostró
+propuesta pendiente sin fila canónica antes del Sí; al final un vehículo,
+un mantenimiento y dos propuestas `executed`, sin nueva propuesta en la lectura.
+Los datos ficticios quedan identificados y persistidos, sin limpieza implícita.
+Cinco interacciones `completed`; ambas confirmaciones 0 inferencia. Rev. 8/r4,
+8 model calls / 8 Gateway requests / 8 tool calls entre las tres peticiones;
+sin retry/fallback. Coste estimado 0,00998640 USD, real no informado.
+41 unitarias focales superadas. No valida factura/OCR, importes ni toda M4.
+Hallazgo UX no bloqueante registrado: el bloque de mantenimiento omite el
+nombre del target; FK verificada por SELECT, sin cambio de gobernanza ahora.
+Evidencia en `specs/008-railway-deployment/mvp-release-campaign.md`, entrega 2.
+Siguiente flujo acordado: calendario, recurrencia y snooze.
+
+| Orden | Bloque de trabajo | Qué falta para cerrar |
+|---|---|---|
+| 1 | **Validación MVP (BL-1/41) + invitaciones y administración family&friends (BL-24/43) + dashboard visual Grafana (BL-33, alcance acotado arriba)** | Recordatorios → vehículos+mantenimiento → calendario, zona horaria, recurrencia/snooze → imagen/PDF escaneado (BL-6); en paralelo, validar onboarding/revocación, panel protegido y aislamiento antes del primer participante, más Collector desplegado + dashboard importado como evidencia visual de demo; reutilizar las garantías de consentimiento ya implementadas, sin ampliar gobernanza nueva |
+| 2 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | BL-46 completado; BL-48 congelado en su alcance actual (harness real) hasta cerrar el orden 1 — no se amplía con hallazgos nuevos de BL-1 salvo fallo de seguridad real |
+| 3 | Operación gobernada (BL-23/33/44, resto no cubierto por la excepción) | Degradación/circuit del Gateway sin bypass, alertas, matriz de degradación T7, parada/recuperación y rotación con runbook; requieren campaña operativa autorizada, no cortes improvisados |
+| 4 | Seguridad semántica (BL-8/39/48) | Ejecutar evals reales con ruta/presupuesto aprobados; catálogos y respuestas scripted no acreditan obediencia semántica |
 
 GPT-6 Luna sigue como default `ancoramind-default-r4`, runtime rev. 8;
 embeddings `ancoramind-embeddings-r1` sin cambios. No abrir otro experimento
 de modelo mientras se valida este baseline. Las anotaciones fechadas debajo
-son historia: no implican que hoy el servicio esté pausado o el flag esté OFF.
-
-| Orden | Bloque de trabajo | Qué falta para cerrar |
-|---|---|---|
-| 1 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | BL-46 completado; BL-48 sigue abierto hasta harness real autorizado y evaluación de instrucciones; preflight sin inferencia listo, sin desactivar controles ni exponer Gateway |
-| 2 | Operación gobernada (BL-23/33/44) | Degradación/circuit del Gateway sin bypass, dashboard/alertas, parada/recuperación y rotación con runbook; requieren campaña operativa autorizada, no cortes improvisados |
-| 3 | Validación MVP (BL-1/41) | M4/M5: vehículos, calendario/recordatorios, zona horaria, recurrencia y snooze; reutilizar las garantías de consentimiento anteriores |
-| 4 | Seguridad semántica (BL-8/39/48) | Ejecutar evals reales con ruta/presupuesto aprobados; catálogos y respuestas scripted no acreditan obediencia semántica |
+son historia de un orden anterior (2026-10-16): no implican que hoy el
+servicio esté pausado o el flag esté OFF, y el orden 1↔2 de esa tabla queda
+sustituido por la decisión de arriba.
 
 OCR, nuevas salidas y expansión de capabilities no preceden estos cierres.
 Protección de `main` sigue pendiente de decisión de plan/visibilidad, no de

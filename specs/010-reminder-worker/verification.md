@@ -1,5 +1,23 @@
 # Verification: 010 — Reminder Background Worker
 
+## E2E real autorizado — 2026-10-17
+
+**PASS para un recordatorio no recurrente:** petición y confirmación mediante
+Playwright en Telegram Web, con autorización explícita del propietario para
+ese único caso. Propuesta `executed`, una fila canónica `fired`, un aviso
+recibido en Telegram y sin segundo aviso en la ventana observada (más de dos
+ciclos). `trigger_at=2026-10-17T00:18:50Z`,
+`fired_at=2026-10-17T00:18:51.955389Z`: retraso **1,955389 s**.
+
+Confirmación determinista con cero llamadas LLM; petición con ruta r4/revisión 8,
+sin retries/fallback. Sin inserciones SQL, cambios de flags, despliegues ni replay.
+La consulta final fue SELECT, no una nueva interacción inferencial.
+
+Evidencia correlacionada, coste estimado y límites en
+`specs/008-railway-deployment/mvp-release-campaign.md`, sección E2E autorizado.
+No acredita exactly-once bajo crash/red ambigua, múltiples workers ni recurrencia.
+El registro fechado debajo se conserva como histórico previo a esta validación.
+
 > **Fecha:** 2026-09-09 · **Entorno:** Windows 11 + Docker Desktop 29.2.1
 > (pgvector/pgvector:pg16) · **Estado:** ✅ verificado (E2E de entrega real
 > pendiente de hacer con el propietario — ver abajo)

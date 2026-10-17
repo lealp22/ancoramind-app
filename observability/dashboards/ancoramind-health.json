@@ -39,7 +39,7 @@
       "fieldConfig": {"defaults": {"unit": "short"}},
       "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
       "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "sum(increase(ancora_health_heartbeat[$__rate_interval])) by (ancora_health_component)", "refId": "A"}],
+      "targets": [{"expr": "sum(increase(ancora_health_heartbeat_total[$__rate_interval])) by (ancora_health_component)", "refId": "A"}],
       "title": "Heartbeats recientes",
       "type": "stat"
     },
@@ -49,7 +49,7 @@
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 5},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
-        {"expr": "sum(rate(ancora_telegram_admission_total[$__rate_interval])) by (ancora_admission_status)", "legendFormat": "{{ancora_admission_status}}", "refId": "A"},
+        {"expr": "sum(rate(ancora_telegram_admissions_total[$__rate_interval])) by (ancora_admission_status)", "legendFormat": "{{ancora_admission_status}}", "refId": "A"},
         {"expr": "sum(rate(ancora_telegram_deliveries_total[$__rate_interval])) by (ancora_delivery_status)", "legendFormat": "delivery {{ancora_delivery_status}}", "refId": "B"}
       ],
       "title": "Admission y deliveries",

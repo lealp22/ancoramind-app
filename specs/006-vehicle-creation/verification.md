@@ -1,5 +1,23 @@
 # Verification: 006 — Vehicle Creation Tool
 
+## Revalidación con consentimiento Core — 2026-10-17
+
+**PASS del flujo manual autorizado** vía Playwright/Telegram: alta de un vehículo
+ficticio sin matrícula/VIN → botón Sí → mantenimiento ficticio → botón Sí →
+consulta de vehículo/historial. Cero filas antes de cada confirmación; al final
+un vehículo, un mantenimiento y dos propuestas `executed`. Consulta final
+`completed`, sin nuevas propuestas. Ambas confirmaciones con cero inferencia.
+
+Baseline revisión 8/r4, sin retries/fallback ni cambios de producto/despliegue.
+41 pruebas unitarias focales superadas. El vehículo ficticio queda identificado
+y persistido; no se borró automáticamente ni se modificó un vehículo real.
+
+Correlaciones, coste estimado y límites:
+`specs/008-railway-deployment/mvp-release-campaign.md`, entrega 2.
+No revalida factura/OCR, duplicados ni normalización de matrícula.
+El historial siguiente describe la implementación legacy de septiembre;
+`execute_vehicle` ya no se registra en el Agent: confirma/ejecuta el Core.
+
 > Estado: **PASS** — completado 2026-09-06
 
 ## Escenario E2E (Telegram)
