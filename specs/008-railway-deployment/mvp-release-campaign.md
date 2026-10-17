@@ -15,6 +15,16 @@ No sustituye la matriz A–Y ni cierra BL-23/39/40/48.
 | Paralelo: invitaciones/admin (BL-24/43) | Canje manual y autoaprobado, revocación, aislamiento y acceso administrativo protegido | E2E manual y auto sin LLM PASS con account=2; mensaje automático correcto y revocación inmediata; panel HTTPS/auth/logout comprobados. Flags OFF al cierre. Aislamiento/inactividad/resto matriz pendientes; silencio sin acceso → BL-52 |
 | Paralelo: Grafana (BL-33, demo) | Collector privado existente → series reales → dashboard importado | Dashboard v1 importado y consultado; alertas/degradación/rotación fuera de alcance |
 
+## Seguimiento local BL-49 (2026-10-17, sin rollout)
+
+La carencia de presentación de la entrega 3 tiene corrección local en
+`specs/038-calendar-snooze-presentation`: bloque Core con recurrencia/límite,
+aviso/antelación y snooze con objetivo canónico scoped al usuario y duración.
+Gates: 1582 unitarias y 207 integraciones passed, 1 STT live skipped,
+Ruff/mypy limpios. Sin cambiar payload/hash, consentimiento ni ejecución.
+La evidencia E2E anterior sigue siendo asistida: no acredita este nuevo bloque
+hasta desplegar y revalidar visualmente en una ventana autorizada.
+
 ## Baseline observado, sin desplegar desde esta sesión
 
 - SHA: `b104d8fdcc04e476ce11263b7b3cda7291e24127`.

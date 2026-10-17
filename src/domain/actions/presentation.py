@@ -4,8 +4,8 @@ Pure domain code (specs/023 T4.3-T4.4): no Agno, Telegram SDK or SQL.
 
 * ``render_proposal_block`` builds the fixed text appended by the Core to a
   response that created a proposal. It is generated from the **stored**
-  payload, never from the model's wording, so what the user confirms is what
-  will be executed.
+  payload and optional user-scoped canonical target title, never from the
+  model's wording, so what the user confirms is what will be executed.
 * ``consent_buttons`` / ``parse_consent_callback`` encode the inline Sí/No
   buttons. Button data is only an identifier: it is never proof of consent —
   the Core re-validates principal, bot, chat, window and payload hash in
@@ -72,6 +72,7 @@ def parse_consent_callback(data: str | None) -> ConsentCallback | None:
 
 _TOOL_TITLES = {
     "create_reminder": "Crear recordatorio",
+    "snooze_reminder": "Posponer recordatorio",
     "create_calendar_event": "Añadir evento al calendario",
     "register_vehicle": "Registrar vehículo",
     "register_vehicle_maintenance": "Registrar mantenimiento",
@@ -111,6 +112,12 @@ _FIELD_LABELS = {
 
 
 _PRIORITIES = {"high": "alta", "normal": "normal", "low": "baja"}
+_RECURRENCE_UNITS = {
+    "daily": ("día", "días"),
+    "weekly": ("semana", "semanas"),
+    "monthly": ("mes", "meses"),
+    "yearly": ("año", "años"),
+}
 _MONTHS = (
     "enero",
     "febrero",
@@ -149,14 +156,68 @@ def _render_field(tool_name: str, key: str, value: Any) -> str:
     return ", ".join(map(str, value)) if isinstance(value, list) else str(value)
 
 
-def render_proposal_block(proposal_id: UUID, tool_name: str, payload: dict[str, Any]) -> str:
+def _duration(minutes: Any) -> str:
+    """Display stored minutes without rounding or interpreting invalid values."""
+    if not isinstance(minutes, int) or isinstance(minutes, bool):
+        return str(minutes)
+    hours, remainder = divmod(minutes, 60)
+    if not hours:
+        return f"{minutes} min"
+    return f"{hours} h {remainder} min" if remainder else f"{hours} h"
+
+
+def _calendar_fields(payload: dict[str, Any]) -> list[tuple[str, Any]]:
+    frequency = payload.get("recurrence_frequency")
+    fields: list[tuple[str, Any]] = []
+    if frequency is None:
+        fields.append(("Repetición", "no se repite"))
+    else:
+        interval = payload.get("recurrence_interval")
+        if interval is None:
+            interval = 1  # Same default as recurrence_rule_from_flat.
+        units = _RECURRENCE_UNITS.get(str(frequency))
+        unit = units[0 if interval == 1 else 1] if units else str(frequency)
+        fields.append(("Repetición", f"cada {interval} {unit}"))
+        fields.append(
+            ("Repetir hasta (inclusive)", payload.get("recurrence_until") or "sin fecha límite")
+        )
+    with_reminder = bool(payload.get("with_reminder"))
+    fields.append(("Aviso", "sí" if with_reminder else "no"))
+    if with_reminder:
+        lead = payload.get("reminder_lead_minutes", 0)
+        fields.append(
+            ("Antelación", "al inicio" if lead == 0 else f"{_duration(lead)} antes del inicio")
+        )
+    return fields
+
+
+def render_proposal_block(
+    proposal_id: UUID,
+    tool_name: str,
+    payload: dict[str, Any],
+    *,
+    reminder_title: str | None = None,
+) -> str:
     """Fixed, Core-generated summary of exactly what «Sí» will execute."""
     lines = [f"📋 **Propuesta**: {_TOOL_TITLES.get(tool_name, tool_name)}"]
-    for key, label in _FIELD_LABELS.items():
-        value = payload.get(key)
-        if value is None or value == "" or value == []:
-            continue
-        rendered = _render_field(tool_name, key, value)
+    fields: list[tuple[str, Any]] = []
+    if tool_name == "snooze_reminder":
+        # Never trust a title supplied in the tool payload. The Core resolves
+        # this display-only context by reminder_id + the interaction's user.
+        fields.append(("Recordatorio", reminder_title or "No disponible"))
+        fields.append(
+            ("Aplazamiento", f"{_duration(payload.get('minutes'))} desde la confirmación")
+        )
+    else:
+        for key, label in _FIELD_LABELS.items():
+            value = payload.get(key)
+            if value is None or value == "" or value == []:
+                continue
+            fields.append((label, _render_field(tool_name, key, value)))
+        if tool_name == "create_calendar_event":
+            fields.extend(_calendar_fields(payload))
+    for label, value in fields:
+        rendered = str(value)
         rendered = " ".join(rendered.split())
         if len(rendered) > MAX_FIELD_CHARS:
             rendered = rendered[: MAX_FIELD_CHARS - 1] + "…"

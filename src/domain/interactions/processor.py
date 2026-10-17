@@ -65,6 +65,7 @@ from src.observability import get_telemetry, log_context_scope
 from src.repositories.actions import ActionProposalsRepository
 from src.repositories.interactions import TelegramInteractionsRepository
 from src.repositories.llm_usage import LlmUsageRepository
+from src.repositories.reminders import RemindersRepository
 
 logger = logging.getLogger(__name__)
 
@@ -690,9 +691,9 @@ class InteractionProcessor:
     ) -> str:
         """Replace proposal narration, preserving independent answers (BL-48).
 
-        The block is generated from the stored payload, never from the
-        model's wording, so confirming «Sí» always matches what was shown
-        (specs/023 T4.4). Unbacked proposal narration is always discarded.
+        The block is generated from the stored payload and user-scoped
+        canonical target title, never from the model's wording (BL-49).
+        Unbacked proposal narration is always discarded (specs/023 T4.4).
         """
         # Proposal narration is never evidence that a proposal exists. Only
         # stored rows below may produce proposal text or confirmation controls.
@@ -708,18 +709,34 @@ class InteractionProcessor:
             created = await ActionProposalsRepository(session).list_created_in_interaction(
                 interaction.id, user_id=str(interaction.telegram_user_id)
             )
+            if not created:
+                return text
+            if not isinstance(content, AgentReply):
+                # Never deduce proposal narration from free-form prose.
+                raise ValueError("Proposal presentation requires a partitioned Agent reply")
+            blocks: list[str] = []
+            for row in created:
+                reminder_title = None
+                if row["tool_name"] == "snooze_reminder":
+                    raw_id = row["payload"].get("reminder_id")
+                    try:
+                        reminder_id = UUID(raw_id) if isinstance(raw_id, str) else None
+                    except ValueError:
+                        reminder_id = None
+                    if reminder_id is not None:
+                        reminder = await RemindersRepository(session).get_by_id(
+                            str(interaction.telegram_user_id), reminder_id
+                        )
+                        if reminder is not None:
+                            reminder_title = reminder.title
+                blocks.append(
+                    render_proposal_block(
+                        row["id"], row["tool_name"], row["payload"], reminder_title=reminder_title
+                    )
+                )
+            return "\n\n".join(part for part in (content.answer.strip(), *blocks) if part)
         finally:
             await session.close()
-        if not created:
-            return text
-        if not isinstance(content, AgentReply):
-            # A plain-text test/custom adapter cannot safely partition a mixed
-            # reply. Never deduce proposal narration from free-form prose.
-            raise ValueError("Proposal presentation requires a partitioned Agent reply")
-        blocks = "\n\n".join(
-            render_proposal_block(row["id"], row["tool_name"], row["payload"]) for row in created
-        )
-        return "\n\n".join(part for part in (content.answer.strip(), blocks) if part)
 
     async def _mark_proposals_presented(
         self, interaction: TelegramInteraction, response_id: UUID

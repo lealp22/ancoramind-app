@@ -189,12 +189,27 @@ de producto; registros sintéticos conservados. Evidencia: campaña, entrega 4.
 No cerrar BL-6 ni readiness family&friends; próximos trabajos requieren alcance
 propio (hallazgos y/o invitaciones/admin), no otra prueba inferencial implícita.
 
+**Ampliación 2026-10-17 (tarde): la evaluación de modelos entra en el orden 1,
+en paralelo — no es solo seguridad semántica de fondo.** El propietario aclara
+que el MVP no es únicamente demostrar funcionalidad: lo que se quiere poner en
+valor es el ciclo completo de ingeniería al trabajar con un LLM, y la
+evaluación de modelos/respuestas es uno de esos pasos explícitos a mostrar.
+Por eso la ejecución real del harness T7/T7a (BL-8/BL-48) ya preparado —
+preflight validado, plan de 5 casos contra rev. 8/r4, reserva estimada de
+~0,10 USD, sin tocar producción ni mutar datos reales— sube al mismo nivel que
+BL-1/24/43/33: no bloquea ni es bloqueada por ellas, se ejecuta tan pronto el
+propietario apruebe el gasto y el acceso privado que ya están pendientes.
+Esto NO reabre el alcance congelado de BL-48 (presentación de propuestas,
+armonía con hallazgos de BL-1): sigue sin ampliarse con nuevos hallazgos
+salvo fallo de seguridad real. Es específicamente la ejecución del harness ya
+construido, no trabajo de desarrollo nuevo.
+
 | Orden | Bloque de trabajo | Qué falta para cerrar |
 |---|---|---|
-| 1 | **Validación MVP (BL-1/41) + invitaciones y administración family&friends (BL-24/43) + dashboard visual Grafana (BL-33, alcance acotado arriba)** | Recordatorios → vehículos+mantenimiento → calendario, zona horaria, recurrencia/snooze → imagen/PDF escaneado (BL-6); en paralelo, validar onboarding/revocación, panel protegido y aislamiento antes del primer participante, más Collector desplegado + dashboard importado como evidencia visual de demo; reutilizar las garantías de consentimiento ya implementadas, sin ampliar gobernanza nueva |
-| 2 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | BL-46 completado; BL-48 congelado en su alcance actual (harness real) hasta cerrar el orden 1 — no se amplía con hallazgos nuevos de BL-1 salvo fallo de seguridad real |
+| 1 | **Validación MVP (BL-1/41) + invitaciones y administración family&friends (BL-24/43) + dashboard visual Grafana (BL-33, alcance acotado arriba) + ejecución del harness de evals (BL-8/BL-48 T7/T7a)** | Recordatorios → vehículos+mantenimiento → calendario, zona horaria, recurrencia/snooze → imagen/PDF escaneado (BL-6); en paralelo, validar onboarding/revocación, panel protegido y aislamiento antes del primer participante; Collector desplegado + dashboard importado como evidencia visual de demo; y ejecutar el plan de 5 casos del harness T7a contra rev. 8/r4 en cuanto se apruebe gasto/acceso — reutilizar las garantías de consentimiento ya implementadas, sin ampliar gobernanza nueva |
+| 2 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | BL-46 completado; BL-48 congelado en su alcance de presentación (no en la ejecución del harness, que ya subió al orden 1) hasta cerrar el orden 1 — no se amplía con hallazgos nuevos de BL-1 salvo fallo de seguridad real |
 | 3 | Operación gobernada (BL-23/33/44, resto no cubierto por la excepción) | Degradación/circuit del Gateway sin bypass, alertas, matriz de degradación T7, parada/recuperación y rotación con runbook; requieren campaña operativa autorizada, no cortes improvisados |
-| 4 | Seguridad semántica (BL-8/39/48) | Ejecutar evals reales con ruta/presupuesto aprobados; catálogos y respuestas scripted no acreditan obediencia semántica |
+| 4 | Seguridad semántica adicional (BL-8/39) | Ampliar catálogos/corpus más allá del plan de 5 casos ya ejecutado en orden 1, scoring semántico más profundo si procede |
 
 GPT-6 Luna sigue como default `ancoramind-default-r4`, runtime rev. 8;
 embeddings `ancoramind-embeddings-r1` sin cambios. No abrir otro experimento
@@ -959,7 +974,7 @@ inferencial hasta acordar alcance; no declarar garantía completa de coste con
 el ledger parcial. No se desactivó ningún control desde esta sesión.
 Evidencia en campaña, entrega 4; marco existente specs/013/026, no BL-48.
 
-### BL-49 · Completar presentación de calendario y snooze antes del piloto 🆕 registrado — 2026-10-17
+### BL-49 · Completar presentación de calendario y snooze antes del piloto 🔶 implementado localmente — 2026-10-17
 
 Hallazgo del E2E de calendario/recurrencia/snooze (BL-1/41): el bloque Core
 de `create_calendar_event` muestra título/inicio/fin, pero no frecuencia,
@@ -969,13 +984,17 @@ objetivo ni duración. No es un fallo de ejecución observado: los payloads
 persistidos eran correctos y el flujo autorizado pasó tras revisión asistida
 por SELECT; un participante normal no dispone de esa revisión.
 
-**Trabajo propuesto, no implementado en esta ventana:** presentar campos
-canónicos relevantes, nombre legible de operación y target/duración de snooze;
-añadir regresión del renderer y revalidación Telegram. No dar por lista para
-family&friends la confirmación de estas capacidades hasta resolver esta
-carencia de revisión. Mantener confirmaciones Core y alcance de BL-48 sin
-ampliarlo implícitamente; tratar esto como entrada separada según la decisión
-de priorización vigente. No se desactivó ningún control para pasar el E2E.
+**Incremento local autorizado e implementado (specs/038):** calendario muestra
+frecuencia/intervalo, límite inclusivo o sin fecha límite, aviso sí/no y
+antelación (cero = al inicio). Snooze muestra «Posponer recordatorio», título
+canónico consultado por ID + usuario de la interacción y duración desde la
+confirmación. Target ausente/no propio/ID inválido → «No disponible»; nunca un
+título del modelo. Payload/hash, botones, consentimiento y ejecución intactos.
+Sin migraciones ni cambios de tools/prompts. 29 unitarias y 4 integraciones
+nuevas; gates globales: 1582 unitarias, 207 integraciones passed y 1 STT live
+skipped, Ruff/mypy limpios. Evidencia: `specs/038-calendar-snooze-presentation/verification.md`.
+**Pendiente:** despliegue y revalidación Telegram con autorización propia;
+no dar por validada la UX family&friends ni ampliar el alcance de BL-48.
 
 Observaciones relacionadas a priorizar por separado si procede: doble prefijo
 «Recordatorio:» en avisos vinculados, y texto de retraso que atribuye siempre

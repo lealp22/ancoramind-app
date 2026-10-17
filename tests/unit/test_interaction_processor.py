@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
@@ -12,6 +13,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.domain.interactions.processor as processor_module
+from src.domain.actions.models import payload_hash
 from src.domain.context_policy.session_summary import SessionSummaryOutcome
 from src.domain.emergency_stop.models import EmergencyStopActiveError
 from src.domain.interactions.commands import (
@@ -27,6 +29,7 @@ from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputE
 from src.domain.llm_access.cost_governance import CostGovernanceError
 from src.domain.llm_access.models import ExecutionBudgetExceededError
 from src.repositories.interactions import EncryptedSessionExchange, TelegramInteractionsRepository
+from src.repositories.reminders import RemindersRepository
 
 
 def _interaction(status: InteractionStatus = InteractionStatus.ACCEPTED) -> TelegramInteraction:
@@ -963,6 +966,89 @@ async def test_multiple_proposals_keep_one_block_and_button_pair_per_id(monkeypa
     buttons = await processor._pending_proposal_buttons(_interaction())
     assert [pair[0].callback_data for pair in buttons] == [f"c:{pid}" for pid in ids]
     assert [pair[1].callback_data for pair in buttons] == [f"d:{pid}" for pid in ids]
+
+
+@pytest.mark.parametrize("available", [True, False])
+async def test_snooze_composition_resolves_target_for_interaction_user(
+    monkeypatch, available
+) -> None:
+    actions = AsyncMock()
+    reminder_id = uuid4()
+    payload = {"reminder_id": str(reminder_id), "minutes": 90, "title": "Unverified"}
+    before = payload_hash("snooze_reminder", payload)
+    actions.list_created_in_interaction.return_value = [
+        {"id": uuid4(), "tool_name": "snooze_reminder", "payload": payload}
+    ]
+    reminders = AsyncMock(spec=RemindersRepository)
+    reminders.get_by_id.return_value = (
+        SimpleNamespace(title="Seguro canónico") if available else None
+    )
+    monkeypatch.setattr(processor_module, "RemindersRepository", lambda _: reminders)
+    processor = _consent_processor(monkeypatch, actions)
+    content = await processor._append_proposal_blocks(
+        _interaction(), AgentReply(answer="Respuesta independiente.", proposal_text="Unverified"),
+    )
+    reminders.get_by_id.assert_awaited_once_with("5", reminder_id)
+    assert content.startswith("Respuesta independiente.")
+    assert "Unverified" not in content
+    assert "Recordatorio: " + ("Seguro canónico" if available else "No disponible") in content
+    assert "Aplazamiento: 1 h 30 min desde la confirmación" in content
+    assert payload_hash("snooze_reminder", payload) == before
+
+
+@pytest.mark.parametrize("reminder_id", [None, "invalid"])
+async def test_snooze_invalid_target_does_not_query_unscoped_data(monkeypatch, reminder_id) -> None:
+    actions = AsyncMock()
+    actions.list_created_in_interaction.return_value = [
+        {"id": uuid4(), "tool_name": "snooze_reminder",
+         "payload": {"reminder_id": reminder_id, "minutes": 20}}
+    ]
+    reminders = AsyncMock(spec=RemindersRepository)
+    monkeypatch.setattr(processor_module, "RemindersRepository", lambda _: reminders)
+    processor = _consent_processor(monkeypatch, actions)
+    content = await processor._append_proposal_blocks(
+        _interaction(), AgentReply(answer="", proposal_text="Narración no fiable"),
+    )
+    reminders.get_by_id.assert_not_awaited()
+    assert "Recordatorio: No disponible" in content
+
+
+async def test_snooze_target_read_failure_closes_session_without_inventing_title(
+    monkeypatch,
+) -> None:
+    actions = AsyncMock()
+    actions.list_created_in_interaction.return_value = [
+        {"id": uuid4(), "tool_name": "snooze_reminder",
+         "payload": {"reminder_id": str(uuid4()), "minutes": 20}}
+    ]
+    reminders = AsyncMock(spec=RemindersRepository)
+    reminders.get_by_id.side_effect = RuntimeError("database unavailable")
+    monkeypatch.setattr(processor_module, "RemindersRepository", lambda _: reminders)
+    processor = _consent_processor(monkeypatch, actions)
+    session = await processor._session_factory()
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        await processor._append_proposal_blocks(
+            _interaction(), AgentReply(answer="", proposal_text="Invented title"),
+        )
+    session.close.assert_awaited_once()
+    actions.create.assert_not_awaited()
+    processor._agent_runner.run.assert_not_awaited()
+
+
+async def test_non_snooze_proposal_does_not_resolve_a_reminder_title(monkeypatch) -> None:
+    actions = AsyncMock()
+    actions.list_created_in_interaction.return_value = [
+        {"id": uuid4(), "tool_name": "create_calendar_event", "payload": {"title": "Clase"}}
+    ]
+    reminders = AsyncMock(spec=RemindersRepository)
+    monkeypatch.setattr(processor_module, "RemindersRepository", lambda _: reminders)
+    processor = _consent_processor(monkeypatch, actions)
+    content = await processor._append_proposal_blocks(
+        _interaction(), AgentReply(answer="", proposal_text="Narración no fiable"),
+    )
+    assert "Título: Clase" in content
+    assert "Repetición: no se repite" in content
+    reminders.get_by_id.assert_not_awaited()
 
 
 @pytest.mark.parametrize("governed", [False, True])

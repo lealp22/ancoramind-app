@@ -147,3 +147,142 @@ def test_unexpected_values_fall_back_and_html_stays_escaped() -> None:
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
     assert payload_hash("create_todo_item", payload) == before
+
+
+@pytest.mark.parametrize(
+    "frequency,interval,display",
+    [
+        ("daily", 1, "cada 1 día"),
+        ("daily", 3, "cada 3 días"),
+        ("weekly", 1, "cada 1 semana"),
+        ("weekly", 2, "cada 2 semanas"),
+        ("monthly", 1, "cada 1 mes"),
+        ("monthly", 6, "cada 6 meses"),
+        ("yearly", 1, "cada 1 año"),
+        ("yearly", 2, "cada 2 años"),
+    ],
+)
+def test_calendar_recurrence_is_reviewable_without_changing_payload(
+    frequency, interval, display
+) -> None:
+    payload = {
+        "title": "Clase",
+        "start_at": "2026-10-20T00:00:00+02:00",
+        "end_at": "2026-10-20T01:00:00+02:00",
+        "recurrence_frequency": frequency,
+        "recurrence_interval": interval,
+        "recurrence_until": "2027-10-20T00:00:00+02:00",
+        "with_reminder": True,
+        "reminder_lead_minutes": 90,
+    }
+    before = payload_hash("create_calendar_event", payload)
+    block = render_proposal_block(uuid4(), "create_calendar_event", payload)
+    assert f"Repetición: {display}" in block
+    assert "Repetir hasta (inclusive): 2027-10-20T00:00:00+02:00" in block
+    assert "Aviso: sí" in block
+    assert "Antelación: 1 h 30 min antes del inicio" in block
+    assert f"Inicio: {payload['start_at']}" in block
+    assert f"Fin: {payload['end_at']}" in block
+    assert block.count("Pulsa ✅ Sí") == 1
+    assert payload_hash("create_calendar_event", payload) == before
+
+
+@pytest.mark.parametrize("payload", [{}, {"recurrence_frequency": None, "with_reminder": False}])
+def test_one_off_calendar_explicitly_has_no_recurrence_or_reminder(payload) -> None:
+    block = render_proposal_block(uuid4(), "create_calendar_event", payload)
+    assert "Repetición: no se repite" in block
+    assert "Aviso: no" in block
+    assert "Antelación" not in block
+    assert "Repetir hasta" not in block
+
+
+@pytest.mark.parametrize("interval", [None, 1])
+def test_calendar_open_ended_recurrence_and_execution_defaults(interval) -> None:
+    block = render_proposal_block(
+        uuid4(), "create_calendar_event",
+        {"recurrence_frequency": "weekly", "recurrence_interval": interval, "with_reminder": True},
+    )
+    assert "Repetición: cada 1 semana" in block
+    assert "Repetir hasta (inclusive): sin fecha límite" in block
+    assert "Aviso: sí" in block
+    assert "Antelación: al inicio" in block
+
+
+@pytest.mark.parametrize(
+    "minutes,display",
+    [(0, "al inicio"), (5, "5 min antes del inicio"), (60, "1 h antes del inicio")],
+)
+def test_calendar_reminder_lead_is_not_hidden_when_zero(minutes, display) -> None:
+    block = render_proposal_block(
+        uuid4(), "create_calendar_event",
+        {"with_reminder": True, "reminder_lead_minutes": minutes},
+    )
+    assert f"Antelación: {display}" in block
+
+
+@pytest.mark.parametrize(
+    "minutes,display", [(5, "5 min"), (60, "1 h"), (90, "1 h 30 min"), (10080, "168 h")]
+)
+def test_snooze_displays_canonical_target_and_duration_without_changing_hash(
+    minutes, display
+) -> None:
+    payload = {"reminder_id": str(uuid4()), "minutes": minutes, "title": "LLM title ignored"}
+    before = payload_hash("snooze_reminder", payload)
+    block = render_proposal_block(
+        uuid4(), "snooze_reminder", payload, reminder_title="Revisar seguro",
+    )
+    assert "Propuesta**: Posponer recordatorio" in block
+    assert "Recordatorio: Revisar seguro" in block
+    assert f"Aplazamiento: {display} desde la confirmación" in block
+    assert "LLM title ignored" not in block
+    assert payload["reminder_id"] not in block
+    assert payload_hash("snooze_reminder", payload) == before
+
+
+def test_snooze_without_canonical_target_does_not_invent_one() -> None:
+    block = render_proposal_block(
+        uuid4(), "snooze_reminder", {"minutes": 20, "title": "Unverified"},
+    )
+    assert "Recordatorio: No disponible" in block
+    assert "Unverified" not in block
+    assert "Aplazamiento: 20 min desde la confirmación" in block
+
+
+def test_snooze_target_is_bounded_flattened_and_html_escaped() -> None:
+    block = render_proposal_block(
+        uuid4(), "snooze_reminder", {"minutes": 20},
+        reminder_title="<script>DATA</script>\n" + "x" * 500,
+    )
+    target_line = next(line for line in block.splitlines() if "Recordatorio:" in line)
+    assert target_line.endswith("…")
+    assert len(target_line) < 140
+    html = markdown_to_telegram_html(block)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_calendar_does_not_present_ignored_recurrence_or_reminder_fields() -> None:
+    block = render_proposal_block(
+        uuid4(), "create_calendar_event",
+        {"recurrence_frequency": None, "recurrence_interval": 5,
+         "recurrence_until": "IGNORED", "with_reminder": False, "reminder_lead_minutes": 30},
+    )
+    assert "Repetición: no se repite" in block
+    assert "IGNORED" not in block
+    assert "Repetir hasta" not in block
+    assert "Aviso: no" in block
+    assert "Antelación" not in block
+
+
+def test_calendar_added_fields_stay_bounded_and_unknown_frequency_is_not_reinterpreted() -> None:
+    block = render_proposal_block(
+        uuid4(), "create_calendar_event",
+        {"recurrence_frequency": "unexpected", "recurrence_interval": 0,
+         "recurrence_until": "<script>\n" + "x" * 500,
+         "with_reminder": True, "reminder_lead_minutes": "invalid"},
+    )
+    assert "Repetición: cada 0 unexpected" in block
+    assert "Antelación: invalid antes del inicio" in block
+    until_line = next(line for line in block.splitlines() if "Repetir hasta" in line)
+    assert until_line.endswith("…")
+    assert "<script>" not in markdown_to_telegram_html(block)
