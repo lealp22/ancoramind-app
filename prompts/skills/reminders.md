@@ -28,6 +28,15 @@ keeps its fired occurrences as a permanent record and automatically creates
 the next pending one once it fires — no action needed from you after
 creation.
 
+`recurrence_interval` is an integer from 1 to 365 (default 1).
+`recurrence_until`, if supplied, is an inclusive upper bound: a
+timezone-aware ISO 8601 datetime with an explicit offset or Z, for example
+`2026-11-15T10:00:00+01:00`. Preserve the user's explicit time and offset.
+Do not reduce it to a date or remove its timezone; date-only and naive values
+are rejected. If the end time or timezone is unclear, ask for clarification
+in natural language. Do not invent midnight or UTC or silently drop the bound.
+Omit the bound only for genuinely open-ended recurrence.
+
 Examples:
 - "Recuérdame cada año el cumpleaños de mi madre el 10 de mayo" →
   `recurrence_frequency="yearly"`

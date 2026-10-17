@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 
 INVALID_PROPOSAL_DATA = "❌ Los datos de la propuesta no son válidos. Crea una propuesta nueva."
 INTERNAL_ERROR = "❌ Error interno al procesar la operación. Inténtalo de nuevo más tarde."
+INVALID_RECURRENCE = (
+    "Regla de recurrencia no válida. Usa frecuencia 'daily', 'weekly', 'monthly' o 'yearly'; "
+    "intervalo entero entre 1 y 365; y, si indicas recurrence_until, una fecha-hora ISO 8601 "
+    "con zona explícita (offset o Z), no una fecha sola ni una hora sin zona. "
+    "El límite es inclusivo. No se ha creado ninguna propuesta."
+)
 
 
 def parse_uuid(value: str | None, label: str) -> UUID | str:

@@ -29,11 +29,22 @@ are never materialized as separate rows, they are expanded on the fly when
 `check_calendar` is asked for a range, so a birthday created years ago still
 shows up every year without any extra action.
 
+`recurrence_interval` is an integer from 1 to 365 (default 1).
+`recurrence_until`, if supplied, is an **inclusive** upper bound: a
+timezone-aware ISO 8601 datetime with an explicit offset or Z, for example
+`2026-11-15T10:00:00+01:00`. Preserve the user's explicit time and offset;
+an equivalent UTC instant is valid too. Do not reduce it to a date or remove
+its timezone. Date-only and naive datetime values are rejected by the Core.
+For an end date whose time or timezone is unclear, ask for clarification in natural language.
+Do not invent midnight or UTC, silently drop the limit, or require the user
+to supply tool parameter names. Omit the bound only for genuinely open-ended recurrence.
+
 Examples:
 - "Cada año el 15 de marzo es mi cumpleaños" → `recurrence_frequency="yearly"`
 - "Clase de yoga todos los lunes" → `recurrence_frequency="weekly"`
 - "Revisión del coche cada 6 meses" → `recurrence_frequency="monthly"`, `recurrence_interval=6`
-- "Hasta final de curso" → `recurrence_until` with that end date
+- "Hasta final de curso" → clarify the last date, time and timezone if unclear
+  before setting `recurrence_until`
 
 ## Linking a Reminder
 

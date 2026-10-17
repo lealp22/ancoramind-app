@@ -35,7 +35,7 @@ recordatorios y eventos, con trazabilidad completa.
   BL-46 completado con variantes reviewable descripción-sola/fecha-sola; BL-48
   espera ejecución real del harness aislado (lanzador one-shot y revisión humana
   local preparados, sin aprobación de gasto ni acceso nuevo).
-  1582 unit tests y 207 integration PostgreSQL superados; una prueba STT live
+  1626 unit tests y 207 integration PostgreSQL superados; una prueba STT live
   se omite por diseño. Ruff y `mypy src/` limpios; ambos son gates globales en CI.
   BL-52/specs/037 desplegado y validado E2E acotado: primer aviso, cooldown,
   renovación y `/help` autorizado; rejected intacto/sin IA. Flag
@@ -46,7 +46,11 @@ recordatorios y eventos, con trazabilidad completa.
   recurrencia/límite/aviso/antelación y snooze con título canónico scoped al
   usuario y duración. Sin cambios de payload/hash, consentimiento ni ejecución;
   presentación/descarte Telegram superados en SHA `65295ac`. Primera petición
-  natural de recurrencia rechazada sin propuesta, diagnóstico pendiente BL-54.
+  natural de recurrencia rechazada sin propuesta. BL-54/specs/039: corregida
+  localmente contradicción de contrato `recurrence_until` (datetime con zona,
+  no fecha sola), rango de intervalo y error fijo sin eco en ambas tools;
+  parser intacto. Sin inferencia/rollout; causa histórica exacta no confirmada
+  y E2E natural pendiente. Cambio de prompts/descripciones evaluable.
   Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.
 

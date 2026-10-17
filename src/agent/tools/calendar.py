@@ -16,6 +16,7 @@ from src.agent.tools.untrusted_results import (
     render_retrieved_records,
 )
 from src.agent.tools.validation import (
+    INVALID_RECURRENCE,
     internal_error_reply,
     invalid_proposal_reply,
     parse_optional_uuid,
@@ -170,9 +171,11 @@ async def propose_calendar_event(
             es mi cumpleaños" -> "yearly"; "cada 6 meses" -> "monthly" +
             interval=6; "clase todos los lunes" -> "weekly"). Omit for a
             one-off event.
-        recurrence_interval: Optional — repeat every N units (default 1).
-        recurrence_until: Optional ISO 8601 date — last date the
-            recurrence applies to (open-ended if omitted).
+        recurrence_interval: Optional integer 1-365 — repeat every N units (default 1).
+        recurrence_until: Optional inclusive upper bound as a timezone-aware ISO 8601 datetime
+            with an explicit offset or Z, e.g. '2026-11-15T10:00:00+01:00';
+            not a date-only or naive value. Preserve the supplied time and offset.
+            Omit for open-ended recurrence. Ask for clarification if time or zone is unclear.
         with_reminder: If True, also create a Telegram reminder linked to
             this event (same recurrence), so the user is notified each
             time it occurs — use when the user implies they want to be
@@ -205,10 +208,7 @@ async def propose_calendar_event(
             recurrence_frequency, recurrence_interval, recurrence_until
         )
     except (ValueError, TypeError):
-        return (
-            f"Regla de recurrencia no válida: frecuencia={recurrence_frequency!r}. "
-            "Usa 'daily', 'weekly', 'monthly' o 'yearly'."
-        )
+        return INVALID_RECURRENCE
 
     actions_repo = await _get_actions_repo()
     proposal = await actions_repo.create(

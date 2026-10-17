@@ -896,7 +896,7 @@ reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
 
-### BL-54 · Investigar rechazo de recurrencia en petición natural de calendario 🆕 registrado — 2026-10-17
+### BL-54 · Investigar rechazo de recurrencia en petición natural de calendario 🔶 contrato corregido localmente; E2E pendiente — 2026-10-17
 
 Durante E2E de presentación BL-49, petición natural con inicio/fin y límite
 inclusivo timezone-aware `+01:00`, frecuencia semanal cada 2 semanas y aviso
@@ -913,6 +913,21 @@ captura de contenido personal indiscriminada; regresión cuando se localice
 el mecanismo. No retries/fallbacks ni cambio de timezone/prompts implícitos.
 Evidencia en specs/038 y campaña de liberación, E2E BL-49/52. Registro sólo,
 sin ampliar el alcance implementado de BL-49 ni el congelado de BL-48.
+
+**Diagnóstico/corrección local autorizados (specs/039):** schema real Agno y
+prompt de calendario describían `recurrence_until` como fecha; el Core exige
+datetime timezone-aware. Fecha sola/naive e intervalo inválido se rechazan
+incluso con weekly válida, pero el error anterior apuntaba a frecuencia.
+Offsets +01:00/UTC válidos pasan parser y FunctionCall reales sin inferencia.
+Esto prueba la contradicción, **no** los argumentos ni causa exacta del run
+histórico. Corregidas las dos descripciones y assets calendar/reminders,
+incluido rango 1–365, preservación de hora/zona y aclaración natural si falta;
+error fijo sin eco de entradas. Parser/semántica/permisos/ejecución intactos.
+44 regresiones nuevas; 1626 unitarias, 207 integraciones locales passed y 1
+STT live skipped; Ruff/mypy limpios. Sin inferencia ni acceso remoto, flags o
+despliegue. **Abierto:** commit de cambio evaluable, CI/SHA y E2E natural
+autorizado; no exigir parámetros técnicos ni declarar retrospectivamente
+corregida la interacción fallida. T7 no se amplía ni se ejecuta en este cambio.
 
 ### BL-53 · Ocultar IDs técnicos documentales en respuestas de uso normal 🆕 registrado — 2026-10-17
 
