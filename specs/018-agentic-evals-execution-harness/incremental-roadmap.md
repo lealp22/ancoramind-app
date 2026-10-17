@@ -32,7 +32,7 @@ segunda interfaz los necesite: aprobación, identidad, presupuesto y anti-replay
 Este motor pertenece al harness de evaluación; no es un nuevo servicio del Core
 de negocio ni introduce subagentes en el bot.
 
-Operación prevista, todavía no aprovisionada:
+Secuencia operativa (aprovisionamiento y comprobaciones sin modelo ya realizados):
 
 1. Arrancar el servicio temporal **sin iniciar evaluaciones automáticamente**.
 2. Entrar en una shell interactiva autorizada y comprobar TTY con una simulación
@@ -46,8 +46,10 @@ Preparación local implementada: imagen exclusiva con catálogo y manifiesto
 sellado contrastable con checkout Git/CI externo; no copia `.git` ni secretos.
 Arranque idle y estado exigido en mount real. Servicio y volumen exclusivos ya
 creados con autorización posterior; arranque remoto recuperado por contexto
-privado explícito (no selección de ruta GitHub corregida). Pendientes verificación
-preflight/mount/TTY remotos, clave limitada al alias y revisión efectiva.
+privado explícito (no selección de ruta GitHub corregida). El propietario aporta
+mount válido/escribible, preflight remoto con identidad correcta y TTY
+`console_ready`, sin inferencia ni aprobación. Pendientes clave limitada al alias,
+scope/presupuesto externo, comprobación Gateway y aprobación/revisión de campaña.
 Evidencia y límite de rebuild en [aprovisionamiento](railway-provisioning.md).
 La reserva protege el mismo volumen, no es distribuida.
 Sin dominio público, cron ni ejecución pagada en comandos de arranque/reinicio.

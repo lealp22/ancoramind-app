@@ -10,7 +10,8 @@ inferencias, etiquetas humanas ni cambios en bot/Gateway/BD/runtime config.
 Dockerfile de evals en la raíz, deployment `54892e8d-84be-422a-b5a4-e4a2f4dfc7b9`
 `SUCCESS`, **1 running / 0 crashed**. El fallo de selección de ruta desde GitHub
 no está corregido internamente: se evita con contexto explícito (detalle al final).
-Pendientes TTY del propietario, preflight remoto y clave/scope/budget/campaña.
+Montaje, preflight remoto y TTY comprobados por el propietario (salidas aportadas
+en conversación); pendientes clave/scope/budget y aprobación/ejecución de campaña.
 
 ## Identidad y recursos
 
@@ -153,6 +154,38 @@ integraciones PostgreSQL en esta continuación (sin cambios de dominio/BD);
 Avisos de Collector local ausente en tests, sin fallos ni cambio de telemetry.
 Sin commit/push del agente; nuevo script/docs locales no están desplegados.
 
+## Verificación remota por el propietario — sin inferencia
+
+El propietario confirma acceso a la shell de `ancoramind-evals` y aporta las
+salidas de los tres comandos del runbook. Evidencia suministrada por el operador,
+no una nueva ejecución remota del agente ni un nuevo despliegue:
+
+- Mount: `mount_valid=true`, `writable=true`, `inference_started=false`.
+  Se validó un montaje real con el validador del harness y permiso de escritura;
+  no prueba adicional de persistencia tras reinicio ni escritura de reserva.
+- Preflight: `preflight_valid`, `worktree=clean`, `identity_source=sealed_image`,
+  SHA `db0c59be0b2eeb807d4222aeb5a62b622d90b200` y huella fuente
+  `108c410d26149cd5e3946e15d16f728fdfbdd4f6a8553fef1ec787df271e6c82`.
+- Plan `8f3e4a51496dbbdc763fd17458e8857fe785bd8abaf6016881effe6f79bd8139`,
+  revisión 8, ruta `ancoramind-default` / `ancoramind-default-r4`, cinco casos
+  previstos. Snapshot checksum
+  `e2663c6ab9e2666f41ba3d5399d05feb8a0d4141de0d2d74fdcfca19b3afdb25`,
+  fingerprint `a41f255f1b4022bc5ac1c7efb35a02d82fb4ec2396d71f4991fea1db15f7cccc`;
+  casos `abddf11d06c5233ca97ddf016938ae759f698b740588167c5a9079dc5d137474`.
+- Presupuesto candidato: 0,02 USD estimados/caso, **0,10 USD estimados total**;
+  no techo de facturación ni verificación del límite externo. Por caso:
+  120 s, 6 model calls/requests, 12 tools, 1024 output tokens, un intento por
+  model call, sin espera de cola. Plan sin ampliaciones.
+- Consola: `console_ready`, `inference_started=false`, `approval_granted=false`.
+  Comprueba el revisor real con texto fijo sintético, no evalúa respuesta LLM.
+- Siguen `gateway_access=not_checked`,
+  `approval_status=pending_separate_approval`, `semantic_status=not_evaluated`.
+
+Quedan superados los subgates acceso shell/mount/preflight/TTY de T7c-remoto,
+**no T7c completo, T7b ni BL-48**. Sin nuevas claves, flags, aprobación de campaña
+ni inferencia a partir de estas salidas. El commit local de documentación no
+sustituye la identidad db0c59b del contenedor.
+
 ## Continuación y límite operativo
 
 No utilizar un nuevo build GitHub o aplicar cambios a ciegas: el source del
@@ -165,10 +198,25 @@ Bot y Gateway conservan los deployments registrados arriba. Sin dominio/keys,
 flags de inferencia o secretos nuevos. Servicio queda **encendido idle**, con coste
 de cómputo y volumen, no apagado automáticamente. No se han ejecutado evals LLM.
 
-Comprobar preflight/mount efectivos y TTY real desde una sesión autorizada; no se
-han verificado por shell remota. Después preparar clave restringida, scope/budget
-y aprobación ligada a la identidad desplegada, sólo entonces campaña humana.
+Preflight/mount y TTY real comprobados por el propietario según evidencia arriba.
+Siguiente gate: autorización específica para clave exclusiva/expirable sólo r4,
+scope y presupuesto externo, comprobación Gateway sin inferencia y aprobación
+ligada a la identidad desplegada, sólo entonces campaña humana. No reutilizar el
+generador genérico de clave del bot: incluye aliases base y no configura expiración.
 **T7c-remoto, T7b y BL-48 permanecen abiertos**.
+
+### Autorización posterior: clave/acceso sin modelo
+
+El propietario autoriza preparar clave exclusiva/expirable, verificar presupuesto
+externo y acceso sin inferencia. **No creada todavía**: no hay ejecución de shell
+remota disponible en las herramientas del agente; no se extraen credenciales ni
+se instalan CLI/túneles para sustituirla. Se preparan helpers del operador con
+tests, sin deploy: [procedimiento de acceso](gateway-access-runbook.md).
+Clave candidata sólo r4, caducidad 2 h, 0,10 USD sin reset, concurrencia 1,
+lectura exclusivamente `/models`, `/v1/models`, `/key/info`; inferencia bloqueada.
+El propietario debe ejecutarlos en shells existentes y devolver sólo metadata.
+Pricing/enforcement en inferencia y aprobación/campaña siguen sin verificar;
+no se trata el presupuesto nominal como garantía de facturación.
 
 ### Plan anterior (superado parcialmente por la recuperación)
 
@@ -178,6 +226,6 @@ incremento explícito y CI del nuevo SHA, no mutar el candidato ni migrar el bot
 silenciosamente. No publicar imagen/código del repo como atajo.
 
 Build con `COPY evals/`, sellado, log `idle_manual_only` con SHA/huella correctos y
-réplica running ya comprobados; verificar mount/preflight y TTY autorizado.
+réplica running ya comprobados; mount/preflight y TTY confirmados por propietario.
 Sólo entonces preparar clave restringida, scope/budget y campaña humana, con gates
 separados. **T7c-remoto, T7b y BL-48 permanecen abiertos**.

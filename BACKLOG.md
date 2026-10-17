@@ -1445,8 +1445,19 @@ idle_manual_only/sin inferencia, **1 running/0 crashed**. Subida autenticada, no
 GitHub deploy ni registry público; sin CLI/túneles/keys, bot/Gateway intactos.
 Utilidad local reproducible `scripts/prepare_eval_build.py` sin upload; no está en
 imagen db0c59b. Servicio queda encendido idle; no reconstruir por GitHub a ciegas.
-Pendientes preflight/mount/TTY remotos y clave/scope/budget/campaña humana, BL-48
-abierto. Evidencia y hashes diferenciados de paquete manual/utilidad en specs/018.
+Mount/preflight/TTY remotos confirmados después por propietario: mount válido y
+escribible, preflight_valid con SHA db0c59b/huella/plan esperados y console_ready,
+sin inferencia ni aprobación concedida. Pendientes clave exclusiva/expirable,
+scope/presupuesto externo, Gateway not_checked y aprobación/campaña humana;
+T7c-remoto/T7b/BL-48 abiertos y semántica not_evaluated. Evidencia y hashes
+diferenciados de paquete manual/utilidad en specs/018.
+Autorizada después clave temporal/acceso sin inferencia: preparación local de
+helpers de operador y runbook Gateway; **no clave creada ni acceso comprobado**
+por el agente (sin shell remota disponible). Requiere ejecutar en shells existentes,
+sin extraer master ni clave bot, sólo clave nueva r4/lectura/2 h/0,10 USD sin reset.
+Sin flags de campaña/deploy; pricing y presupuesto externo live aún pendientes.
+Preparación de acceso: 21 pruebas específicas, suite global **1681 unitarias,
+80,58 % cobertura**, Ruff/mypy limpios; helpers sin TTY/red fallan cerrados.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

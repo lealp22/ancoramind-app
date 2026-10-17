@@ -23,8 +23,12 @@ campaña por esta autorización. Estado preciso: [evidencia Railway](railway-pro
 
 **Recuperación posterior:** idle validado en `54892e8d…`, 1 running/0 crashed,
 paquete privado de fuentes db0c59b con igual huella y receta eval en raíz.
-No se ha corregido el selector de rutas GitHub ni ejecutado campaña/preflight
-remoto. No regenerar desde GitHub a ciegas; seguir evidencia/runbook actualizado.
+No se ha corregido el selector de rutas GitHub. No regenerar desde GitHub a ciegas;
+seguir evidencia/runbook actualizado. **Validación posterior por propietario:**
+mount real válido/escribible, preflight remoto válido con identidad/plan esperados
+y consola TTY `console_ready`, sin inferencia ni aprobación concedida. Pendientes
+clave/scope/presupuesto externo, acceso Gateway y aprobación/ejecución de campaña;
+semántica sigue `not_evaluated`.
 
 ## Incremento implementado
 

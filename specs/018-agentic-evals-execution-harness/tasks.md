@@ -56,7 +56,15 @@
       mismos fuentes/huella db0c59b CI-verde; deployment `54892e8d…` SUCCESS,
       idle_manual_only y 1 running/0 crashed. Defecto de ruta GitHub no corregido;
       empaquetado reproducible local `prepare_eval_build.py`. Sin keys/inferencia;
-      preflight/mount/TTY remotos, scope/budget y campaña siguen pendientes.
+      **Verificación posterior por propietario:** shell accesible, mount_valid y
+      writable true, preflight_valid db0c59b/huella esperada y console_ready;
+      inference_started/approval_granted false. Subgates mount/preflight/TTY
+      superados, no T7c completo. Siguen clave exclusiva/expirable, scope/budget
+      externo, gateway_access not_checked y aprobación/ejecución de campaña.
+      Autorizada después preparación de clave/acceso sin modelo; helpers locales
+      de operador y `gateway-access-runbook.md` listos, no ejecutados remotamente.
+      Clave prevista sólo lectura r4/2 h/0,10 USD sin reset; no inferencia. No
+      marcar clave/scope/budget live verificados hasta reportes reales.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

@@ -50,8 +50,16 @@ Dockerfile de eval y su ignore específico.
 ## Preparación Railway — arranque recuperado, campaña pendiente
 
 **Actualización:** arranque validado y réplica running en deployment
-`54892e8d-84be-422a-b5a4-e4a2f4dfc7b9` mediante contexto explícito. Pendientes
-preflight/mount/TTY remotos y acceso al Gateway. No ejecutar campaña todavía.
+`54892e8d-84be-422a-b5a4-e4a2f4dfc7b9` mediante contexto explícito. El propietario
+aporta preflight remoto válido (identidad db0c59b/huella esperada), mount válido
+y escribible y `console_ready`; todos sin inferencia, sin aprobación concedida.
+Pendientes clave/scope/presupuesto externo, acceso al Gateway y aprobación de
+campaña. Evidencia detallada en `railway-provisioning.md`. No usar `--execute` aún.
+
+El propietario autoriza posteriormente clave y comprobación de acceso **sin
+inferencia**. Procedimiento de shells existentes y helpers locales (no están en
+la imagen, no reconstruirla): [acceso Gateway](gateway-access-runbook.md).
+Creación y verificaciones live pendientes de los reportes del operador.
 
 Para reconstruir un paquete sin cambios no comiteados ni inferencia, usar la
 utilidad local (no incluida en la imagen db0c59b) y SHA/huella previamente validados:
