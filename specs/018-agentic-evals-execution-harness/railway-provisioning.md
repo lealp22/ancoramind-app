@@ -218,6 +218,24 @@ El propietario debe ejecutarlos en shells existentes y devolver sólo metadata.
 Pricing/enforcement en inferencia y aprobación/campaña siguen sin verificar;
 no se trata el presupuesto nominal como garantía de facturación.
 
+**Resultado posterior aportado por el propietario:** `eval_key_read_only_ready`,
+alias `ancoramind-evals-access-1eacd663da85`, expiración
+`2026-10-18T01:37:40.773000+00:00`, único modelo r4, presupuesto nominal 0,10 USD
+sin reset, gasto cero, concurrencia 1, 30 RPM/250000 TPM y puerto 4000. Rutas sólo
+`/models`, `/v1/models`, `/key/info`; inferencia deshabilitada/no iniciada, pricing
+no verificado y campaña pendiente. Creación ejecutada por el propietario en
+Gateway, no por el agente. Falta comprobar acceso desde evals. No se registra
+secreto ni se configura almacenamiento persistente o un gestor de secretos;
+transferencia efímera a prompt oculto suficiente para esta comprobación.
+
+**Intento posterior desde evals:** propietario aporta `eval_gateway_check_blocked`
+sin inferencia. Helper original ocultaba todas las causas detrás del mismo estado;
+causa remota aún no confirmada. Evaluador/Gateway Online sin cambios, clave vigente
+al control 23:47:49Z. Se mejora sólo helper local de lectura con etapa/clase fija/
+HTTP status/URL-presente, sin contenido sensible; ningún deploy/clave/permiso nuevo.
+Repetir manualmente sólo comprobación GET con clave vigente para reunir evidencia,
+no generación ni inferencia. Detalle en `gateway-access-runbook.md`.
+
 ### Plan anterior (superado parcialmente por la recuperación)
 
 Resolver primero selección real de Dockerfile con metadata de build/plataforma

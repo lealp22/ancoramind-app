@@ -6,7 +6,22 @@ El propietario aporta mount/preflight/TTY correctos y autoriza explícitamente
 crear clave exclusiva/expirable y comprobar acceso privado sin modelo. No autoriza
 campaña, ampliación de presupuesto, clave del bot ni mutación de aliases/settings.
 
-**Preparado localmente, NO ejecutado en Railway:** las herramientas disponibles
+**Creación ejecutada por el propietario; acceso desde evals pendiente:** el JSON
+aportado confirma `eval_key_read_only_ready`, alias
+`ancoramind-evals-access-1eacd663da85`, expiración `2026-10-18T01:37:40.773000+00:00`,
+modelo exclusivo r4, presupuesto 0,10 USD sin reset/gasto cero, concurrencia 1,
+30 RPM/250000 TPM, puerto 4000 y las tres rutas de lectura previstas. Sin inferencia;
+`campaign_approval=pending`, `pricing_verified=false`. Se registra sólo metadata,
+no la clave. La lectura/verificación del registro y catálogo fue en loopback del
+Gateway; todavía no demuestra acceso desde `ancoramind-evals`.
+
+**Intento desde evals aportado después:** `eval_gateway_check_blocked`,
+`inference_started=false`, sin detalle de etapa. Acceso no validado; causa remota
+desconocida. Evaluador y Gateway Online, mismos deployments, sin pending work;
+clave no caducada al control de reloj 2026-10-17T23:47:49Z (caduca 01:37:40Z).
+No inferir de esos datos que la clave sea incorrecta o que falle la red.
+
+La creación no la ejecutó el agente: las herramientas disponibles
 no ofrecen ejecución de comandos en los contenedores. No instalar CLI, crear
 túneles/dominios ni extraer master key como atajo. La parte privilegiada la ejecuta
 el propietario en la shell existente de **LiteLLM**, usando su master key ambiente
@@ -18,7 +33,8 @@ Gateway inspeccionado sólo lectura: imagen `v1.100.1`, digest
 sin dominio/TCP proxy. Se contrastan tipos, generación y autenticación de la
 [versión fijada](https://github.com/BerriAI/litellm/blob/v1.100.1/litellm/proxy/management_endpoints/key_management_endpoints.py)
 y [documentación de claves](https://docs.litellm.ai/docs/proxy/virtual_keys).
-La compatibilidad live sigue pendiente hasta obtener el reporte, sin suponerla.
+La creación/verificación de restricciones queda acreditada por el reporte del
+operador; conectividad privada desde evals, pricing y campaña siguen pendientes.
 
 ## Controles de la nueva clave (no se modifica ninguna existente)
 
@@ -58,8 +74,15 @@ $source = Get-Content -Raw -Encoding UTF8 "$root\scripts\provision_eval_gateway_
 Pegar el bloque en la shell **LiteLLM**, no en evals. No escribir archivos Python
 en el contenedor, no redirigir a logs ni grabar la sesión. Se abre `/dev/tty` antes
 de crear la clave: sin terminal privada se rechaza. La clave **se mostrará sólo
-en esa terminal privada**; guardar en un gestor de secretos y limpiar el scrollback
-si procede, nunca enviarla en chat. No imprimir variables de entorno.
+en esa terminal privada**. No se presupone ni se ha configurado un gestor de
+secretos del propietario. Si ya utiliza uno, puede guardarla allí; no necesita
+instalar/configurar ninguno para esta prueba efímera. Puede transferirla desde
+esa terminal privada al prompt oculto del comprobador, sin archivo ni variable
+persistente Railway, historial de comandos o chat. No imprimir variables.
+Primero pegar el código del comprobador; después copiar la clave cuando aparezca
+el prompt (copiar el código reemplaza el portapapeles). Limpiar portapapeles y
+scrollback tras la transferencia, según política del equipo; no usar portapapeles
+sincronizado ni grabación de terminal para secretos.
 
 El JSON final en stdout es metadata-only: esperado `eval_key_read_only_ready`,
 alias/expiración/puerto/límites y `inference_enabled=false`,
@@ -102,10 +125,44 @@ límites/caducidad y `inference_enabled=false`, `inference_started=false`,
 Compartir sólo JSON. Esto no instala variables permanentes en evals: no se provoca
 un rebuild ni se incorpora una clave en el contenedor o manifiesto de fuentes.
 
+### Si el comprobador se detiene
+
+El helper actualizado incluye únicamente `stage`, `error_class`, `http_status`
+y `gateway_url_present` junto al estado/sin inferencia. Etapas posibles:
+imports, source_identity, plan_snapshot, private_console, key_input,
+gateway_settings, http_client, models_request, models_response, models_scope,
+key_info_request, key_info_response, key_info_restrictions. Error class es una
+allowlist fija; clases desconocidas se reducen a OtherError. No se imprimen URL,
+clave, cuerpos/headers HTTP, mensajes de excepción ni traceback.
+
+Para el intento fallido ya recibido, volver a copiar **sólo el comprobador
+actualizado** y repetir únicamente los GET de diagnóstico desde la shell evals,
+con la misma clave de lectura todavía vigente. No repetir creación ni habilitar
+rutas. Si la URL sigue exportada, conservarla para diagnosticar el fallo original;
+`gateway_url_present=false` permitirá identificar su ausencia sin mostrar variables.
+No copiar este helper a `/app/scripts`: ejecutar por stdin conserva la identidad.
+No añadir un retry automático: la repetición manual autorizada es de lectura,
+nunca de inferencia ni de POST de generación. Si ya ha caducado, detenerse.
+
+El mismo JSON genérico se reprodujo localmente con URL ausente, HTTP de error,
+ConnectError y scope incorrecto. Esto explica el **déficit de diagnóstico**, no
+la causa exacta de la incidencia remota. Pruebas nuevas ejecutan main completo
+con HTTP simulado; incluyen camino correcto sin ampliar permisos y errores sin
+filtraciones (incluidas clases de excepción con nombre sensible).
+
+Validación del incremento diagnóstico: 13 pruebas nuevas (34 focales con creación),
+suite global **1694 unitarias**, cobertura **80,58 %**, Ruff global/mypy src limpios.
+Helper pegado por stdin en imagen db0c59b `--network none` sin TTY: informa etapa
+private_console/OSError sin traceback/red/inferencia. No nuevas integraciones
+PostgreSQL ni operaciones remotas de escritura; causa live pendiente del reporte.
+
 ## 3. Límites y continuación
 
-Hasta ambos reportes, clave/acceso/budget **pendientes**, no validados por tests
-mockeados. No marcar T7c, T7b ni BL-48 terminados por preparar scripts.
+Reporte de creación recibido: restricciones y presupuesto nominal releídos en
+Gateway. Falta el reporte desde evals; no considerar acceso privado, pricing ni
+enforcement de facturación comprobados. No marcar T7c, T7b ni BL-48 terminados.
+La clave no se regenera: si ha caducado o no se conserva su valor, detenerse y
+revisar el siguiente paso, no repetir generación por defecto.
 
 Incluso después: revisar pricing real de r4 y su correspondencia con snapshot,
 aceptar procedencia histórica y presupuesto externo; aprobación de campaña

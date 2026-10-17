@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-17
+Última actualización: 2026-10-18
 
 ---
 
@@ -23,7 +23,7 @@
 | M5 Calendar & Reminders | ✅ |
 | BL-21 Listas TODO multi-lista | ✅ (toda mutación gobernada — specs/011) |
 | BL-8 Evals agentic | 🔶 36 casos sintéticos, runner estático, harness aislado del Agent y harness Core de consentimiento implementados; pendiente ejecución LLM real (T7) y scoring semántico (T8) — specs/014 + 018 |
-| BL-18 Sustituir ngrok por Railway | 🔶 gate manual por SHA (Wait for CI OFF por decisión del propietario); servicio/readiness recuperados; M3 PDF textual validado en Telegram/Railway; pendientes protección de `main` (requiere decisión de plan/visibilidad), E2E de imagen/PDF escaneado y M4–M5 — specs/008 |
+| BL-18 Hardening del despliegue Railway (CI/branch protection) | 🔶 gate manual por SHA (Wait for CI OFF por decisión del propietario); servicio/readiness recuperados; E2E de M3–M5 completo en Telegram/Railway (2026-10-17); litellm-postgres/Redis decidido no reactivar; único pendiente real: protección de `main` (decisión de plan/visibilidad diferida) — specs/008 |
 | BL-23 Governed LLM Access, Telegram admission y OTel | 🔶 T2–T14 implementados; default GPT-6 Luna `r4` activo en runtime rev. 8, embeddings preservados; queda verificar matriz A–Y completa — specs/013 |
 | BL-25 Script E2E nativo PowerShell | ✅ Validación/configuración y flujo local/remoto implementados — specs/015 |
 | BL-33 Health signals + dashboard de salud | 🔶 Collector/Grafana base desplegados y 429 resuelto; faltan import/provisioning de dashboard/alertas y matriz T7 — specs/016 |
@@ -39,7 +39,7 @@
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | ✅ completado: PostgreSQL, trivial y reviewable (prioridad, descripción-sola, fecha-sola); ausencia de escritura previa, descartes y hashes acreditados; versión/CI comprobados — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
-| MVP usable | 🔶 E2E en curso (M1–M2 + M3 .txt y PDF textual validados en Railway; M3 visión y M4–M5 pendientes — BL-1) |
+| MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
 Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL
 superadas; una prueba STT live omitida por diseño. Las 4 pruebas de migración
@@ -1458,11 +1458,23 @@ sin extraer master ni clave bot, sólo clave nueva r4/lectura/2 h/0,10 USD sin r
 Sin flags de campaña/deploy; pricing y presupuesto externo live aún pendientes.
 Preparación de acceso: 21 pruebas específicas, suite global **1681 unitarias,
 80,58 % cobertura**, Ruff/mypy limpios; helpers sin TTY/red fallan cerrados.
+Reporte posterior del propietario: clave creada/verificada en Gateway, alias
+`ancoramind-evals-access-1eacd663da85`, caduca 2026-10-18T01:37:40.773Z; sólo r4 y
+lectura, 0,10 USD nominal sin reset/gasto cero, sin inferencia. Acceso desde evals,
+pricing y campaña pendientes. No gestor de secretos configurado ni clave en docs;
+transferencia temporal a prompt oculto, sin persistencia/redeploy ni regeneración.
+Intento real desde evals: eval_gateway_check_blocked/sin inferencia, causa sin
+confirmar (helper original genérico). Diagnóstico local por etapa/clase fija/HTTP
+status/URL-presente preparado y probado, sin secretos ni ampliar permisos; sólo
+repetición GET manual con clave vigente, pendiente reporte operador. Servicios
+Online sin cambios; no regeneración ni campaña.
+Diagnóstico validado: 34 pruebas focales, **1694 unitarias/80,58 %**, Ruff/mypy
+limpios; imagen db0c59b sin TTY/red informa etapa sin traceback. Sin commit/push.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.
 
-### BL-18 · Sustituir ngrok por Railway 🔶 en curso — specs/008
+### BL-18 · Hardening del despliegue Railway (CI/branch protection) 🔶 bloqueado por decisión diferida del propietario — specs/008
 La alerta de tráfico tipo C2 hace no recomendable seguir usando ngrok en esta
 red sin autorización. **Decisión (2026-09-08): Railway** como despliegue
 gestionado conectado a GitHub; Supabase permanece como PostgreSQL y Storage.
@@ -1512,18 +1524,36 @@ privado sin dominio/TCP proxy.
   administración de LiteLLM o algún rate-limiting opcional dependen de
   ellos; decisión del propietario si también los reactiva.
 
-**Pendiente para cerrar BL-18:** repetir y documentar el E2E Telegram de
-M3–M5 con el servicio ya recuperado y el Gateway ya en línea; decidir sobre
-protección de `main` (plan de GitHub); confirmar si `litellm-postgres`/
-`Redis` deben reactivarse también. Por esos criterios BL-18 **sigue sin
-poder cerrarse**.
+**Actualización 2026-10-18 (cierre de 2 de los 3 criterios pendientes):**
+1. ✅ **E2E Telegram de M3–M5 satisfecho.** El 2026-10-17 los 4 flujos
+   restantes (recordatorio, vehículo+mantenimiento, calendario/recurrencia/
+   snooze, imagen/PDF escaneado) corrieron contra Telegram+Railway en
+   producción y pasaron PASS — ver BL-1 más arriba y
+   `specs/008-railway-deployment/mvp-release-campaign.md` (entregas 1-4).
+   Este criterio queda cerrado; el ítem no se había actualizado para
+   reflejarlo hasta ahora.
+2. ✅ **`litellm-postgres`/`Redis`: decisión del propietario — no
+   reactivar.** El Gateway lleva operando `healthy` sin ellos desde su
+   reactivación del 2026-10-09; no son dependencia bloqueante de
+   producción. Si en el futuro hiciera falta el panel de administración
+   de LiteLLM o rate-limiting opcional que dependa de ellos, se reabre
+   como entrada propia, no como parte de BL-18.
+3. 🔶 **Protección de rama `main`: decisión explícitamente diferida.**
+   El propietario decide no resolver ahora si hacer el repo público o
+   contratar GitHub Pro; sigue bloqueado por esa elección pendiente, sin
+   fecha. Este es el **único criterio que mantiene BL-18 abierto**.
+
+**Pendiente para cerrar BL-18:** únicamente decidir y aplicar la
+protección de rama `main` (upgrade de plan GitHub o hacer el repo
+público). Los otros dos criterios históricos quedan resueltos (arriba).
 **Nota (2026-09-09):** al desplegar se activará también el worker de
 recordatorios (BL-5 / ADR-003 / specs/010): variables `REMINDER_WORKER_*`
 opcionales (defaults válidos); su entrega es **outbound** y funciona desde el
 primer deployment saludable, sin esperar al registro del webhook. Ver
 `docs/deployment-railway.md` §8.
-**Criterio de cierre:** dominio HTTPS Railway estable, CI/CD operativo y E2E
-Telegram ejecutado sin alertas ni túneles desde el equipo local.
+**Criterio de cierre:** protección de rama `main` aplicada (upgrade de plan
+GitHub o repo público, decisión del propietario). Dominio HTTPS Railway
+estable, CI/CD operativo y E2E Telegram ya cumplidos desde 2026-10-17/18.
 
 
 ### ~~BL-25 · Script E2E nativo para PowerShell~~ ✅ implementado — specs/015 (2026-09-19)
@@ -2897,10 +2927,10 @@ ADR-002, Storage real verificado y 26 tests nuevos (123 total). Seguridad:
 `rls_auto_enable()` ya no es ejecutable por roles API y Security Advisor está
 limpio. Session pooler sync/async e integración directa de repositorios ya
 verificados. E2E nota y alta de vehículo PASS; fixes de foto, búsqueda de
-matrícula formateada y OpenRouter streaming listos. **Pendiente/pausado:**
-re-test Telegram de documento y búsqueda para cerrar T7, bloqueado hasta
-resolver BL-18 (alternativa autorizada a ngrok). pgvector: disponible (0.8.2),
-NO instalado — diseño solo hasta BL-6.
+matrícula formateada y OpenRouter streaming listos. **Actualización
+2026-10-18:** el re-test Telegram de documento/búsqueda que cerraba T7 ya se
+cubrió con el E2E completo de M1-M5 en Railway (2026-10-17, ver BL-1/BL-18).
+pgvector: disponible (0.8.2), NO instalado — diseño solo hasta BL-6.
 
 
 **Hardening RLS desplegado (2026-10-15, incremento 1):** revisión Alembic

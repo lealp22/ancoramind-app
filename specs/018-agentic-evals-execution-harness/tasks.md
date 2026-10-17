@@ -65,6 +65,14 @@
       de operador y `gateway-access-runbook.md` listos, no ejecutados remotamente.
       Clave prevista sólo lectura r4/2 h/0,10 USD sin reset; no inferencia. No
       marcar clave/scope/budget live verificados hasta reportes reales.
+      **Reporte real posterior del propietario:** eval_key_read_only_ready,
+      clave exclusiva sólo lectura r4, expiración 2026-10-18T01:37:40.773Z,
+      presupuesto nominal 0,10 USD sin reset/gasto cero, concurrencia 1. Creación
+      y restricciones releídas en Gateway confirmadas; acceso desde evals,
+      pricing/enforcement de coste y aprobación/campaña siguen pendientes.
+      Intento desde evals bloqueado sin inferencia; causa no confirmada. Helper
+      local mejorado con diagnóstico metadata-only por etapas, sin relajar scope
+      ni regenerar clave/redeploy. Pendiente salida de diagnóstico del operador.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización
