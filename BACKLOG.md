@@ -1547,6 +1547,27 @@ Probe local reproducible y `accounting-offline-review.md`; sin cambio remoto ni
 permisos/claves, T7c/T7b/BL-48 abiertos, falta decisión/evidencia runtime de gasto.
 Validación de investigación: 10 pruebas Docker offline separadas y 7 unitarias nuevas;
 suite global **1701 passed/80,58 %**, Ruff/mypy limpios, sin integración DB nueva.
+Revisión adicional autorizada de evidencia existente cerrada (2026-10-18):
+Gateway/evals sanos sin cambios; filtros logs metadata coste/tracking sin filas,
+control logs peticiones visible/truncado, sin contenido ni secretos. No certifica
+spend real ni flags efectivos. Recomendación concreta: un smoke sintético pagado
+único por LLMAccess/Gateway, max64 salida/30s/sin retry, nominal0,01 USD y lectura
+spend propio antes/después; requiere aprobación específica, aún no ejecutado.
+Si contabiliza cierra investigación; si ambiguo/falla se para sin repetir, no
+otra ronda abierta. No modificar r4/clave proveedor/bot/candidato para ello.
+Autorización explícita recibida: UNA prueba pagada nominal0,01 USD/max64/30s/1POST,
+sin tools/retry/fallback/replay, por LLMAccess; campaña sigue sin aprobar. Clave
+eval anterior caducada (control05:56Z); preparar sustituta dedicada sólo al estar
+operador listo. Helper dos roles admin/smoke, TTY secreto y cleanup Enter/revocación;
+marca persistente separada de campaña, reporte sin contenido. 13 pruebas nuevas,
+**1714 unitarias/80,58 %**, Ruff/mypy limpios; imagen sellada offline mock1POST y
+replay bloqueado. Ninguna inferencia/clave real/deploy ejecutados por agente;
+pendiente operación humana y JSON smoke+revocación. Runbook accounting-smoke.
+**Smoke real aportado después:** 1POST/1call, gasto0→0,0000353 USD=header Gateway,
+smoke_accounting_verified; clave87a125a812bd revocada/ausente confirmada por operador.
+Investigación contable cerrada acotadamente, sin más rondas/smokes. No garantía
+absoluta de factura ni campaña aprobada; siguiente decisión cinco casos por plan
+existente y revisión humana. No borrar reserva ni reutilizar la clave revocada.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

@@ -2,6 +2,18 @@
 
 ## Estado y alcance
 
+**Resultado actual:** smoke pagado autorizado superado, evidencia del propietario:
+una llamada, gasto clave0→0,0000353 USD=header Gateway; revocación confirmada
+87a125a812bd. Investigación de contabilidad cerrada acotadamente, sin más smokes.
+Campaña todavía sin aprobar; siguiente paso es decisión concreta de cinco casos,
+no auditoría nueva. [Resultado smoke](accounting-smoke-runbook.md).
+
+**Continuación autorizada:** UNA prueba de contabilidad con gasto nominal0,01 USD,
+max64 salida/30s/1intento/sin tools/retry/fallback, no campaña. Clave previa caducada
+al preparar: sustituta smoke sólo al ejecutar operador con ambas shells listas;
+cleanup admin tras resultado. [Procedimiento completo](accounting-smoke-runbook.md).
+No confundir autorización con resultado real; aún sin inferencia del smoke.
+
 **Investigación offline autorizada y completada:** 10 pruebas sobre la imagen
 LiteLLM fijada, sin red/credenciales/inferencia, demuestran coste upstream → cola
 KEY/contador/budget y sus límites. Metadata0 no prueba spend roto; coste ausente y

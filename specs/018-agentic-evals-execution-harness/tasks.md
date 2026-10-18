@@ -99,6 +99,17 @@
       Metadata0 no demuestra fallo, tampoco garantía hard0.10; coste ausente y
       flags opt-in dejan límites. `accounting-offline-review.md`; pendiente
       evidencia runtime/decisión de aislamiento y aprobación, no cierre T7c/T7b.
+      **Autorización posterior:** smoke pagado único nominal0,01 USD/max64/30s,
+      LLMAccess/Gateway sin tools/retry/fallback/replay; no campaña. Clave antigua
+      caducada, sustituta dedicada por operador pendiente; helper/cleanup y runbook
+      preparados, 13 tests nuevos/1714 unitarias. Falta ejecución real+revocación;
+      no nuevas rondas abiertas si contabiliza o si resultado ambiguo (parar).
+      **Ejecución real y cleanup confirmados por propietario:** smoke_accounting_verified,
+      1POST/1call, delta0,0000353 USD=header Gateway; smoke_key_revoked_verified
+      mismo alias87a125a812bd. Investigación contable cerrada para este alcance;
+      no garantía absoluta de factura ni evaluación semántica. Pendiente decisión
+      de campaña de cinco casos, nueva clave exclusiva y revisión humana; T7b/BL-48
+      siguen abiertos. No repetir smoke ni borrar reserva.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

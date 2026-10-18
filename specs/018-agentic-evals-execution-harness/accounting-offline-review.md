@@ -124,6 +124,62 @@ petición, pero no garantiza el orden de todos los callbacks/concurrencia reales
 
 ## Siguiente decisión, no ejecución
 
+**Resultado posterior live:** propietario aporta smoke_accounting_verified,
+1POST/1call, gasto propio0→0,0000353 USD, delta=header Gateway y clave smoke
+87a125a812bd revocada según segundo reporte smoke_key_revoked_verified.
+Se cierra investigación contable acotada; no volver a pedir pruebas de coste.
+No se convierte en garantía universal de0,01/0,10 USD ni valida semántica; campaña
+sigue sin aprobar. Evidencia completa en [smoke](accounting-smoke-runbook.md).
+
+**Decisión posterior del propietario:** autoriza explícitamente el smoke único
+nominal0,01 USD y modificación temporal de clave eval; no la campaña. La clave
+anterior ya está caducada al preparar, así que se requiere sustituta dedicada al
+estar listo el operador, no creación automática del agente. Helper/rutina de
+revocación y prueba offline preparados en [runbook smoke](accounting-smoke-runbook.md).
+Autorización de la prueba no se registra como inferencia ejecutada ni contabilidad
+live validada: faltan JSON real y cleanup. No nuevas rondas de investigación.
+
+### Revisión de evidencia existente autorizada — ronda cerrada
+
+El propietario solicita revisar evidencia existente y acepta considerar pruebas
+pagadas acotadas para salir del bucle. No equivale todavía a aprobar un importe
+ni ejecutar inferencia. Se limita la investigación a una ronda, sin nuevas tools
+de producción, modificaciones de permisos o llamadas al modelo.
+
+Railway, lectura 2026-10-18T01:19:28Z: Gateway y evaluador Online, deployments
+bf1c29d3/54892e8d sin cambios, una réplica cada uno, sin pending work. Config de
+entorno (sin descifrar variables) confirma imagen fijada, endpoint privado litellm,
+healthcheck readiness y una región/réplica. **No verifica settings efectivos**
+disable_spend_updates/fail_closed_budget_enforcement, que no se han leído del proceso.
+
+Consulta de logs Gateway desde 2026-10-15T20:38:38Z hasta el control, sin solicitar
+campo message ni cuerpos/prompt/argumentos: filtros `response_cost`,
+`"Error in tracking cost callback"` y `"Spend tracking"` devuelven cero filas.
+No atribuirlo a ausencia de costes/errores: pueden no emitirse a ese nivel y son
+filtros acotados, no acceso a ledger DB. Control de visibilidad `"chat/completions"`
+devuelve 101 filas con límite100 (muestra truncada); sólo timestamps/severity,
+sin mensajes. Confirma que hay logs de peticiones, no número total de inferencias
+ni facturación. No claves, texto personal, spend logs DB ni valores env leídos.
+
+**Decisión recomendada:** no más rondas de lectura para perseguir una garantía
+absoluta que no ofrece el sistema. Proponer UNA prueba pagada sintética por la
+frontera LLMAccess/Gateway, sin tools/DB productiva, un intento, max64 tokens de
+salida, timeout30 s, sin retry/fallback/replay. Presupuesto nominal0,01 USD,
+restringiendo sólo la clave eval a ese límite/ruta tras autorización específica;
+la petición en curso puede sobrepasarlo y no se promete techo exacto de factura.
+Releer spend propio antes/después sin contenido y exigir coste positivo finito
+y atribución a esa clave. Resultado positivo cierra esta investigación y permite
+pedir aprobación de campaña, no nuevas auditorías; error/coste ausente/resultado
+ambiguo → detenerse y registrar fallo concreto, sin segunda inferencia.
+
+La prueba NO está autorizada/ejecutada en esta revisión, no habilita flags de
+campaña ni afirma verificación técnica antes de obtenerla. No modificar r4,
+secreto upstream del bot, DB productiva ni reconstruir el candidato db0c59b.
+Al finalizar smoke, retirar permiso de inferencia o revocar clave según decisión
+explícita; no dejar una ampliación indefinida. La campaña de cinco casos estimada
+0,10 USD es distinta: smoke añadiría0,01 USD nominal a su presupuesto, no ocultarlo
+dentro del plan inmutable. Debe aprobarse esa suma si después se realiza campaña.
+
 Investigación acotada completa: **no hay prueba de que la contabilidad esté rota
 por metadata0**, sí hay prueba de que depende de un coste recibido y del estado
 de tracking/contadores. Para elevar el presupuesto nominal eval a control externo
