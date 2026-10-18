@@ -110,6 +110,13 @@ políticas de software/red del ordenador gestionado.
   no usar un run anterior exitoso para ocultar un último intento fallido.
 - `eval_deploy_pending_changes_or_wrong_environment`, drift o deployment en curso:
   inspeccionar Railway; helper **no aplica** staged changes ni arregla config.
+  `unmergedChangesCount: null` explícito es válido en production: es metadata de
+  comparación entre entornos, no la señal de staged work. Campo ausente, valor
+  inválido o contador distinto de cero siguen bloqueando. La consulta independiente
+  `environmentStagedChanges` debe devolver null; cualquier registro STAGED/APPLYING
+  bloquea, aunque la UI muestre cero cambios. Revisar su origen en el dashboard y
+  resolverlo explícitamente, sin pulsar Deploy/Apply como atajo ni descartar trabajo
+  ajeno. Reintentar sólo con entorno sin trabajo pendiente y código corregido/CI verde.
 - Build/subida fallida/timeout → consultar deployment ID del resumen/dashboard.
   Puede haberse iniciado aunque falte confirmación. **No volver a pulsar a ciegas**.
   Sin retries mutantes, rollback o borrado automático. Variables de build pueden

@@ -195,9 +195,14 @@ def inventory(value: dict[str, Any]) -> tuple[dict[str, str | None], dict[str, A
         raise ValueError("eval_deploy_wrong_project")
     environments = [e["node"] for e in value["environments"]["edges"]
                     if e["node"]["id"] == ENVIRONMENT]
-    if len(environments) != 1 or environments[0].get("unmergedChangesCount") != 0:
+    if len(environments) != 1 or "unmergedChangesCount" not in environments[0]:
         raise ValueError("eval_deploy_pending_changes_or_wrong_environment")
     environment = environments[0]
+    # Nullable merge-comparison metadata is not the staged-work signal: production
+    # returns null. Railway.status() independently requires a null staged patch.
+    count = environment["unmergedChangesCount"]
+    if count is not None and (type(count) is not int or count != 0):
+        raise ValueError("eval_deploy_pending_changes_or_wrong_environment")
     services = {e["node"]["serviceId"]: e["node"]
                 for e in environment["serviceInstances"]["edges"]}
     candidate = services.get(SERVICE, {})

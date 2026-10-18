@@ -182,9 +182,11 @@ def test_package_no_candidate_execution_or_secrets(candidate, env, monkeypatch, 
     assert source_fingerprint(destination / "context") == metadata["source_fingerprint"]
 
 
+@pytest.mark.parametrize("unmerged_count", [0, None])
 def test_publish_only_three_metadata_variables_and_fixed_existing_service(
-    candidate, status, env, capsys,
+    candidate, status, env, capsys, unmerged_count,
 ):
+    status["environments"]["edges"][0]["node"]["unmergedChangesCount"] = unmerged_count
     directory, metadata = candidate
     railway = FakeRailway(status, metadata)
     report = deploy.publish(directory, env, railway, {})
@@ -203,6 +205,23 @@ def test_publish_only_three_metadata_variables_and_fixed_existing_service(
     assert sum(args[0] == "up" for args in railway.calls) == 1
     assert "--path-as-root" in next(args for args in railway.calls if args[0] == "up")
     assert "PRIVATE" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("count", [1, -1, "0", False, [], {}])
+def test_unmerged_count_invalid_blocks_before_mutation(candidate, status, env, count):
+    status["environments"]["edges"][0]["node"]["unmergedChangesCount"] = count
+    railway = FakeRailway(status, candidate[1])
+    with pytest.raises(ValueError, match="pending_changes_or_wrong_environment"):
+        deploy.publish(candidate[0], env, railway, {})
+    assert not any(args[0] in {"up", "variable"} for args in railway.calls)
+
+
+def test_unmerged_count_missing_blocks_before_mutation(candidate, status, env):
+    del status["environments"]["edges"][0]["node"]["unmergedChangesCount"]
+    railway = FakeRailway(status, candidate[1])
+    with pytest.raises(ValueError, match="pending_changes_or_wrong_environment"):
+        deploy.publish(candidate[0], env, railway, {})
+    assert not any(args[0] in {"up", "variable"} for args in railway.calls)
 
 
 @pytest.mark.parametrize("change", ["volume", "pending", "start", "domain", "replicas"])
@@ -282,8 +301,13 @@ def test_cli_environment_excludes_github_and_model_keys(monkeypatch):
     assert "GITHUB_TOKEN" not in call.call_args.kwargs["env"]
 
 
-@pytest.mark.parametrize("patch", [None, {"id": "pending", "status": "STAGED"}])
-def test_pending_patch_check_reads_metadata_not_patch_or_variables(monkeypatch, status, patch):
+@pytest.mark.parametrize("unmerged_count", [0, None])
+@pytest.mark.parametrize("patch", [None, {"id": "pending", "status": "STAGED"},
+                                  {"id": "applying", "status": "APPLYING"}])
+def test_pending_patch_check_reads_metadata_not_patch_or_variables(
+    monkeypatch, status, patch, unmerged_count,
+):
+    status["environments"]["edges"][0]["node"]["unmergedChangesCount"] = unmerged_count
     monkeypatch.setattr(deploy.sys, "platform", "linux")
     monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
     railway = deploy.Railway("synthetic")

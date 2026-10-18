@@ -1,5 +1,36 @@
 # Verificación — 2026-10-18
 
+## Intentos Actions y corrección del contador nullable
+
+- SHA `7957ba70e7eda09014594889befd9ef52e1a9005`: definición aceptada y
+  preparación CI/archivo correctas. Run `39146799866` bloqueado por token ausente;
+  propietario configuró el secreto. Run `39149868659` (17:30:07–17:30:22Z)
+  bloqueado por `eval_deploy_pending_changes_or_wrong_environment`, antes de
+  modificar variables o subir código. No inferencia.
+- Diagnóstico por lectura API con sesión de navegador ya autenticada, sin CLI
+  local ni extraer credenciales: production devuelve `unmergedChangesCount: null`.
+  La query Project del CLI fijado 5.70.0 incluye ese campo nullable. El fixture
+  anterior sólo usaba cero; `None != 0` rechazaba el entorno legítimo.
+- Corrección local: aceptar exclusivamente null explícito o entero cero;
+  ausente/malformado/no-cero sigue bloqueando. Se conserva íntegra la consulta
+  independiente `environmentStagedChanges { id status }`, sin leer patch/secretos.
+  STAGED/APPLYING no-null sigue bloqueando, sin excepciones por cero cambios.
+- Estado posterior a aquel intento: `environment-status` y lectura API confirman
+  patch `3f9536e6-9ad4-4b64-bd0b-2876f1c7b724`, STAGED, iniciado 17:33:47.047Z,
+  0 cambios según pendingWork. `get-staged-changes`/`describe-environment` en cambio
+  muestran null/sin cambios: no confundir presentación vacía con ausencia de
+  registro. Origen no confirmado; creado después del run, no atribuido al helper.
+  No aplicado/descartado. Sigue siendo bloqueo real para el siguiente intento.
+- Evaluador continúa en `54892e8d-84be-422a-b5a4-e4a2f4dfc7b9`, identidad histórica
+  db0c59b; volumen y resto de servicios sin modificaciones por esta investigación.
+  La publicación final y resolución humana del staged work siguen pendientes.
+- Prueba antes de corregir: publicación sintética con null reproduce rechazo;
+  booleano False revela aceptación indebida por igualdad con cero. Después:
+  **64 focales** (publicación + packaging), **1804 unitarias/1 skip**, **80,85 %**
+  cobertura, Ruff global limpio y mypy **177** archivos sin errores. Tests cubren
+  cero/null, ausente/no-cero/tipos inválidos y STAGED/APPLYING con ambos contadores.
+  Sin integraciones repetidas (no cambia src/schema); sin push/despliegue/inferencia.
+
 ## Corrección del workflow tras publicar 9125484
 
 GitHub rechazó la definición antes de ejecutar jobs: `runner.temp` no está
