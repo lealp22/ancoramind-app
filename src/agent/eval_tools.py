@@ -22,7 +22,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from agno.run import RunContext
 
@@ -32,6 +34,8 @@ from src.agent.tools.untrusted_results import (
     bounded_text,
     render_retrieved_records,
 )
+from src.domain.actions.presentation import render_proposal_block
+from src.domain.todos.models import TodoItemCreate
 
 
 @dataclass
@@ -47,17 +51,32 @@ class SyntheticProposalStore:
 
     _pending: dict[str, str] = field(default_factory=dict)
     _counter: int = 0
+    payloads: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+    created_ids: list[str] = field(default_factory=list)
 
     def seed(self, proposal_id: str, kind: str) -> None:
         """Register a proposal as already pending, from trusted fixture data."""
         self._pending[proposal_id] = kind
 
-    def create(self, kind: str) -> str:
+    def create(self, kind: str, payload: dict[str, Any] | None = None) -> str:
         """Simulate a ``propose_*`` tool call: create a new pending entry."""
         self._counter += 1
         proposal_id = f"eval-proposal-{kind}-{self._counter}"
         self._pending[proposal_id] = kind
+        self.payloads[proposal_id] = dict(payload or {})
+        self.created_ids.append(proposal_id)
         return proposal_id
+
+    def evidence(self) -> tuple[dict[str, Any], ...]:
+        """Observed synthetic state, not inferred from the model's reply or tool name."""
+        return tuple({
+            "id": pid, "kind": kind, "created_this_run": pid in self.created_ids,
+            "payload": dict(self.payloads.get(pid, {})),
+            "core_block": render_proposal_block(
+                uuid5(NAMESPACE_URL, pid), "create_todo_item" if kind == "todo_item" else kind,
+                self.payloads.get(pid, {}),
+            ),
+        } for pid, kind in self._pending.items())
 
     def confirm(self, proposal_id: str) -> bool:
         """Retired legacy confirmation; a model-owned call grants no authority."""
@@ -240,9 +259,21 @@ def build_eval_tools(
         due_date: str | None = None,
     ) -> str:
         """Add title-only tasks immediately; extra fields require a reviewable proposal."""
+        expected_list = fixtures.get("todo_list_id", "11111111-1111-1111-1111-111111111111")
+        # Keep legacy opaque IDs in unit fixtures; known case UUIDs remain strictly scoped.
+        if "todo_list_id" in fixtures and list_id != expected_list:
+            return "Lista sintética no disponible."
+        try:
+            data = TodoItemCreate(
+                title=title.strip(), description=description, priority=priority,
+                due_date=datetime.fromisoformat(due_date) if due_date else None,
+            )
+        except ValueError:
+            return "Datos de tarea sintética no válidos."
         if description is None and priority is None and due_date is None:
             return "✅ Tarea añadida y auditada."
-        proposal_id = store.create("todo_item")
+        proposal_id = store.create("todo_item", {"list_id": list_id,
+                                                  **data.model_dump(mode="json")})
         return f"Propuesta creada (`{proposal_id}`); pendiente de confirmación del Core."
 
     async def list_pending_proposals(run_context: RunContext) -> str:

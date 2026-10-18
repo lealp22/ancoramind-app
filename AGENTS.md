@@ -56,6 +56,19 @@ recordatorios y eventos, con trazabilidad completa.
   Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.
 
+  **Evaluador specs/040 (local, no desplegado):** consola reutilizable
+  `scripts/eval_console.py`, worker desacoplado y revisión recuperable sin nueva
+  inferencia, evidencia/revisiones **sólo sintéticas** cifradas en volumen separado,
+  autosave por criterio y promoción humana/versionada de golden Agent/juez. Es una
+  decisión explícita del propietario de persistir contenido sintético privado:
+  no captura de contenido personal ni logs/OTel con prompts/resultados. Retención
+  bruta7d/purga manual, markers anti-replay conservados; exports sanitizados
+  explícitos. Candidato histórico db0c59b sigue sin esa recuperación; no inventar
+  revisión ni relanzar campaña interrumpida. Nuevo SHA/CI/setup clave exclusiva
+  reutilizable y despliegue eval pendientes; no crear claves/inferir por implementar.
+  1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
+  Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
+
 ---
 
 ## 2. Principios arquitectónicos NO negociables

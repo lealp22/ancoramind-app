@@ -11,7 +11,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 import httpx
 
@@ -111,7 +111,7 @@ async def check_console() -> dict[str, object]:
 
 async def execute_approved(
     plan: EvalCampaignPlan, snapshot: RuntimeConfigSnapshot, identity: dict[str, str],
-    env: Mapping[str, str], state_dir: Path,
+    env: Mapping[str, str], state_dir: Path, *, durable: tuple[Any, str] | None = None,
 ) -> dict[str, object]:
     """Reserve durable local one-shot marker before network/inference; never resume."""
     cases = plan.validate_snapshot(snapshot)
@@ -126,8 +126,12 @@ async def execute_approved(
     state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     if state_dir.is_symlink():
         raise ValueError("eval_state_directory_invalid")
-    marker = state_dir / (plan.checksum() + ".reserved.json")
-    report_path = state_dir / (plan.checksum() + ".report.json")
+    tag = plan.checksum()
+    if durable is not None:
+        # New candidate with explicit new SHA approval, never a replay of an old run.
+        tag += "." + identity["source_fingerprint"]
+    marker = state_dir / (tag + ".reserved.json")
+    report_path = state_dir / (tag + ".report.json")
     reservation = {
         **identity, "plan_checksum": plan.checksum(), "cases_fingerprint": case_hash,
         "reserved_estimated_cost_usd": str(plan.total_estimated_cost_usd),
@@ -145,15 +149,23 @@ async def execute_approved(
             report_file.truncate()
             report_file.flush()
             os.fsync(report_file.fileno())
+            if durable is not None:
+                durable[0].append(durable[1], "checkpoint", report)
 
         initial = {**reservation, "status": "reserved", "inference_started": False,
                    "semantic_status": "not_evaluated"}
         checkpoint(initial)
         runner: EvalCampaignRunner | None = None
         try:
-            reader, writer = open_review_console()
-            with reader, writer:
-                reviewer = TerminalCampaignReviewer(reader, writer)
+            with contextlib.ExitStack() as stack:
+                if durable is None:
+                    reader, writer = open_review_console()
+                    stack.enter_context(reader)
+                    stack.enter_context(writer)
+                    reviewer: Any = TerminalCampaignReviewer(reader, writer)
+                else:
+                    from src.agent.eval_durable_review import DurableCampaignReviewer
+                    reviewer = DurableCampaignReviewer(durable[0], durable[1])
                 async with httpx.AsyncClient(
                     timeout=snapshot.config.gateway.request_timeout_seconds,
                     follow_redirects=False, trust_env=False,

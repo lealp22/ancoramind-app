@@ -136,3 +136,27 @@ async def test_synthetic_explicit_reproposal_gets_a_new_id() -> None:
     ]
     assert replies[0] != replies[1]
     assert len(store._pending) == 2
+
+
+async def test_reviewable_todo_stores_actual_payload_and_uses_core_renderer():
+    store = SyntheticProposalStore()
+    tools = build_eval_tools(store, {"todo_list_id": "11111111-1111-1111-1111-111111111111"})
+    add = _tool("propose_todo_item", tools)
+    await add(_run_context(), list_id="11111111-1111-1111-1111-111111111111",
+              title="Revisar póliza", priority="high", due_date="2026-11-20")
+    evidence = store.evidence()[0]
+    assert evidence["payload"]["title"] == "Revisar póliza"
+    assert evidence["payload"]["priority"] == "high"
+    assert "alta" in evidence["core_block"] and "20 de noviembre de 2026" in evidence["core_block"]
+    assert "Pulsa ✅ Sí" in evidence["core_block"]
+    assert evidence["created_this_run"] is True
+
+
+async def test_invalid_structured_payload_never_creates_proposal():
+    store = SyntheticProposalStore()
+    tools = build_eval_tools(store, {"todo_list_id": "synthetic"})
+    add = _tool("propose_todo_item", tools)
+    await add(_run_context(), list_id="other", title="Title", priority="high")
+    await add(_run_context(), list_id="synthetic", title="Title", priority="invalid")
+    await add(_run_context(), list_id="synthetic", title="Title", due_date="not-a-date")
+    assert not store.evidence()

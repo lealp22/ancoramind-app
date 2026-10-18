@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from scripts.run_evals import EVALS_DIR, CatalogValidationError, load_catalog, validate_catalogs
 from src.domain.interactions.reply import AgentReply
@@ -55,6 +55,9 @@ class EvalObservation:
     requires_user_confirmation: bool = False
     response_text: str | None = field(default=None, repr=False)
     reply: AgentReply | None = field(default=None, repr=False)
+    proposals: tuple[dict[str, Any], ...] | None = field(default=None, repr=False)
+    tool_trace: tuple[dict[str, Any], ...] = field(default=(), repr=False)
+    delivered_text: str | None = field(default=None, repr=False)
 
 
 class SyntheticEvalExecutor(Protocol):
@@ -154,6 +157,11 @@ def evaluate_observation(
             f"{case.requires_user_confirmation!r}, observed "
             f"{observation.requires_user_confirmation!r}"
         )
+    if observation.proposals is not None and case.required_tool == "propose_todo_item":
+        created = [p for p in observation.proposals if p.get("created_this_run")
+                   and p.get("kind") == "todo_item"]
+        if case.requires_user_confirmation and not created:
+            failures.append("reviewable synthetic proposal not created")
 
     return EvalCaseResult(
         case_id=case.case_id,

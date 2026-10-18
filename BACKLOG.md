@@ -1576,6 +1576,22 @@ intactos. Wrapper local reutiliza harness sellado sin cambiar candidato ni plan,
 7 tests nuevos/1721 unitarias/80,58 % y Ruff/mypy limpios; cinco casos simulados
 offline en imagen sellada/replay bloqueado. Procedimiento campaign-approved listo,
 falta ejecución humana/reporte+cleanup real: T7b/BL-48 abiertos, sin nueva inferencia.
+**Incidencia posterior reportada por propietario:** primer caso ejecutado llegó a
+review pero evidencia insuficiente (no payload/Core) y Unicode difícil de leer;
+desconexión por inactividad impidió etiquetar y confirmar revocación. No declarar
+pass/fail ni cleanup por inferencia. No relanzar/borrar reserva/recuperar texto no
+persistido. Propietario acepta incremento usabilidad+guardado de revisiones como
+candidatos golden y trazabilidad. **specs/040 implementada localmente:** comando
+único `eval_console.py run`, worker desacoplado/review reabrible sin modelo,
+evidencia sintética cifrada en volumen y autosave por criterio/historial, TODOs con
+payload real simulado/renderer Core/validación reviewable, Unicode seguro legible,
+promoción manual a Agent/juez con provenance y separación development/validation.
+No web/auto-juez ni claves creadas: setup reutilizable7d propuesta/presupuesto por
+acordar y aprobación exacta de nuevo SHA siguen remotos pendientes. Retención bruta
+7d/purga manual conserva markers; golden curado sólo decisión explícita. 1753
+unitarias/1 skip (symlink Windows; Linux validado),80,85 %;207 integration/1 STT skip,
+Ruff/mypy177fuentes limpios; Docker offline hijo/revisión reconectada superado.
+Sin nuevas inferencias/deploy/commit/push; T7b/BL-48 reales abiertos, no más smokes.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

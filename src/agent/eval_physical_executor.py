@@ -219,12 +219,20 @@ class GovernedPhysicalEvalExecutor:
         reply = reply_from_run(output)
         outcome = "tool_call" if tool_names else "no_tool_call"
 
+        proposals = store.evidence()
+        blocks = [str(p["core_block"]) for p in proposals if p["created_this_run"]]
+        delivered = "\n\n".join(part for part in [reply.answer.strip(), *blocks] if part)
+        trace = tuple({
+            "name": execution.tool_name, "arguments": execution.tool_args,
+            "result": execution.result, "error": bool(execution.tool_call_error),
+        } for execution in domain_tool_executions(output))
         return EvalObservation(
             outcome=outcome,
             tool_names=tool_names,
-            requires_user_confirmation=any(name.startswith("propose_") for name in tool_names),
+            requires_user_confirmation=bool(blocks),
             response_text=reply.text(),
             reply=reply,
+            proposals=proposals, tool_trace=trace, delivered_text=delivered,
         )
 
     def _build_execution_context(self) -> ExecutionContext:

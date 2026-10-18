@@ -26,6 +26,19 @@
       T8, no T6. Detalle en `verification.md`.
 - [ ] T7 · Con credenciales y presupuesto aprobados, ejecutar la modalidad LLM
       fuera de CI por defecto y capturar evidencia metadata-only.
+      **Decisión posterior priorizada:** propietario acepta mejorar operativa y
+      solicita persistir evidencia/revisiones sintéticas para recuperación,
+      trazabilidad y candidatos a golden set. Separar archivo privado de contenido
+      del reporte metadata-only, ejecución de revisión sin nuevas inferencias,
+      autosave por criterio e historial de correcciones; promoción golden humana,
+      no automática por pass/fail. Corregir evidencia/rúbrica y Unicode antes de
+      otra campaña. Privacidad/retención y credencial reutilizable por concretar;
+      sin cambios remotos/gasto/replay por esta decisión. Detalle en actualización
+      de `incremental-roadmap.md`. **Implementado localmente en specs/040:**
+      evidencia cifrada/review recuperable/promoción manual y operativa reusable;
+      1753 unitarias/1 skip,80,85 %,207 integraciones/1 skip,Ruff/mypy limpios.
+      Falta commit/CI nuevo/setup exclusivo/despliegue y campaña real nueva; no
+      rellenar etiquetas ni replay del intento histórico db0c59b por este cambio.
       Preparación autorizada 2026-10-16: snapshot explícito, plan limitado,
       Gateway-only y preflight sin inferencia implementados y probados;
       `t7-preparation.md`. Reserva de 0,10 USD estimados aceptada posteriormente;

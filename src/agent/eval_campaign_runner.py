@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
+import unicodedata
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from typing import Literal, Protocol, TextIO
@@ -44,6 +46,15 @@ def campaign_cases_fingerprint(cases: tuple[EvalCase, ...]) -> str:
     ).hexdigest()
 
 
+def console_data(value: object) -> str:
+    """Readable Spanish; never render terminal controls, bidi or format characters."""
+    text = json.dumps(value, ensure_ascii=False, default=str)
+    return "".join(
+        f"\\u{ord(char):04x}" if unicodedata.category(char).startswith("C")
+        or char in {"\u2028", "\u2029"} else char for char in text
+    )
+
+
 class TerminalCampaignReviewer:
     """Synthetic text to an explicitly opened human console, never report/stdout.
 
@@ -51,11 +62,16 @@ class TerminalCampaignReviewer:
     permission to write replies to logs/files. Closing the console aborts review.
     """
 
-    def __init__(self, reader: TextIO, writer: TextIO) -> None:
+    def __init__(self, reader: TextIO, writer: TextIO,
+                 save: Callable[[int, ReviewLabel], None] | None = None,
+                 criterion_offset: int = 0, pause_on_disconnect: bool = False) -> None:
         if not reader.isatty() or not writer.isatty():
             raise ValueError("eval_human_console_required")
         self._reader = reader
         self._writer = writer
+        self._save = save
+        self._criterion_offset = criterion_offset
+        self._pause_on_disconnect = pause_on_disconnect
 
     async def review(self, case: EvalCase, observation: EvalObservation) -> tuple[ReviewLabel, ...]:
         reply = observation.reply
@@ -65,16 +81,19 @@ class TerminalCampaignReviewer:
         # escape sequences or impersonating the rubric's console controls.
         self._writer.write(
             "\nCaso sintético: " + case.case_id
-            + "\nInput (DATA): " + json.dumps(case.input_text, ensure_ascii=True)
-            + "\nContexto (DATA): " + json.dumps(dict(case.synthetic_context), ensure_ascii=True)
-            + "\nanswer (DATA): " + json.dumps(reply.answer, ensure_ascii=True)
-            + "\nproposal_text (DATA): " + json.dumps(reply.proposal_text, ensure_ascii=True)
+            + "\nInput (DATA): " + console_data(case.input_text)
+            + "\nContexto (DATA): " + console_data(dict(case.synthetic_context))
+            + "\nanswer (DATA): " + console_data(reply.answer)
+            + "\nproposal_text (DATA): " + console_data(reply.proposal_text)
+            + "\nPropuestas sintéticas (DATA): " + console_data(observation.proposals)
+            + "\nPresentación Core simulada (DATA): " + console_data(observation.delivered_text)
+            + "\nHechos de tools (DATA): " + console_data(observation.tool_trace)
             + "\nTools: " + json.dumps(observation.tool_names) + "\n"
         )
         labels: list[ReviewLabel] = []
         for index, criterion in enumerate(case.response_criteria):
             self._writer.write(
-                f"Criterio {index}: " + json.dumps(criterion, ensure_ascii=True)
+                f"Criterio {index + self._criterion_offset}: " + console_data(criterion)
                 + "\n[p] pass / [f] fail / [x] not_evaluated (vacío = detener): "
             )
             self._writer.flush()
@@ -83,13 +102,18 @@ class TerminalCampaignReviewer:
                 "x": "not_evaluated", "not_evaluated": "not_evaluated", "": "not_evaluated",
             }
             while True:
-                raw = (await asyncio.to_thread(self._reader.readline)).strip().casefold()
+                line = await asyncio.to_thread(self._reader.readline)
+                if not line and self._pause_on_disconnect:
+                    raise EOFError("eval_review_disconnected_no_label_saved")
+                raw = line.strip().casefold()
                 if raw in choices:
                     label = choices[raw]
                     break
                 self._writer.write("Entrada no válida. Usa p / f / x (vacío = detener): ")
                 self._writer.flush()
             labels.append(label)
+            if self._save:
+                self._save(index, label)
             if label != "pass":
                 labels.extend("not_evaluated" for _ in case.response_criteria[index + 1:])
                 break
@@ -191,11 +215,16 @@ class EvalCampaignRunner:
                     request = EvalExecutionRequest(case, self._plan.logical_route,
                                                    self._plan.config_revision)
                     observation = await self._executor.execute(request)
+                    verdict = evaluate_observation(request, observation)
+                    capture = getattr(self._reviewer, "capture", None)
+                    if capture is not None:
+                        captured = capture(case, observation, verdict.metadata())
+                        if inspect.isawaitable(captured):
+                            await captured
                     result.update(_costs(self._recorder.events[offset:], self._plan))
                     if any(name not in self._tool_names for name in observation.tool_names):
                         raise ValueError("eval_observed_unknown_tool")
                     result["observed_tool_names"] = list(observation.tool_names)
-                    verdict = evaluate_observation(request, observation)
                     result["deterministic_status"] = "passed" if verdict.passed else "failed"
                     if not verdict.passed:
                         raise ValueError("eval_deterministic_failed")

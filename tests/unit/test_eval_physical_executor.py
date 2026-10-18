@@ -16,7 +16,7 @@ from agno.models.base import Model
 from agno.models.response import ModelResponse
 
 from src.agent.eval_physical_executor import GovernedPhysicalEvalExecutor, eval_snapshot_fingerprint
-from src.agent.evals import EvalCase, EvalExecutionRequest
+from src.agent.evals import EvalCase, EvalExecutionRequest, evaluate_observation
 from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import ExecutionContext
 from src.domain.runtime_config.models import (
@@ -75,6 +75,31 @@ class _FakeLLMAccess:
 
     def model_for(self, route_name: str, execution_context: ExecutionContext) -> Model:
         return self.model
+
+
+@pytest.mark.parametrize("extra,created", [("", False),
+                                          (',"priority":"high","due_date":"2026-11-20"', True)])
+async def test_proposal_verdict_depends_on_state_not_function_name(extra, created):
+    from dataclasses import replace
+    case = replace(_case(input_text="Synthetic", required_tool="propose_todo_item"),
+                   requires_user_confirmation=True)
+    model = _ScriptedModel(id="eval-test", turns=(
+        _tool_call_turn("one", "propose_todo_item",
+                        '{"list_id":"synthetic-list","title":"Revisar póliza"' + extra + '}'),
+        _tool_call_turn("reply", "present_reply", AgentReply(
+            answer="", proposal_text="Propuesta creada.",
+        ).model_dump_json()),
+    ))
+    request = EvalExecutionRequest(case, "ancoramind-default", 0)
+    observed = await GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model)).execute(request)
+    assert bool(observed.proposals) is created
+    assert evaluate_observation(request, observed).passed is created
+    assert bool(observed.delivered_text) is created
+    if created:
+        assert observed.proposals[0]["payload"]["priority"] == "high"
+        assert "20 de noviembre de 2026" in observed.delivered_text
+        assert "alta" in observed.delivered_text
+    assert observed.tool_trace[0]["name"] == "propose_todo_item"
 
 
 def _case(

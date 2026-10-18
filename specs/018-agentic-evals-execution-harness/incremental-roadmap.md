@@ -6,6 +6,63 @@
 
 ## Alcance y autorizaciones
 
+### Decisión posterior — usabilidad, evidencia durable y revisión recuperable
+
+**Implementación local specs/040 completada:** [contrato](../040-durable-eval-review/spec.md),
+[operación reutilizable](../040-durable-eval-review/runbook.md) y
+[verificación](../040-durable-eval-review/verification.md). `eval_console.py run`
+lanza worker desacoplado y review reabrible, archivo sintético cifrado/autosave
+por criterio, propuestas con payload/renderer Core, promoción manual Agent/juez.
+No web/juez automático/credenciales/despliegues/inferencias nuevos. Falta setup
+remoto único y aprobación del nuevo SHA/campaña; no sustituye resultados históricos.
+1753 unitarias/1 skip Windows symlink,80,85 %;207 integraciones/1 STT skip; Ruff/mypy
+limpios y prueba Linux offline de hijo desacoplado/review reconectada superada.
+
+El propietario acepta sustituir la operación puntual con dos shells/claves por
+ensayo por una preparación reutilizable y lanzamiento sencillo. Solicita guardar
+revisiones como base para golden set y trazabilidad. Este incremento se prioriza
+antes de otra campaña pagada; modifica la decisión anterior de no persistir
+respuestas, **sólo para evidencia del harness con fixtures sintéticas**. No autoriza
+captura de conversaciones/documentos reales ni contenido en logs/OTel/reportes
+públicos. Clave más duradera y desconexión de consola son problemas distintos.
+
+Propuesta de diseño para desarrollar esa decisión, todavía sin implementar:
+
+- Ejecución y revisión separadas: guardar resultado sintético completo y hechos
+  de tools/propuestas antes de pedir la primera etiqueta; reabrir revisión sólo
+  lee el artefacto y no llama al modelo. Checkpoint por criterio, no sólo al acabar
+  el caso. No repetir inferencia ni reanudar gasto automáticamente tras desconexión.
+- Evidencia privada por run/case: input/contexto, salida particionada, argumentos/
+  resultados sintéticos necesarios, propuesta con campos y presentación Core,
+  checks deterministas, estados/error/costes y trazabilidad de SHA/huellas/ruta/
+  snapshot/rúbrica. Conservar casos fallidos y no evaluados sin inventar etiquetas.
+- Revisiones: identidad del revisor, fecha, criterio versionado, pass/fail/
+  not_evaluated y motivo. Corregir una valoración crea revisión enlazada, sin
+  borrar resultado original ni decisión anterior. Valoración humana no otorga
+  consentimiento de negocio ni permisos para ejecutar otra campaña.
+- Dos productos distintos: archivo de ejecuciones/revisiones y golden set curado.
+  Pass y fail son candidatos útiles; promoción humana explícita, versionada y
+  deduplicada, nunca automática por etiqueta. Separar regresión del Agent de
+  pares respuesta/criterio/etiqueta usados para calibrar jueces; reservar validación
+  independiente para evitar evaluar al juez con sus mismos ejemplos de ajuste.
+- Corregir evidencia insuficiente del primer caso y mostrar español legible con
+  controles de terminal escapados. No pedir al modelo duplicar bloque Core para
+  suplir carencias de la interfaz. Fallo de observabilidad/rúbrica no equivale a
+  fallo del modelo; not_evaluated sigue siendo diferente de fail.
+
+Pendientes concretar almacenamiento/acceso, cifrado, retención y exportación;
+no mantener contenido indefinidamente por defecto ni subirlo todo a Git. Material
+seleccionado para golden set será sintético, revisado y sin secretos/datos personales.
+Metadata operativa mantiene separación respecto al archivo privado de evidencia.
+Las labels que hoy se guardan en reportes no bastan para recuperar la respuesta
+que no fue persistida: no reconstruir el caso interrumpido como si fuera evidencia.
+
+La imagen remota histórica continúa sin esa recuperación. No cambios remotos, nueva
+clave duradera, inferencia o replay autorizados automáticamente por esta decisión;
+duración/presupuesto de credencial se concretarán al implantar la operativa.
+Web/juez automático siguen fuera de este incremento salvo decisión posterior.
+La secuencia histórica de abajo se conserva como antecedente, no operativa objetivo.
+
 - Mantener los cinco casos de `bl48-campaign-plan.json`; no ampliar a calendario
   ni otras categorías en esta campaña.
 - Reserva estimada de **0,10 USD aceptada**. No equivale a autorización de
