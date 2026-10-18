@@ -48,6 +48,15 @@ el simple hecho de publicar el código.
 
 ## Cada actualización
 
+**Si se han añadido secretos/configuración al evaluador:** revisar que sólo afecta
+a sus variables y, desde Details de Railway, mantener **Alt** al pulsar **Deploy**
+para confirmar sin redespliegue (comportamiento documentado por Railway en
+<https://docs.railway.com/deployments/staged-changes>). El contenedor actual no
+recibe esas variables hasta el siguiente despliegue. Después iniciar **un nuevo**
+workflow de main con el helper corregido y CI verde, nunca «Re-run jobs» del viejo.
+Guardar configuración no autoriza campaña ni crea `/eval-state/approval.json`.
+No cambiar el pin GitHub ni usar Deploy Latest Commit para aplicar estos secretos.
+
 1. Confirmar que no hay campaña **ni revisión operativa** en curso. Actualizar el
    contenedor mata workers locales al contenedor; evidencia persistida no equivale
    a poder continuar inferencias. Revisar estado desde operativa specs/040 si duda.
@@ -131,8 +140,16 @@ políticas de software/red del ordenador gestionado.
   inválido o contador distinto de cero siguen bloqueando. La consulta independiente
    `environmentStagedChanges` es obligatorio en el schema Railway: exigir null era
    un error del helper, no un problema a resolver pulsando Deploy/Apply. Desde la
-   enmienda de specs/041, un borrador STAGED con patch exactamente `{}` pasa sólo
-   si es la única fila de pendingWork, mismo id/entorno y sin hijos. Cualquier patch
+    enmienda de specs/041, un borrador STAGED con patch exactamente `{}` pasa sólo
+    si es la única fila de pendingWork, mismo id/entorno y sin hijos. Tras confirmar
+    variables sin desplegar, también es válido el sentinel exacto `id: "<empty>"`,
+    estado STAGED/entorno correcto/patch `{}` y pendingWork `[]`; no UUID + lista vacía
+    ni sentinel con filas. El helper antiguo rechaza ese estado legítimo con
+    `eval_deploy_pending_work_cannot_be_verified` (run39171845184). No recrear claves,
+    borradores o cambios para forzar el UUID: hace falta publicar el fix del helper,
+    CI verde y nuevo Run workflow desde main. El candidato puede seguir siendo
+    7ea0cf06 con su CI exacta; el código de publicación debe ser el nuevo main.
+    Cualquier patch
    con contenido, APPLYING/estado desconocido/operación adicional o respuesta
    incompleta bloquea. Con este borrador vacío no hace falta cambiar Railway:
    publicar el helper corregido, esperar CI verde y lanzar una nueva ejecución

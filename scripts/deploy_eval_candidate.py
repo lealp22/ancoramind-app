@@ -178,8 +178,8 @@ class Railway:
 
     def status(self) -> dict[str, Any]:
         value = json.loads(self.call(["status", *TARGET, "--json"]))
-        # Railway returns a non-null draft even when patch is exactly {}. Its
-        # contents stay in memory only; never include them in reports or errors.
+        # Railway returns a non-null object: a draft or the <empty> sentinel.
+        # Patch contents stay in memory only; never include them in reports or errors.
         query = ('query { environmentStagedChanges(environmentId: "' + ENVIRONMENT
                  + '") { id status environmentId patch } '
                  + 'environmentPendingWork(environmentId: "' + ENVIRONMENT
@@ -189,21 +189,29 @@ class Railway:
 
 
 def validate_pending_work(response: Any) -> None:
-    """Accept only an exactly empty idle draft, never merely zero visible changes."""
+    """Verify an empty draft or the exact no-draft sentinel against pending work."""
     if (not isinstance(response, dict) or response.get("errors")
         or not isinstance(response.get("data"), dict)):
         raise ValueError("eval_deploy_pending_work_cannot_be_verified")
     data = response["data"]
     staged, pending = data.get("environmentStagedChanges"), data.get("environmentPendingWork")
     if (not isinstance(staged, dict) or not isinstance(staged.get("id"), str)
-        or not UUID.fullmatch(staged["id"]) or staged.get("environmentId") != ENVIRONMENT
+        or staged.get("environmentId") != ENVIRONMENT
         or not isinstance(pending, list)):
         raise ValueError("eval_deploy_pending_work_cannot_be_verified")
     if (staged.get("status") != "STAGED" or type(staged.get("patch")) is not dict
         or staged["patch"] != {}):
         raise ValueError("eval_deploy_pending_changes_or_wrong_environment")
-    # Cross-check the empty draft's identity against all pending operations. Do
-    # not request changes/values: any additional operation or child blocks upload.
+    # After committing without a deploy, the API uses this literal sentinel,
+    # not null or an omitted draft. No actual pending row may accompany it.
+    if staged["id"] == "<empty>":
+        if pending != []:
+            raise ValueError("eval_deploy_pending_work_cannot_be_verified")
+        return
+    if not UUID.fullmatch(staged["id"]):
+        raise ValueError("eval_deploy_pending_work_cannot_be_verified")
+    # A persisted draft still requires its matching row; an empty list alone
+    # never proves consistency. Any other operation or child blocks upload.
     expected = {"id": "patch:" + staged["id"], "kind": "EnvironmentPatch", "status": "staged",
                 "environmentId": ENVIRONMENT, "children": []}
     if pending != [expected]:

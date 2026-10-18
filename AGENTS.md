@@ -95,7 +95,15 @@ recordatorios y eventos, con trazabilidad completa.
   volumen conservado/otros servicios sin cambios según workflow. SHA/huella por
   sello/log del upload; pin GitHub histórico db0c59b permanece sin reconnect.
   1867 unitarias/1 skip,127 focales,80,85 %,Ruff/mypy177 limpios.
-  No inferencia ni CLI local; campañas/claves/revisión remota real siguen pendientes.
+  Segundo run39171845184 bloqueado tras Alt+Deploy de variables: API sin borrador
+  devuelve id literal `<empty>`, STAGED/entorno/patch`{}` y pendingWork`[]`; helper
+  sólo aceptaba UUID+fila. Fix local acepta sólo ambas combinaciones exactas,
+  manteniendo rechazo de contenido/errores/inconsistencias;158 focales pasan,
+  1898 unitarias/1skip,80,85 %,Ruff/mypy177/diff limpios.
+  Publicación del helper/CI/nuevo workflow pendientes; candidato puede seguir7ea0cf06.
+  Propietario reporta clave eval r4 nominal0,10USD/7d creada sin inferencia; variables
+  guardadas sin reiniciar (valores no consultados); mismas instancia/volumen.
+  Sin inferencia ni CLI local; despliegue de variables/aprobación y revisión real pendientes.
   Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
 
 ---

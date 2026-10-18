@@ -1,6 +1,45 @@
 # Verificación — 2026-10-18
 
-## Primer rollout real verificado — estado vigente
+## Segundo bloqueo tras configuración de claves — fix local, rollout pendiente
+
+- Run [39171845184](https://github.com/lealp22/ancoramind-app/actions/runs/39171845184),
+  head/candidato/control7ea0cf06,2026-10-18T22:21:10Z. Paquete/CI preparados;
+  a22:21:32Z `eval_deploy_pending_work_cannot_be_verified` antes de variable set/up.
+  No inferencia ni nuevo deployment. Alt+Deploy sí confirmó la configuración sin
+  reiniciar: cuatro nombres de variables ya live; valores no leídos/verificados.
+- MCP read-only: no staged changes ni pendingWork, mismo deploymentb4305cc0,
+  Online/SUCCESS,1 RUNNING/0crashed y volumen conservado. API con sesión navegador
+  ya existente confirma `environmentStagedChanges` no-null, id literal **`<empty>`**,
+  statusSTAGED, environmentId correcto y patch exactamente `{}`, pendingWork `[]`,
+  HTTP200 sin errores. Patch sólo en memoria; salida limitada a metadata/booleanos.
+  No variables/secreto master/clave LLM/evidencia del volumen leídos por el agente.
+- Causa: el helper exigía UUID + única fila de borrador incluso cuando no había
+  ninguno; el fixture previo sólo cubría el UUID residual del primer rollout.
+  Regresión con la forma observada falla antes del fix; recorridos integrales
+  muestran6fail/3pass al añadir el estado sin borrador y transiciones pre/post.
+- Fix limitado: sólo sentinel literal `<empty>` + STAGED + entorno exacto + patch
+  `{}` + pendingWork `[]`, o caso previo UUID + única fila coincidente/sin hijos.
+  Null/missing/grafías/estados/patch/filas inconsistentes siguen bloqueando antes
+  de escribir. No borrar/aplicar/crear borradores, reintentos ni mostrar valores.
+  Fixture `railway_eval_empty_pending.json` saneada; adapter/subprocess mocked
+  comprueba ambos estados/transiciones, check_only, drift post-upload y no filtrado.
+- Reporte del propietario para la clave exclusiva: eval_reusable_key_ready,
+  modelo r4, expiración2026-10-25T22:02:58.503Z, presupuesto nominal0,10 USD sin reset,
+  inference_started=false. No equivale a validación remota del evaluador/saldo actual
+  ni aprobación de campaña. Clave Fernet configurada por propietario; formato y
+  valores remotos no inspeccionados. No generar/sustituir claves por este fallo.
+- Validación: `pytest tests/unit/test_deploy_eval_candidate.py
+  tests/unit/test_prepare_eval_build.py -q --no-cov`: **158 passed**;
+  `pytest tests/unit/ -q --cov=src`: **1898 passed/1 skipped**, **80,85 %**;
+  `ruff check src/ tests/ scripts/ migrations/`, `mypy src/` (**177 fuentes**) y
+  `git diff --check` limpios. Warning conocido OTel: Collector localhost4318 ausente,
+  sin fallo de suite; no se cambia telemetría. Integraciones no repetidas al no
+  cambiar src/schema ni prompts/tools. Control-plane de publicación
+  debe llegar a main/CI antes de nuevo Run workflow. Se puede conservar candidato
+  7ea0cf06, su CI y huella, usando helper nuevo de main; no Re-run del workflow viejo.
+  Sin commit/push/dispatch/CLI local/mutaciones Railway ni inferencia por el agente.
+
+## Primer rollout real verificado — evidencia histórica vigente del contenedor
 
 - Candidato y código de publicación:
   `7ea0cf06002d76692f230d189c43e8f9f5e742b1` (main).

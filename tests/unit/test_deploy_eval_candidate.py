@@ -25,6 +25,17 @@ def observed_status():
     ))["status"]
 
 
+@pytest.fixture
+def observed_empty_pending():
+    """Sanitized API shape after committing variables without deploying; no values."""
+    fixture = Path(__file__).parent / "fixtures/railway_eval_empty_pending.json"
+    return json.loads(fixture.read_text(encoding="utf-8"))
+
+
+def test_observed_no_draft_sentinel_is_verified_not_assumed(observed_empty_pending):
+    deploy.validate_pending_work(observed_empty_pending)
+
+
 def test_observed_cli_projection_null_legacy_replica_is_not_drift(observed_status):
     others, service = deploy.inventory(observed_status)
     assert len(others) == 6
@@ -92,8 +103,12 @@ def test_manifest_explicit_count_without_region_map_is_never_defaulted(observed_
 
 
 @pytest.mark.parametrize("check_only", [False, True])
+@pytest.mark.parametrize("pending_states", [
+    ("draft", "draft"), ("empty", "empty"), ("draft", "empty"), ("empty", "draft"),
+])
 def test_full_cli_adapter_contract_with_observed_projection(
-    monkeypatch, candidate, observed_status, env, check_only, capsys,
+    monkeypatch, candidate, observed_status, observed_empty_pending, env, check_only,
+    pending_states, capsys,
 ):
     """Real adapter/CLI JSON boundaries, not FakeRailway.status skipping validation."""
     monkeypatch.setattr(deploy.sys, "platform", "linux")
@@ -101,6 +116,7 @@ def test_full_cli_adapter_contract_with_observed_projection(
     environment = observed_status["environments"]["edges"][0]["node"]
     node = environment["serviceInstances"]["edges"][3]["node"]
     calls = []
+    pending_checks = []
     def run(argv, **kwargs):
         assert kwargs["capture_output"] is True and kwargs["check"] is False
         assert kwargs["env"]["RAILWAY_TOKEN"] == "synthetic"
@@ -112,7 +128,11 @@ def test_full_cli_adapter_contract_with_observed_projection(
             result = json.dumps(observed_status)
         elif args[0] == "api":
             assert args[1].startswith("query {")
-            result = json.dumps({"data": pending_state()})
+            state = pending_states[len(pending_checks)]
+            pending_checks.append(state)
+            result = json.dumps(observed_empty_pending if state == "empty" else {
+                "data": pending_state(),
+            })
         elif args[0] == "variable":
             assert check_only is False and "--skip-deploys" in args
             result = "updated keys"
@@ -142,10 +162,12 @@ def test_full_cli_adapter_contract_with_observed_projection(
     if check_only:
         assert report["status"] == "preflight_verified_no_upload"
         assert [args[0] for args in calls] == ["--version", "status", "api"]
+        assert len(pending_checks) == 1
     else:
         assert report["status"] == "deployed_idle_verified"
         assert len([args for args in calls if args[0] == "up"]) == 1
         assert len([args for args in calls if args[0] == "variable"]) == 1
+        assert len(pending_checks) == 2
     assert "serviceManifest" not in json.dumps(report) + capsys.readouterr().out
 
 
@@ -523,8 +545,9 @@ def pending_state():
     }
 
 
+@pytest.mark.parametrize("no_draft", [False, True])
 def test_pending_changes_after_upload_never_trigger_another_mutation(
-    monkeypatch, candidate, status, env,
+    monkeypatch, candidate, status, observed_empty_pending, env, no_draft,
 ):
     monkeypatch.setattr(deploy.sys, "platform", "linux")
     monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
@@ -535,7 +558,7 @@ def test_pending_changes_after_upload_never_trigger_another_mutation(
         if args[0] == "status":
             return json.dumps(status)
         if args[0] == "api":
-            data = pending_state()
+            data = observed_empty_pending["data"] if no_draft else pending_state()
             if checks:
                 data["environmentStagedChanges"]["patch"] = {"services": {}}
             checks.append(True)
@@ -632,8 +655,60 @@ def test_pending_work_unknown_or_in_progress_blocks_before_mutation(
     assert not any(args[0] in {"up", "variable"} for args in calls)
 
 
+@pytest.mark.parametrize("change", [
+    "id_missing", "id_null", "id_empty", "id_case", "id_whitespace", "id_uuid",
+    "status_missing", "status_applying", "status_null", "environment_missing",
+    "environment_wrong", "patch_missing", "patch_null", "patch_string", "patch_list",
+    "patch_nonempty", "pending_missing", "pending_null", "pending_object",
+    "pending_draft", "pending_deployment", "errors",
+])
+def test_no_draft_sentinel_inconsistency_blocks_before_writes(
+    monkeypatch, candidate, status, observed_empty_pending, env, change, capsys,
+):
+    response = observed_empty_pending
+    data = response["data"]
+    staged = data["environmentStagedChanges"]
+    if change.endswith("_missing"):
+        field = change.removesuffix("_missing")
+        if field == "pending":
+            del data["environmentPendingWork"]
+        else:
+            del staged["environmentId" if field == "environment" else field]
+    elif change == "errors":
+        response["errors"] = [{"message": "SYNTHETIC_PRIVATE"}]
+    elif change.startswith("pending_"):
+        data["environmentPendingWork"] = {
+            "pending_null": None, "pending_object": {},
+            "pending_draft": pending_state()["environmentPendingWork"],
+            "pending_deployment": [{"id": "other", "kind": "Deployment", "status": "deploying"}],
+        }[change]
+    else:
+        field, value = {
+            "id_null": ("id", None), "id_empty": ("id", ""),
+            "id_case": ("id", "<EMPTY>"), "id_whitespace": ("id", "<empty> "),
+            "id_uuid": ("id", DEPLOYMENT), "status_applying": ("status", "APPLYING"),
+            "status_null": ("status", None), "environment_wrong": ("environmentId", "other"),
+            "patch_null": ("patch", None), "patch_string": ("patch", "{}"),
+            "patch_list": ("patch", []),
+            "patch_nonempty": ("patch", {"private": "SYNTHETIC_PRIVATE"}),
+        }[change]
+        staged[field] = value
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    call = Mock(side_effect=["railway " + deploy.CLI_VERSION, json.dumps(status),
+                             json.dumps(response)])
+    monkeypatch.setattr(deploy.subprocess, "run", Mock(side_effect=AssertionError("no real CLI")))
+    railway = deploy.Railway("synthetic")
+    monkeypatch.setattr(railway, "call", call)
+    with pytest.raises(ValueError, match="eval_deploy_pending_") as error:
+        deploy.publish(candidate[0], env, railway, {})
+    assert [entry.args[0][0] for entry in call.call_args_list] == ["--version", "status", "api"]
+    assert "SYNTHETIC_PRIVATE" not in str(error.value) + capsys.readouterr().out
+
+
+@pytest.mark.parametrize("no_draft", [False, True])
 def test_nonempty_patch_values_never_reach_stdout_or_summary(
-    monkeypatch, candidate, status, env, tmp_path, capsys,
+    monkeypatch, candidate, status, observed_empty_pending, env, tmp_path, capsys, no_draft,
 ):
     monkeypatch.setattr(deploy.sys, "platform", "linux")
     monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
@@ -642,7 +717,7 @@ def test_nonempty_patch_values_never_reach_stdout_or_summary(
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     monkeypatch.setenv("RAILWAY_TOKEN", "synthetic")
-    data = pending_state()
+    data = observed_empty_pending["data"] if no_draft else pending_state()
     data["environmentStagedChanges"]["patch"] = {
         "sharedVariables": {"PRIVATE_KEY": "SYNTHETIC_PRIVATE"},
     }

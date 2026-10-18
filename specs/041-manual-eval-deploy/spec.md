@@ -50,6 +50,19 @@ no se imprime, persiste, adjunta a errores ni incluye en resúmenes. PendingWork
 se consulta sólo con metadata, sin `changes`, valores ni actor. No es permiso
 para leer variables live, volumen, inferir ni reintentar operaciones mutantes.
 
+### Corrección tras guardar variables sin desplegar — sentinel sin borrador (2026-10-18)
+
+Tras Alt+Deploy, la API del entorno observado devuelve un objeto no-null con
+`id: "<empty>"`, `status: "STAGED"`, environmentId exacto y `patch: {}`, junto con
+`environmentPendingWork: []`. No es null ni un UUID residual: es el sentinel de
+ausencia de borrador, omitido por el contrato anterior. Run39171845184 bloquea
+antes de variable set/upload aunque no hay cambios reales. Se acepta esta segunda
+combinación **exacta**, manteniendo el caso previo UUID + única fila matching.
+No se acepta UUID + lista vacía ni sentinel + fila alguna; tampoco id vacío,
+null/missing, otras grafías, patch no vacío/malformado, otro entorno/estado o errores.
+Mismo guard pre/post-upload y check_only, sin aplicar/descartar ni imprimir patch.
+Fixture saneada y pruebas integrales cubren ambos estados y sus transiciones.
+
 ### Contrato de réplicas y comprobación sin subida (2026-10-18)
 
 `ServiceInstance.numReplicas` es legacy/nullable; no equivale por sí solo al total.

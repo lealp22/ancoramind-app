@@ -1614,7 +1614,17 @@ fresh) superados. **Primer rollout cerrado2026-10-18:** SHA
 check_only39164426466 y publicación39165134464 success/deployed_idle_verified.
 Deploymentb4305cc0-3ddd-404e-8dbc-a3b002103b1f Online/SUCCESS,1RUNNING/0crashed,
 sin pendingWork; volumen/otros servicios conservados según workflow. No campaña
-ni recuperación histórica/revisión real certificadas; setup clave sigue pendiente.
+ni recuperación histórica/revisión real certificadas. Después, propietario reporta
+clave eval r4 nominal0,10USD/7d creada sin inferencia; cuatro variables confirmadas
+con Alt+Deploy (sin reinicio/valores consultados). Run39171845184 bloquea antes de
+up: API devuelve sentinel `<empty>`/STAGED/entorno/patch`{}` y pendingWork`[]`,
+no UUID+fila. Fix local sólo acepta ambas combinaciones exactas, sin omitir guard
+ni crear borradores; fixture saneada, regresión roja antes del fix y158 focales.
+1898 unitarias/1 skip,80,85 %,Ruff global/mypy177/diff limpios; warning conocido
+Collector local no disponible, sin fallos. Falta commit/push/CI del helper y nuevo
+Run workflow desde main (no Re-run); puede conservarse candidato7ea0cf06/huella.
+No tocar claves otra vez ni añadir staged; aplicación al nuevo contenedor y
+approval.json/campaña siguen pendientes. Histórico de validación primer rollout:
 1867 unitarias/1 skip,127 focales,80,85 %,Ruff/mypy177 limpios.
 Sin CLI local/inferencia/deploy por agente. Evals efectivo7ea0cf06; mantener
 pin GitHub histórico sin connect/rebuild; versión upload por sello/log. Detalle
