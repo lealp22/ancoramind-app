@@ -1592,6 +1592,19 @@ acordar y aprobación exacta de nuevo SHA siguen remotos pendientes. Retención 
 unitarias/1 skip (symlink Windows; Linux validado),80,85 %;207 integration/1 STT skip,
 Ruff/mypy177fuentes limpios; Docker offline hijo/revisión reconectada superado.
 Sin nuevas inferencias/deploy/commit/push; T7b/BL-48 reales abiertos, no más smokes.
+**Actualización candidato sin CLI local (specs/041):** propietario restringe equipo
+gestionado: no instalar/ejecutar Railway CLI local. Implementado botón GitHub
+**Actualizar evaluador** manual/main/SHAcompleto/confirm_idle/CI exacta; runner
+GitHub instala CLI fijada, empaqueta con helper existente y publica sólo evaluador,
+verifica SUCCESS/running/idle SHA/huella y volumen/otros deployments. No evaluación
+ni permisos/gasto modelo. Token initial proyecto/entorno en environment secret
+GitHub; alcance no exclusivo de servicio, riesgo/documentación explícitos.
+1791 unitarias/1 skip,80,85 %,Ruff/mypy177limpios, paquete de commit real y CI
+read-only verificados. Sin CLI local/secreto creado/workflow activado/deploy.
+Falta commit/push/CI código nuevo, setup navegador y primera ejecución manual.
+Evals sigue db0c59b; bot/Collector ya f9e08ae por push del propietario. Mantener
+pin GitHub histórico sin connect/rebuild; versión upload por sello/log. Detalle
+`specs/041-manual-eval-deploy/runbook.md`; no borrar reservas ni relanzar campaña.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

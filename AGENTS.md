@@ -69,6 +69,17 @@ recordatorios y eventos, con trazabilidad completa.
   1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
   Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
 
+  **Publicación evaluador specs/041 (local, sin activar):** workflow manual
+  `Actualizar evaluador` (`.github/workflows/deploy-evals.yml`) con SHA completo,
+  CI exacta y confirmación de ausencia de campaña. Sólo runner GitHub alojado;
+  **no instalar/ejecutar Railway CLI en el ordenador gestionado del propietario**.
+  Secret inicial `RAILWAY_EVALS_DEPLOY_TOKEN` en environment GitHub
+  `ancoramind-evals-deploy` (token Railway de proyecto/entorno, NO sólo servicio).
+  Helper empaqueta contexto eval allowlist y publica/verifica sólo evals sin
+  inferencia ni tocar volumen/otros servicios. No ejecutado remotely; commit/CI/
+  secreto inicial pendientes. 1791 unitarias/1 skip,80,85 %,Ruff/mypy177limpios.
+  Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
+
 ---
 
 ## 2. Principios arquitectónicos NO negociables

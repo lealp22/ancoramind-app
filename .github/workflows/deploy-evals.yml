@@ -1,0 +1,66 @@
+name: Actualizar evaluador
+run-name: Evaluador manual — ${{ inputs.candidate_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "SHA completo (40 caracteres) de main con CI verde"
+        required: true
+        type: string
+      confirm_idle:
+        description: "Confirmo que no hay campaña ni revisión en curso: actualizar reinicia el evaluador"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ancoramind-evals-publication
+  cancel-in-progress: false
+
+jobs:
+  publish-evals:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_idle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: ancoramind-evals-deploy
+    env:
+      EVAL_CONFIRM_IDLE: ${{ inputs.confirm_idle }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      CANDIDATE_DIR: ${{ runner.temp }}/eval-candidate
+
+    steps:
+      # Control-plane code comes from the workflow's reviewed main revision,
+      # never checkout or execute a candidate's scripts with deployment secrets.
+      - name: Checkout trusted publication code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python (runner only)
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Check exact CI and prepare allowlisted candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/deploy_eval_candidate.py prepare --sha "$CANDIDATE_SHA" --directory "$CANDIDATE_DIR"
+
+      - name: Set up Node (runner only)
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+
+      - name: Install pinned Railway CLI (GitHub runner only)
+        run: npm install --global @railway/cli@5.70.0
+
+      - name: Publish only ancoramind-evals and verify idle identity
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_EVALS_DEPLOY_TOKEN }}
+        run: python scripts/deploy_eval_candidate.py publish --directory "$CANDIDATE_DIR"

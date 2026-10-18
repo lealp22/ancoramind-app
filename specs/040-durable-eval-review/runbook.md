@@ -2,6 +2,11 @@
 
 ## Preparación única por el propietario
 
+**Actualización por navegador preparada en specs/041:**
+[botón manual Actualizar evaluador](../041-manual-eval-deploy/runbook.md).
+No requiere Railway CLI local. Publicar código no concede aprobación de campaña
+ni configura las claves LLM/Fernet descritas aquí.
+
 No ejecutar los comandos nuevos sobre la imagen histórica db0c59b: no los contiene.
 Commit/CI y despliegue aislado del nuevo candidato pendientes. Usar paquete eval
 explícito, no rebuild GitHub con selector conocido incorrecto. No redesplegar bot.

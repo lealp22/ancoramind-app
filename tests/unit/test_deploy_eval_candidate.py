@@ -1,0 +1,439 @@
+"""Manual remote publication contracts. No CLI installed, tokens or live upload."""
+
+import copy
+import io
+import json
+import subprocess
+import tarfile
+from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
+import yaml
+
+from scripts import deploy_eval_candidate as deploy
+from scripts.eval_source import source_fingerprint
+
+COMMIT = "a" * 40
+DEPLOYMENT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
+
+@pytest.fixture
+def env():
+    return {"GITHUB_REPOSITORY": deploy.REPO, "GITHUB_REF": "refs/heads/main",
+            "GITHUB_EVENT_NAME": "workflow_dispatch", "EVAL_CONFIRM_IDLE": "true",
+            "RUNNER_ENVIRONMENT": "github-hosted", "GH_TOKEN": "synthetic-not-real",
+            "CANDIDATE_SHA": COMMIT, "GITHUB_SHA": COMMIT}
+
+
+@pytest.fixture
+def candidate(tmp_path):
+    folder = tmp_path / "candidate"
+    context = folder / "context"
+    files = {"pyproject.toml": "# fixture", "README.md": "synthetic",
+             "evals/Dockerfile": "FROM python:3.12-slim\n",
+             "evals/Dockerfile.dockerignore": "**\n!src/**\n",
+             "src/example.py": "# never execute", "scripts/eval_service.py": "# idle"}
+    for name, text in files.items():
+        path = context / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    (context / "Dockerfile").write_bytes((context / "evals/Dockerfile").read_bytes())
+    (context / ".dockerignore").write_bytes(
+        (context / "evals/Dockerfile.dockerignore").read_bytes(),
+    )
+    metadata = {"code_sha": COMMIT, "source_fingerprint": source_fingerprint(context),
+                "prepared_archive_sha256": "b" * 64, "ci_run_id": 123, "ci_attempt": 1,
+                "publication_code_sha": COMMIT,
+                "status": "prepared_no_upload", "inference_started": False}
+    (folder / "candidate.json").write_text(json.dumps(metadata), encoding="utf-8")
+    return folder, metadata
+
+
+@pytest.fixture
+def status():
+    service = {"serviceId": deploy.SERVICE, "serviceName": "ancoramind-evals",
+               "startCommand": "python /app/scripts/eval_service.py", "numReplicas": 1,
+               "cronSchedule": None, "tracingEnabled": False, "autoInstrumentationEnabled": False,
+               "domains": {"serviceDomains": [], "customDomains": []},
+               "latestDeployment": {"id": DEPLOYMENT, "status": "SUCCESS",
+                                    "instances": [{"status": "RUNNING"}]}}
+    return {"id": deploy.PROJECT, "environments": {"edges": [{"node": {
+        "id": deploy.ENVIRONMENT, "unmergedChangesCount": 0,
+        "serviceInstances": {"edges": [{"node": service}, {"node": {
+            "serviceId": "other-service", "latestDeployment": {"id": "unchanged"},
+        }}]},
+        "volumeInstances": {"edges": [{"node": {
+            "volume": {"id": deploy.VOLUME}, "serviceId": deploy.SERVICE,
+            "mountPath": "/eval-state", "deletedAt": None, "isPendingDeletion": False,
+        }}]},
+    }}]}}
+
+
+class FakeRailway:
+    def __init__(self, value, metadata):
+        self.value, self.metadata = value, metadata
+        self.calls = []
+        self.deployment_status = "SUCCESS"
+        self.raw_logs = None
+
+    def status(self):
+        return copy.deepcopy(self.value)
+
+    def call(self, args, **kwargs):
+        self.calls.append(args)
+        if args == ["--version"]:
+            return "railway " + deploy.CLI_VERSION
+        if args[0] == "variable":
+            return "updated keys"
+        if args[0] == "up":
+            return json.dumps({"deploymentId": DEPLOYMENT})
+        if args[0] == "deployment":
+            return json.dumps([{"id": DEPLOYMENT, "status": self.deployment_status}])
+        if args[0] == "logs":
+            return self.raw_logs or json.dumps({
+                "status": "idle_manual_only", "inference_started": False,
+                "code_sha": COMMIT, "source_fingerprint": self.metadata["source_fingerprint"],
+                "worktree": "clean", "identity_source": "sealed_image",
+            })
+        raise AssertionError(args)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("GITHUB_REF", "refs/heads/unsafe"), ("GITHUB_EVENT_NAME", "push"),
+    ("GITHUB_REPOSITORY", "other/repo"), ("EVAL_CONFIRM_IDLE", "false"),
+    ("RUNNER_ENVIRONMENT", "self-hosted"),
+])
+def test_dispatch_requires_main_manual_idle_and_hosted_runner(env, field, value):
+    env[field] = value
+    with pytest.raises(ValueError, match="manual_main"):
+        deploy.validate_dispatch(COMMIT, env)
+
+
+@pytest.mark.parametrize("sha", ["main", "a" * 7, "a" * 39 + ";", "A" * 40, "$(secret)"])
+def test_no_sha_injection_or_implicit_branch(env, sha):
+    with pytest.raises(ValueError):
+        deploy.validate_dispatch(sha, env)
+
+
+def test_ci_gate_latest_same_sha_push_main_attempt_and_job_names(monkeypatch):
+    runs = [{"id": 123, "run_number": 5, "run_attempt": 2, "head_sha": COMMIT,
+             "head_branch": "main", "event": "push", "status": "completed",
+             "conclusion": "success"}]
+    requests = []
+    def github(path, token):
+        requests.append(path)
+        if "ci.yml/runs" in path:
+            return {"workflow_runs": runs}
+        return {"jobs": [{"name": name, "conclusion": "success", "status": "completed"}
+                         for name in (
+            "quality", "integration", "collector-config",
+        )]}
+    monkeypatch.setattr(deploy, "github_get", github)
+    assert deploy.ci_gate(COMMIT, "synthetic")["ci_attempt"] == 2
+    assert "/attempts/2/jobs" in requests[-1]
+    runs.append({**runs[0], "run_number": 6, "id": 124, "conclusion": "failure"})
+    with pytest.raises(ValueError, match="latest_ci"):
+        deploy.ci_gate(COMMIT, "synthetic")
+    runs[1]["conclusion"] = "success"
+    runs[1]["status"] = "in_progress"
+    with pytest.raises(ValueError, match="latest_ci"):
+        deploy.ci_gate(COMMIT, "synthetic")
+
+
+@pytest.mark.parametrize("jobs", [[], [{"name": "quality", "conclusion": "skipped"}],
+                                   [{"name": "quality", "conclusion": "success"}]])
+def test_missing_skipped_jobs_cannot_unlock_publication(monkeypatch, jobs):
+    run = {"id": 123, "run_number": 1, "run_attempt": 1, "head_sha": COMMIT,
+           "head_branch": "main", "event": "push", "status": "completed",
+           "conclusion": "success"}
+    monkeypatch.setattr(deploy, "github_get", lambda path, _: {
+        "workflow_runs": [run],
+    } if "ci.yml/runs" in path else {"jobs": jobs})
+    with pytest.raises(ValueError, match="required_job"):
+        deploy.ci_gate(COMMIT, "synthetic")
+
+
+def test_package_no_candidate_execution_or_secrets(candidate, env, monkeypatch, tmp_path):
+    folder, _ = candidate
+    raw = io.BytesIO()
+    with tarfile.open(fileobj=raw, mode="w") as archive:
+        for path in (folder / "context").rglob("*"):
+            if path.is_file():
+                archive.add(path, arcname=path.relative_to(folder / "context").as_posix())
+        for name in (".env", "railway.json", "data/private.db"):
+            info = tarfile.TarInfo(name)
+            info.size = 6
+            archive.addfile(info, io.BytesIO(b"secret"))
+    calls = []
+    def git(root, *args):
+        calls.append(args)
+        return raw.getvalue() if args[0] == "archive" else b""
+    monkeypatch.setattr(deploy, "git", git)
+    monkeypatch.setattr(deploy, "ci_gate", lambda *_: {"ci_run_id": 123, "ci_attempt": 1})
+    destination = tmp_path / "new-package"
+    metadata = deploy.prepare(tmp_path, COMMIT, destination, env)
+    assert calls == [("merge-base", "--is-ancestor", COMMIT, "origin/main"),
+                     ("archive", "--format=tar", COMMIT)]
+    assert not (destination / "context/railway.json").exists()
+    assert not (destination / "context/.env").exists()
+    assert not (destination / "context/data").exists()
+    assert metadata["inference_started"] is False
+    assert source_fingerprint(destination / "context") == metadata["source_fingerprint"]
+
+
+def test_publish_only_three_metadata_variables_and_fixed_existing_service(
+    candidate, status, env, capsys,
+):
+    directory, metadata = candidate
+    railway = FakeRailway(status, metadata)
+    report = deploy.publish(directory, env, railway, {})
+    assert report["status"] == "deployed_idle_verified"
+    assert report["volume_preserved"] and report["other_services_unchanged"]
+    assert report["inference_started"] is False
+    for args in railway.calls[1:]:
+        assert args[args.index("--service") + 1] == deploy.SERVICE
+        assert args[args.index("--environment") + 1] == deploy.ENVIRONMENT
+        assert args[args.index("--project") + 1] == deploy.PROJECT
+    mutation = next(args for args in railway.calls if args[:2] == ["variable", "set"])
+    assert "--skip-deploys" in mutation
+    assert {a.split("=", 1)[0] for a in mutation if "=" in a} == {
+        "ANCORA_EVAL_BUILD_SHA", "ANCORA_EVAL_BUILD_SOURCE", "RAILWAY_DOCKERFILE_PATH",
+    }
+    assert sum(args[0] == "up" for args in railway.calls) == 1
+    assert "--path-as-root" in next(args for args in railway.calls if args[0] == "up")
+    assert "PRIVATE" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("change", ["volume", "pending", "start", "domain", "replicas"])
+def test_inventory_drift_blocks_before_mutation(candidate, status, env, change):
+    environment = status["environments"]["edges"][0]["node"]
+    service = environment["serviceInstances"]["edges"][0]["node"]
+    if change == "volume":
+        environment["volumeInstances"]["edges"][0]["node"]["mountPath"] = "/wrong"
+    elif change == "pending":
+        environment["unmergedChangesCount"] = 1
+    elif change == "start":
+        service["startCommand"] = "python -m src.main"
+    elif change == "domain":
+        service["domains"]["serviceDomains"] = [{"domain": "public.example"}]
+    else:
+        service["numReplicas"] = 2
+    railway = FakeRailway(status, candidate[1])
+    with pytest.raises(ValueError):
+        deploy.publish(candidate[0], env, railway, {})
+    assert not any(args[0] in {"up", "variable"} for args in railway.calls)
+
+
+def test_wrong_idle_identity_or_not_running_is_not_success(candidate, status, env, monkeypatch):
+    railway = FakeRailway(status, candidate[1])
+    railway.raw_logs = '{"status":"idle_manual_only","code_sha":"wrong","content":"PRIVATE"}'
+    clock = iter([0, 0, 100])
+    monkeypatch.setattr(deploy.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(deploy.time, "sleep", lambda _: None)
+    report = {}
+    with pytest.raises(TimeoutError):
+        deploy.publish(candidate[0], env, railway, report, wait_seconds=1)
+    assert report["deployment_id"] == DEPLOYMENT
+    assert report["status"] == "uploaded_not_verified"
+    assert sum(args[0] == "up" for args in railway.calls) == 1
+
+
+def test_deployment_failure_is_not_retried(candidate, status, env):
+    railway = FakeRailway(status, candidate[1])
+    railway.deployment_status = "FAILED"
+    with pytest.raises(ValueError, match="failed_no_automatic_retry"):
+        deploy.publish(candidate[0], env, railway, {})
+    assert sum(args[0] == "up" for args in railway.calls) == 1
+
+
+def test_context_tamper_blocks_before_remote_commands(candidate, status, env):
+    directory, metadata = candidate
+    (directory / "context/.env").write_text("PRIVATE")
+    railway = FakeRailway(status, metadata)
+    with pytest.raises(ValueError, match="unexpected_file"):
+        deploy.publish(directory, env, railway, {})
+    assert railway.calls == []
+
+
+def test_idle_log_accepts_cli_flattened_and_json_message_only_exact(candidate):
+    fingerprint = candidate[1]["source_fingerprint"]
+    record = {"status": "idle_manual_only", "code_sha": COMMIT,
+              "source_fingerprint": fingerprint, "worktree": "clean",
+              "identity_source": "sealed_image", "inference_started": False}
+    assert deploy.idle_log(json.dumps(record), COMMIT, fingerprint)
+    assert deploy.idle_log(json.dumps({"message": json.dumps(record)}), COMMIT, fingerprint)
+    record["inference_started"] = True
+    assert not deploy.idle_log(json.dumps(record), COMMIT, fingerprint)
+
+
+def test_cli_environment_excludes_github_and_model_keys(monkeypatch):
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    monkeypatch.setenv("ANCORA_EVAL_GATEWAY_KEY", "PRIVATE_LLM")
+    monkeypatch.setenv("GITHUB_TOKEN", "PRIVATE_GITHUB")
+    call = Mock(return_value=subprocess.CompletedProcess([], 1, stdout="PRIVATE", stderr="PRIVATE"))
+    monkeypatch.setattr(deploy.subprocess, "run", call)
+    railway = deploy.Railway("PRIVATE_DEPLOY")
+    with pytest.raises(ValueError, match="command_failed") as error:
+        railway.call(["status", *deploy.TARGET, "--json"])
+    assert "PRIVATE" not in str(error.value)
+    assert "ANCORA_EVAL_GATEWAY_KEY" not in call.call_args.kwargs["env"]
+    assert "GITHUB_TOKEN" not in call.call_args.kwargs["env"]
+
+
+@pytest.mark.parametrize("patch", [None, {"id": "pending", "status": "STAGED"}])
+def test_pending_patch_check_reads_metadata_not_patch_or_variables(monkeypatch, status, patch):
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    railway = deploy.Railway("synthetic")
+    responses = [json.dumps(status), json.dumps({"data": {"environmentStagedChanges": patch}})]
+    call = Mock(side_effect=responses)
+    monkeypatch.setattr(railway, "call", call)
+    if patch:
+        with pytest.raises(ValueError, match="pending_changes"):
+            railway.status()
+    else:
+        assert railway.status() == status
+    query = call.call_args.args[0][1]
+    assert "{ id status }" in query and "patch" not in query and "variables" not in query
+
+
+def test_workflow_manual_secret_only_publish_and_remote_install():
+    workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/deploy-evals.yml"
+                ).read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow and "  push:" not in workflow
+    assert "pull_request" not in workflow and "schedule:" not in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "environment: ancoramind-evals-deploy" in workflow
+    assert workflow.count("${{ secrets.") == 1
+    assert workflow.index("${{ secrets.") > workflow.index("Check exact CI")
+    assert "persist-credentials: false" in workflow
+    assert "@railway/cli@5.70.0" in workflow
+    assert "execute_eval_campaign" not in workflow and "--execute" not in workflow
+    assert "${{ inputs.candidate_sha }}" not in workflow.split("steps:", 1)[1]
+    parsed = yaml.load(workflow, Loader=yaml.BaseLoader)
+    assert set(parsed["on"]) == {"workflow_dispatch"}
+    job = parsed["jobs"]["publish-evals"]
+    assert "RAILWAY_TOKEN" not in job["env"]
+    assert job["runs-on"] == "ubuntu-24.04"
+    for step in job["steps"]:
+        if "uses" in step:
+            assert len(step["uses"].split("@")[1]) == 40
+
+
+def test_ci_job_pagination_does_not_accept_hidden_required_jobs(monkeypatch):
+    run = {"id": 123, "run_number": 1, "run_attempt": 3, "head_sha": COMMIT,
+           "head_branch": "main", "event": "push", "status": "completed",
+           "conclusion": "success"}
+    calls = []
+    def github(path, _):
+        calls.append(path)
+        if "ci.yml/runs" in path:
+            return {"workflow_runs": [run]}
+        if path.endswith("&page=1"):
+            return {"jobs": [{"name": str(i), "conclusion": "success", "status": "completed"}
+                             for i in range(100)]}
+        return {"jobs": [{"name": n, "conclusion": "success", "status": "completed"}
+                         for n in ("quality", "integration", "collector-config")]}
+    monkeypatch.setattr(deploy, "github_get", github)
+    assert deploy.ci_gate(COMMIT, "synthetic")["ci_run_id"] == 123
+    assert "page=2" in calls[-1]
+
+
+def test_no_matching_ci_of_main_is_blocked(monkeypatch):
+    monkeypatch.setattr(deploy, "github_get", lambda *_: {"workflow_runs": [{
+        "head_sha": "b" * 40, "head_branch": "main", "event": "push",
+    }]})
+    with pytest.raises(ValueError, match="ci_missing"):
+        deploy.ci_gate(COMMIT, "synthetic")
+
+
+def test_other_deployment_change_is_not_claimed_success(candidate, status, env):
+    railway = FakeRailway(status, candidate[1])
+    original = railway.status
+    calls = []
+    def inventory():
+        value = original()
+        if calls:
+            value["environments"]["edges"][0]["node"]["serviceInstances"]["edges"][1][
+                "node"]["latestDeployment"]["id"] = "concurrent-unrelated-deploy"
+        calls.append(True)
+        return value
+    railway.status = inventory
+    with pytest.raises(ValueError, match="other_services_changed"):
+        deploy.publish(candidate[0], env, railway, {})
+
+
+def test_running_proof_and_exact_id_required(candidate, status, env, monkeypatch):
+    railway = FakeRailway(status, candidate[1])
+    environment = railway.value["environments"]["edges"][0]["node"]
+    latest = environment["serviceInstances"]["edges"][0]["node"]["latestDeployment"]
+    latest["instances"] = [{"status": "CRASHED"}]
+    clock = iter([0, 0, 100])
+    monkeypatch.setattr(deploy.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(deploy.time, "sleep", lambda _: None)
+    with pytest.raises(TimeoutError):
+        deploy.publish(candidate[0], env, railway, {}, wait_seconds=1)
+    latest["id"] = "some-other-deployment"
+    clock = iter([0, 0])
+    with pytest.raises(ValueError, match="superseded"):
+        deploy.publish(candidate[0], env, railway, {}, wait_seconds=1)
+
+
+def test_main_failure_summary_has_no_raw_provider_text_or_secret(tmp_path, monkeypatch, capsys):
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setattr(deploy, "prepare", Mock(side_effect=RuntimeError("SECRET_PROVIDER_DATA")))
+    assert deploy.main(["prepare", "--sha", COMMIT, "--directory", str(tmp_path / "out")]) == 1
+    assert "SECRET" not in capsys.readouterr().out
+    assert "SECRET" not in summary.read_text(encoding="utf-8")
+
+
+def test_github_request_fixed_origin_header_and_no_mutation(monkeypatch):
+    response = io.BytesIO(b'{"workflow_runs": []}')
+    request = Mock(return_value=response)
+    monkeypatch.setattr(deploy.urllib.request, "urlopen", request)
+    assert deploy.github_get("/actions/workflows/ci.yml/runs", "synthetic") == {
+        "workflow_runs": [],
+    }
+    sent = request.call_args.args[0]
+    assert sent.full_url == "https://api.github.com/repos/" + deploy.REPO + (
+        "/actions/workflows/ci.yml/runs"
+    )
+    assert sent.get_method() == "GET" and sent.get_header("Authorization") == "Bearer synthetic"
+
+
+def test_ci_for_control_code_also_required_before_artifact_write(
+    candidate, env, monkeypatch, tmp_path,
+):
+    env["GITHUB_SHA"] = "b" * 40
+    monkeypatch.setattr(deploy, "git", lambda *_: b"")
+    calls = []
+    def ci(sha, _token):
+        calls.append(sha)
+        if sha != COMMIT:
+            raise ValueError("eval_deploy_latest_ci_not_successful")
+        return {"ci_run_id": 123, "ci_attempt": 1}
+    monkeypatch.setattr(deploy, "ci_gate", ci)
+    output = tmp_path / "output"
+    with pytest.raises(ValueError, match="ci_not_successful"):
+        deploy.prepare(tmp_path, COMMIT, output, env)
+    assert calls == [COMMIT, "b" * 40] and not output.exists()
+
+
+def test_candidate_metadata_does_not_echo_extra_artifact_data(candidate):
+    metadata = {**candidate[1], "PRIVATE_TOKEN": "private-not-reportable"}
+    value = deploy.candidate_metadata(metadata)
+    assert "PRIVATE_TOKEN" not in value
+    metadata["ci_run_id"] = "private-not-an-id"
+    with pytest.raises(ValueError, match="invalid_candidate_metadata"):
+        deploy.candidate_metadata(metadata)
+
+
+def test_missing_environment_secret_blocks_before_cli(monkeypatch):
+    monkeypatch.setattr(deploy.shutil, "which", Mock(
+        side_effect=AssertionError("no local install"),
+    ))
+    with pytest.raises(ValueError, match="remote_linux_token_required"):
+        deploy.Railway("")

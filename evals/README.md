@@ -5,6 +5,11 @@ al cambiar prompts, descripciones de tools o modelos. No contienen credenciales,
 IDs reales, mensajes de usuarios ni documentos privados: todos los ejemplos son
 sintéticos.
 
+**Actualizar candidato desde navegador:** workflow manual
+[Actualizar evaluador — specs/041](../specs/041-manual-eval-deploy/runbook.md),
+SHA/CI explícitos y despliegue sólo evals desde runner GitHub. Sin Railway CLI
+en equipo local ni inferencia automática; setup de secreto inicial necesario.
+
 ## Alcance de esta primera entrega
 
 El comando `scripts/run_evals.py` es **determinista**: comprueba que todos los
