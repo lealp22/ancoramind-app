@@ -1,6 +1,41 @@
 # Verificación — 2026-10-18
 
+## Corrección autorizada del borrador vacío — estado vigente
+
+- Run [39157815349](https://github.com/lealp22/ancoramind-app/actions/runs/39157815349),
+  SHA `da351546a1c53b61985b8184efe289b118336c05`, CI39150725443 verde: preparación
+  correcta, bloqueo antes de mutaciones por existencia del mismo borrador STAGED.
+- Introspección read-only de la API pública Railway `/graphql/v2`: campo
+  `environmentStagedChanges` devuelve **EnvironmentPatch!**, no nullable. Por tanto
+  el guard «cualquier respuesta no-null bloquea» no puede funcionar con ese contrato.
+  No hay evidencia para exigir al propietario eliminar un registro residual.
+- Consulta acotada con sesión navegador existente comprobó patch exactamente `{}`
+  del id `3f9536e6-9ad4-4b64-bd0b-2876f1c7b724`. Se procesa en memoria y sólo se
+  devuelve el booleano de vacío; no imprimir ni persistir patch/valores. Query
+  conjunta metadata pendingWork confirma única fila EnvironmentPatch/staged mismo
+  id y entorno, children=[]; no operaciones adicionales. No mutación Railway.
+- Propietario autorizó explícitamente esta nueva comprobación, con pruebas y sin
+  deploy. El helper acepta sólo ese caso estricto, no patch=null/lista/cadenas ni
+  ramas vacías como `services:{}`. Bloquea ausente/error/inconsistencia/estado no
+  STAGED, contenido real, hijos/otro trabajo; repite guard pre/post publicación.
+  No consulta `changes`/actor/variables live ni escribe summary con contenido patch.
+- Cambia el contrato anterior de lectura de metadata solamente. Las secciones
+  históricas inferiores registran lo probado entonces, no el comportamiento actual.
+  El borrador vacío no requiere Apply/Deploy/Discard. Nuevo commit/push/CI y nueva
+  ejecución manual pendientes; no re-run del workflow viejo, subida ni inferencia.
+- Validación: regresión STAGED/`{}` falló antes del fix con contadores cero/null;
+  después **92 focales** (helper + packaging), **1832 unitarias/1 skip**, cobertura
+  **80,85 %**, Ruff global y mypy177 limpios. Guard real contrastado por query
+  read-only: patch vacío, mismo entorno y única fila sin hijos; no se usa CLI local
+  ni se publica. Tests verifican rechazo de contenido/tipos/estados/campos
+  desconocidos, otras operaciones/hijos, recheck post-upload sin retry, y ausencia
+  de valores sintéticos privados en stdout/stderr/summary. No cambia src/schema;
+  integraciones no repetidas. Aceptación remota de publicación aún no demostrada.
+
 ## Intentos Actions y corrección del contador nullable
+
+Registro histórico de la corrección anterior; su exigencia de staged=null queda
+sustituida por la enmienda anterior y specs/041/spec.md.
 
 - SHA `7957ba70e7eda09014594889befd9ef52e1a9005`: definición aceptada y
   preparación CI/archivo correctas. Run `39146799866` bloqueado por token ausente;
@@ -45,7 +80,7 @@ resultado mypy anterior sigue vigente. Sin CLI local, secreto nuevo ni despliegu
 Aceptación remota de la definición pendiente del nuevo commit/push; no es un
 fallo de token Railway ni evidencia de un despliegue realizado.
 
-## Implementado localmente
+## Implementación inicial — registro histórico
 
 - `.github/workflows/deploy-evals.yml`: botón **Actualizar evaluador**, SHA explícito,
   confirmación idle, sólo main/manual, environment `ancoramind-evals-deploy`,
@@ -61,7 +96,7 @@ fallo de token Railway ni evidencia de un despliegue realizado.
   otro build con selector problemático. Identidad upload por sello/log, no metadato
   GitHub inventado.
 
-## Pruebas
+## Pruebas iniciales — registro histórico
 
 - **1791 unitarias passed / 1 skipped**, cobertura **80,85 %** (gate75 %).
   El skip corresponde a symlink Windows preexistente de specs/040, no a este workflow.
@@ -88,7 +123,7 @@ fallo de token Railway ni evidencia de un despliegue realizado.
   El siguiente commit ejecutará CI completa antes de autorizar publicación.
 - Aviso OTel localhost4318 ausente durante unit tests, sin fallos ni cambios telemetry.
 
-## Pendientes que no se certifican con tests locales
+## Pendientes iniciales — registro histórico
 
 No se ha instalado CLI en equipo gestionado, creado token/environment/secreto,
 ejecutado workflow/deployment ni inferencia. No commit/push por agente.

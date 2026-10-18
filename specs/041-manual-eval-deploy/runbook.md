@@ -77,6 +77,10 @@ No ejecutar helper `publish` localmente; requiere Linux runner y credencial env.
   No admite cambiar esos IDs desde inputs. Lee inventario metadata, exige réplica1,
   mount del volumen existente `/eval-state`, start idle, sin dominio/cron/tracing,
   sin cambios pendientes ni deployment previo aún construyéndose.
+- Railway conserva un borrador STAGED vacío: no hay que aplicarlo ni descartarlo.
+  Helper acepta únicamente `patch: {}` exacto y pendingWork con ese mismo borrador,
+  sin hijos ni otra operación. Lee patch sólo en memoria; aunque pudiera contener
+  secretos, no lo imprime ni persiste. No basta con «0 cambios» en la UI.
 - Escribe sólo `ANCORA_EVAL_BUILD_SHA`, `ANCORA_EVAL_BUILD_SOURCE` y
   `RAILWAY_DOCKERFILE_PATH=Dockerfile` **en el evaluador**, con skip-deploys. No
   lee secretos del servicio ni toca Gateway/claves/config runtime/telemetría.
@@ -113,10 +117,15 @@ políticas de software/red del ordenador gestionado.
   `unmergedChangesCount: null` explícito es válido en production: es metadata de
   comparación entre entornos, no la señal de staged work. Campo ausente, valor
   inválido o contador distinto de cero siguen bloqueando. La consulta independiente
-  `environmentStagedChanges` debe devolver null; cualquier registro STAGED/APPLYING
-  bloquea, aunque la UI muestre cero cambios. Revisar su origen en el dashboard y
-  resolverlo explícitamente, sin pulsar Deploy/Apply como atajo ni descartar trabajo
-  ajeno. Reintentar sólo con entorno sin trabajo pendiente y código corregido/CI verde.
+   `environmentStagedChanges` es obligatorio en el schema Railway: exigir null era
+   un error del helper, no un problema a resolver pulsando Deploy/Apply. Desde la
+   enmienda de specs/041, un borrador STAGED con patch exactamente `{}` pasa sólo
+   si es la única fila de pendingWork, mismo id/entorno y sin hijos. Cualquier patch
+   con contenido, APPLYING/estado desconocido/operación adicional o respuesta
+   incompleta bloquea. Con este borrador vacío no hace falta cambiar Railway:
+   publicar el helper corregido, esperar CI verde y lanzar una nueva ejecución
+   manual desde main. El SHA antiguo sigue ejecutando el guard antiguo si se usa
+   «Re-run jobs». Si hay cambios reales, revisarlos sin aplicar/descartar trabajo ajeno.
 - Build/subida fallida/timeout → consultar deployment ID del resumen/dashboard.
   Puede haberse iniciado aunque falte confirmación. **No volver a pulsar a ciegas**.
   Sin retries mutantes, rollback o borrado automático. Variables de build pueden

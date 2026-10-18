@@ -1599,10 +1599,14 @@ GitHub instala CLI fijada, empaqueta con helper existente y publica sólo evalua
 verifica SUCCESS/running/idle SHA/huella y volumen/otros deployments. No evaluación
 ni permisos/gasto modelo. Token initial proyecto/entorno en environment secret
 GitHub; alcance no exclusivo de servicio, riesgo/documentación explícitos.
-1791 unitarias/1 skip,80,85 %,Ruff/mypy177limpios, paquete de commit real y CI
-read-only verificados. Sin CLI local/secreto creado/workflow activado/deploy.
-Falta commit/push/CI código nuevo, setup navegador y primera ejecución manual.
-Evals sigue db0c59b; bot/Collector ya f9e08ae por push del propietario. Mantener
+Setup secreto hecho por propietario; SHA da351546/CI verde, run39157815349 prepara
+pero bloquea antes de mutaciones. Error confirmado: schema staged NON_NULL, no
+significa cambios reales. Enmienda autorizada: patch sólo en memoria, permitir
+STAGED/`{}` exacto + única fila pendingWork del mismo id/entorno sin hijos; bloquear
+contenido/inconsistencias/en curso, no imprimir/persistir ni aplicar/descartar.
+Fix local pendiente commit/push/CI y nuevo Run workflow, no re-run del antiguo.
+1832 unitarias/1 skip,92 focales,80,85 %,Ruff/mypy177 limpios; rollout no probado.
+Sin CLI local/inferencia/deploy por agente. Evals sigue db0c59b. Mantener
 pin GitHub histórico sin connect/rebuild; versión upload por sello/log. Detalle
 `specs/041-manual-eval-deploy/runbook.md`; no borrar reservas ni relanzar campaña.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,

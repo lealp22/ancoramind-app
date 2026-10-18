@@ -302,25 +302,178 @@ def test_cli_environment_excludes_github_and_model_keys(monkeypatch):
 
 
 @pytest.mark.parametrize("unmerged_count", [0, None])
-@pytest.mark.parametrize("patch", [None, {"id": "pending", "status": "STAGED"},
-                                  {"id": "applying", "status": "APPLYING"}])
-def test_pending_patch_check_reads_metadata_not_patch_or_variables(
-    monkeypatch, status, patch, unmerged_count,
+def test_empty_staged_draft_allows_publication_without_applying_it(
+    monkeypatch, candidate, status, env, unmerged_count, capsys,
 ):
     status["environments"]["edges"][0]["node"]["unmergedChangesCount"] = unmerged_count
     monkeypatch.setattr(deploy.sys, "platform", "linux")
     monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
     railway = deploy.Railway("synthetic")
-    responses = [json.dumps(status), json.dumps({"data": {"environmentStagedChanges": patch}})]
-    call = Mock(side_effect=responses)
+    fake = FakeRailway(status, candidate[1])
+    queries = []
+    def call(args, **kwargs):
+        if args[0] == "status":
+            return json.dumps(status)
+        if args[0] == "api":
+            queries.append(args[1])
+            return json.dumps({"data": pending_state()})
+        return fake.call(args, **kwargs)
     monkeypatch.setattr(railway, "call", call)
-    if patch:
-        with pytest.raises(ValueError, match="pending_changes"):
-            railway.status()
+    report = deploy.publish(candidate[0], env, railway, {})
+    assert report["status"] == "deployed_idle_verified"
+    assert len(queries) == 2  # The same strict guard runs before and after upload.
+    assert all("environmentPendingWork" in query and "patch" in query for query in queries)
+    assert all("changes" not in query and "variables" not in query for query in queries)
+    assert len([args for args in fake.calls if args[0] == "up"]) == 1
+    assert not any("mutation" in query or "Commit" in query for query in queries)
+    assert "environmentStagedChanges" not in capsys.readouterr().out
+
+
+def pending_state():
+    return {
+        "environmentStagedChanges": {
+            "id": DEPLOYMENT, "status": "STAGED", "environmentId": deploy.ENVIRONMENT,
+            "patch": {},
+        },
+        "environmentPendingWork": [{
+            "id": "patch:" + DEPLOYMENT, "kind": "EnvironmentPatch", "status": "staged",
+            "environmentId": deploy.ENVIRONMENT, "children": [],
+        }],
+    }
+
+
+def test_pending_changes_after_upload_never_trigger_another_mutation(
+    monkeypatch, candidate, status, env,
+):
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    railway = deploy.Railway("synthetic")
+    fake = FakeRailway(status, candidate[1])
+    checks = []
+    def call(args, **kwargs):
+        if args[0] == "status":
+            return json.dumps(status)
+        if args[0] == "api":
+            data = pending_state()
+            if checks:
+                data["environmentStagedChanges"]["patch"] = {"services": {}}
+            checks.append(True)
+            return json.dumps({"data": data})
+        return fake.call(args, **kwargs)
+    monkeypatch.setattr(railway, "call", call)
+    report = {}
+    with pytest.raises(ValueError, match="pending_changes"):
+        deploy.publish(candidate[0], env, railway, report)
+    assert report["status"] == "uploaded_not_verified"
+    assert len(checks) == 2
+    assert len([args for args in fake.calls if args[0] == "up"]) == 1
+    assert len([args for args in fake.calls if args[0] == "variable"]) == 1
+
+
+@pytest.mark.parametrize("patch", [
+    None, [], False, 0, "{}", {"services": {}}, {"sharedVariables": {}},
+    {"privateNetworkDisabled": False}, {"services": {"other": {"isDeleted": True}}},
+    {"sharedVariables": {"PRIVATE_TOKEN": "SYNTHETIC_PRIVATE"}},
+])
+def test_only_exact_empty_patch_accepted(patch):
+    data = pending_state()
+    data["environmentStagedChanges"]["patch"] = patch
+    with pytest.raises(ValueError, match="eval_deploy_pending_"):
+        deploy.validate_pending_work({"data": data})
+
+
+@pytest.mark.parametrize("change", [
+    "missing_patch", "missing_stage", "null_stage", "bad_stage_id", "wrong_stage_env",
+    "applying", "failed", "unknown_stage", "missing_pending", "null_pending",
+    "empty_pending", "wrong_pending_id", "wrong_pending_env", "wrong_kind",
+    "pending_applying", "children", "missing_children", "other_deployment",
+    "wrong_data_type", "errors",
+])
+def test_pending_work_unknown_or_in_progress_blocks_before_mutation(
+    monkeypatch, candidate, status, env, change, capsys,
+):
+    data = pending_state()
+    staged, pending = data["environmentStagedChanges"], data["environmentPendingWork"]
+    response = {"data": data}
+    if change == "missing_patch":
+        del staged["patch"]
+    elif change == "missing_stage":
+        del data["environmentStagedChanges"]
+    elif change == "null_stage":
+        data["environmentStagedChanges"] = None
+    elif change == "bad_stage_id":
+        staged["id"] = "SYNTHETIC_PRIVATE"
+    elif change == "wrong_stage_env":
+        staged["environmentId"] = "other"
+    elif change in {"applying", "failed", "unknown_stage"}:
+        staged["status"] = change.upper()
+    elif change == "missing_pending":
+        del data["environmentPendingWork"]
+    elif change == "null_pending":
+        data["environmentPendingWork"] = None
+    elif change == "empty_pending":
+        data["environmentPendingWork"] = []
+    elif change == "wrong_pending_id":
+        pending[0]["id"] = "patch:other"
+    elif change == "wrong_pending_env":
+        pending[0]["environmentId"] = "other"
+    elif change == "wrong_kind":
+        pending[0]["kind"] = "Deployment"
+    elif change == "pending_applying":
+        pending[0]["status"] = "applying"
+    elif change == "children":
+        pending[0]["children"] = [{"id": "running-deploy"}]
+    elif change == "missing_children":
+        del pending[0]["children"]
+    elif change == "other_deployment":
+        pending.append({"id": "other", "kind": "Deployment", "status": "deploying"})
+    elif change == "wrong_data_type":
+        response["data"] = []
     else:
-        assert railway.status() == status
-    query = call.call_args.args[0][1]
-    assert "{ id status }" in query and "patch" not in query and "variables" not in query
+        response["errors"] = [{"message": "SYNTHETIC_PRIVATE"}]
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    railway = deploy.Railway("synthetic")
+    calls = []
+    def call(args, **kwargs):
+        calls.append(args)
+        if args == ["--version"]:
+            return "railway " + deploy.CLI_VERSION
+        if args[0] == "status":
+            return json.dumps(status)
+        if args[0] == "api":
+            return json.dumps(response)
+        raise AssertionError("no mutation allowed")
+    monkeypatch.setattr(railway, "call", call)
+    with pytest.raises(ValueError, match="eval_deploy_pending_") as error:
+        deploy.publish(candidate[0], env, railway, {})
+    assert "SYNTHETIC_PRIVATE" not in str(error.value) + capsys.readouterr().out
+    assert not any(args[0] in {"up", "variable"} for args in calls)
+
+
+def test_nonempty_patch_values_never_reach_stdout_or_summary(
+    monkeypatch, candidate, status, env, tmp_path, capsys,
+):
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setenv("RAILWAY_TOKEN", "synthetic")
+    data = pending_state()
+    data["environmentStagedChanges"]["patch"] = {
+        "sharedVariables": {"PRIVATE_KEY": "SYNTHETIC_PRIVATE"},
+    }
+    responses = ["railway " + deploy.CLI_VERSION, json.dumps(status), json.dumps({"data": data})]
+    call = Mock(side_effect=responses)
+    monkeypatch.setattr(deploy.Railway, "call", call)
+    assert deploy.main(["publish", "--directory", str(candidate[0])]) == 1
+    output = capsys.readouterr()
+    text = output.out + output.err + summary.read_text(encoding="utf-8")
+    assert "SYNTHETIC_PRIVATE" not in text and "PRIVATE_KEY" not in text
+    assert "eval_deploy_pending_changes" in text
+    assert call.call_count == 3
 
 
 def test_workflow_manual_secret_only_publish_and_remote_install():

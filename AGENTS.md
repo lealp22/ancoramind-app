@@ -76,11 +76,14 @@ recordatorios y eventos, con trazabilidad completa.
   Secret inicial `RAILWAY_EVALS_DEPLOY_TOKEN` en environment GitHub
   `ancoramind-evals-deploy` (token Railway de proyecto/entorno, NO sólo servicio).
   Helper empaqueta contexto eval allowlist y publica/verifica sólo evals sin
-  inferencia ni tocar volumen/otros servicios. SHA7957ba70/CI verde; secreto creado
-  por propietario. Actions39149868659 prepara pero bloquea antes de mutaciones.
-  Corrección local del nullable `unmergedChangesCount` (production devuelve null);
-  consulta staged independiente intacta. Registro STAGED posterior al run con cero
-  cambios visibles requiere resolución humana, no Apply/Deploy/retry automático.
+  inferencia ni tocar volumen/otros servicios. Secreto creado por propietario;
+  SHA da351546/CI verde y run39157815349 bloqueado antes de mutaciones. Contador
+  nullable corregido, pero schema staged es NON_NULL: exigir null era otro error.
+  Enmienda autorizada: leer patch sólo en memoria, permitir únicamente STAGED/`{}`
+  exacto y pendingWork del mismo id/entorno, sin hijos/otras operaciones; cualquier
+  contenido/error/inconsistencia bloquea. No imprimir/persistir patch ni valores,
+  ni aplicar/descartar borrador. Fix local pendiente de commit/CI/publicación manual.
+  1832 unitarias/1 skip,92 focales,80,85 %,Ruff/mypy177 limpios; rollout no probado.
   Evaluador sigue db0c59b/deployment54892e8d; no inferencia ni CLI local.
   Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
 

@@ -33,6 +33,23 @@ claves LLM, recursos, migraciones ni despliegues reales por implementar.
   Concurrencia1 y cancel-in-progress=false; reporte de incertidumbre/deployment ID
   si timeout. No borrar reservas/reportes; secretos de modelo nunca en workflow.
 
+### Enmienda autorizada — borrador vacío (2026-10-18)
+
+El propietario autoriza sustituir la exigencia de staged=null: el schema Railway
+declara `environmentStagedChanges: EnvironmentPatch!` y devuelve un borrador
+STAGED incluso con `patch: {}`. Sólo se acepta ese objeto exactamente vacío (no
+null, lista ni ramas vacías), id UUID y environmentId correctos. Se cruza con
+`environmentPendingWork`: exactamente una fila EnvironmentPatch/staged del mismo
+id/entorno, sin hijos ni otra operación. Missing/errors/estado desconocido o en
+curso y cualquier contenido bloquean antes de escribir/subir. Ambos controles
+se repiten al verificar el despliegue, sin aplicar/descartar el borrador.
+
+Esto cambia deliberadamente el contrato de lectura: se solicita `patch` y se
+comprueba exclusivamente en memoria. Un borrador no vacío puede contener secretos;
+no se imprime, persiste, adjunta a errores ni incluye en resúmenes. PendingWork
+se consulta sólo con metadata, sin `changes`, valores ni actor. No es permiso
+para leer variables live, volumen, inferir ni reintentar operaciones mutantes.
+
 ## No objetivos y límites
 
 No arreglar dispatcher interno Railway, promover golden, configurar presupuesto,
