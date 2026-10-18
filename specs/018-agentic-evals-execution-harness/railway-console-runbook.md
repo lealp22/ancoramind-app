@@ -61,6 +61,12 @@ inferencia**. Procedimiento de shells existentes y helpers locales (no están en
 la imagen, no reconstruirla): [acceso Gateway](gateway-access-runbook.md).
 Creación y verificaciones live pendientes de los reportes del operador.
 
+**Reportes recibidos después:** clave sustituta 238d37ae3e0e y acceso privado desde
+evals `eval_gateway_read_only_verified`/`restricted_alias_verified`, identidad/plan
+correctos y gasto cero. Caduca 2026-10-18T02:08:48.318Z. Sin inferencia habilitada
+ni iniciada; pendientes pricing, aceptación snapshot/presupuesto y aprobación de
+campaña. No ejecutar `--execute` ni ampliar rutas por esta comprobación.
+
 Para reconstruir un paquete sin cambios no comiteados ni inferencia, usar la
 utilidad local (no incluida en la imagen db0c59b) y SHA/huella previamente validados:
 

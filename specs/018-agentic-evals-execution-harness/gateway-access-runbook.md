@@ -2,6 +2,19 @@
 
 ## Estado y alcance
 
+**Estado actual — reporte real del propietario:** `eval_gateway_read_only_verified`
+desde evals, `restricted_alias_verified`, clave `ancoramind-evals-access-238d37ae3e0e`,
+caducidad `2026-10-18T02:08:48.318000+00:00`, único modelo r4. Coinciden SHA
+`db0c59be0b2eeb807d4222aeb5a62b622d90b200`, fuente
+`108c410d26149cd5e3946e15d16f728fdfbdd4f6a8553fef1ec787df271e6c82` y plan
+`8f3e4a51496dbbdc763fd17458e8857fe785bd8abaf6016881effe6f79bd8139`.
+Presupuesto nominal 0,10 USD sin reset, gasto cero. Acceso privado y restricciones
+releídas desde el evaluador quedan comprobados; `inference_enabled=false`,
+`inference_started=false`, `pricing_verified=false`, aprobación separada pendiente.
+No se ha evaluado al modelo ni demostrado un techo de facturación. La causa exacta
+del primer intento bloqueado sigue sin confirmarse; este éxito no la identifica.
+Los apartados siguientes conservan la secuencia histórica de preparación/intentos.
+
 El propietario aporta mount/preflight/TTY correctos y autoriza explícitamente
 crear clave exclusiva/expirable y comprobar acceso privado sin modelo. No autoriza
 campaña, ampliación de presupuesto, clave del bot ni mutación de aliases/settings.
@@ -20,6 +33,31 @@ Gateway; todavía no demuestra acceso desde `ancoramind-evals`.
 desconocida. Evaluador y Gateway Online, mismos deployments, sin pending work;
 clave no caducada al control de reloj 2026-10-17T23:47:49Z (caduca 01:37:40Z).
 No inferir de esos datos que la clave sea incorrecta o que falle la red.
+
+**Clave perdida y retirada del alias:** el propietario informa pérdida del valor
+y después aporta `eval_key_absent_verified` para
+`ancoramind-evals-access-1eacd663da85`, `inference_started=false`, tras ejecutar el
+procedimiento por alias exacto en LiteLLM. La consulta final confirma ausencia del
+registro; el reporte no distingue si se borró en ese paso o ya no existía. No
+reutilizar la clave anterior ni tratarlo como validación del acceso desde evals.
+
+Se continúa con **una sola sustituta**, mismos controles de lectura/modelo,
+2 h/0,10 USD sin reset, sin inferencia ni ampliación de autorización. La nueva
+creación la ejecutará el propietario con el generador existente y devolverá sólo
+metadata; todavía no hay reporte de nueva clave. Mantener abierta su terminal
+privada de LiteLLM hasta introducir la clave en el prompt oculto de evals. Copiar
+primero el código de diagnóstico y después el valor secreto para que el
+portapapeles no se sobrescriba. No hace falta un gestor nuevo ni persistirla.
+Si se bloquea o es ambiguo, parar y no repetir generación.
+
+**Sustituta creada por el propietario (reporte recibido):**
+`eval_key_read_only_ready`, alias `ancoramind-evals-access-238d37ae3e0e`, expiración
+`2026-10-18T02:08:48.318000+00:00`. Mismos controles: único modelo r4, tres rutas
+de lectura, 0,10 USD nominal sin reset/gasto cero, concurrencia 1, 30 RPM/250000 TPM,
+puerto 4000. Inferencia deshabilitada/no iniciada, campaña pendiente y pricing
+no verificado. Ya no repetir generación; usar esta clave en el prompt oculto del
+comprobador actualizado. Acceso privado desde evals aún pendiente; no atribuir
+la incidencia anterior a la clave perdida ni dar por resuelta su causa.
 
 La creación no la ejecutó el agente: las herramientas disponibles
 no ofrecen ejecución de comandos en los contenedores. No instalar CLI, crear
@@ -158,9 +196,11 @@ PostgreSQL ni operaciones remotas de escritura; causa live pendiente del reporte
 
 ## 3. Límites y continuación
 
-Reporte de creación recibido: restricciones y presupuesto nominal releídos en
-Gateway. Falta el reporte desde evals; no considerar acceso privado, pricing ni
-enforcement de facturación comprobados. No marcar T7c, T7b ni BL-48 terminados.
+Reportes de creación y comprobación desde evals recibidos: acceso privado, alias
+exclusivo y presupuesto nominal releídos en Gateway. Pricing y enforcement de
+facturación no comprobados; no marcar T7c, T7b ni BL-48 terminados. Antes de campaña
+faltan aceptación de procedencia histórica del snapshot, revisión de pricing y
+límites externos y aprobación explícita con revisor presente.
 La clave no se regenera: si ha caducado o no se conserva su valor, detenerse y
 revisar el siguiente paso, no repetir generación por defecto.
 

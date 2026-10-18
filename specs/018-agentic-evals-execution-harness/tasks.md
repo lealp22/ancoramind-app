@@ -73,6 +73,17 @@
       Intento desde evals bloqueado sin inferencia; causa no confirmada. Helper
       local mejorado con diagnóstico metadata-only por etapas, sin relajar scope
       ni regenerar clave/redeploy. Pendiente salida de diagnóstico del operador.
+      Clave perdida después: propietario confirma eval_key_absent_verified para
+      alias antiguo. Sustituta única con mismos controles de lectura pendiente de
+      creación por operador/reporte, sin ampliar alcance ni aprobar inferencia.
+      Reporte posterior confirma sustituta 238d37ae3e0e read-only, mismos límites,
+      caduca 2026-10-18T02:08:48.318Z. Pendiente diagnóstico/acceso desde evals;
+      no inferencia, pricing no verificado y campaña sin aprobar.
+      **Comprobación posterior del propietario:** eval_gateway_read_only_verified,
+      restricted_alias_verified desde evals, sustituta/identidad/plan coincidentes,
+      presupuesto nominal 0,10 USD sin reset/gasto cero. Acceso y scope superados;
+      inferencia aún deshabilitada/no iniciada. Pricing/enforcement de coste,
+      aceptación snapshot y aprobación/campaña mantienen T7c/T7b/BL-48 abiertos.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

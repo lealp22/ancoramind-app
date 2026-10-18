@@ -236,6 +236,32 @@ HTTP status/URL-presente, sin contenido sensible; ningún deploy/clave/permiso n
 Repetir manualmente sólo comprobación GET con clave vigente para reunir evidencia,
 no generación ni inferencia. Detalle en `gateway-access-runbook.md`.
 
+**Después, pérdida de clave:** el propietario aporta `eval_key_absent_verified`
+del procedimiento de retirada por alias `ancoramind-evals-access-1eacd663da85`,
+sin inferencia. Registro ausente según consulta final; no afirmar que la clave
+seguía presente antes ni acceso privado comprobado. Se prepara una sustitución
+única de lectura bajo el mismo alcance, con generador existente en shell del
+operador; nueva clave/reporte aún pendientes. No cambios del agente en servicios,
+credenciales del bot o candidato evaluado.
+
+**Sustituta, reporte recibido:** `ancoramind-evals-access-238d37ae3e0e`,
+`eval_key_read_only_ready`, caduca `2026-10-18T02:08:48.318000+00:00`; mismas
+restricciones de lectura/r4/0,10 USD sin reset/gasto cero/concurrencia 1/puerto 4000.
+Creada por el propietario, sin inferencia ni ampliación de alcance; pricing y
+campaña pendientes. Acceso desde evals no validado todavía: siguiente operación
+es el comprobador actualizado por stdin/TTY, sin rebuild ni más creación.
+
+**Comprobación desde evals superada — evidencia del propietario:**
+`eval_gateway_read_only_verified`, `gateway_access=restricted_alias_verified`,
+misma sustituta `238d37ae3e0e`, único modelo r4, SHA db0c59b/huella fuente/plan
+exactos ya registrados, 0,10 USD nominal sin reset y gasto cero. Inferencia sigue
+deshabilitada/no iniciada; pricing no verificado y aprobación de campaña pendiente.
+Superados acceso privado y scope desde el contenedor, no T7c/T7b/BL-48 completos.
+Sin cambiar deployments/permisos ni iniciar campaña; causa del primer bloqueo
+histórico no confirmada. Siguiente gate: precio real frente al snapshot, límite
+externo/limitaciones de coste y aceptación del snapshot, antes de habilitar una
+ruta de inferencia con autorización separada. No regenerar claves por este éxito.
+
 ### Plan anterior (superado parcialmente por la recuperación)
 
 Resolver primero selección real de Dockerfile con metadata de build/plataforma

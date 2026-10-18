@@ -1470,6 +1470,18 @@ repetición GET manual con clave vigente, pendiente reporte operador. Servicios
 Online sin cambios; no regeneración ni campaña.
 Diagnóstico validado: 34 pruebas focales, **1694 unitarias/80,58 %**, Ruff/mypy
 limpios; imagen db0c59b sin TTY/red informa etapa sin traceback. Sin commit/push.
+Clave temporal perdida posteriormente; propietario aporta eval_key_absent_verified
+del alias antiguo tras retirada dirigida. Sustitución única sólo lectura con mismos
+límites prevista, nueva clave/reporte pendientes; no acceso/campaña verificados.
+Recibido después reporte sustituta `ancoramind-evals-access-238d37ae3e0e`,
+read-only r4/mismos límites, caduca 2026-10-18T02:08:48.318Z; sin inferencia.
+Pendiente acceso/diagnóstico desde evals, pricing y aprobación de campaña.
+Reporte posterior: **eval_gateway_read_only_verified/restricted_alias_verified**
+desde evals, sustituta238d37ae3e0e/SHA db0c59b/huella/plan correctos, presupuesto
+nominal 0,10 USD sin reset/gasto cero. Acceso privado y scope comprobados;
+inferencia deshabilitada/no iniciada, pricing y aceptación snapshot/presupuesto
+y aprobación/campaña pendientes. T7c/T7b/BL-48 abiertos; no se atribuye causa exacta
+al primer bloqueo ni se habilitan rutas/deploys por recibir este reporte.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.
