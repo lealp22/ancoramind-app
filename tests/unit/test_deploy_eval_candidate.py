@@ -322,6 +322,19 @@ def test_workflow_manual_secret_only_publish_and_remote_install():
             assert len(step["uses"].split("@")[1]) == 40
 
 
+def test_workflow_temp_directory_uses_runtime_environment_not_job_runner_context():
+    workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/deploy-evals.yml"
+                ).read_text(encoding="utf-8")
+    job = yaml.load(workflow, Loader=yaml.BaseLoader)["jobs"]["publish-evals"]
+    # YAML parsing alone cannot detect GitHub's context-availability restrictions:
+    # jobs.<job_id>.env has no runner context, unlike step env/run expressions.
+    assert all("runner." not in value for value in job["env"].values())
+    commands = [step["run"] for step in job["steps"]
+                if step.get("run", "").startswith("python scripts/deploy_eval_candidate.py")]
+    assert len(commands) == 2
+    assert all('--directory "$RUNNER_TEMP/eval-candidate"' in command for command in commands)
+
+
 def test_ci_job_pagination_does_not_accept_hidden_required_jobs(monkeypatch):
     run = {"id": 123, "run_number": 1, "run_attempt": 3, "head_sha": COMMIT,
            "head_branch": "main", "event": "push", "status": "completed",

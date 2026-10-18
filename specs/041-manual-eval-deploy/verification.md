@@ -1,5 +1,19 @@
 # Verificación — 2026-10-18
 
+## Corrección del workflow tras publicar 9125484
+
+GitHub rechazó la definición antes de ejecutar jobs: `runner.temp` no está
+disponible en `jobs.<job_id>.env`. Sustituido por `$RUNNER_TEMP/eval-candidate`
+expandido por la shell en ambos pasos prepare/publish; misma ruta temporal,
+sin cambios de destino, secretos ni permisos. La validación YAML anterior no
+detectaba restricciones de contextos de Actions. Nueva prueba de regresión
+reproduce el fallo antes del cambio y comprueba ambos pasos después.
+Validación de la corrección:39 pruebas focales y1792unitarias/1skip superadas,
+80,85 % cobertura, Ruff global limpio y diff sin errores. No cambia código src;
+resultado mypy anterior sigue vigente. Sin CLI local, secreto nuevo ni despliegue.
+Aceptación remota de la definición pendiente del nuevo commit/push; no es un
+fallo de token Railway ni evidencia de un despliegue realizado.
+
 ## Implementado localmente
 
 - `.github/workflows/deploy-evals.yml`: botón **Actualizar evaluador**, SHA explícito,

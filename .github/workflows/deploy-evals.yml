@@ -31,7 +31,6 @@ jobs:
     env:
       EVAL_CONFIRM_IDLE: ${{ inputs.confirm_idle }}
       CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-      CANDIDATE_DIR: ${{ runner.temp }}/eval-candidate
 
     steps:
       # Control-plane code comes from the workflow's reviewed main revision,
@@ -50,7 +49,7 @@ jobs:
       - name: Check exact CI and prepare allowlisted candidate
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/deploy_eval_candidate.py prepare --sha "$CANDIDATE_SHA" --directory "$CANDIDATE_DIR"
+        run: python scripts/deploy_eval_candidate.py prepare --sha "$CANDIDATE_SHA" --directory "$RUNNER_TEMP/eval-candidate"
 
       - name: Set up Node (runner only)
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -63,4 +62,4 @@ jobs:
       - name: Publish only ancoramind-evals and verify idle identity
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_EVALS_DEPLOY_TOKEN }}
-        run: python scripts/deploy_eval_candidate.py publish --directory "$CANDIDATE_DIR"
+        run: python scripts/deploy_eval_candidate.py publish --directory "$RUNNER_TEMP/eval-candidate"
