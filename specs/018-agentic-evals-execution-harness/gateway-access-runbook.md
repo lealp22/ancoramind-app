@@ -2,6 +2,13 @@
 
 ## Estado y alcance
 
+**Investigación offline autorizada y completada:** 10 pruebas sobre la imagen
+LiteLLM fijada, sin red/credenciales/inferencia, demuestran coste upstream → cola
+KEY/contador/budget y sus límites. Metadata0 no prueba spend roto; coste ausente y
+lecturas no verificables no dan garantía fail-closed por defecto. No se verifica
+spend productivo ni se aprueba presupuesto/campaña. Evidencia y reproducción:
+[contabilidad offline](accounting-offline-review.md). No ejecutar el probe en Railway.
+
 **Presupuesto upstream — reporte posterior del propietario:**
 `upstream_budget_metadata_read`, límite **5 USD**, restante **4,44046623 USD**,
 `reset=null`, `include_byok_in_limit=false`, sin inferencia. Confirma configuración

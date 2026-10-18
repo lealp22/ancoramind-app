@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-18
+Última actualización: 2026-10-18 (BL-55)
 
 ---
 
@@ -39,6 +39,7 @@
 | BL-46 Subclasificación WRITE_TRIVIAL/WRITE_REVIEWABLE | ✅ completado: PostgreSQL, trivial y reviewable (prioridad, descripción-sola, fecha-sola); ausencia de escritura previa, descartes y hashes acreditados; versión/CI comprobados — specs/035 |
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
+| BL-55 Gap analysis contra rúbrico de evaluación académica | 🆕 registrado; huecos priorizados en justificación de modelo/coste proyectado, LLM-juez (Jev) ejecutado, red-teaming (PyRIT/Garak) ejecutado y documento de riesgos propio — ver `docs/academic-rubric-gap-analysis.md` |
 | MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
 Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL
@@ -974,6 +975,52 @@ focales superadas. Evidencia specs/039. Cierre de contrato/regresión acotado,
 no causa histórica exacta, garantía general semántica ni toda M5. Sin cambiar
 flags/desplegar desde esta ventana; navegador conservado. Evals T7 pendientes.
 
+### BL-55 · Gap analysis contra el rúbrico de evaluación académica 🆕 registrado — 2026-10-18
+
+El propietario compartió el texto de evaluación del entregable final del
+programa (4 módulos: modelo/coste, flujo agentic, despliegue/evaluación/
+monitorización, seguridad/riesgos). Se hizo un gap analysis puntual contra
+el estado actual del repo, documentado en
+`docs/academic-rubric-gap-analysis.md` — no se repite el detalle aquí, solo
+el resumen para priorización.
+
+**Huecos identificados (ninguno implementado en este registro):**
+1. Módulo 1: falta justificación comparativa de por qué GPT-6 Luna frente a
+   otros modelos (hoy solo existe el *cómo* cambiarlo, no el *por qué* de
+   la elección actual), y falta una proyección de coste por niveles de uso
+   (solo hay coste medido retrospectivo, nunca una proyección "$X/mes a N
+   usuarios/día").
+2. Módulo 2: falta un documento que traduzca explícitamente un proceso de
+   negocio real a su patrón técnico (ej. "recordar mantenimiento del
+   coche" → `propose_vehicle_maintenance`/`execute_vehicle_maintenance`);
+   hoy esa lógica está repartida sin pieza narrativa propia. Es, de los
+   cuatro módulos, el mejor cubierto ya (autonomía/gobernanza y elección de
+   framework con ADR-001 ya documentados).
+3. Módulo 3: el LLM-juez (`Jev`,
+   `specs/014-agentic-evals/jev-pilot-proposal.md`) sigue en estado
+   "propuesta, no implementada" — el enunciado pide explícitamente "LLMs
+   como Juez, o al menos algún evaluador no-subjetivo"; el no-subjetivo ya
+   corre (`evals/`, `injection_heuristics.py`), falta ejecutar el juez.
+4. Módulo 4: PyRIT/Garak quedaron documentados como candidatos evaluados
+   (2026-10-18, `docs/llm-security-hardening.md`) pero ninguno está
+   ejecutado — el enunciado pide apoyarse en "algún agente o framework de
+   red-teaming". Tampoco existe un documento de análisis de riesgos
+   independiente (el modelo de amenaza vive como subsección de
+   `llm-security-hardening.md`, no como artefacto propio).
+
+**Lectura global:** según el baremo descrito por el propietario (5-7 por
+reflejar conceptos; 7-9 por implementado aunque no desplegado del todo; 9-10
+por completo sin carga de mantenimiento para terceros), el proyecto está
+hoy sólidamente en banda 7-9. El riesgo no es falta de trabajo de fondo —es
+que el documento final no nombre estos huecos explícitamente.
+
+**Pendiente, no implementado:** decidir cuáles de estos huecos se cierran
+antes de la entrega y cuáles se documentan como "trabajo futuro reconocido"
+en el propio entregable. No amplía ni reabre ninguna gobernanza existente;
+es puramente un registro de priorización. Revisar vigencia de
+`docs/academic-rubric-gap-analysis.md` antes de usarlo — puede quedar
+obsoleto si se cierran estos puntos.
+
 ### BL-53 · Ocultar IDs técnicos documentales en respuestas de uso normal 🆕 registrado — 2026-10-17
 
 Preferencia explícita del propietario al revisar el E2E visual de BL-1/6:
@@ -1492,6 +1539,14 @@ incluido, sin inferencia. Control compartido, no límite exclusivo0,10 ni permis
 para consumir saldo. Difiere de snapshot histórico rev8 external_limit20; inmutable,
 requiere aceptación de esa diferencia. Contabilidad efectiva/riesgo/campaña aún
 pendientes; no flags/rutas ni cambios de clave upstream del bot por el reporte.
+Investigación offline autorizada: 10 pruebas en imagen LiteLLM fijada, sin red/
+credenciales/inferencia, coste0.03→callback/cola KEY/contador/budget funciona;
+umbral acumulado no garantiza techo0.10, coste ausente/lecturas no verificables
+requieren atención. No spend productivo certificado ni fallo deducido de metadata0.
+Probe local reproducible y `accounting-offline-review.md`; sin cambio remoto ni
+permisos/claves, T7c/T7b/BL-48 abiertos, falta decisión/evidencia runtime de gasto.
+Validación de investigación: 10 pruebas Docker offline separadas y 7 unitarias nuevas;
+suite global **1701 passed/80,58 %**, Ruff/mypy limpios, sin integración DB nueva.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

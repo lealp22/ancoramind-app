@@ -281,6 +281,15 @@ explicitar diferencia en aceptación del snapshot. Queda decidir cómo cerrar la
 verificación de contabilización/límite de eval y aprobación de riesgo/campaña;
 sin flag externo verificado, ampliación de rutas ni inferencia por este reporte.
 
+**Investigación offline posterior autorizada:** misma imagen LiteLLM por digest,
+10 pruebas sin red/secretos/inferencia. Cadena coste sintético0.03 desde OpenRouter
+hasta cola KEY/contador real en memoria y rechazo a0.10 comprobada. No se flushea
+DB ni se certifica Railway; coste ausente puede no contabilizarse y fallo de
+lecturas sólo se rechaza con flag opt-in. Metadata0 no demuestra avería/free.
+Herramienta local `scripts/check_litellm_accounting_offline.py`; evidencia en
+`accounting-offline-review.md`. Sin cambios remotos ni permiso de gasto/campaña;
+la identidad de la imagen eval db0c59b permanece intacta.
+
 ### Plan anterior (superado parcialmente por la recuperación)
 
 Resolver primero selección real de Dockerfile con metadata de build/plataforma

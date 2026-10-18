@@ -94,6 +94,11 @@
       Difiere de external_hard_limit_usd=20 del snapshot histórico rev.8, sin
       reescribirlo. Contabilización efectiva/riesgo aceptado, snapshot y campaña
       siguen pendientes; no habilitar flags/rutas automáticamente.
+      Investigación offline autorizada completada: 10 pruebas imagen fijada,
+      coste provider→callback→cola KEY/contador→budget, sin red/inferencia/DB real.
+      Metadata0 no demuestra fallo, tampoco garantía hard0.10; coste ausente y
+      flags opt-in dejan límites. `accounting-offline-review.md`; pendiente
+      evidencia runtime/decisión de aislamiento y aprobación, no cierre T7c/T7b.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización
