@@ -8,6 +8,12 @@
 
 ## Qué arranca
 
+**Campaña ahora aprobada expresamente por el propietario**, ejecución pendiente:
+cinco casos del SHA db0c59b/plan8f3e4a51…, nominal0,10 USD adicional, revisor humano,
+clave exclusiva2h y revocación. Smoke previo real cerrado (0,0000353 USD/clave
+revocada). Usar [procedimiento aprobado](campaign-approved-runbook.md), no roles
+de smoke ni otra ronda de preparación. Aprobación no equivale a resultado real.
+
 - Imagen prevista `evals/Dockerfile`, raíz del repositorio como build context.
   **Corrección tras aprovisionar:** Railway rechaza activar `/evals/railway.json`
   para servicios nuevos por deprecación de Config as Code. Se aplican ajustes

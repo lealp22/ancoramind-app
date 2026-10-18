@@ -1,4 +1,4 @@
-"""Operator-controlled, separately approved ONE-call accounting smoke.
+"""Operator-controlled smoke and separately approved five-case campaign.
 
 Run by stdin, never copy into the sealed eval image. Admin uses only loopback
 management routes; smoke uses existing LLMAccess, no Agent/tools/business DB.
@@ -21,6 +21,7 @@ import sys
 import time
 import uuid
 import warnings
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -36,6 +37,24 @@ ROOT = Path("/app")
 STATE = Path("/eval-state")
 RESERVATION = "accounting-smoke-v1.reserved.json"
 REPORT = "accounting-smoke-v1.report.json"
+CASES = "abddf11d06c5233ca97ddf016938ae759f698b740588167c5a9079dc5d137474"
+
+
+@dataclass(frozen=True)
+class KeyPolicy:
+    name: str
+    prefix: str
+    budget: str
+    duration: str
+    minutes: int
+    rpm: int
+    tpm: int
+
+
+SMOKE_POLICY = KeyPolicy("smoke", PREFIX, "0.01", "30m", 30, 1, 2000)
+CAMPAIGN_POLICY = KeyPolicy(
+    "campaign", "ancoramind-evals-campaign-", "0.10", "2h", 120, 30, 250000,
+)
 
 
 def finite(value: object) -> Decimal:
@@ -45,20 +64,20 @@ def finite(value: object) -> Decimal:
     return result
 
 
-def key_metadata(info: dict, now: datetime) -> dict:
+def key_metadata(info: dict, now: datetime, policy: KeyPolicy = SMOKE_POLICY) -> dict:
     expires = datetime.fromisoformat(info["expires"].replace("Z", "+00:00"))
     if expires.tzinfo is None:
         expires = expires.replace(tzinfo=UTC)
     if (
-        not str(info.get("key_alias", "")).startswith(PREFIX)
+        not str(info.get("key_alias", "")).startswith(policy.prefix)
         or info.get("models") != [ALIAS]
         or set(info.get("allowed_routes") or []) != set(SMOKE_ROUTES)
-        or finite(info.get("max_budget")) != Decimal("0.01")
+        or finite(info.get("max_budget")) != Decimal(policy.budget)
         or info.get("budget_duration") is not None or info.get("budget_reset_at") is not None
         or info.get("max_parallel_requests") != 1
-        or info.get("rpm_limit") != 1 or info.get("tpm_limit") != 2000
+        or info.get("rpm_limit") != policy.rpm or info.get("tpm_limit") != policy.tpm
         or info.get("blocked") or info.get("auto_rotate")
-        or not now + timedelta(seconds=45) < expires <= now + timedelta(minutes=32)
+        or not now + timedelta(seconds=45) < expires <= now + timedelta(minutes=policy.minutes + 2)
     ):
         raise ValueError("smoke_key_restrictions_mismatch")
     for field in ("aliases", "config", "permissions"):
@@ -71,14 +90,14 @@ def key_metadata(info: dict, now: datetime) -> dict:
             "spend_usd": str(finite(info.get("spend")))}
 
 
-def key_payload(alias: str) -> dict:
+def key_payload(alias: str, policy: KeyPolicy = SMOKE_POLICY) -> dict:
     return {
-        "key_alias": alias, "models": [ALIAS], "duration": "30m",
+        "key_alias": alias, "models": [ALIAS], "duration": policy.duration,
         "key_type": "default", "allowed_routes": SMOKE_ROUTES,
-        "max_budget": 0.01, "budget_duration": None, "spend": 0,
-        "max_parallel_requests": 1, "rpm_limit": 1, "tpm_limit": 2000,
+        "max_budget": float(policy.budget), "budget_duration": None, "spend": 0,
+        "max_parallel_requests": 1, "rpm_limit": policy.rpm, "tpm_limit": policy.tpm,
         "auto_rotate": False, "send_invite_email": False,
-        "metadata": {"service": "ancoramind-evals", "purpose": "one-accounting-smoke"},
+        "metadata": {"service": "ancoramind-evals", "purpose": "one-" + policy.name},
     }
 
 
@@ -120,46 +139,50 @@ def revoke(alias: str, key: str, master: str, call=admin_call) -> None:
         raise ValueError("cleanup_unconfirmed")
 
 
-def admin(console, reader, call=admin_call) -> int:
+def admin(console, reader, call=admin_call, *, policy: KeyPolicy = SMOKE_POLICY) -> int:
     """Create only when operator is ready; terminal stays open until cleanup."""
     master = os.environ.get("LITELLM_MASTER_KEY", "").strip()
     if not master or not console.isatty():
         raise ValueError("existing_gateway_private_shell_required")
-    alias = PREFIX + uuid.uuid4().hex[:12]
+    alias = policy.prefix + uuid.uuid4().hex[:12]
     key = None
     try:
-        created = call("POST", "/key/generate", master, key_payload(alias))
+        created = call("POST", "/key/generate", master, key_payload(alias, policy))
         key = created.get("key")
         if not isinstance(key, str) or not key.startswith("sk-"):
             key = None
             raise ValueError("creation_ambiguous")
-        info = key_metadata(call("GET", "/key/info", key)["info"], datetime.now(UTC))
+        info = key_metadata(call("GET", "/key/info", key)["info"], datetime.now(UTC), policy)
         if info["key_alias"] != alias or finite(info["spend_usd"]) != 0:
             raise ValueError("new_key_mismatch")
         visible = call("GET", "/v1/models", key)["data"]
         if not visible or {row.get("id") for row in visible} != {ALIAS}:
             raise ValueError("model_scope_mismatch")
-        console.write("\nCLAVE SMOKE — sólo al prompt oculto del evaluador, nunca al chat:\n")
+        console.write("\nCLAVE " + policy.name.upper()
+                      + " — sólo al prompt oculto del evaluador, nunca al chat:\n")
         console.write(key + "\n")
         console.flush()
-        print(json.dumps({"status": "smoke_key_ready", **info, "max_budget_usd": "0.01",
-                          "inference_started": False, "campaign_approved": False}), flush=True)
-        console.write("Mantén esta shell abierta. Ejecuta smoke en la otra shell.\n"
-                      "AL TERMINAR o cancelar smoke, pulsa Enter aquí para REVOCAR la clave.\n")
+        print(json.dumps({"status": policy.name + "_key_ready", **info,
+                          "max_budget_usd": policy.budget, "inference_started": False,
+                          "campaign_approved": policy == CAMPAIGN_POLICY}), flush=True)
+        console.write("Mantén esta shell abierta. Ejecuta " + policy.name + " en la otra shell.\n"
+                      "AL TERMINAR o cancelar, pulsa Enter aquí para REVOCAR la clave.\n")
         console.flush()
         reader.readline()
         return 0
     except (Exception, KeyboardInterrupt):
-        print(json.dumps({"status": "smoke_key_blocked_or_ambiguous", "key_alias": alias,
+        print(json.dumps({"status": policy.name + "_key_blocked_or_ambiguous", "key_alias": alias,
                           "do_not_repeat_creation": True, "inference_started": False}))
         return 1
     finally:
         if key is not None:
             try:
                 revoke(alias, key, master, call)
-                print(json.dumps({"status": "smoke_key_revoked_verified", "key_alias": alias}))
+                print(json.dumps({"status": policy.name + "_key_revoked_verified",
+                                  "key_alias": alias}))
             except Exception:
-                print(json.dumps({"status": "smoke_key_cleanup_unconfirmed", "key_alias": alias}))
+                print(json.dumps({"status": policy.name + "_key_cleanup_unconfirmed",
+                                  "key_alias": alias}))
 
 
 async def smoke(env: dict, key: str, *, transport=None) -> dict:
@@ -324,9 +347,101 @@ async def smoke(env: dict, key: str, *, transport=None) -> dict:
         return report
 
 
+async def campaign(env: dict, key: str, *, transport=None) -> dict:
+    """Run the EXISTING sealed harness once, with the owner's exact approval."""
+    import httpx
+
+    from scripts.eval_source import source_identity
+    from scripts.execute_eval_campaign import execute_approved, validate_state_directory
+    from src.agent.eval_campaign import EvalCampaignPlan, gateway_settings
+    from src.agent.eval_campaign_runner import campaign_cases_fingerprint
+    from src.domain.runtime_config.models import RuntimeConfigSnapshot
+
+    if env.get("ANCORA_EVAL_CAMPAIGN_OPERATOR_APPROVED") != "five-cases-0.10-usd-once":
+        raise ValueError("campaign_explicit_approval_required")
+    identity = source_identity(ROOT)
+    if (identity.get("code_sha"), identity.get("source_fingerprint"),
+        identity.get("identity_source"), identity.get("worktree")) != (
+            SHA, SOURCE, "sealed_image", "clean",
+        ):
+        raise ValueError("campaign_candidate_mismatch")
+    folder = ROOT / "evals" / "response_style"
+    snapshot = RuntimeConfigSnapshot.model_validate_json(
+        (folder / "runtime-rev8-snapshot.json").read_text()
+    )
+    plan = EvalCampaignPlan.model_validate_json((folder / "bl48-campaign-plan.json").read_text())
+    cases = plan.validate_snapshot(snapshot)
+    if plan.checksum() != PLAN or campaign_cases_fingerprint(cases) != CASES:
+        raise ValueError("campaign_plan_or_cases_mismatch")
+    validate_state_directory(STATE, env, sealed_image=True)
+    if (STATE / (PLAN + ".reserved.json")).exists() or (STATE / (PLAN + ".report.json")).exists():
+        raise ValueError("campaign_already_consumed")
+    settings = gateway_settings({
+        "ANCORA_EVAL_GATEWAY_URL": env.get("ANCORA_EVAL_GATEWAY_URL", ""),
+        "ANCORA_EVAL_GATEWAY_KEY": key,
+    })
+    gateway = settings.litellm_proxy_base_url.rstrip("/")
+    async with httpx.AsyncClient(
+        timeout=15, follow_redirects=False, trust_env=False,
+        transport=transport or httpx.AsyncHTTPTransport(retries=0),
+    ) as client:
+        async def info():
+            response = await client.get(gateway.removesuffix("/v1") + "/key/info",
+                                        headers={"Authorization": "Bearer " + key})
+            response.raise_for_status()
+            return key_metadata(response.json()["info"], datetime.now(UTC), CAMPAIGN_POLICY)
+
+        before = await info()
+        if finite(before["spend_usd"]) != 0:
+            raise ValueError("campaign_key_already_used")
+        # Values encode the explicit owner decision, not a self-granted permission.
+        approved_env = {
+            "ANCORA_EVAL_APPROVED_PLAN": PLAN, "ANCORA_EVAL_APPROVED_SHA": SHA,
+            "ANCORA_EVAL_APPROVED_SOURCE": SOURCE, "ANCORA_EVAL_APPROVED_CASES": CASES,
+            "ANCORA_EVAL_SYNTHETIC_APPROVED": "1",
+            "ANCORA_EVAL_EXTERNAL_BUDGET_VERIFIED": "1",
+            "ANCORA_EVAL_SNAPSHOT_PROVENANCE_ACCEPTED": "1",
+            "ANCORA_EVAL_HUMAN_REVIEW_APPROVED": "1",
+            "ANCORA_EVAL_GATEWAY_URL": gateway, "ANCORA_EVAL_GATEWAY_KEY": key,
+            "ANCORA_EVAL_REQUIRE_VOLUME": "1",
+        }
+        report = await execute_approved(plan, snapshot, identity, approved_env, STATE)
+        report["campaign_approved"] = True
+        report["permission_cleanup_required"] = True
+        report["gateway_spend"] = {
+            "key_alias": before["key_alias"], "before_usd": before["spend_usd"],
+            "status": "not_observed",
+        }
+        # This cannot invoke inference; failed/uncertain campaign is never replayed.
+        try:
+            for attempt in range(6):
+                after = await info()
+                delta = finite(after["spend_usd"]) - finite(before["spend_usd"])
+                if delta < 0:
+                    raise ValueError("campaign_spend_reset_unexpected")
+                report["gateway_spend"].update(after_usd=after["spend_usd"], delta_usd=str(delta))
+                if delta > 0 or not report.get("inference_started"):
+                    report["gateway_spend"]["status"] = (
+                        "over_nominal_budget" if delta > Decimal("0.10") else "observed"
+                    )
+                    break
+                if attempt < 5:
+                    await asyncio.sleep(2)
+        except Exception:
+            report["gateway_spend"]["status"] = "read_failed_do_not_replay"
+        # Preserve original harness report and write the supplemental metadata separately.
+        path = STATE / (PLAN + ".gateway-report.json")
+        with path.open("x", encoding="utf-8") as file:
+            json.dump(report, file, ensure_ascii=True, allow_nan=False)
+            file.flush()
+            os.fsync(file.fileno())
+        return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--role", choices=["admin", "smoke"], required=True)
+    parser.add_argument("--role", choices=["admin", "smoke", "campaign-admin", "campaign"],
+                        required=True)
     args = parser.parse_args()
     disabled = logging.root.manager.disable
     stage = "private_console"
@@ -337,24 +452,27 @@ def main() -> int:
         ):
             if not console.isatty() or not reader.isatty():
                 raise ValueError("private_tty_required")
-            if args.role == "admin":
+            if args.role in {"admin", "campaign-admin"}:
                 stage = "admin_create_and_cleanup"
-                return admin(console, reader)
+                policy = CAMPAIGN_POLICY if args.role == "campaign-admin" else SMOKE_POLICY
+                return admin(console, reader, policy=policy)
             with warnings.catch_warnings():
                 warnings.simplefilter("error", getpass.GetPassWarning)
                 stage = "key_input"
-                key = getpass.getpass("Clave SMOKE (entrada oculta): ", stream=console)
+                key = getpass.getpass("Clave " + args.role.upper() + " (entrada oculta): ",
+                                     stream=console)
             logging.disable(sys.maxsize)
             sys.path.insert(0, str(ROOT))
-            stage = "smoke_execution"
+            stage = args.role + "_execution"
             with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), \
                     contextlib.redirect_stderr(sink):
-                report = asyncio.run(smoke(dict(os.environ), key))
+                execute = campaign if args.role == "campaign" else smoke
+                report = asyncio.run(execute(dict(os.environ), key))
             print(json.dumps(report))
-            return 0 if report["status"] == "smoke_accounting_verified" else 1
+            return 0 if report["status"] in {"smoke_accounting_verified", "passed"} else 1
     except (Exception, KeyboardInterrupt) as error:
         name = type(error).__name__
-        print(json.dumps({"status": "smoke_blocked_or_ambiguous", "do_not_replay": True,
+        print(json.dumps({"status": args.role + "_blocked_or_ambiguous", "do_not_replay": True,
                           "stage": stage, "error_class": name if name in {
                               "ValueError", "OSError", "FileExistsError", "PermissionError",
                               "ModuleNotFoundError", "KeyboardInterrupt", "HTTPStatusError",

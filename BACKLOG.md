@@ -1568,6 +1568,14 @@ smoke_accounting_verified; clave87a125a812bd revocada/ausente confirmada por ope
 Investigación contable cerrada acotadamente, sin más rondas/smokes. No garantía
 absoluta de factura ni campaña aprobada; siguiente decisión cinco casos por plan
 existente y revisión humana. No borrar reserva ni reutilizar la clave revocada.
+**Campaña autorizada después expresamente:** UNA ejecución cinco casos exactos
+SHA db0c59b/fuente108c410d…/plan8f3e4a51…/snapshot rev8 histórico, nominal0,10 USD
+adicional y riesgo residual/límite upstream5vs20 aceptados, revisor humano presente.
+Clave campaña exclusiva r4/2h/0,10 nominal, revocación final; bot/DB/upstream/r4
+intactos. Wrapper local reutiliza harness sellado sin cambiar candidato ni plan,
+7 tests nuevos/1721 unitarias/80,58 % y Ruff/mypy limpios; cinco casos simulados
+offline en imagen sellada/replay bloqueado. Procedimiento campaign-approved listo,
+falta ejecución humana/reporte+cleanup real: T7b/BL-48 abiertos, sin nueva inferencia.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

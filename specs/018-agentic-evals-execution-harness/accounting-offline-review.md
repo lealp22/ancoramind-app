@@ -124,6 +124,13 @@ petición, pero no garantiza el orden de todos los callbacks/concurrencia reales
 
 ## Siguiente decisión, no ejecución
 
+**Decisión de campaña recibida posteriormente:** propietario autoriza cinco casos
+exactos/nominal0,10 USD adicional/clave exclusiva2h con revisión humana y revocación;
+acepta snapshot histórico/diferencias y limitaciones. Investigación cerrada, no
+nuevos smokes; [campaña aprobada](campaign-approved-runbook.md) preparada, resultados
+humanos reales todavía pendientes. El smoke existente no se repite ni consume
+reserva de campaña.
+
 **Resultado posterior live:** propietario aporta smoke_accounting_verified,
 1POST/1call, gasto propio0→0,0000353 USD, delta=header Gateway y clave smoke
 87a125a812bd revocada según segundo reporte smoke_key_revoked_verified.

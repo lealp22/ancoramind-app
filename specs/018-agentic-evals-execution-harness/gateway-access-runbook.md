@@ -2,6 +2,12 @@
 
 ## Estado y alcance
 
+**Decisión final recibida:** propietario autoriza UNA campaña de los cinco casos,
+presupuesto nominal0,10 USD adicional, snapshot histórico/riesgos aceptados,
+clave exclusiva2h y revisión humana. No ejecutada aún. Seguir
+[campaña aprobada](campaign-approved-runbook.md); no regenerar claves de smoke ni
+reabrir investigación contable. Falta reporte/revocación real para concluir T7.
+
 **Resultado actual:** smoke pagado autorizado superado, evidencia del propietario:
 una llamada, gasto clave0→0,0000353 USD=header Gateway; revocación confirmada
 87a125a812bd. Investigación de contabilidad cerrada acotadamente, sin más smokes.

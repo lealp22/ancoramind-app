@@ -37,6 +37,13 @@
       ante fallo/cancelación/no evaluado. Pruebas sin inferencia pagada.
 - [ ] T7b · Aprobar plan/presupuesto/snapshot, acceso privado y clave exclusiva;
       lanzar una campaña real con revisor presente y registrar los resultados.
+      **Aprobación explícita posterior recibida:** cinco casos exactos SHA db0c59b/
+      fuente108c410d…/plan8f3e4a51…, snapshot rev8 histórico/límite20vs5/riesgos
+      aceptados, nominal0,10 USD adicional y clave r4 exclusiva2h con revocación.
+      Smoke real ya cerrado; no nuevas rondas contables. Wrapper reutiliza launcher
+      sellado, no modifica candidato/plan. `campaign-approved-runbook.md` listo;
+      7 tests nuevos/1721 unitarias. Falta campaña real con etiquetas humanas y
+      revocación de clave; mantener T7b/BL-48 abiertos hasta resultado.
 - [x] T7c-local · Preparar operación puntual en servicio temporal privado Railway,
       separado del bot: no ejecutar al arrancar/reiniciar, shell con TTY probado
       sin modelo, assets/procedencia verificables y conservación de reporte y
