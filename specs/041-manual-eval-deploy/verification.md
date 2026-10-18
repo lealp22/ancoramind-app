@@ -1,6 +1,38 @@
 # Verificación — 2026-10-18
 
-## Revisión integral tras b0b6beb9 — estado vigente
+## Primer rollout real verificado — estado vigente
+
+- Candidato y código de publicación:
+  `7ea0cf06002d76692f230d189c43e8f9f5e742b1` (main).
+  [CI39163986626](https://github.com/lealp22/ancoramind-app/actions/runs/39163986626),
+  attempt1, completed/success comprobado por GitHub sólo lectura.
+- [Check-only39164426466](https://github.com/lealp22/ancoramind-app/actions/runs/39164426466):
+  success, `preflight_verified_no_upload` a20:41:17Z, sin inferencia.
+- [Publicación39165134464](https://github.com/lealp22/ancoramind-app/actions/runs/39165134464):
+  success, `deployed_idle_verified` a20:52:25Z, inference_started=false.
+  Resumen aportado por propietario y contrastado con log público del workflow.
+  Deployment exacto **`b4305cc0-3ddd-404e-8dbc-a3b002103b1f`**;
+  preflight_verified=true, replica_evidence=deployment_manifest_single_region,
+  other_services_unchanged=true, volume_preserved=true.
+- Identidad de fuentes comprobada por el workflow mediante sello y log idle:
+  `3c0585730a9e30f641a468d1e5e388498fc6328d2368cc8403ee94e089de31f8`.
+  SHA256 archivo preparado:
+  `6bdf34f623b92e20841896d94c82de69d2d4139a9d2f8e95a85a5fc9f5e17cb4`.
+  Este hash no es digest de imagen ni hash del tar adicional de Railway CLI.
+- Comprobación independiente MCP sólo lectura: evaluador **Online/SUCCESS**, mismo
+  deployment, **1 RUNNING / 0 crashed**, sin issues ni pendingWork. Volumen existente
+  b88f8940-dd92-430f-8d6f-a4adb2b455c8,100MB, montado en `/eval-state`; sin dominios,
+  TCP proxy, cron ni tracing. No se leen variables, volumen o evidencia sintética.
+- Pin GitHub histórico sigue db0c59b en config por diseño: upload no reconecta
+  source ni inventa commitHash. La versión efectiva del contenedor es el nuevo
+  SHA probado mediante paquete/sello/log, no ese pin de la UI.
+- Se cierra **publicación manual del evaluador specs/041**, no campaña BL-8/BL-48:
+  no inferencia, clave exclusiva nueva, recuperación histórica ni validación de
+  revisión durable remota por este despliegue. No repetir el workflow para cerrar
+  esta evidencia. Sólo docs actualizadas localmente; sin mutaciones Railway,
+  instalación/ejecución CLI local, dispatch o inferencia por el agente.
+
+## Revisión integral tras b0b6beb9 — incremento anterior
 
 - Run [39160757789](https://github.com/lealp22/ancoramind-app/actions/runs/39160757789),
   19:52:47–19:53:03Z, candidato/publicación

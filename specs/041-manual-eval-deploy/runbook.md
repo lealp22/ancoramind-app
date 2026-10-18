@@ -7,8 +7,14 @@ un runner GitHub Linux efímero, **nunca en el ordenador del propietario**.
 El SHA elegido sigue siendo decisión explícita; empaquetado/huella/subida/verificación
 son automáticos. Publicación no es campaña: arranca en espera, no llama al modelo.
 
-Esta implementación requiere commit/push/CI y configuración del secreto inicial.
-No se ha creado token, workflow run ni deployment por añadir estos archivos.
+**Primer rollout verificado (2026-10-18):** SHA
+`7ea0cf06002d76692f230d189c43e8f9f5e742b1`, CI39163986626 verde,
+check_only39164426466 y publicación39165134464 correctos. Deployment
+`b4305cc0-3ddd-404e-8dbc-a3b002103b1f`, Online/SUCCESS,1 RUNNING/0 crashed,
+volumen conservado y resto de servicios sin cambios según verificación del workflow;
+sin inferencia. Setup secreto realizado por propietario. No repetir para esta versión.
+Detalle y límites: [verification.md](verification.md). Preparación única inferior
+se mantiene como referencia para configurar el mecanismo, no como tarea pendiente.
 
 ## Preparación única (navegador)
 

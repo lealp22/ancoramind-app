@@ -56,7 +56,7 @@ recordatorios y eventos, con trazabilidad completa.
   Runtime config activa:
   revisión 8, default `ancoramind-default-r4` y embeddings `ancoramind-embeddings-r1`.
 
-  **Evaluador specs/040 (local, no desplegado):** consola reutilizable
+  **Evaluador specs/040 (código desplegado idle; uso real pendiente):** consola reutilizable
   `scripts/eval_console.py`, worker desacoplado y revisión recuperable sin nueva
   inferencia, evidencia/revisiones **sólo sintéticas** cifradas en volumen separado,
   autosave por criterio y promoción humana/versionada de golden Agent/juez. Es una
@@ -64,12 +64,13 @@ recordatorios y eventos, con trazabilidad completa.
   no captura de contenido personal ni logs/OTel con prompts/resultados. Retención
   bruta7d/purga manual, markers anti-replay conservados; exports sanitizados
   explícitos. Candidato histórico db0c59b sigue sin esa recuperación; no inventar
-  revisión ni relanzar campaña interrumpida. Nuevo SHA/CI/setup clave exclusiva
-  reutilizable y despliegue eval pendientes; no crear claves/inferir por implementar.
+  revisión ni relanzar campaña interrumpida. Nuevo código publicado en7ea0cf06
+  vía specs/041; setup clave exclusiva reutilizable y validación real de revisión
+  durable siguen pendientes; no crear claves/inferir por publicar.
   1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
   Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
 
-  **Publicación evaluador specs/041 (primer rollout bloqueado):** workflow manual
+  **Publicación evaluador specs/041 (primer rollout verificado):** workflow manual
   `Actualizar evaluador` (`.github/workflows/deploy-evals.yml`) con SHA completo,
   CI exacta y confirmación de ausencia de campaña. Sólo runner GitHub alojado;
   **no instalar/ejecutar Railway CLI en el ordenador gestionado del propietario**.
@@ -87,10 +88,14 @@ recordatorios y eventos, con trazabilidad completa.
   Fix local usa evidencia explícita del manifiesto, nunca default null→1, reasons
   específicos y check_only opcional sin escrituras/subida. CLI5.70.0/docs/API
   contrastados, fixture API saneada/adaptador integral y arranque Docker offline
-  del paquete b0b6 superados (dependencias cacheadas, no build fresh). Nuevo
-  commit/CI/publicación manual pendientes; aceptación remota aún no probada.
+  del paquete b0b6 superados (dependencias cacheadas, no build fresh).
+  SHA7ea0cf06002d76692f230d189c43e8f9f5e742b1/CI39163986626 verde; check_only
+  run39164426466 y publicación39165134464 correctos: deployed_idle_verified,
+  deploymentb4305cc0-3ddd-404e-8dbc-a3b002103b1f,1 RUNNING/0crashed, sin pendingWork,
+  volumen conservado/otros servicios sin cambios según workflow. SHA/huella por
+  sello/log del upload; pin GitHub histórico db0c59b permanece sin reconnect.
   1867 unitarias/1 skip,127 focales,80,85 %,Ruff/mypy177 limpios.
-  Evaluador sigue db0c59b/deployment54892e8d; no inferencia ni CLI local.
+  No inferencia ni CLI local; campañas/claves/revisión remota real siguen pendientes.
   Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
 
 ---

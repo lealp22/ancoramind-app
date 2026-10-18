@@ -1609,9 +1609,14 @@ manifiesto demuestra una región/réplica, RUNNING y volumen correcto. Fix local
 contrasta réplica explícita del manifiesto con CLI5.70.0, sin default null→1;
 reasons específicos y check_only opcional sólo lectura. Fixture API saneada/
 adaptador integral y arranque offline del paquete b0b6 (deps cacheadas, no build
-fresh) superados. Pendiente commit/push/CI/nuevo Run workflow; rollout no probado.
+fresh) superados. **Primer rollout cerrado2026-10-18:** SHA
+7ea0cf06002d76692f230d189c43e8f9f5e742b1/CI39163986626 verde;
+check_only39164426466 y publicación39165134464 success/deployed_idle_verified.
+Deploymentb4305cc0-3ddd-404e-8dbc-a3b002103b1f Online/SUCCESS,1RUNNING/0crashed,
+sin pendingWork; volumen/otros servicios conservados según workflow. No campaña
+ni recuperación histórica/revisión real certificadas; setup clave sigue pendiente.
 1867 unitarias/1 skip,127 focales,80,85 %,Ruff/mypy177 limpios.
-Sin CLI local/inferencia/deploy por agente. Evals sigue db0c59b. Mantener
+Sin CLI local/inferencia/deploy por agente. Evals efectivo7ea0cf06; mantener
 pin GitHub histórico sin connect/rebuild; versión upload por sello/log. Detalle
 `specs/041-manual-eval-deploy/runbook.md`; no borrar reservas ni relanzar campaña.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
