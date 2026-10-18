@@ -19,6 +19,187 @@ DEPLOYMENT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
 
 @pytest.fixture
+def observed_status():
+    return json.loads((Path(__file__).parent / "fixtures/railway_eval_inventory.json").read_text(
+        encoding="utf-8",
+    ))["status"]
+
+
+def test_observed_cli_projection_null_legacy_replica_is_not_drift(observed_status):
+    others, service = deploy.inventory(observed_status)
+    assert len(others) == 6
+    assert service["numReplicas"] is None
+    assert service["latestDeployment"]["instances"][0]["status"] == "RUNNING"
+
+
+@pytest.mark.parametrize("change", [
+    "legacy_multiple", "legacy_false", "legacy_missing", "meta_missing", "meta_null",
+    "meta_string", "manifest_missing", "deploy_list", "regions_empty", "regions_multiple",
+    "regions_null", "region_null", "count_missing", "count_false", "count_string",
+    "count_multiple", "count_zero",
+])
+def test_replica_null_never_defaults_to_one_without_valid_evidence(observed_status, change):
+    environment = observed_status["environments"]["edges"][0]["node"]
+    node = environment["serviceInstances"]["edges"][3]["node"]
+    latest = node["latestDeployment"]
+    config = latest["meta"]["serviceManifest"]["deploy"]
+    regions = config["multiRegionConfig"]
+    if change == "legacy_multiple":
+        node["numReplicas"] = 2
+    elif change == "legacy_false":
+        node["numReplicas"] = False
+    elif change == "legacy_missing":
+        del node["numReplicas"]
+    elif change == "meta_missing":
+        del latest["meta"]
+    elif change == "meta_null":
+        latest["meta"] = None
+    elif change == "meta_string":
+        latest["meta"] = "PRIVATE_NOT_METADATA"
+    elif change == "manifest_missing":
+        latest["meta"] = {}
+    elif change == "deploy_list":
+        latest["meta"]["serviceManifest"]["deploy"] = []
+    elif change == "regions_empty":
+        config["multiRegionConfig"] = {}
+    elif change == "regions_multiple":
+        regions["other-region"] = {"numReplicas": 1}
+    elif change == "regions_null":
+        config["multiRegionConfig"] = None
+    elif change == "region_null":
+        regions["europe-west4-drams3a"] = None
+    elif change == "count_missing":
+        regions["europe-west4-drams3a"] = {}
+    else:
+        regions["europe-west4-drams3a"]["numReplicas"] = {
+            "count_false": False, "count_string": "1", "count_multiple": 2, "count_zero": 0,
+        }[change]
+    with pytest.raises(ValueError, match="eval_deploy_replica_") as error:
+        deploy.inventory(observed_status)
+    assert "PRIVATE" not in str(error.value)
+
+
+@pytest.mark.parametrize("count", [1, 2, None, False, "1"])
+def test_manifest_explicit_count_without_region_map_is_never_defaulted(observed_status, count):
+    environment = observed_status["environments"]["edges"][0]["node"]
+    node = environment["serviceInstances"]["edges"][3]["node"]
+    node["latestDeployment"]["meta"]["serviceManifest"]["deploy"] = {"numReplicas": count}
+    if type(count) is int and count == 1:
+        assert deploy.single_replica_evidence(node) == "deployment_manifest_explicit_count"
+    else:
+        with pytest.raises(ValueError, match="replica_configuration_drift"):
+            deploy.inventory(observed_status)
+
+
+@pytest.mark.parametrize("check_only", [False, True])
+def test_full_cli_adapter_contract_with_observed_projection(
+    monkeypatch, candidate, observed_status, env, check_only, capsys,
+):
+    """Real adapter/CLI JSON boundaries, not FakeRailway.status skipping validation."""
+    monkeypatch.setattr(deploy.sys, "platform", "linux")
+    monkeypatch.setattr(deploy.shutil, "which", lambda _: "/runner/railway")
+    environment = observed_status["environments"]["edges"][0]["node"]
+    node = environment["serviceInstances"]["edges"][3]["node"]
+    calls = []
+    def run(argv, **kwargs):
+        assert kwargs["capture_output"] is True and kwargs["check"] is False
+        assert kwargs["env"]["RAILWAY_TOKEN"] == "synthetic"
+        args = argv[1:]
+        calls.append(args)
+        if args == ["--version"]:
+            result = "railway " + deploy.CLI_VERSION
+        elif args == ["status", *deploy.TARGET, "--json"]:
+            result = json.dumps(observed_status)
+        elif args[0] == "api":
+            assert args[1].startswith("query {")
+            result = json.dumps({"data": pending_state()})
+        elif args[0] == "variable":
+            assert check_only is False and "--skip-deploys" in args
+            result = "updated keys"
+        elif args[0] == "up":
+            assert check_only is False
+            assert "--detach" in args and "--json" in args and "--path-as-root" in args
+            assert kwargs["cwd"] == candidate[0] / "context"
+            node["latestDeployment"]["id"] = DEPLOYMENT
+            result = json.dumps({"deploymentId": DEPLOYMENT, "logsUrl": "https://railway.com"})
+        elif args == ["deployment", "list", *deploy.SERVICE_TARGET, "--json", "--limit", "20"]:
+            result = json.dumps([{"id": DEPLOYMENT, "status": "SUCCESS", "meta": None}])
+        elif args == ["logs", DEPLOYMENT, *deploy.SERVICE_TARGET, "--json", "--lines", "50"]:
+            result = json.dumps({"message": json.dumps({
+                "status": "idle_manual_only", "inference_started": False, "code_sha": COMMIT,
+                "source_fingerprint": candidate[1]["source_fingerprint"],
+                "worktree": "clean", "identity_source": "sealed_image",
+            })})
+        else:
+            raise AssertionError("unexpected command")
+        return subprocess.CompletedProcess(argv, 0, stdout=result, stderr="")
+    monkeypatch.setattr(deploy.subprocess, "run", run)
+    report = deploy.publish(
+        candidate[0], env, deploy.Railway("synthetic"), {}, check_only=check_only,
+    )
+    assert report["replica_evidence"] == "deployment_manifest_single_region"
+    assert report["preflight_verified"] is True
+    if check_only:
+        assert report["status"] == "preflight_verified_no_upload"
+        assert [args[0] for args in calls] == ["--version", "status", "api"]
+    else:
+        assert report["status"] == "deployed_idle_verified"
+        assert len([args for args in calls if args[0] == "up"]) == 1
+        assert len([args for args in calls if args[0] == "variable"]) == 1
+    assert "serviceManifest" not in json.dumps(report) + capsys.readouterr().out
+
+
+@pytest.mark.parametrize("flag", ["true", "false", "invalid"])
+def test_main_check_only_flag_is_explicit(monkeypatch, candidate, flag):
+    monkeypatch.setenv("EVAL_DEPLOY_CHECK_ONLY", flag)
+    railway = Mock()
+    publish = Mock(return_value={"status": "synthetic", "inference_started": False})
+    monkeypatch.setattr(deploy, "Railway", Mock(return_value=railway))
+    monkeypatch.setattr(deploy, "publish", publish)
+    expected = 1 if flag == "invalid" else 0
+    assert deploy.main(["publish", "--directory", str(candidate[0])]) == expected
+    if flag == "invalid":
+        publish.assert_not_called()
+    else:
+        assert publish.call_args.kwargs["check_only"] is (flag == "true")
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("start", "start_command_drift"), ("identity", "service_identity_drift"),
+    ("domain", "exposure_schedule_or_tracing_drift"),
+    ("tracing_unknown", "exposure_schedule_or_tracing_drift"),
+    ("cron_missing", "exposure_schedule_or_tracing_drift"),
+    ("volume", "volume_drift"), ("replicas", "replica_configuration_drift"),
+])
+def test_preflight_reports_specific_safe_drift_before_any_mutation(
+    observed_status, candidate, env, change, reason, capsys,
+):
+    environment = observed_status["environments"]["edges"][0]["node"]
+    service = environment["serviceInstances"]["edges"][3]["node"]
+    if change == "start":
+        service["startCommand"] = "PRIVATE_CONTENT"
+    elif change == "identity":
+        service["serviceName"] = "PRIVATE_CONTENT"
+    elif change == "domain":
+        service["domains"]["serviceDomains"] = [{"domain": "PRIVATE_CONTENT"}]
+    elif change == "tracing_unknown":
+        del service["tracingEnabled"]
+    elif change == "cron_missing":
+        del service["cronSchedule"]
+    elif change == "volume":
+        environment["volumeInstances"]["edges"][0]["node"]["mountPath"] = "PRIVATE_CONTENT"
+    else:
+        service["latestDeployment"]["meta"]["serviceManifest"]["deploy"]["multiRegionConfig"] = {
+            "region": {"numReplicas": 2},
+        }
+    railway = FakeRailway(observed_status, candidate[1])
+    with pytest.raises(ValueError, match="eval_deploy_" + reason) as error:
+        deploy.publish(candidate[0], env, railway, {}, check_only=True)
+    assert railway.calls == [["--version"]]
+    assert "PRIVATE_CONTENT" not in str(error.value) + capsys.readouterr().out
+
+
+@pytest.fixture
 def env():
     return {"GITHUB_REPOSITORY": deploy.REPO, "GITHUB_REF": "refs/heads/main",
             "GITHUB_EVENT_NAME": "workflow_dispatch", "EVAL_CONFIRM_IDLE": "true",
@@ -491,8 +672,10 @@ def test_workflow_manual_secret_only_publish_and_remote_install():
     assert "${{ inputs.candidate_sha }}" not in workflow.split("steps:", 1)[1]
     parsed = yaml.load(workflow, Loader=yaml.BaseLoader)
     assert set(parsed["on"]) == {"workflow_dispatch"}
+    assert parsed["on"]["workflow_dispatch"]["inputs"]["check_only"]["default"] == "false"
     job = parsed["jobs"]["publish-evals"]
     assert "RAILWAY_TOKEN" not in job["env"]
+    assert job["steps"][-1]["env"]["EVAL_DEPLOY_CHECK_ONLY"] == "${{ inputs.check_only }}"
     assert job["runs-on"] == "ubuntu-24.04"
     for step in job["steps"]:
         if "uses" in step:

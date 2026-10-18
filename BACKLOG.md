@@ -1604,8 +1604,13 @@ pero bloquea antes de mutaciones. Error confirmado: schema staged NON_NULL, no
 significa cambios reales. Enmienda autorizada: patch sólo en memoria, permitir
 STAGED/`{}` exacto + única fila pendingWork del mismo id/entorno sin hijos; bloquear
 contenido/inconsistencias/en curso, no imprimir/persistir ni aplicar/descartar.
-Fix local pendiente commit/push/CI y nuevo Run workflow, no re-run del antiguo.
-1832 unitarias/1 skip,92 focales,80,85 %,Ruff/mypy177 limpios; rollout no probado.
+SHA b0b6beb9/run39160757789 pasa staged pero bloquea réplica legacy=null; API/
+manifiesto demuestra una región/réplica, RUNNING y volumen correcto. Fix local
+contrasta réplica explícita del manifiesto con CLI5.70.0, sin default null→1;
+reasons específicos y check_only opcional sólo lectura. Fixture API saneada/
+adaptador integral y arranque offline del paquete b0b6 (deps cacheadas, no build
+fresh) superados. Pendiente commit/push/CI/nuevo Run workflow; rollout no probado.
+1867 unitarias/1 skip,127 focales,80,85 %,Ruff/mypy177 limpios.
 Sin CLI local/inferencia/deploy por agente. Evals sigue db0c59b. Mantener
 pin GitHub histórico sin connect/rebuild; versión upload por sello/log. Detalle
 `specs/041-manual-eval-deploy/runbook.md`; no borrar reservas ni relanzar campaña.

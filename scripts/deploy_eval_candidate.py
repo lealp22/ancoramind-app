@@ -210,6 +210,45 @@ def validate_pending_work(response: Any) -> None:
         raise ValueError("eval_deploy_pending_work_cannot_be_verified")
 
 
+def single_replica_evidence(candidate: dict[str, Any]) -> str:
+    """Use explicit manifest regions before the nullable legacy per-region field.
+
+    Mirrors CLI5.70.0 service_summary.rs/regions.rs, but never defaults unknown to 1.
+    Deployment metadata stays private; only a fixed evidence label is reportable.
+    """
+    legacy = candidate.get("numReplicas")
+    if "numReplicas" not in candidate or (
+        legacy is not None and (type(legacy) is not int or legacy != 1)
+    ):
+        raise ValueError("eval_deploy_replica_configuration_drift")
+    meta = (candidate.get("latestDeployment") or {}).get("meta")
+    if meta is not None:
+        if not isinstance(meta, dict):
+            raise ValueError("eval_deploy_replica_evidence_unavailable")
+        manifest = meta.get("serviceManifest")
+        if manifest is not None and not isinstance(manifest, dict):
+            raise ValueError("eval_deploy_replica_evidence_unavailable")
+        config = (manifest or {}).get("deploy")
+        if config is not None:
+            if not isinstance(config, dict):
+                raise ValueError("eval_deploy_replica_evidence_unavailable")
+            if "multiRegionConfig" in config:
+                regions = config["multiRegionConfig"]
+                if (not isinstance(regions, dict) or len(regions) != 1
+                    or not all(isinstance(region, str) and region for region in regions)
+                    or not all(isinstance(row, dict) and type(row.get("numReplicas")) is int
+                               and row["numReplicas"] == 1 for row in regions.values())):
+                    raise ValueError("eval_deploy_replica_configuration_drift")
+                return "deployment_manifest_single_region"
+            if "numReplicas" in config:
+                if type(config["numReplicas"]) is not int or config["numReplicas"] != 1:
+                    raise ValueError("eval_deploy_replica_configuration_drift")
+                return "deployment_manifest_explicit_count"
+    if legacy == 1:
+        return "legacy_explicit_count"
+    raise ValueError("eval_deploy_replica_evidence_unavailable")
+
+
 def inventory(value: dict[str, Any]) -> tuple[dict[str, str | None], dict[str, Any]]:
     if value.get("id") != PROJECT:
         raise ValueError("eval_deploy_wrong_project")
@@ -228,15 +267,23 @@ def inventory(value: dict[str, Any]) -> tuple[dict[str, str | None], dict[str, A
     candidate = services.get(SERVICE, {})
     volume = [v["node"] for v in environment["volumeInstances"]["edges"]
               if v["node"]["volume"]["id"] == VOLUME]
-    if (candidate.get("serviceName") != "ancoramind-evals"
-        or candidate.get("startCommand") != "python /app/scripts/eval_service.py"
-        or candidate.get("numReplicas") != 1 or candidate.get("cronSchedule") is not None
-        or candidate.get("tracingEnabled") or candidate.get("autoInstrumentationEnabled")
-        or any(candidate.get("domains", {}).get(key) for key in ("serviceDomains", "customDomains"))
-        or len(volume) != 1 or volume[0].get("serviceId") != SERVICE
-        or volume[0].get("mountPath") != "/eval-state" or volume[0].get("deletedAt")
-        or volume[0].get("isPendingDeletion")):
-        raise ValueError("eval_deploy_service_or_volume_drift")
+    if candidate.get("serviceName") != "ancoramind-evals":
+        raise ValueError("eval_deploy_service_identity_drift")
+    if candidate.get("startCommand") != "python /app/scripts/eval_service.py":
+        raise ValueError("eval_deploy_start_command_drift")
+    single_replica_evidence(candidate)
+    domains = candidate.get("domains")
+    if ("cronSchedule" not in candidate or candidate["cronSchedule"] is not None
+        or candidate.get("tracingEnabled") is not False
+        or candidate.get("autoInstrumentationEnabled") is not False
+        or not isinstance(domains, dict)
+        or domains.get("serviceDomains") != [] or domains.get("customDomains") != []):
+        raise ValueError("eval_deploy_exposure_schedule_or_tracing_drift")
+    if (len(volume) != 1 or volume[0].get("serviceId") != SERVICE
+        or volume[0].get("mountPath") != "/eval-state"
+        or "deletedAt" not in volume[0] or volume[0]["deletedAt"] is not None
+        or volume[0].get("isPendingDeletion") is not False):
+        raise ValueError("eval_deploy_volume_drift")
     latest_status = (candidate.get("latestDeployment") or {}).get("status")
     if latest_status not in {"SUCCESS", "FAILED", "CRASHED", "REMOVED", "STOPPED"}:
         raise ValueError("eval_deploy_existing_deployment_in_progress_or_unknown")
@@ -278,7 +325,8 @@ def candidate_metadata(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def publish(directory: Path, env: dict[str, str], railway: Railway,
-            report: dict[str, Any], *, wait_seconds: float = 900) -> dict[str, Any]:
+            report: dict[str, Any], *, wait_seconds: float = 900,
+            check_only: bool = False) -> dict[str, Any]:
     metadata = candidate_metadata(json.loads(
         (directory / "candidate.json").read_text(encoding="utf-8"),
     ))
@@ -305,7 +353,12 @@ def publish(directory: Path, env: dict[str, str], railway: Railway,
         raise ValueError("eval_deploy_context_changed")
     if railway.call(["--version"]).strip() != "railway " + CLI_VERSION:
         raise ValueError("eval_deploy_cli_version_mismatch")
-    other, _ = inventory(railway.status())
+    other, node = inventory(railway.status())
+    report.update(metadata, service_id=SERVICE, preflight_verified=True,
+                  replica_evidence=single_replica_evidence(node))
+    if check_only:
+        report.update(status="preflight_verified_no_upload", inference_started=False)
+        return report
     report.update(metadata, status="publication_started_no_automatic_retry", service_id=SERVICE)
     railway.call(["variable", "set", *SERVICE_TARGET, "--skip-deploys",
                   "ANCORA_EVAL_BUILD_SHA=" + sha, "ANCORA_EVAL_BUILD_SOURCE=" + fingerprint,
@@ -357,8 +410,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "prepare":
             report = prepare(ROOT, args.sha or "", args.directory, dict(os.environ))
         else:
+            check_only = os.environ.get("EVAL_DEPLOY_CHECK_ONLY", "false")
+            if check_only not in {"true", "false"}:
+                raise ValueError("eval_deploy_invalid_check_only_flag")
             report = publish(args.directory, dict(os.environ),
-                             Railway(os.environ.get("RAILWAY_TOKEN", "")), report)
+                             Railway(os.environ.get("RAILWAY_TOKEN", "")), report,
+                             check_only=check_only == "true")
         print(json.dumps(report, ensure_ascii=True))
         return 0
     except (Exception, KeyboardInterrupt) as error:

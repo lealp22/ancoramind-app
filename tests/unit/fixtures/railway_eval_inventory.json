@@ -1,0 +1,48 @@
+{
+  "provenance": "2026-10-18 public API fields selected by Railway CLI v5.70.0 EnvironmentInstances.graphql. Allowlisted projection, not raw CLI stdout. Other services reduced to ids; deployment meta reduced to replica configuration. No variables, prompts, container logs or credentials.",
+  "status": {
+    "id": "b291bc34-c75d-4a8a-9f82-d3d7cf32aeef",
+    "environments": {
+      "edges": [{"node": {
+        "id": "79202202-e66e-4778-8ce3-6aa975c212d5",
+        "unmergedChangesCount": null,
+        "serviceInstances": {"edges": [
+          {"node": {"serviceId": "68dbf63b-878b-4d8f-a172-f8a06a4823fd", "latestDeployment": null}},
+          {"node": {"serviceId": "263dc6cf-9afc-4c6c-983e-e521bfe0b44f", "latestDeployment": {"id": "bf1c29d3-2332-4868-bd25-782bbbf095eb"}}},
+          {"node": {"serviceId": "9d55cb29-72ce-4b51-b216-40ebce1b4261", "latestDeployment": {"id": "3419c01c-6c74-4393-8ad0-6a0184a0d017"}}},
+          {"node": {
+            "serviceId": "79f8f0c2-1ba1-4fea-9e89-d4b672b23efc",
+            "serviceName": "ancoramind-evals",
+            "environmentId": "79202202-e66e-4778-8ce3-6aa975c212d5",
+            "startCommand": "python /app/scripts/eval_service.py",
+            "numReplicas": null,
+            "cronSchedule": null,
+            "tracingEnabled": false,
+            "autoInstrumentationEnabled": false,
+            "domains": {"serviceDomains": [], "customDomains": []},
+            "latestDeployment": {
+              "id": "54892e8d-84be-422a-b5a4-e4a2f4dfc7b9",
+              "status": "SUCCESS",
+              "deploymentStopped": false,
+              "instances": [{"id": "8be76fbb-eb60-4564-b41e-064c32154209", "status": "RUNNING"}],
+              "meta": {"serviceManifest": {"deploy": {
+                "numReplicas": 1,
+                "multiRegionConfig": {"europe-west4-drams3a": {"numReplicas": 1}}
+              }}}
+            }
+          }},
+          {"node": {"serviceId": "d03f9cb1-85b0-466d-a012-d1a8e7bdc9af", "latestDeployment": {"id": "69b2fb79-5d27-4a3d-ba25-c68c1905de03"}}},
+          {"node": {"serviceId": "8ec07956-56a3-4750-9fe5-bab62ae7ae4d", "latestDeployment": {"id": "a41359f5-4000-4d59-ac23-c7b3b31df633"}}},
+          {"node": {"serviceId": "a6a22b62-ff51-4821-9c23-40322637270c", "latestDeployment": null}}
+        ]},
+        "volumeInstances": {"edges": [{"node": {
+          "volume": {"id": "b88f8940-dd92-430f-8d6f-a4adb2b455c8"},
+          "serviceId": "79f8f0c2-1ba1-4fea-9e89-d4b672b23efc",
+          "environmentId": "79202202-e66e-4778-8ce3-6aa975c212d5",
+          "mountPath": "/eval-state", "deletedAt": null, "isPendingDeletion": false,
+          "state": "READY"
+        }}]}
+      }}]
+    }
+  }
+}

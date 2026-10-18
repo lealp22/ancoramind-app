@@ -50,6 +50,23 @@ no se imprime, persiste, adjunta a errores ni incluye en resúmenes. PendingWork
 se consulta sólo con metadata, sin `changes`, valores ni actor. No es permiso
 para leer variables live, volumen, inferir ni reintentar operaciones mutantes.
 
+### Contrato de réplicas y comprobación sin subida (2026-10-18)
+
+`ServiceInstance.numReplicas` es legacy/nullable; no equivale por sí solo al total.
+Conforme a CLI5.70.0 `service_summary.rs`/`regions.rs`, comprobar primero el
+`latestDeployment.meta.serviceManifest.deploy.multiRegionConfig`: una región y
+entero uno explícito; sin mapa, count explícito del manifiesto o campo legacy
+explícito uno. No default null→1, no aceptar estados malformados/multi-región ni
+contradicciones con legacy no-null distinto de uno. Manifest/meta no se reportan.
+La evidencia es de la configuración del despliegue consultado, no un lock contra
+cambios simultáneos en el dashboard; mantener recheck post-upload e identidad.
+
+Input manual opcional `check_only` (default false): mismo paquete/CI/consentimiento
+idle y validaciones preflight, pero retorna `preflight_verified_no_upload` antes
+de variable set/up. No es un despliegue ni garantiza permisos de escritura/build.
+Errores de inventario separan identidad/start/réplicas/exposición/volumen mediante
+reason fijos sin eco de configuración. Sin mutaciones para «arreglar» drift.
+
 ## No objetivos y límites
 
 No arreglar dispatcher interno Railway, promover golden, configurar presupuesto,

@@ -82,8 +82,14 @@ recordatorios y eventos, con trazabilidad completa.
   Enmienda autorizada: leer patch sólo en memoria, permitir únicamente STAGED/`{}`
   exacto y pendingWork del mismo id/entorno, sin hijos/otras operaciones; cualquier
   contenido/error/inconsistencia bloquea. No imprimir/persistir patch ni valores,
-  ni aplicar/descartar borrador. Fix local pendiente de commit/CI/publicación manual.
-  1832 unitarias/1 skip,92 focales,80,85 %,Ruff/mypy177 limpios; rollout no probado.
+  ni aplicar/descartar borrador. b0b6beb9/run39160757789 supera staged pero rechaza
+  réplica legacy=null: manifiesto regional tiene una réplica y hay RUNNING.
+  Fix local usa evidencia explícita del manifiesto, nunca default null→1, reasons
+  específicos y check_only opcional sin escrituras/subida. CLI5.70.0/docs/API
+  contrastados, fixture API saneada/adaptador integral y arranque Docker offline
+  del paquete b0b6 superados (dependencias cacheadas, no build fresh). Nuevo
+  commit/CI/publicación manual pendientes; aceptación remota aún no probada.
+  1867 unitarias/1 skip,127 focales,80,85 %,Ruff/mypy177 limpios.
   Evaluador sigue db0c59b/deployment54892e8d; no inferencia ni CLI local.
   Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
 

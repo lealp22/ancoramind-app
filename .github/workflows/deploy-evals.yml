@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      check_only:
+        description: "Sólo comprobar destino y paquete; no escribir variables ni subir/desplegar"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -62,4 +67,5 @@ jobs:
       - name: Publish only ancoramind-evals and verify idle identity
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_EVALS_DEPLOY_TOKEN }}
+          EVAL_DEPLOY_CHECK_ONLY: ${{ inputs.check_only }}
         run: python scripts/deploy_eval_candidate.py publish --directory "$RUNNER_TEMP/eval-candidate"

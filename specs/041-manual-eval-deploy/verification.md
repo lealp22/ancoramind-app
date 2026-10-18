@@ -1,6 +1,56 @@
 # Verificación — 2026-10-18
 
-## Corrección autorizada del borrador vacío — estado vigente
+## Revisión integral tras b0b6beb9 — estado vigente
+
+- Run [39160757789](https://github.com/lealp22/ancoramind-app/actions/runs/39160757789),
+  19:52:47–19:53:03Z, candidato/publicación
+  `b0b6beb9b2826d0a8ddca26bc735095979f73d80`, CI39160304725. Preparación y guard de
+  borrador vacío pasan; `eval_deploy_service_or_volume_drift` bloquea antes de
+  variable set/upload. Evaluador sigue en deployment54892e8d/db0c59b.
+- Causa probada read-only API: `serviceInstance.numReplicas=null`, pero
+  `latestDeployment.meta.serviceManifest.deploy` tiene numReplicas=1 y
+  multiRegionConfig=`europe-west4-drams3a:{numReplicas:1}`. Start correcto,
+  sin cron/domains/tracing; volumen correcto/no eliminado; SUCCESS, una instancia
+  RUNNING. No drift real observado. El fixture sintético previo sólo usaba count=1.
+- Investigación web: guía oficial recomienda Actions/Project Token/railway up;
+  CLI5.70.0 `service_summary.rs` consulta mapa de regiones del manifiesto antes de
+  legacy. `EnvironmentInstances.graphql` sí pide meta e instances; `deployment list`
+  sí devuelve lista JSON; `up --detach --json` devuelve deploymentId sin esperar
+  build; `logs --json --lines` usa NDJSON con message/atributos. Variable set
+  skip-deploys/flags de destino y Dockerfile root/ARG contrastados con fuente/docs.
+- Fix local: evidencia explícita de una región/réplica desde manifiesto; legacy
+  explícito uno como compatibilidad, nunca null→1 por defecto. Missing/malformed/
+  multi-región/múltiple/legacy contradictorio bloquean. Diagnósticos de inventario
+  específicos/allowlist sin eco. Nuevo check_only opcional (default false) ejecuta
+  preflight y retorna `preflight_verified_no_upload` sin variable set/up.
+- Fixture `tests/unit/fixtures/railway_eval_inventory.json`: proyección saneada de
+  API con mismos campos seleccionados por CLI5.70.0, no stdout capturado ejecutando
+  CLI. Otros servicios reducidos a ids, meta sólo réplica; sin variables/logs/prompt.
+  Regresión falla antes del fix con el error real. Prueba completa usa Railway
+  adapter y subprocess mocked con contratos JSON reales, no FakeRailway.status;
+  verifica hasta SUCCESS/running/log identidad y guard pre/post; rama check_only
+  sólo hace --version/status/api, drift nunca escribe. No prueba token de escritura.
+- Prueba real **offline**, sin inferencia: git archive b0b6beb9, allowlist,
+  fingerprint `50466b7d36c045501019c3fc3855561f263f1f6d7f36d1bfd0cdcc8aa2057a19`,
+  sello/identidad verificados. Docker ejecuta ese contexto montado read-only con
+  dependencias de imagen local `ancoramind-evals:t7-root-context`, sin red, sin
+  credenciales/env-file y tmpfs temporal. Proceso vivo/log idle exacto superados;
+  contenedor eliminado y temp borrado. **No build Dockerfile fresh**: falta base
+  python3.12-slim local; no atribuir al candidato digest de imagen cacheada.
+- Alternativas investigadas: volver a source GitHub requiere reabrir fallo
+  histórico de selección Dockerfile; GHCR por digest evita upload pero añade
+  registry/credenciales/cambio source y requiere decisión separada (no ejecutado).
+  Mantener vía oficial CLI runner evita esa migración, no prometer que verificación
+  offline cubra permisos/dispatcher/build remoto. No CLI local, dispatch, subida,
+  secretos consultados, modificación del volumen ni inferencia en esta sesión.
+- Validación final del fix: **127 focales**, **1867 unitarias/1 skip**, **80,85 %**
+  cobertura, Ruff global y mypy177 sin errores. Se incluyen 17 variantes adversas
+  de manifest/réplicas, count explícito sin regiones, recorridos del adapter hasta
+  éxito y check_only sin mutaciones, reasons específicos sin eco y rama de CLI
+  flag. No integraciones repetidas al no cambiar src/schema; CI exacta del nuevo
+  commit sigue requerida. Commit/push y primer rollout aún pendientes.
+
+## Corrección autorizada del borrador vacío — incremento anterior
 
 - Run [39157815349](https://github.com/lealp22/ancoramind-app/actions/runs/39157815349),
   SHA `da351546a1c53b61985b8184efe289b118336c05`, CI39150725443 verde: preparación

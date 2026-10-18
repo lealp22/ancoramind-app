@@ -51,6 +51,9 @@ el simple hecho de publicar el código.
    - Branch del workflow: **main**.
    - `candidate_sha`: pegar SHA completo.
    - Marcar `confirm_idle` sólo tras comprobar ausencia de campaña/revisión activa.
+    - `check_only` es opcional (default desmarcado): comprueba paquete y destino
+      sin escribir variables ni subir/desplegar. Resultado esperado en ese modo:
+      **`preflight_verified_no_upload`**, no `deployed_idle_verified`.
    - Pulsar **Run workflow**. No push automático ni cron para publicar.
 4. Leer resumen del workflow. Éxito es **`deployed_idle_verified`**, con SHA,
    huella, CI run/attempt y deployment ID. `prepared_no_upload` o `uploaded_not_verified`
@@ -77,6 +80,9 @@ No ejecutar helper `publish` localmente; requiere Linux runner y credencial env.
   No admite cambiar esos IDs desde inputs. Lee inventario metadata, exige réplica1,
   mount del volumen existente `/eval-state`, start idle, sin dominio/cron/tracing,
   sin cambios pendientes ni deployment previo aún construyéndose.
+  Réplica verificada por mapa regional explícito del manifiesto (una región/una
+  réplica); el campo legacy numReplicas puede ser null. No se sustituye null por
+  uno sin evidencia, ni se confunde una instancia RUNNING con configuración.
 - Railway conserva un borrador STAGED vacío: no hay que aplicarlo ni descartarlo.
   Helper acepta únicamente `patch: {}` exacto y pendingWork con ese mismo borrador,
   sin hijos ni otra operación. Lee patch sólo en memoria; aunque pudiera contener
@@ -126,6 +132,14 @@ políticas de software/red del ordenador gestionado.
    publicar el helper corregido, esperar CI verde y lanzar una nueva ejecución
    manual desde main. El SHA antiguo sigue ejecutando el guard antiguo si se usa
    «Re-run jobs». Si hay cambios reales, revisarlos sin aplicar/descartar trabajo ajeno.
+- El antiguo `eval_deploy_service_or_volume_drift` agrupaba causas diferentes;
+  tras la corrección posterior a b0b6beb9 los reasons son específicos: `eval_deploy_start_command_drift`,
+  `eval_deploy_replica_configuration_drift`, `eval_deploy_replica_evidence_unavailable`,
+  `eval_deploy_exposure_schedule_or_tracing_drift` o `eval_deploy_volume_drift`.
+  El campo legacy numReplicas=null observado no es drift si hay manifiesto explícito
+  con una región/réplica. No modificar la escala para forzar ese campo a uno.
+  `preflight_verified_no_upload` con check_only es sólo lectura: confirma el
+  inventario, no el build ni la autorización del token para escribir/subir.
 - Build/subida fallida/timeout → consultar deployment ID del resumen/dashboard.
   Puede haberse iniciado aunque falte confirmación. **No volver a pulsar a ciegas**.
   Sin retries mutantes, rollback o borrado automático. Variables de build pueden
@@ -144,5 +158,8 @@ políticas de software/red del ordenador gestionado.
 - [Railway: deploy CLI/Project Token](https://docs.railway.com/cli/deploying)
 - [Railway: up y salida JSON](https://docs.railway.com/cli/up)
 - [Railway: variable set --skip-deploys](https://docs.railway.com/cli/variable)
+- [Guía oficial GitHub Actions + Project Token + CLI](https://blog.railway.com/p/github-actions)
+- [CLI5.70.0: réplica del manifiesto antes del campo legacy](https://github.com/railwayapp/cli/blob/v5.70.0/src/commands/output/service_summary.rs)
+- [CLI5.70.0: campos reales de status](https://github.com/railwayapp/cli/blob/v5.70.0/src/gql/queries/strings/EnvironmentInstances.graphql)
 - [Contexto histórico del workaround](../018-agentic-evals-execution-harness/railway-provisioning.md)
 - [Ejecución/revisión recuperable](../040-durable-eval-review/runbook.md)
