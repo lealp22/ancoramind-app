@@ -84,6 +84,16 @@
       presupuesto nominal 0,10 USD sin reset/gasto cero. Acceso y scope superados;
       inferencia aún deshabilitada/no iniciada. Pricing/enforcement de coste,
       aceptación snapshot y aprobación/campaña mantienen T7c/T7b/BL-48 abiertos.
+      Pricing posterior: Gateway metadata 0/0 para openrouter/gpt-6-luna; catálogo
+      oficial base 0,10/0,50 USD/M coincide snapshot pero endpoints/contextos varían.
+      No inferir gratuito ni fallo de spend (LiteLLM soporta usage.cost upstream).
+      Presupuesto externo efectivo/correlación upstream pendientes; sólo consulta
+      read-only de límite proveedor prevista, sin modificar clave bot/r4/inferir.
+      Reporte upstream recibido: 5 USD límite/4,44046623 USD restantes, reset null,
+      no incluye BYOK; compartido, no presupuesto exclusivo ni autorización eval.
+      Difiere de external_hard_limit_usd=20 del snapshot histórico rev.8, sin
+      reescribirlo. Contabilización efectiva/riesgo aceptado, snapshot y campaña
+      siguen pendientes; no habilitar flags/rutas automáticamente.
 - [x] T7d · Registrar decisión del propietario (2026-10-17): primero motor
       compartido/operación por consola y campaña humana de cinco casos; web,
       golden set humano, piloto/calibración Jev, segunda opinión y automatización

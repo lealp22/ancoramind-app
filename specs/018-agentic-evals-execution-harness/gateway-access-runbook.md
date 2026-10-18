@@ -2,6 +2,24 @@
 
 ## Estado y alcance
 
+**Presupuesto upstream — reporte posterior del propietario:**
+`upstream_budget_metadata_read`, límite **5 USD**, restante **4,44046623 USD**,
+`reset=null`, `include_byok_in_limit=false`, sin inferencia. Confirma configuración
+de límite finito y saldo reportado de la clave upstream del Gateway, **no** reserva
+ni permiso de gasto de eval por ese saldo y **no** límite exclusivo de 0,10 USD.
+No modificarla ni reducirla: es compartida y puede afectar al bot. Si se usara
+BYOK, este reporte no acredita cobertura de ese gasto. Son valores de la lectura
+del operador, no una garantía de saldo vigente o una prueba de bloqueo efectivo.
+
+El snapshot histórico rev.8 declara `external_hard_limit_usd=20`; no coincide con
+el límite upstream observado de 5 USD. No actualizar el snapshot, huellas ni una
+revisión productiva para aparentar coincidencia. Debe aceptarse explícitamente su
+uso histórico y la diferencia operativa antes de campaña. El plan de eval sigue
+estimando 0,10 USD total y la clave virtual conserva límite nominal 0,10 USD;
+contabilización efectiva Gateway y aceptación del riesgo continúan pendientes.
+No establecer `ANCORA_EVAL_EXTERNAL_BUDGET_VERIFIED=1` como efecto automático de
+recibir un reporte válido ni habilitar rutas por él.
+
 **Estado actual — reporte real del propietario:** `eval_gateway_read_only_verified`
 desde evals, `restricted_alias_verified`, clave `ancoramind-evals-access-238d37ae3e0e`,
 caducidad `2026-10-18T02:08:48.318000+00:00`, único modelo r4. Coinciden SHA
@@ -195,6 +213,44 @@ private_console/OSError sin traceback/red/inferencia. No nuevas integraciones
 PostgreSQL ni operaciones remotas de escritura; causa live pendiente del reporte.
 
 ## 3. Límites y continuación
+
+### Precio contrastado, contabilidad Gateway no demostrada
+
+Reporte del propietario de `/model/info`: r4 apunta a `openrouter/gpt-6-luna`,
+precios input/output **0/0** en metadata, frente a snapshot **0,10/0,50 USD/M**.
+No significa gratuito ni prueba por sí solo de contabilidad rota.
+
+Consulta pública sin credenciales/inferencia 2026-10-18T00:34:29Z:
+[`GET /api/v1/models`](https://openrouter.ai/api/v1/models) HTTP 200 devuelve
+`openai/gpt-6-luna`: prompt `0.0000001`, completion `0.0000005` USD/token, base
+**0,10/0,50 USD/M**, coincide con snapshot para ese modelo/precio base. No se
+ha demostrado que el nombre no cualificado de Gateway resuelva exactamente esa
+entrada upstream; no modificar el alias existente para normalizarlo a ciegas.
+[Página oficial](https://openrouter.ai/openai/gpt-6-luna?view=api).
+
+El catálogo incluye overrides a partir de 272000 tokens de entrada y caché/web;
+[`/models/openai/gpt-6-luna/endpoints`](https://openrouter.ai/api/v1/models/openai/gpt-6-luna/endpoints)
+también ofrece variantes 0,05/0,25, 0,10/0,50, 0,11/0,55 y 0,20/1,00 USD/M.
+La coincidencia base no garantiza coste efectivo con routing/contexto variables;
+no elevar `pricing_verified` a prueba de factura/cobertura de todas las variantes.
+
+Fuente de código LiteLLM v1.100.1: `_get_proxy_model_info` combina metadata/mapa
+local para presentar `/model/info`; las cuatro formas de nombre gpt-6-luna
+consultadas no están en su mapa publicado fijado. El adaptador OpenRouter añade
+`usage.include=true` y extrae `usage.cost`; `response_cost_calculator` prioriza ese
+coste de proveedor sobre cálculo local si llega. [Usage Accounting oficial](https://openrouter.ai/docs/guides/guides/usage-accounting)
+documenta coste en cada respuesta (parámetro include ahora deprecado). Esto explica
+por qué **no se puede inferir spend real desde metadata cero**, pero no confirma
+que este despliegue lo reciba/registre ni la causa exacta del cero.
+
+Por tanto límite nominal 0,10 USD releído, pero enforcement/coste externo sigue
+pendiente. Próxima comprobación de sólo lectura: desde shell LiteLLM, GET oficial
+`https://openrouter.ai/api/v1/key` con su secreto upstream **ya ambiente**, sin
+imprimirlo ni moverlo al evaluador. Mostrar sólo límite/remaining/reset, sin label,
+IDs o clave. No crea/rota/restringe clave upstream compartida del bot y no debe
+presentarse como presupuesto exclusivo de eval. No petición de inferencia para
+probar spend; si falta límite/aislamiento suficiente, decidir remediación explícita
+antes de habilitar campaña. No editar r4 ni settings por este hallazgo.
 
 Reportes de creación y comprobación desde evals recibidos: acceso privado, alias
 exclusivo y presupuesto nominal releídos en Gateway. Pricing y enforcement de

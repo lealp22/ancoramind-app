@@ -189,6 +189,20 @@ trazabilidad y aprobación de privacidad; nunca decide permisos.
 | Rebuff | Repositorio archivado en 2025; no adoptar como control de producción. |
 | `prompt-armor/prompt-armor` | Detector local candidato a benchmark; métricas del propio proyecto no son prueba en AncoraMind. No confundirlo con productos homónimos. |
 | Llama Prompt Guard 2 86M | Clasificador multilingüe candidato; límite de 512 tokens exige segmentación, medición de carga, licencia y falsos positivos. No autoriza acciones. |
+| PyRIT (Microsoft) | Framework de red-teaming/orquestación adversarial (orquestadores, converters, targets, scorers) — no es un guard de producción, es herramienta de testing/evals offline. Candidato como generador de casos adversariales para el harness aislado BL-8/specs/018, nunca como componente en `domain/`/`agent/`. Llamar al modelo bajo prueba exigiría un "target" adaptador propio hacia `LLMAccess`/Gateway (AGENTS.md §2.9), no su cliente nativo. Dependencia más pesada que las heurísticas propias; evaluar mantenimiento/supply chain/licencia antes de instalar. |
+| Garak (NVIDIA/Leon Derczynski) | Escáner de vulnerabilidades LLM tipo "nmap", catálogo fijo de probes (jailbreaks, encoding, fuga de datos, toxicidad) con sus detectores — más "apunta y dispara" que PyRIT, menos componible. Mismo obstáculo de integración: necesitaría un target custom hacia `LLMAccess`/Gateway, no su invocación directa del modelo. Catálogo genérico, probablemente menos preciso que casos propios para probar lo específico de AncoraMind (patrón `propose_*`/`execute_*`, consentimiento Core, frontera `untrusted_results`). Útil como primera pasada barata de vulnerabilidades genéricas del modelo base, no sustituye `evals/security/cases.json`. |
+
+**PyRIT vs. Garak — no son equivalentes, se solapan parcialmente:** PyRIT es
+una librería de composición (tú construyes el ataque); Garak es un escáner
+con catálogo ya construido (informe rápido, menor extensibilidad). PyRIT se
+ajusta mejor al modelo de amenaza específico de este proyecto (gobernanza de
+consentimiento, fronteras de datos no confiables) que un catálogo genérico de
+jailbreaks; Garak aportaría más como barrido inicial de vulnerabilidades
+conocidas del modelo subyacente. Ninguno de los dos se instalaría en
+`dependencies` de `pyproject.toml` — como mucho en un extra tipo
+`dev`/`evals`, igual que el harness actual vive fuera del runtime del bot.
+Fotografía sin investigación profunda de versión/estado actual de ninguno de
+los dos; reconfirmar antes de decidir adopción.
 
 Referencias primarias consultadas: [OWASP LLM Prompt Injection Prevention](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html),
 [rag-sanitizer (PyPI)](https://pypi.org/project/rag-sanitizer/),
@@ -196,7 +210,9 @@ Referencias primarias consultadas: [OWASP LLM Prompt Injection Prevention](https
 [Bleach (mantenimiento)](https://github.com/mozilla/bleach/issues/698),
 [Rebuff (archivo)](https://github.com/protectai/rebuff),
 [prompt-armor (repositorio)](https://github.com/prompt-armor/prompt-armor),
-[Llama Prompt Guard 2 (model card)](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M).
+[Llama Prompt Guard 2 (model card)](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M),
+[PyRIT (repositorio)](https://github.com/Azure/PyRIT),
+[Garak (repositorio)](https://github.com/leondz/garak).
 Las características/licencias/estado de terceros deben reconfirmarse al decidir
 una dependencia; este análisis no añade ninguna.
 

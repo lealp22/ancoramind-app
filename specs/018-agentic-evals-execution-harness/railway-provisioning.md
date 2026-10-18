@@ -262,6 +262,25 @@ histórico no confirmada. Siguiente gate: precio real frente al snapshot, límit
 externo/limitaciones de coste y aceptación del snapshot, antes de habilitar una
 ruta de inferencia con autorización separada. No regenerar claves por este éxito.
 
+**Precio, siguiente reporte:** metadata Gateway r4 → `openrouter/gpt-6-luna`,
+0/0 USD/M; no gratuito demostrado. Catálogo oficial público consultado sin
+credenciales a 00:34:29Z confirma `openai/gpt-6-luna` base 0,10/0,50 USD/M,
+como snapshot; hay variantes endpoint/contexto más caras y falta correlación
+exacta del nombre no cualificado. LiteLLM puede contabilizar `usage.cost` upstream
+aunque metadata sea cero; no se ha probado recepción/spend efectivo. Enforcement
+del límite nominal 0,10 USD sigue sin demostrar. Próximo paso lectura de límite
+de clave upstream en shell Gateway, sin mutación/secreto en reporte; no exclusivo
+eval ni autorización para cambiar clave bot. Detalle en runbook de acceso.
+
+**Resultado de lectura upstream aportado después:** límite 5 USD, restante
+4,44046623 USD, sin reset, include_byok_in_limit=false, sin inferencia. Presupuesto
+finito compartido, no 0,10 USD exclusivos de eval ni autorización a consumir saldo.
+No se modifica la clave proveedor del bot. Snapshot rev.8 contiene límite externo
+histórico de 20 USD, distinto de los 5 USD observados; mantenerlo inmutable y
+explicitar diferencia en aceptación del snapshot. Queda decidir cómo cerrar la
+verificación de contabilización/límite de eval y aprobación de riesgo/campaña;
+sin flag externo verificado, ampliación de rutas ni inferencia por este reporte.
+
 ### Plan anterior (superado parcialmente por la recuperación)
 
 Resolver primero selección real de Dockerfile con metadata de build/plataforma

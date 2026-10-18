@@ -1482,6 +1482,16 @@ nominal 0,10 USD sin reset/gasto cero. Acceso privado y scope comprobados;
 inferencia deshabilitada/no iniciada, pricing y aceptación snapshot/presupuesto
 y aprobación/campaña pendientes. T7c/T7b/BL-48 abiertos; no se atribuye causa exacta
 al primer bloqueo ni se habilitan rutas/deploys por recibir este reporte.
+Reporte precio: Gateway r4 physical openrouter/gpt-6-luna con metadata0/0; catálogo
+oficial OpenRouter consultado 2026-10-18 base openai/gpt-6-luna0,10/0,50 USD/M,
+coincide snapshot pero con variantes endpoint/contexto. No gratuito ni spend roto
+demostrados: LiteLLM soporta coste upstream. Enforcement externo aún no validado;
+próximo GET presupuesto proveedor, sin mutar claves/bot/r4 ni habilitar inferencia.
+Reporte posterior upstream: límite5 USD/restante4,44046623 USD/sin reset y BYOK no
+incluido, sin inferencia. Control compartido, no límite exclusivo0,10 ni permiso
+para consumir saldo. Difiere de snapshot histórico rev8 external_limit20; inmutable,
+requiere aceptación de esa diferencia. Contabilidad efectiva/riesgo/campaña aún
+pendientes; no flags/rutas ni cambios de clave upstream del bot por el reporte.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.
