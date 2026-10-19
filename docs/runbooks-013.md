@@ -186,6 +186,33 @@ python scripts/runtime_config.py activate --base-url <app-url> `
 **Rollback:** activar de nuevo la revisión anterior que apunta a `r2`. El alias previo sigue
 publicado y autorizado porque `grant` es aditivo; no hay que recrear la key.
 
+### 2.2b Ruta STT para notas de voz (BL-26/specs/028) — candidato, sin publicar
+
+Candidato preparado, **no publicado ni activado** y con voz OFF. Alias nuevo
+`ancoramind-stt-r1` (Whisper large v3 turbo vía OpenRouter, ruta compatible
+`openai/` + `api_base`; sin reintentos). Ejecutar desde un entorno de operador:
+
+```powershell
+python scripts/litellm_gateway_alias.py --dry-run publish --alias ancoramind-stt-r1 `
+  --model openai/openai/whisper-large-v3-turbo `
+  --api-base https://openrouter.ai/api/v1 --num-retries 0
+python scripts/litellm_gateway_alias.py publish --alias ancoramind-stt-r1 `
+  --model openai/openai/whisper-large-v3-turbo `
+  --api-base https://openrouter.ai/api/v1 --num-retries 0
+python scripts/litellm_gateway_alias.py grant --alias ancoramind-stt-r1
+python scripts/litellm_gateway_alias.py verify --alias ancoramind-stt-r1
+```
+
+No usar `verify --smoke` con este alias: envía un chat completion y STT usa
+`/audio/transcriptions`. Después: partir de `status` (confirmar que la revisión
+activa sigue siendo la 8, base del candidato), `validate`/`create-revision`/
+`activate` con CAS usando
+`specs/028-telegram-voice-stt/configs/ancoramind-stt-r1.json`, y por último
+`TELEGRAM_VOICE_ENABLED=true` (y `GOVERNED_CONSENT_ENABLED=true` si el "Sí"
+hablado debe ejecutar propuestas). La tarifa es el dato crudo del catálogo
+(0,00000333 USD/s) con mínimo conservador de 10 s: mínimo/redondeo reales y
+`actual_cost` siguen sin confirmar (ver `specs/028-telegram-voice-stt/preflight-smoke.md`).
+
 ### 2.3 Ruta de visión para documentos (Qwen)
 
 La ingesta de imágenes/PDF Telegram no reutiliza el modelo conversacional: la

@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import inspect
 import json
+import sys
 import unicodedata
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
@@ -95,22 +96,35 @@ class TerminalCampaignReviewer:
         for index, criterion in enumerate(case.response_criteria):
             self._writer.write(
                 f"Criterio {index + self._criterion_offset}: " + console_data(criterion)
-                + "\n[p] pass / [f] fail / [x] not_evaluated (vacío = detener): "
+                + "\n[p] pass / [f] fail / [x] not_evaluated: "
             )
             self._writer.flush()
+            # Keystrokes typed while the model was running must never become a label.
+            if sys.platform != "win32":
+                try:
+                    import termios
+
+                    termios.tcflush(self._reader.fileno(), termios.TCIFLUSH)
+                except Exception:  # noqa: S110 - non-tty test double
+                    pass
             choices: dict[str, ReviewLabel] = {
                 "p": "pass", "pass": "pass", "f": "fail", "fail": "fail",
-                "x": "not_evaluated", "not_evaluated": "not_evaluated", "": "not_evaluated",
+                "x": "not_evaluated", "not_evaluated": "not_evaluated",
             }
             while True:
                 line = await asyncio.to_thread(self._reader.readline)
                 if not line and self._pause_on_disconnect:
                     raise EOFError("eval_review_disconnected_no_label_saved")
                 raw = line.strip().casefold()
+                # A bare Enter ("\n") is ignored; only real EOF (no newline) stops.
+                if raw == "" and line:
+                    continue
+                if raw == "" and not line:
+                    raw = "x"
                 if raw in choices:
                     label = choices[raw]
                     break
-                self._writer.write("Entrada no válida. Usa p / f / x (vacío = detener): ")
+                self._writer.write("Entrada no válida. Usa p / f / x: ")
                 self._writer.flush()
             labels.append(label)
             if self._save:

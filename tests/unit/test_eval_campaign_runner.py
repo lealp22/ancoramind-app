@@ -335,6 +335,16 @@ async def test_blank_console_input_is_not_approval(campaign):
     assert await review.review(case, observation(case)) == ("not_evaluated", "not_evaluated")
 
 
+async def test_stray_enter_is_ignored_and_never_saved_as_a_label(campaign):
+    case = campaign[0].validate_snapshot(campaign[1])[0]
+    saved = []
+    reviewer = TerminalCampaignReviewer(
+        Console("\n\n  \np\np\n"), Console(), save=lambda i, label: saved.append((i, label)),
+    )
+    assert await reviewer.review(case, observation(case)) == ("pass", "pass")
+    assert saved == [(0, "pass"), (1, "pass")]
+
+
 @pytest.mark.parametrize("text,expected", [
     ("p\nP\n", ("pass", "pass")),
     (" PASS \np\n", ("pass", "pass")),

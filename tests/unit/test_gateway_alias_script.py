@@ -33,6 +33,8 @@ def _publish_args(**overrides: object) -> argparse.Namespace:
         "tpm": DEFAULT_TPM,
         "force": False,
         "allow_base": False,
+        "api_base": None,
+        "num_retries": None,
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -47,6 +49,34 @@ def test_publish_payload_mirrors_the_base_alias_shape() -> None:
         "api_key": "os.environ/OPENROUTER_API_KEY",
     }
     assert payload["model_info"] == {"rpm": DEFAULT_RPM, "tpm": DEFAULT_TPM}
+
+
+def test_stt_payload_adds_api_base_and_single_attempt() -> None:
+    payload = build_model_payload(
+        alias="ancoramind-stt-r1",
+        model="openai/openai/whisper-large-v3-turbo",
+        api_base="https://openrouter.ai/api/v1",
+        num_retries=0,
+    )
+
+    assert payload["litellm_params"] == {
+        "model": "openai/openai/whisper-large-v3-turbo",
+        "api_key": "os.environ/OPENROUTER_API_KEY",
+        "api_base": "https://openrouter.ai/api/v1",
+        "num_retries": 0,
+    }
+
+
+def test_payload_rejects_insecure_api_base() -> None:
+    with pytest.raises(AliasError, match="https"):
+        build_model_payload(
+            alias="ancoramind-stt-r1", model="openai/x", api_base="http://openrouter.ai"
+        )
+
+
+def test_payload_rejects_negative_retries() -> None:
+    with pytest.raises(AliasError, match="num_retries"):
+        build_model_payload(alias="ancoramind-stt-r1", model="openai/x", num_retries=-1)
 
 
 def test_publish_payload_never_contains_a_secret() -> None:

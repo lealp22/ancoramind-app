@@ -66,19 +66,35 @@ def build_model_payload(
     model: str,
     rpm: int = DEFAULT_RPM,
     tpm: int = DEFAULT_TPM,
+    api_base: str | None = None,
+    num_retries: int | None = None,
 ) -> dict[str, Any]:
-    """Render the ``POST /model/new`` body, mirroring the base alias shape."""
+    """Render the ``POST /model/new`` body, mirroring the base alias shape.
+
+    ``api_base`` / ``num_retries`` are only emitted when given: STT aliases
+    route through OpenRouter's OpenAI-compatible endpoint and must be
+    single-attempt (``num_retries=0``), see specs/028.
+    """
     validate_alias(alias)
     if not model.strip():
         raise AliasError("model must not be blank")
     if rpm <= 0 or tpm <= 0:
         raise AliasError("rpm and tpm must be positive integers")
+    params: dict[str, Any] = {
+        "model": model.strip(),
+        "api_key": API_KEY_ENV_REFERENCE,
+    }
+    if api_base is not None:
+        if not api_base.strip().startswith("https://"):
+            raise AliasError("api_base must be an https:// URL")
+        params["api_base"] = api_base.strip()
+    if num_retries is not None:
+        if num_retries < 0:
+            raise AliasError("num_retries must not be negative")
+        params["num_retries"] = num_retries
     return {
         "model_name": alias,
-        "litellm_params": {
-            "model": model.strip(),
-            "api_key": API_KEY_ENV_REFERENCE,
-        },
+        "litellm_params": params,
         "model_info": {"rpm": rpm, "tpm": tpm},
     }
 
@@ -256,6 +272,8 @@ def command_publish(args: argparse.Namespace, env: Mapping[str, str], *, dry_run
         model=str(args.model),
         rpm=int(args.rpm),
         tpm=int(args.tpm),
+        api_base=args.api_base,
+        num_retries=args.num_retries,
     )
     if dry_run:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -376,6 +394,10 @@ def _parse_args() -> argparse.Namespace:
     publish.add_argument("--model", required=True, help="e.g. openrouter/gpt-6-luna")
     publish.add_argument("--rpm", type=int, default=DEFAULT_RPM)
     publish.add_argument("--tpm", type=int, default=DEFAULT_TPM)
+    publish.add_argument(
+        "--api-base", help="https:// upstream base (STT: https://openrouter.ai/api/v1)"
+    )
+    publish.add_argument("--num-retries", type=int, help="Upstream retries (STT: 0)")
     publish.add_argument("--force", action="store_true", help="Publish even if it already exists")
     publish.add_argument("--allow-base", action="store_true", help="Permit a -r1 base alias")
 

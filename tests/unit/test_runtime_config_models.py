@@ -69,6 +69,25 @@ def test_gpt_6_luna_runtime_candidate_is_valid() -> None:
     }
 
 
+def test_stt_runtime_candidate_is_valid() -> None:
+    candidate_path = (
+        Path(__file__).parents[2]
+        / "specs"
+        / "028-telegram-voice-stt"
+        / "configs"
+        / "ancoramind-stt-r1.json"
+    )
+    payload = json.loads(candidate_path.read_text(encoding="utf-8"))
+
+    result = validate_runtime_config(payload)
+
+    assert result.valid is True
+    assert payload["speech"]["logical_route"] == "ancoramind-stt"
+    assert payload["routing"]["routes"]["ancoramind-stt"]["effective_gateway_route"] == (
+        "ancoramind-stt-r1"
+    )
+
+
 def test_schema_rejects_unknown_fields_at_any_depth() -> None:
     payload = _payload()
     routing = payload["routing"]
