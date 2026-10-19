@@ -1,5 +1,11 @@
 # Operación reutilizable — candidato desplegado; diagnóstico adicional sólo local
 
+> **Nueva operativa preparada localmente:** [sesión de validación specs/042](../042-eval-validation-session/runbook.md).
+> Sustituye approval.json por sesión acotada0,10USD acumulados cuando se inicializa
+> explícitamente, sin nueva autorización por cada SHA operativo. No usar aún hasta
+> publicar el incremento completo; diagnóstico3f2e8b89 por sí solo no lo incluye.
+> Los pasos inferiores se conservan como referencia del modo legacy.
+
 ## Estado actual
 
 Candidato7ea0cf06 publicado idle con variables mediante workflow39173039736

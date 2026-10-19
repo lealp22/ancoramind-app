@@ -10,13 +10,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import os
 import subprocess
 import sys
 import time
+from decimal import ROUND_DOWN, Decimal
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -33,7 +36,18 @@ from src.agent.eval_campaign import EvalCampaignPlan, gateway_settings  # noqa: 
 from src.agent.eval_campaign_runner import campaign_cases_fingerprint  # noqa: E402
 from src.agent.eval_durable_review import case_record, review_saved  # noqa: E402
 from src.agent.eval_evidence import EvalEvidenceStore  # noqa: E402
+from src.agent.eval_validation_session import (  # noqa: E402
+    EvalSessionError,
+    EvalValidationSession,
+    read_session_gateway,
+    session_reason,
+    session_scope,
+)
 from src.domain.runtime_config.models import RuntimeConfigSnapshot  # noqa: E402
+
+# Historical campaign used separate short-lived keys before the reusable key
+# and current cumulative authorization. Preserve it; never charge it a second time.
+PRE_SESSION_SHA = "db0c59be0b2eeb807d4222aeb5a62b622d90b200"
 
 
 def store_from_env(env: dict[str, str]) -> tuple[EvalEvidenceStore, Path]:
@@ -43,6 +57,137 @@ def store_from_env(env: dict[str, str]) -> tuple[EvalEvidenceStore, Path]:
     if not key:
         raise ValueError("eval_evidence_encryption_key_required")
     return EvalEvidenceStore(state / "private-evidence", key), state
+
+
+def campaign_config() -> tuple[EvalCampaignPlan, RuntimeConfigSnapshot]:
+    folder = ROOT / "evals" / "response_style"
+    snapshot = RuntimeConfigSnapshot.model_validate_json(
+        (folder / "runtime-rev8-snapshot.json").read_text(encoding="utf-8"),
+    )
+    plan = EvalCampaignPlan.model_validate_json(
+        (folder / "bl48-campaign-plan.json").read_text(encoding="utf-8"),
+    )
+    plan.validate_snapshot(snapshot)
+    return plan, snapshot
+
+
+async def check_session_access(session: EvalValidationSession, plan: EvalCampaignPlan,
+                               env: dict[str, str]) -> dict[str, Any]:
+    import httpx
+
+    settings = gateway_settings(env)
+    async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
+        await read_session_gateway(client, settings.litellm_proxy_base_url.rstrip("/"),
+                                   settings.litellm_proxy_virtual_key, plan, session)
+    return session.summary()
+
+
+def approval_gates(plan: EvalCampaignPlan, snapshot: RuntimeConfigSnapshot,
+                   identity: dict[str, str]) -> dict[str, str]:
+    return {
+        "ANCORA_EVAL_APPROVED_PLAN": plan.checksum(),
+        "ANCORA_EVAL_APPROVED_SHA": identity["code_sha"],
+        "ANCORA_EVAL_APPROVED_SOURCE": identity["source_fingerprint"],
+        "ANCORA_EVAL_APPROVED_CASES": campaign_cases_fingerprint(plan.validate_snapshot(snapshot)),
+        "ANCORA_EVAL_SYNTHETIC_APPROVED": "1", "ANCORA_EVAL_EXTERNAL_BUDGET_VERIFIED": "1",
+        "ANCORA_EVAL_SNAPSHOT_PROVENANCE_ACCEPTED": "1", "ANCORA_EVAL_HUMAN_REVIEW_APPROVED": "1",
+    }
+
+
+def session_history(state: Path, plan: EvalCampaignPlan) -> list[dict[str, Any]]:
+    history = []
+    reports = sorted(state.glob(plan.checksum() + "*.report.json"))
+    for marker in state.glob(plan.checksum() + "*.reserved.json"):
+        report = marker.with_name(marker.name.removesuffix(".reserved.json") + ".report.json")
+        if marker.is_symlink() or report not in reports:
+            raise EvalSessionError("session_history_unverifiable")
+    for path in reports:
+        if path.is_symlink() or path.stat().st_size > 2_000_000:
+            raise EvalSessionError("session_history_unverifiable")
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if report.get("status") not in {"stopped", "passed"}:
+            raise EvalSessionError("session_prior_execution_not_terminal")
+        if report.get("code_sha") == PRE_SESSION_SHA:
+            continue
+        if (report.get("plan_checksum") != plan.checksum()
+            or report.get("cases_fingerprint") != campaign_cases_fingerprint(
+                plan.validate_snapshot(campaign_config()[1]),
+            )):
+            raise EvalSessionError("session_history_unverifiable")
+        usage = report.get("usage", [])
+        history.append({
+            "run_id": "legacy:" + hashlib.sha256(path.name.encode()).hexdigest(),
+            "source": report["source_fingerprint"], "results": report["results"],
+            "usage_complete": (len(usage) == report.get("recorded_model_calls")
+                               and all(item.get("status") == "completed" for item in usage)),
+        })
+    return history
+
+
+def verify_imported_runs(store: EvalEvidenceStore, history: list[dict[str, Any]]) -> None:
+    imported = {run["source"] for run in history}
+    for folder in store.root.iterdir():
+        if len(folder.name) != 32 or not all(c in "0123456789abcdef" for c in folder.name):
+            continue
+        manifest = store.manifest(folder.name, allow_expired=True)
+        if manifest["identity"]["code_sha"] == PRE_SESSION_SHA:
+            continue
+        if manifest["identity"]["source_fingerprint"] not in imported:
+            raise EvalSessionError("session_evidence_history_unverifiable")
+
+
+def prepare_session(store: EvalEvidenceStore, state: Path,
+                    selected: list[str] | None = None) -> str:
+    plan, snapshot = campaign_config()
+    identity = source_identity()
+    validate_state_directory(state, dict(os.environ), sealed_image=True)
+    if identity.get("worktree") != "clean" or identity.get("identity_source") != "sealed_image":
+        raise EvalSessionError("session_clean_published_candidate_required")
+    settings = gateway_settings(dict(os.environ))
+    session = EvalValidationSession(store)
+    session.validate(session_scope(ROOT, plan, snapshot), settings.litellm_proxy_virtual_key)
+    if (session.folder / "worker.lease").exists():
+        raise EvalSessionError("session_worker_active_or_uncertain")
+    if session.summary()["gateway_observed"] is not True:
+        raise EvalSessionError("session_gateway_unverified")
+    attempts = session.summary()["attempts"]
+    # Do not pay again for already passed cases; historic labels stay attached
+    # to their original candidate, never certify the new candidate retroactively.
+    passed = {item["case_id"] for item in attempts if item["status"] == "passed"}
+    case_ids = tuple(selected) if selected else tuple(c for c in plan.case_ids if c not in passed)
+    if (not case_ids or len(set(case_ids)) != len(case_ids)
+        or any(c not in plan.case_ids for c in case_ids)):
+        raise EvalSessionError("session_case_selection_invalid_or_complete")
+    per_case = min(Decimal(str(plan.budget.max_estimated_cost_usd)),
+                   session.remaining() / len(case_ids)).quantize(Decimal("0.000001"), ROUND_DOWN)
+    if per_case <= 0:
+        raise EvalSessionError("session_budget_insufficient")
+    for case_id in case_ids:
+        if any(item["case_id"] == case_id and (
+            item["source"] == identity["source_fingerprint"]
+            or item["status"] in {"uncertain", "reserved"}
+        ) for item in attempts):
+            raise EvalSessionError("session_case_consumed_or_uncertain")
+    selected_plan = plan.model_copy(update={
+        "case_ids": case_ids,
+        "budget": plan.budget.model_copy(update={"max_estimated_cost_usd": float(per_case)}),
+    })
+    cases = selected_plan.validate_snapshot(snapshot)
+    # Do not let a changed subset or a lower per-case budget bypass the original
+    # source/case anti-replay marker, even if its worker has not started yet.
+    claim = session.folder / ("selection-" + identity["source_fingerprint"] + ".claimed")
+    fd = os.open(claim, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="ascii") as file:
+        file.write(selected_plan.checksum())
+        file.flush()
+        os.fsync(file.fileno())
+    run_id = store.create(identity, selected_plan.model_dump(mode="json"),
+                          [case_record(case) for case in cases],
+                          snapshot.model_dump(mode="json", by_alias=True), synthetic_approved=True)
+    store.append(run_id, "approval", {"gates": approval_gates(selected_plan, snapshot, identity),
+                                      "validation_session": True,
+                                      "scope": session_scope(ROOT, plan, snapshot)})
+    return run_id
 
 
 def prepare(store: EvalEvidenceStore, state: Path, approval_path: Path) -> str:
@@ -88,12 +233,10 @@ def prepare(store: EvalEvidenceStore, state: Path, approval_path: Path) -> str:
 
 async def validate_reusable_access(plan: EvalCampaignPlan, env: dict[str, str]) -> None:
     """Read existing dedicated key before inference; no create/reset/extend/rotate."""
-    from datetime import UTC, datetime
-    from decimal import Decimal
-
     import httpx
 
     from src.agent.eval_campaign import gateway_settings, verify_gateway_models
+    from src.agent.eval_gateway_policy import validate_key_info
 
     settings = gateway_settings(env)
     base = settings.litellm_proxy_base_url.rstrip("/")
@@ -102,27 +245,7 @@ async def validate_reusable_access(plan: EvalCampaignPlan, env: dict[str, str]) 
         response = await client.get(base.removesuffix("/v1") + "/key/info", headers=headers)
         response.raise_for_status()
         info = response.json()["info"]
-        expires = datetime.fromisoformat(info["expires"].replace("Z", "+00:00"))
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=UTC)
-        spend, ceiling = Decimal(str(info["spend"])), Decimal(str(info["max_budget"]))
-        allowed = {"/models", "/v1/models", "/key/info", "/chat/completions",
-                   "/v1/chat/completions"}
-        if (info.get("models") != [plan.effective_gateway_route]
-            or not str(info.get("key_alias", "")).startswith("ancoramind-evals-")
-            or not spend.is_finite() or not ceiling.is_finite() or spend < 0
-            or ceiling <= 0 or ceiling > 1 or ceiling - spend < plan.total_estimated_cost_usd
-            or info.get("max_parallel_requests") != 1 or info.get("budget_duration") is not None
-            or info.get("blocked") or not datetime.now(UTC) < expires
-            or not set(info.get("allowed_routes") or []) <= allowed
-            or not {"/v1/chat/completions", "/key/info"} <= set(info.get("allowed_routes") or [])):
-            raise ValueError("eval_reusable_key_scope_budget_or_expiry_invalid")
-        for name in ("aliases", "config", "permissions"):
-            value = info.get(name)
-            if isinstance(value, str):
-                value = json.loads(value)
-            if value is not None and value != {}:
-                raise ValueError("eval_reusable_key_overrides_forbidden")
+        validate_key_info(info, plan, required=plan.total_estimated_cost_usd)
         response = await client.get(base + "/models", headers=headers)
         response.raise_for_status()
         verify_gateway_models(response.json(), plan.effective_gateway_route)
@@ -136,14 +259,38 @@ async def work(store: EvalEvidenceStore, state: Path, run_id: str, env: dict[str
     if any(event["kind"] == "worker_started" for event in events):
         raise ValueError("eval_worker_already_consumed_no_restart")
     store.append(run_id, "worker_started", {"pid": os.getpid()})
-    approval = next(event["data"]["gates"] for event in events if event["kind"] == "approval")
+    decision = next(event["data"] for event in events if event["kind"] == "approval")
+    approval = decision["gates"]
     plan = EvalCampaignPlan.model_validate(manifest["plan"])
     snapshot = RuntimeConfigSnapshot.model_validate(manifest["snapshot"])
     gated_env = {**env, **approval}
     try:
-        await validate_reusable_access(plan, gated_env)
-        await execute_approved(plan, snapshot, manifest["identity"], gated_env, state,
-                               durable=(store, run_id))
+        if decision.get("validation_session") is True:
+            session = EvalValidationSession(store)
+            full_plan, full_snapshot = campaign_config()
+            scope = session_scope(ROOT, full_plan, full_snapshot)
+            if decision.get("scope") != scope:
+                raise EvalSessionError("session_scope_or_key_changed")
+            session.validate_selection(plan, full_plan)
+            session.validate(scope,
+                             gateway_settings(env).litellm_proxy_virtual_key)
+            with session.worker(run_id, manifest["identity"]):
+                await execute_approved(plan, snapshot, manifest["identity"], gated_env, state,
+                                       durable=(store, run_id), validation_session=session)
+            store.append(run_id, "session_budget", session.summary())
+        else:
+            await validate_reusable_access(plan, gated_env)
+            await execute_approved(plan, snapshot, manifest["identity"], gated_env, state,
+                                   durable=(store, run_id))
+    except EvalSessionError as error:
+        previous = next((event["data"] for event in reversed(store.events(run_id))
+                         if event["kind"] == "checkpoint"), {})
+        store.append(run_id, "checkpoint", {**previous, "status": "stopped",
+                                             "session_reason": session_reason(str(error)),
+                                             "error_class": "EvalSessionError",
+                                             "inference_started": previous.get(
+                                                 "inference_started", False,
+                                             )})
     except (Exception, asyncio.CancelledError):
         store.append(run_id, "worker_failed", {"status": "uncertain_do_not_restart"})
 
@@ -185,7 +332,7 @@ async def review_loop(store: EvalEvidenceStore, run_id: str, reviewer: str) -> d
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("command", choices=["run", "worker", "review", "status", "list", "label",
-                                            "promote", "export", "purge"])
+      "promote", "export", "purge", "session-init", "session-status"])
     result.add_argument("--run", dest="run_id")
     result.add_argument("--reviewer", default="owner")
     result.add_argument("--case")
@@ -198,6 +345,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--version")
     result.add_argument("--output", type=Path)
     result.add_argument("--approval", type=Path)
+    result.add_argument("--cases", nargs="+")
+    result.add_argument("--accept-session", action="store_true")
     return result
 
 
@@ -215,7 +364,11 @@ def main(argv: list[str] | None = None) -> int:
             approval = args.approval or Path(os.environ.get(
                 "ANCORA_EVAL_APPROVAL_FILE", str(state / "approval.json"),
             ))
-            run_id = prepare(store, state, approval)
+            session = EvalValidationSession(store)
+            if args.cases and not session.exists():
+                raise EvalSessionError("session_required_for_case_selection")
+            run_id = (prepare_session(store, state, args.cases) if session.exists()
+                      else prepare(store, state, approval))
             start_worker(run_id)
             print(json.dumps({"run_id": run_id, "status": "worker_launched",
                               "reconnect": "review --run " + run_id}), flush=True)
@@ -231,6 +384,29 @@ def main(argv: list[str] | None = None) -> int:
             report = store.status(args.run_id)
         elif args.command == "list":
             report = {"runs": store.runs()}
+        elif args.command == "session-init":
+            if not args.accept_session:
+                raise EvalSessionError("session_initial_acceptance_required")
+            plan, snapshot = campaign_config()
+            identity = source_identity()
+            validate_state_directory(state, dict(os.environ), sealed_image=True)
+            if (identity.get("worktree") != "clean"
+                or identity.get("identity_source") != "sealed_image"):
+                raise EvalSessionError("session_clean_published_candidate_required")
+            session = EvalValidationSession(store)
+            history = session_history(state, plan) if not session.exists() else []
+            if not session.exists():
+                verify_imported_runs(store, history)
+                if list(state.glob(plan.checksum() + "*.reserved.json")) and not history:
+                    raise EvalSessionError("session_history_unverifiable")
+            report = session.initialize(
+                scope=session_scope(ROOT, plan, snapshot), plan=plan,
+                key=gateway_settings(dict(os.environ)).litellm_proxy_virtual_key,
+                history=history,
+            )
+            report = asyncio.run(check_session_access(session, plan, dict(os.environ)))
+        elif args.command == "session-status":
+            report = EvalValidationSession(store).summary()
         elif args.command == "label":
             store.review(args.run_id, args.case, args.criterion, args.label,
                          args.reviewer, args.comment)
@@ -248,6 +424,10 @@ def main(argv: list[str] | None = None) -> int:
             report = {"status": "content_purged_markers_retained"}
         print(json.dumps(report, ensure_ascii=True, allow_nan=False))
         return 0
+    except EvalSessionError as error:
+        print(json.dumps({"status": "eval_session_blocked", "reason": session_reason(str(error)),
+                          "inference_started": False, "do_not_replay": True}))
+        return 1
     except (Exception, KeyboardInterrupt):
         print(json.dumps({"status": "eval_console_blocked_or_disconnected",
                           "do_not_replay": True, "review_can_reopen_saved_evidence": True}))

@@ -77,4 +77,5 @@ def safe_error_class(value: object) -> str | None:
         "InvalidPresentationOutputError", "ValueError", "ValidationError", "TimeoutError",
         "CancelledError", "RuntimeError", "OSError", "FileExistsError", "PermissionError",
         "ExecutionBudgetExceededError", "ModelProviderError", "HTTPStatusError", "ConnectError",
+        "EvalSessionError",
     } else "OtherError"

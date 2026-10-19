@@ -193,6 +193,8 @@ class EvalCampaignRunner:
     async def run(
         self, *, checkpoint: Callable[[dict[str, object]], None] | None = None,
         before_case: Callable[[], Awaitable[None]] | None = None,
+        case_started: Callable[[str], Awaitable[None]] | None = None,
+        case_finished: Callable[[list[LlmUsageEventCreate], bool], None] | None = None,
     ) -> dict[str, object]:
         if self._used:
             raise ValueError("eval_campaign_already_consumed")
@@ -204,12 +206,15 @@ class EvalCampaignRunner:
             for index, case in enumerate(self._cases):
                 result: dict[str, object] = {"case_id": case.case_id, "status": "started"}
                 offset = len(self._recorder.events)
+                settled = False
                 results.append(result)
                 if checkpoint:
                     checkpoint(self.report)
                 try:
                     if before_case:
                         await before_case()
+                    if case_started:
+                        await case_started(case.case_id)
                     self.report["inference_started"] = True
                     if checkpoint:
                         checkpoint(self.report)  # durable intent before crossing the model boundary
@@ -244,7 +249,11 @@ class EvalCampaignRunner:
                     if result["semantic_status"] != "passed":
                         raise ValueError("eval_review_not_passed")
                     result["status"] = "passed"
+                    if case_finished:
+                        settled = True
+                        case_finished(self._recorder.events[offset:], True)
                 except (Exception, asyncio.CancelledError) as error:
+                    failure = error
                     # No exception/response/provider text is safe report material.
                     result["status"] = "stopped"
                     result.setdefault("semantic_status", "not_evaluated")
@@ -253,11 +262,22 @@ class EvalCampaignRunner:
                     result["usage_error_count"] = sum(
                         event.status != "completed" for event in events
                     )
-                    if isinstance(error, EvalPresentationError):
+                    if case_finished and not settled:
+                        try:
+                            case_finished(events, False)
+                        except Exception as settlement_error:
+                            failure = settlement_error
+                    if isinstance(failure, EvalPresentationError):
                         result["error_class"] = "InvalidPresentationOutputError"
-                        result["terminal_diagnostic"] = error.diagnostic.model_dump()
+                        result["terminal_diagnostic"] = failure.diagnostic.model_dump()
                     else:
-                        result["error_class"] = type(error).__name__
+                        result["error_class"] = type(failure).__name__
+                    # Optional session module imports this runner's case fingerprint;
+                    # keep the dependency lazy and never serialize exception text.
+                    from src.agent.eval_validation_session import EvalSessionError, session_reason
+
+                    if isinstance(failure, EvalSessionError):
+                        result["session_reason"] = session_reason(str(failure))
                     results.extend({"case_id": c.case_id, "status": "not_started"}
                                    for c in self._cases[index + 1:])
                     self.report["status"] = "stopped"

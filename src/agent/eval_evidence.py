@@ -254,6 +254,8 @@ class EvalEvidenceStore:
         events = self.events(run_id)
         checkpoint: dict[str, Any] = next((e["data"] for e in reversed(events)
                                           if e["kind"] == "checkpoint"), {})
+        from src.agent.eval_validation_session import session_reason
+
         results = {item["case_id"]: item for item in checkpoint.get("results", [])
                    if isinstance(item, dict) and isinstance(item.get("case_id"), str)}
 
@@ -272,6 +274,7 @@ class EvalEvidenceStore:
                 "error_class": safe_error_class(result.get("error_class")),
                 "terminal_diagnostic": safe_terminal_diagnostic(result.get("terminal_diagnostic")),
             }
+            value["session_reason"] = session_reason(result.get("session_reason"))
             for name in ("model_calls", "usage_error_count"):
                 count = result.get(name)
                 value[name] = count if type(count) is int and count >= 0 else None
@@ -293,6 +296,7 @@ class EvalEvidenceStore:
             "inference_started": checkpoint.get("inference_started", False),
             "recorded_model_calls": checkpoint.get("recorded_model_calls", 0),
             "error_class": safe_error_class(checkpoint.get("error_class")),
+            "session_reason": session_reason(checkpoint.get("session_reason")),
             "cases": [{
                 "case_id": c["id"], **case_diagnostic(c["id"]),
                 "evidence_available": self.observation(run_id, c["id"]) is not None,

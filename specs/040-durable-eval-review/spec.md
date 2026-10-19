@@ -1,5 +1,12 @@
 # 040 — Evaluaciones recuperables y golden set curado
 
+> **Enmienda posterior specs/042:** el propietario autorizó sesión acotada con
+> límite0,10USD **acumulado**, no permiso repetido por SHA. El nuevo modo opt-in
+> implementa ese contrato con mismo scope/key/ledger y reserva por caso, manteniendo
+> manualidad/anti-replay/CI. Las exigencias por candidato de esta spec describen el
+> modo legacy; no imponerlas como nueva ronda de consentimiento dentro de sesión.
+> Ver [specs/042](../042-eval-validation-session/spec.md).
+
 ## Decisión y alcance
 
 El propietario aprueba el incremento local de usabilidad y conservación de

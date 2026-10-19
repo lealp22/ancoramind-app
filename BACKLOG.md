@@ -1643,6 +1643,19 @@ Caso mixto guionizado offline válido, pruebas cifrado/noleaks/replay;158focales
 Ruff/mypy178/catálogos/diff limpios. No toda integración repetida.
 BL-48/T7 no superados; nueva fuente requiere aprobación independiente, no repetir
 ni borrar reserva/labels históricos. No commit/push/deploy/inferencia por agente.
+**Enmienda operativa specs/042 local autorizada:** límite0,10USD acumulados de sesión,
+incluye histórico; no consentimiento repetido por cada SHA operativo. Ledger Fernet
+persistente/binding misma key/scope estable, reservas por caso, import conservador
+coste desconocido, checks pre/postGateway y bloqueo antes de transporte; claim
+source/lease exclusivo/manualidad/replay incierto intactos. Base3f2e8b89 CIverde sólo
+diagnóstico; falta publicar incremento sesión. No más claves/configuración; nueva
+decisión sólo fuera scope o sin saldo. No factura exacta, ni sumar pasados como
+evaluación completa del candidato nuevo. Detalle specs/042; gates por registrar.
+Validado1969unitarias/1skip,81,22 %,44pruebas sesión, Ruff/mypy180/catálogos/diff;
+paquete sellado/help local sin commit ni inferencia.14integraciones focales
+bloqueadas en setup: Docker daemon/PG local ausentes, no usar productiva. Pendiente
+SHA/CI/publicación; import separa db0c59b/claves2h previas de7ea0cf06, sin borrar
+históricos ni gastar como si empezase desde cero.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

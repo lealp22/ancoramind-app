@@ -77,6 +77,23 @@ recordatorios y eventos, con trazabilidad completa.
   Ruff/mypy178/catálogos/diff limpios. Nueva
   huella requiere SHA/CI/publicación y aprobación independientes. Causa histórica
   exacta/validación E2E completa siguen abiertas; no inferir por publicar.
+  **Cambio operativo autorizado specs/042 (local):** propietario aprueba sesión
+  acotada0,10USD acumulados incluyendo histórico, no nuevas aprobaciones por SHA
+  de diagnóstico/operación. Base3f2e8b89/CI39219285248 verde sólo diagnóstico;
+  sesión nueva requiere otro commit/CI/publicación. Ledger cifrado/clave fija,
+  scope de casos/modelo/prompts/runtime, import conservador de reportes previos,
+  reserva por caso/reparto saldo/claim source/lease worker, checks Gateway pre/post
+  POST vía LLMAccess, sin resets/retries/replay incierto ni secretos extra.
+  `session-init --accept-session` sólo GET e import; luego run manual omite passed
+  históricos sin certificarlos para SHA nuevo. Scope/presupuesto distintos o saldo
+  insuficiente requieren hablar, no renovar autorización repetidamente por comando.
+  Mismo source/caso no se relanza; incertidumbre preserva reserva. Nominal/estimado,
+  no promesa de factura exacta/ledger distribuido. Sin inferencia/deploy por agente.
+  Validación sesión1969unitarias/1skip,81,22 %,44pruebas nuevas de sesión,
+  Ruff/mypy180/catálogos/diff limpios; paquete sellado/help offline válido.
+  Integraciones intentadas bloqueadas14errores setup: Docker daemon/PG local
+  ausentes, no fixtures remotos. No afirmar passed. Pendiente SHA/CI/publicación;
+  import separa db0c59b/claves2h previas de7ea0cf06, sin borrar/mutar históricos.
   1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
   Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
 

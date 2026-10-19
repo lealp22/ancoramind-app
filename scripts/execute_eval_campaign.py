@@ -11,7 +11,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 
 import httpx
 
@@ -33,6 +33,9 @@ from src.agent.eval_campaign_runner import (  # noqa: E402
     campaign_cases_fingerprint,
 )
 from src.domain.runtime_config.models import RuntimeConfigSnapshot  # noqa: E402
+
+if TYPE_CHECKING:
+    from src.agent.eval_validation_session import EvalValidationSession
 
 
 def source_identity(root: Path = ROOT) -> dict[str, str]:
@@ -112,9 +115,12 @@ async def check_console() -> dict[str, object]:
 async def execute_approved(
     plan: EvalCampaignPlan, snapshot: RuntimeConfigSnapshot, identity: dict[str, str],
     env: Mapping[str, str], state_dir: Path, *, durable: tuple[Any, str] | None = None,
+    validation_session: EvalValidationSession | None = None,
 ) -> dict[str, object]:
     """Reserve durable local one-shot marker before network/inference; never resume."""
     cases = plan.validate_snapshot(snapshot)
+    if validation_session is not None and durable is None:
+        raise ValueError("eval_session_requires_durable_evidence")
     case_hash = campaign_cases_fingerprint(cases)
     validate_live_approval(plan, identity, case_hash, env)
     settings = gateway_settings(env)
@@ -134,7 +140,9 @@ async def execute_approved(
     report_path = state_dir / (tag + ".report.json")
     reservation = {
         **identity, "plan_checksum": plan.checksum(), "cases_fingerprint": case_hash,
-        "reserved_estimated_cost_usd": str(plan.total_estimated_cost_usd),
+        "reserved_estimated_cost_usd": ("0" if validation_session else
+                                        str(plan.total_estimated_cost_usd)),
+        "reservation_mode": "per_case_session" if validation_session else "whole_campaign",
         "status": "consumed_do_not_replay",
     }
     # Atomic exclusive creation protects simultaneous launches on this machine.
@@ -170,6 +178,46 @@ async def execute_approved(
                     timeout=snapshot.config.gateway.request_timeout_seconds,
                     follow_redirects=False, trust_env=False,
                 ) as client:
+                    async def session_check() -> None:
+                        if validation_session is not None:
+                            from src.agent.eval_validation_session import read_session_gateway
+
+                            await read_session_gateway(
+                                client, settings.litellm_proxy_base_url.rstrip("/"),
+                                settings.litellm_proxy_virtual_key, plan, validation_session,
+                            )
+
+                    async def before_request(request: httpx.Request) -> None:
+                        if request.method == "POST" and validation_session is not None:
+                            try:
+                                await session_check()
+                                await validation_session.before_request(request)
+                            except Exception as error:
+                                from src.agent.eval_validation_session import (
+                                    EvalSessionError,
+                                    session_reason,
+                                )
+
+                                validation_session.blocked_reason = (
+                                    session_reason(str(error))
+                                    if isinstance(error, EvalSessionError)
+                                    else "session_budget_unverifiable"
+                                )
+                                raise
+
+                    if validation_session is not None:
+                        async def after_response(response: httpx.Response) -> None:
+                            if response.request.method == "POST":
+                                try:
+                                    await session_check()
+                                except Exception:
+                                    validation_session.blocked_reason = (
+                                        "session_budget_unverifiable"
+                                    )
+                                    raise
+
+                        client.event_hooks["request"].append(before_request)
+                        client.event_hooks["response"].append(after_response)
                     response = await client.get(
                         settings.litellm_proxy_base_url.rstrip("/") + "/models",
                         headers={"Authorization": "Bearer " + settings.litellm_proxy_virtual_key},
@@ -184,12 +232,40 @@ async def execute_approved(
                         reviewer=reviewer, code_sha=identity["code_sha"],
                     )
                     runner.report.update(identity)
+                    if validation_session is not None:
+                        runner.report.update(reservation_mode="per_case_session",
+                                             reserved_estimated_cost_usd="0")
 
                     async def unchanged() -> None:
                         if source_identity() != identity:
                             raise ValueError("eval_sources_changed")
 
-                    return await runner.run(checkpoint=checkpoint, before_case=unchanged)
+                    async def reserve_case(case_id: str) -> None:
+                        if validation_session is not None:
+                            from decimal import Decimal
+
+                            await session_check()
+                            validation_session.reserve(
+                                durable[1], case_id, identity["source_fingerprint"],
+                                Decimal(str(plan.budget.max_estimated_cost_usd)),
+                            )
+
+                    if validation_session is None:
+                        return await runner.run(checkpoint=checkpoint, before_case=unchanged)
+                    report = await runner.run(
+                        checkpoint=checkpoint, before_case=unchanged, case_started=reserve_case,
+                        case_finished=lambda events, passed: validation_session.settle(
+                            events, passed=passed,
+                        ),
+                    )
+                    if validation_session.blocked_reason:
+                        results = report.get("results", [])
+                        if isinstance(results, list):
+                            for item in results:
+                                if item.get("status") == "stopped":
+                                    item["session_reason"] = validation_session.blocked_reason
+                        checkpoint(report)
+                    return report
         except (Exception, asyncio.CancelledError) as error:
             partial = runner.report if runner is not None else initial
             partial.update(status="stopped", error_class=type(error).__name__)
