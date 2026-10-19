@@ -1666,6 +1666,12 @@ Ruff/mypy180/diff limpios. Metadata posterior del propietario confirma históric
 db0c59b/running junto a actual/otro stopped; bug de orden acreditado, no evidencia
 de worker activo.21focales recheck pasan; publicación/aceptación remota fix pendientes,
 sin borrar reportes/editar estado ni reset saldo. Sin commit/push/deploy/inferencia por agente.
+Fix import subido68ae6654/CI39246649825 verde; publicación39248955747 bloqueada
+legítimamente por pendingWork botfce3f7ac/collector5de0748a NEEDS_APPROVAL (mismo
+push11:43Z). No staged config, sí deployments ajenos; guard no se modifica.
+Skip por propietario de los dos intentos no deseados conserva activos; no Remove
+SUCCESS ni Deploy ciego. Verificar entorno vacío antes de nuevo workflow mismoSHA.
+42regresiones pending pasan, sin mutaciones remotas ni inferencia; fix aún no live.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

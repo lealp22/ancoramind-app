@@ -2,6 +2,12 @@
 
 ## Incidencia session-init y corrección local — 2026-10-19
 
+- Fix de import subido en68ae6654/CI39246649825 verde. Publicación39248955747
+  bloqueada por DOS despliegues NEEDS_APPROVAL ajenos (bot/collector) del mismo
+  push; no bug del importador ni del guard sentinel. Evals sigue32474d5b/e30e1e80.
+  Resolución operativa pendiente del propietario, sin cancelar/aprobar por agente;
+  misma versión candidata válida cuando entorno sin pendingWork. Detalle en
+  [specs/041 verification](../041-manual-eval-deploy/verification.md).
 - Versión32474d5bdb264e0ff5f34a1435de69519b1d16ea publicada por propietario:
   CI39237715770 success; workflow39239239445 deployed_idle_verified,
   huella4d685a9925e6d28e94e0f90e775dc801d7d942e8aad28ea8bd308e6c82792cf2,

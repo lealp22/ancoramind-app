@@ -1,5 +1,29 @@
 # Verificación — 2026-10-18
 
+## Bloqueo legítimo por despliegues ajenos pendientes — 2026-10-19
+
+- Workflow39248955747/candidato/control68ae6654a9ff12b1ff600a24a5f44465b44464f4,
+  CI39246649825 success. Paquete preparado; a12:02:25Z guard rechaza con
+  eval_deploy_pending_work_cannot_be_verified antes de variable set/upload.
+- MCP/API read-only: ningún cambio staged de configuración; sentinel `<empty>`/
+  STAGED/entorno correcto/patch exactamente `{}`. Pero pendingWork contiene DOS
+  Deployment/staged del mismo entorno, ambos creados11:43:05Z por push68ae6654:
+  collector5de0748a-681c-43a2-8615-7b7c2baa21fa y
+  botfce3f7ac-ad3d-40c4-ab8b-4f20582d7a84, ambos NEEDS_APPROVAL.
+  No es el antiguo bug de sentinel: la lista no está vacía. Guard correcto.
+- Evals mantiene deploymente30e1e80 SUCCESS/1RUNNING/0crashed. Bot y collector
+  conservan sus deployments SUCCESS7d77fe03/e4466992; no se han aprobado,
+  cancelado, reiniciado ni modificado servicios. No inferencia ni valores leídos.
+- Dashboard de bot muestra `Deploy this commit from an external contributor?`
+  y acciones **Skip / Deploy**. Operación recomendada si esos dos intentos no se
+  desean: Skip únicamente los NEEDS_APPROVAL de68ae6654; no Remove del SUCCESS,
+  no aprobar otros servicios sólo para desbloquear evals. Decisión del propietario.
+  Verificar después que pendingWork está vacío antes de nueva publicación manual
+  del MISMO candidato68ae6654. No nuevo parche/commit ni relajar guard.
+- Reproducción offline de sentinel vacío + dos filas devuelve el mismo reason;
+  estado realmente vacío pasa. **42 regresiones** de pending/inconsistencias pasan.
+  Sólo docs locales actualizadas; ninguna mutación remota ni reintento del workflow.
+
 ## Republicación con variables — verificada antes de campaña
 
 - Run [39173039736](https://github.com/lealp22/ancoramind-app/actions/runs/39173039736),

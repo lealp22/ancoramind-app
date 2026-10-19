@@ -104,6 +104,13 @@ recordatorios y eventos, con trazabilidad completa.
   pre_session_db0c59b/running: mecanismo confirmado, no worker vivo demostrado.
   Recheck21focales pasa; fix sin publicar, no afirmar E2E resuelto. No borrar
   archivos/editar estados/reiniciar presupuesto.
+  Fix import publicado Git68ae6654/CI39246649825 verde; workflow39248955747 bloquea
+  correctamente: pendingWork con botfce3f7ac y collector5de0748a NEEDS_APPROVAL de
+  ese push, aunque patch`{}` y sin staged config. Dashboard ofrece Skip/Deploy.
+  No cancelar/aprobar ni ignorar trabajos ajenos automáticamente; propietario puede
+  Skip sólo esos pendientes si no deseados, conservar SUCCESS y verificar entorno
+  vacío antes de nuevo workflow mismoSHA. No parche extra ni reiniciar claves.
+ 42regresiones guard pasan; evaluador sigue32474d5b/e30e1e80, sin inferencia.
   1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
   Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
 

@@ -130,6 +130,15 @@ políticas de software/red del ordenador gestionado.
 
 ## Si algo falla
 
+- **Sin staged changes no significa sin pendingWork.** Pueden existir deployments
+  NEEDS_APPROVAL de otros servicios tras un push. Caso39248955747/68ae6654:
+  bot y collector aguardaban aprobación, mientras el evaluador seguía Online.
+  El guard bloquea correctamente aunque el patch sea `{}`. Si no se desean esos
+  despliegues, propietario selecciona **Skip** en cada tarjeta Pending del commit
+  exacto (dashboard puede indicar contribuidor externo), nunca Remove del activo
+  SUCCESS ni Deploy/Approve a ciegas. Verificar pendingWork vacío y lanzar un
+  nuevo workflow del mismo candidato/CI; no necesita parche ni nuevo push.
+  El helper no cancela ni aprueba otros servicios y no ignora su trabajo pendiente.
 - Secreto ausente → configurar environment secret; no instalar CLI local.
 - SHA/CI incorrectos → esperar/corregir CI y lanzar manualmente con SHA aprobado;
   no usar un run anterior exitoso para ocultar un último intento fallido.
