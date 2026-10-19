@@ -1629,6 +1629,20 @@ approval.json/campaña siguen pendientes. Histórico de validación primer rollo
 Sin CLI local/inferencia/deploy por agente. Evals efectivo7ea0cf06; mantener
 pin GitHub histórico sin connect/rebuild; versión upload por sello/log. Detalle
 `specs/041-manual-eval-deploy/runbook.md`; no borrar reservas ni relanzar campaña.
+**Actualización posterior real:** helper1c700339/Run39173039736 success,
+deployed_idle_verified del candidato7ea0cf06/deployment085cb777-6e58-489b-93ef-c4596d68e0c7;
+variables aplicadas/sin pendingWork/volumen conservado. Propietario autorizó UNA
+campaña5casos/nominal0,10USD/humano/cifrado7d y ejecutó run52759a15ad454050aef8b5c1a9b3f122:
+caso1passed técnico+2pass/3calls/estimado0,003563USD/actual desconocido;
+caso2stopped InvalidPresentationOutputError tras2calls/sin observación;3not_started.
+No tecla p, no fallo setup acreditado; guard terminal impidió observación y no hay
+causa fina recuperable. Incremento local diagnóstico allowlist/counters/estado +
+status por caso, sin texto rechazado/args/proveedor ni cambio guard/prompt/retries.
+Caso mixto guionizado offline válido, pruebas cifrado/noleaks/replay;158focales/1skip.
+1925unitarias/1skip,80,98 %,14integraciones focales PostgreSQL local;
+Ruff/mypy178/catálogos/diff limpios. No toda integración repetida.
+BL-48/T7 no superados; nueva fuente requiere aprobación independiente, no repetir
+ni borrar reserva/labels históricos. No commit/push/deploy/inferencia por agente.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

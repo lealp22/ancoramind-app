@@ -10,14 +10,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from agno.models.base import Model
 from agno.models.response import ModelResponse
+from agno.run.agent import RunOutput, ToolExecution
+from agno.run.base import RunStatus
 
 from src.agent.eval_physical_executor import GovernedPhysicalEvalExecutor, eval_snapshot_fingerprint
 from src.agent.evals import EvalCase, EvalExecutionRequest, evaluate_observation
-from src.domain.interactions.reply import AgentReply
+from src.domain.interactions.reply import AgentReply, InvalidPresentationOutputError
 from src.domain.llm_access.models import ExecutionContext
 from src.domain.runtime_config.models import (
     RuntimeConfigSnapshot,
@@ -75,6 +78,66 @@ class _FakeLLMAccess:
 
     def model_for(self, route_name: str, execution_context: ExecutionContext) -> Model:
         return self.model
+
+
+@pytest.mark.parametrize("tools,reason", [
+    (None, "missing_terminal"),
+    ([ToolExecution(tool_name="present_reply", result="PRIVATE_INVALID_JSON")],
+     "invalid_terminal_payload"),
+    ([ToolExecution(tool_name="present_reply", tool_call_error=True, result="PRIVATE_ERROR")],
+     "terminal_tool_error"),
+])
+async def test_missing_terminal_preserves_only_fixed_diagnostic_not_model_content(
+    monkeypatch, tools, reason,
+):
+    from agno.agent import Agent
+
+    output = RunOutput(content="PRIVATE_RESPONSE_MUST_NOT_BE_EXPORTED", tools=tools,
+                       status=RunStatus.error)
+    arun = AsyncMock(return_value=output)
+    monkeypatch.setattr(Agent, "arun", arun)
+    executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(_ScriptedModel(id="eval")))
+    with pytest.raises(InvalidPresentationOutputError) as error:
+        await executor.execute(EvalExecutionRequest(
+            _case(input_text="Synthetic"), "ancoramind-default", 0,
+        ))
+    assert error.value.diagnostic.reason == reason
+    assert error.value.diagnostic.presentation_count == (1 if tools else 0)
+    assert error.value.diagnostic.run_status == "ERROR"
+    assert "PRIVATE" not in str(error.value) + repr(error.value.diagnostic)
+    assert arun.await_count == 1
+
+
+async def test_mixed_read_proposal_scripted_success_preserves_both_parts():
+    from pathlib import Path
+
+    from src.agent.eval_campaign import EvalCampaignPlan
+
+    folder = Path(__file__).resolve().parents[2] / "evals/response_style"
+    plan = EvalCampaignPlan.model_validate_json((folder / "bl48-campaign-plan.json").read_text())
+    snapshot = RuntimeConfigSnapshot.model_validate_json(
+        (folder / "runtime-rev8-snapshot.json").read_text(),
+    )
+    case = plan.validate_snapshot(snapshot)[1]
+    list_id = "11111111-1111-1111-1111-111111111111"
+    reply = AgentReply(answer="Revisar recibos: completada.", proposal_text="Propuesta preparada.")
+    model = _ScriptedModel(id="eval-test", turns=(
+        _tool_call_turn("lists", "list_todo_lists", "{}"),
+        _tool_call_turn("items", "list_todo_items", '{"list_id":"' + list_id + '"}'),
+        _tool_call_turn("propose", "propose_todo_item", '{"list_id":"' + list_id
+                        + '","title":"Revisar póliza","priority":"high"}'),
+        _tool_call_turn("reply", "present_reply", reply.model_dump_json()),
+    ))
+    executor = GovernedPhysicalEvalExecutor(llm_access=_FakeLLMAccess(model), snapshot=snapshot,
+                                          budget=plan.budget)
+    request = EvalExecutionRequest(case, plan.logical_route, snapshot.revision)
+    observed = await executor.execute(request)
+    assert evaluate_observation(request, observed).passed
+    assert observed.reply == reply
+    assert observed.tool_names == ("list_todo_lists", "list_todo_items", "propose_todo_item")
+    assert observed.proposals[0]["created_this_run"] is True
+    assert reply.answer in observed.delivered_text and "Prioridad: alta" in observed.delivered_text
+    assert model.calls == 4
 
 
 @pytest.mark.parametrize("extra,created", [("", False),

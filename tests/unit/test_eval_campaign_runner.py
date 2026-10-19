@@ -17,6 +17,7 @@ from src.agent.eval_campaign_runner import (
     TerminalCampaignReviewer,
     campaign_cases_fingerprint,
 )
+from src.agent.eval_diagnostics import EvalPresentationError, terminal_diagnostic
 from src.agent.evals import EvalObservation
 from src.domain.interactions.reply import AgentReply
 from src.domain.llm_access.models import LlmUsageEventCreate
@@ -105,6 +106,39 @@ async def test_failure_and_cancellation_stop_and_never_retry(campaign, error):
     assert executor.execute.await_count == 1
     reviewer.review.assert_not_called()
     assert "PRIVATE_ERROR" not in json.dumps(report)
+
+
+async def test_second_case_terminal_failure_preserves_facts_and_stops_without_retry(campaign):
+    from agno.run.agent import RunOutput
+    from agno.run.base import RunStatus
+
+    run, executor, reviewer = runner(campaign)
+    plan, snapshot = campaign
+    cases = plan.validate_snapshot(snapshot)
+    async def execute(request):
+        first = request.case.case_id == cases[0].case_id
+        for _ in range(3 if first else 2):
+            await run._recorder.record(usage(plan, status="completed" if first else "error"))
+        if not first:
+            raise EvalPresentationError(terminal_diagnostic(RunOutput(
+                content="PRIVATE_PROVIDER_ERROR", status=RunStatus.error,
+            )))
+        return observation(request.case)
+    executor.execute.side_effect = execute
+    report = await run.run()
+    assert report["status"] == "stopped" and report["recorded_model_calls"] == 5
+    first, failed = report["results"][:2]
+    assert first["status"] == first["semantic_status"] == "passed"
+    assert failed["model_calls"] == failed["usage_error_count"] == 2
+    assert failed["error_class"] == "InvalidPresentationOutputError"
+    assert failed["terminal_diagnostic"]["reason"] == "missing_terminal"
+    assert failed["terminal_diagnostic"]["run_status"] == "ERROR"
+    assert all(item["status"] == "not_started" for item in report["results"][2:])
+    assert executor.execute.await_count == 2 and reviewer.review.await_count == 1
+    assert "PRIVATE" not in json.dumps(report)
+    with pytest.raises(ValueError, match="already_consumed"):
+        await run.run()
+    assert executor.execute.await_count == 2
 
 
 @pytest.mark.parametrize("changes", [

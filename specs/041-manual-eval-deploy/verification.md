@@ -1,6 +1,21 @@
 # Verificación — 2026-10-18
 
-## Segundo bloqueo tras configuración de claves — fix local, rollout pendiente
+## Republicación con variables — verificada antes de campaña
+
+- Run [39173039736](https://github.com/lealp22/ancoramind-app/actions/runs/39173039736),
+  publication_code_sha1c700339b10a4ed78dea093bec828a36cf71e46a,
+  candidato7ea0cf06002d76692f230d189c43e8f9f5e742b1, misma huella/archivo/CI anterior.
+  A22:38:15Z resumen deployed_idle_verified/inference_started=false,
+  deployment085cb777-6e58-489b-93ef-c4596d68e0c7; otros servicios/volumen conservados.
+  Metadata GitHub y MCP contrastadas sólo lectura antes de la ejecución posterior;
+  Online/SUCCESS,1RUNNING/0crashed/sin pendingWork, variables presentes por nombre.
+  Helper corregido aceptó sentinel sin borrador. No claves nuevas ni valores leídos.
+- La inferencia posterior fue una campaña separada autorizada/ejecutada por el
+  propietario, no por publicar. Resultado parcial/limitación diagnóstica y fix
+  local posterior: [specs/040 verification](../040-durable-eval-review/verification.md).
+  No confundir incremento diagnóstico local con código ya desplegado7ea0cf06.
+
+## Segundo bloqueo tras configuración de claves — incremento anterior corregido
 
 - Run [39171845184](https://github.com/lealp22/ancoramind-app/actions/runs/39171845184),
   head/candidato/control7ea0cf06,2026-10-18T22:21:10Z. Paquete/CI preparados;

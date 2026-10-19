@@ -21,6 +21,8 @@ from uuid import uuid4
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from src.agent.eval_diagnostics import safe_error_class, safe_terminal_diagnostic
+
 MAX_BYTES = 2_000_000
 LABELS = {"pass", "fail", "not_evaluated"}
 _SECRET = re.compile(r"sk-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9_.-]{8,}|"
@@ -252,6 +254,29 @@ class EvalEvidenceStore:
         events = self.events(run_id)
         checkpoint: dict[str, Any] = next((e["data"] for e in reversed(events)
                                           if e["kind"] == "checkpoint"), {})
+        results = {item["case_id"]: item for item in checkpoint.get("results", [])
+                   if isinstance(item, dict) and isinstance(item.get("case_id"), str)}
+
+        def case_diagnostic(case_id: str) -> dict[str, Any]:
+            result = results.get(case_id, {})
+
+            def known_state(value: object) -> str | None:
+                return value if isinstance(value, str) and value in {
+                    "not_started", "started", "passed", "stopped", "failed", "not_evaluated",
+                } else None
+
+            value: dict[str, Any] = {
+                "execution_status": known_state(result.get("status")),
+                "deterministic_status": known_state(result.get("deterministic_status")),
+                "semantic_status": known_state(result.get("semantic_status")),
+                "error_class": safe_error_class(result.get("error_class")),
+                "terminal_diagnostic": safe_terminal_diagnostic(result.get("terminal_diagnostic")),
+            }
+            for name in ("model_calls", "usage_error_count"):
+                count = result.get(name)
+                value[name] = count if type(count) is int and count >= 0 else None
+            return value
+
         if events and events[-1]["kind"] == "worker_failed":
             checkpoint = {**checkpoint, "status": "uncertain_do_not_restart"}
         worker = next((e["data"] for e in events if e["kind"] == "worker_started"), None)
@@ -263,14 +288,18 @@ class EvalEvidenceStore:
                 checkpoint = {**checkpoint, "status": "uncertain_do_not_restart"}
             except PermissionError:
                 pass
-        return {"run_id": run_id, "execution_status": checkpoint.get("status", "not_started"),
-                "inference_started": checkpoint.get("inference_started", False),
-                "recorded_model_calls": checkpoint.get("recorded_model_calls", 0),
-                "cases": [{"case_id": c["id"],
-                           "evidence_available": self.observation(run_id, c["id"]) is not None,
-                           "criteria": [{"index": i, "label": label["label"]}
-                                        for i, label in self.labels(run_id, c["id"]).items()]}
-                          for c in manifest["cases"]]}
+        return {
+            "run_id": run_id, "execution_status": checkpoint.get("status", "not_started"),
+            "inference_started": checkpoint.get("inference_started", False),
+            "recorded_model_calls": checkpoint.get("recorded_model_calls", 0),
+            "error_class": safe_error_class(checkpoint.get("error_class")),
+            "cases": [{
+                "case_id": c["id"], **case_diagnostic(c["id"]),
+                "evidence_available": self.observation(run_id, c["id"]) is not None,
+                "criteria": [{"index": i, "label": label["label"]}
+                             for i, label in self.labels(run_id, c["id"]).items()],
+            } for c in manifest["cases"]],
+        }
 
     def promote(self, run_id: str, case_id: str, *, dataset: str, reviewer: str,
                 sanitized_approved: bool, split: str) -> str:

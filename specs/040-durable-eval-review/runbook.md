@@ -1,4 +1,18 @@
-# Operación reutilizable — preparada localmente, no desplegada
+# Operación reutilizable — candidato desplegado; diagnóstico adicional sólo local
+
+## Estado actual
+
+Candidato7ea0cf06 publicado idle con variables mediante workflow39173039736
+(control1c700339, deployment085cb777-6e58-489b-93ef-c4596d68e0c7). Propietario
+autorizó y ejecutó UNA campaña cinco casos/nominal0,10USD/revisión humana/evidencia7d:
+run52759a15ad454050aef8b5c1a9b3f122. Primer caso passed técnico+dos criterios pass,
+3 llamadas/estimado0,0035629999999999999USD; actual_cost desconocido. Segundo caso
+stopped/InvalidPresentationOutputError tras otras2 llamadas; otros3 not_started.
+No fue la tecla p. No repetir run ni borrar reservas/retocar etiquetas.
+
+Incremento diagnóstico nuevo sólo local (ver spec/verification): no desplegar como
+si recuperase la salida perdida ni reutilizar autorización del candidato7ea0cf06.
+Preparación inferior describe setup original; no generar nuevas claves por fallo.
 
 ## Preparación única por el propietario
 
@@ -7,9 +21,10 @@
 No requiere Railway CLI local. Publicar código no concede aprobación de campaña
 ni configura las claves LLM/Fernet descritas aquí.
 
-No ejecutar los comandos nuevos sobre la imagen histórica db0c59b: no los contiene.
-Commit/CI y despliegue aislado del nuevo candidato pendientes. Usar paquete eval
-explícito, no rebuild GitHub con selector conocido incorrecto. No redesplegar bot.
+No ejecutar consola sobre la imagen histórica db0c59b: no la contiene.
+Consola durable sí está publicada en7ea0cf06; diagnóstico terminal nuevo requiere
+su propio commit/CI/despliegue autorizado. Usar paquete eval explícito, no rebuild
+GitHub con selector conocido incorrecto. No redesplegar bot.
 Guardar sólo en eval service los secretos, con política aprobada del propietario:
 
 - `ANCORA_EVAL_GATEWAY_URL`: URL privada terminada `/v1`.
@@ -27,8 +42,9 @@ Guardar sólo en eval service los secretos, con política aprobada del propietar
   propietario para **SHA/huellas/casos/plan nuevos**, sintético, riesgos/snapshot
   aceptados. Clave existente no concede aprobación. No reutilizar firma/sello viejos.
 
-No se han generado estas claves ni configurado variables remotas por este cambio.
-La nueva clave/budget/7d se acuerdan antes del setup; no revocar/create cada ensayo.
+Las claves/variables reutilizables ya fueron configuradas por el propietario para
+la campaña descrita arriba; no regenerarlas por una parada. Para otro setup nuevo,
+clave/budget/7d se acuerdan antes; no revocar/create cada ensayo.
 Una misma campaña/candidato no se repite por cambiar token: se conserva anti-replay.
 
 Approval file: objeto con `evidence_synthetic_approved: true` y `gates` con **sólo**
@@ -72,6 +88,14 @@ inferencia interrumpida. Si muere worker/contenedor: sólo revisar evidencia exi
 estado incierto/sin replay. PID/probe no es identificación infalible de procesos;
 no borrar .lock por fallo sin inspeccionar que no existe escritor activo. No hay
 lease distribuido ni recovery automático de lock huérfano.
+
+Si termina `stopped` aunque los criterios visibles sean pass, no relanzar. Con el
+incremento diagnóstico desplegado, `status --run ID` muestra por caso execution/
+deterministic/semantic status, error_class, model_calls/usage_error_count y
+terminal_diagnostic. Este último sólo tiene reason/counters/estado allowlist; sin
+texto ni argumentos. Histórico7ea0cf06 no guardó ese detalle: null es desconocido,
+no ausencia demostrada de tool ni permiso de replay. La evidencia del caso previo
+sigue revisable, pero el caso sin respuesta no se etiqueta ni promueve a golden.
 
 Corregir una etiqueta conservando la anterior y un motivo:
 
@@ -163,8 +187,9 @@ usuarios Telegram/documents. Detector de secretos bloquea patrones conocidos,
 
 ## Antes de usar de verdad
 
-- Corregir/esclarecer campaña interrumpida: conservar marker/report, etiquetas no
-  dadas siguen no evaluadas; revocación anterior no confirmada no equivale a pasada.
+- Campañas interrumpidas/históricas: conservar marker/report; etiquetas no dadas
+  siguen no evaluadas; no reconstruir respuestas faltantes. Para7ea0cf06 ya hay
+  resultado parcial real, no reusar esa aprobación para una nueva inferencia.
 - Cambia fingerprint de fuentes/modelado de tools de eval: commit/CI nuevos,
   aprobación de identidad nueva y despliegue exclusivo eval con coste/ventana
   acordados. Motor acepta nueva fuente aprobada sin borrar marca histórica del

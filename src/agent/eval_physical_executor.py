@@ -64,7 +64,9 @@ from agno.media import File
 from agno.models.message import Message
 from agno.run import RunContext
 from agno.run.agent import RunOutput
+from pydantic import ValidationError
 
+from src.agent.eval_diagnostics import EvalPresentationError, terminal_diagnostic
 from src.agent.eval_tools import SyntheticProposalStore, build_eval_tools
 from src.agent.evals import EvalExecutionRequest, EvalObservation
 from src.agent.instructions import assemble_instructions
@@ -75,6 +77,7 @@ from src.agent.reply_presentation import (
 )
 from src.agent.tool_budget_hooks import build_budget_tool_hook
 from src.agent.tool_catalog import proposal_only_tools
+from src.domain.interactions.reply import InvalidPresentationOutputError
 from src.domain.llm_access.access import LLMAccess
 from src.domain.llm_access.context import execution_context_scope
 from src.domain.llm_access.models import ExecutionBudget, ExecutionContext, generate_traceparent
@@ -216,7 +219,12 @@ class GovernedPhysicalEvalExecutor:
         tool_names = tuple(
             name for execution in domain_tool_executions(output) if (name := execution.tool_name)
         )
-        reply = reply_from_run(output)
+        try:
+            reply = reply_from_run(output)
+        except (InvalidPresentationOutputError, ValidationError):
+            # The same terminal guard still fails closed. Capture metadata before
+            # the invalid output disappears; never persist output/content/arguments.
+            raise EvalPresentationError(terminal_diagnostic(output)) from None
         outcome = "tool_call" if tool_names else "no_tool_call"
 
         proposals = store.evidence()

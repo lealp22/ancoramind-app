@@ -65,8 +65,18 @@ recordatorios y eventos, con trazabilidad completa.
   bruta7d/purga manual, markers anti-replay conservados; exports sanitizados
   explícitos. Candidato histórico db0c59b sigue sin esa recuperación; no inventar
   revisión ni relanzar campaña interrumpida. Nuevo código publicado en7ea0cf06
-  vía specs/041; setup clave exclusiva reutilizable y validación real de revisión
-  durable siguen pendientes; no crear claves/inferir por publicar.
+  vía specs/041. Setup reutilizable realizado por propietario y campaña real única
+  autorizada5casos/nominal0,10USD/humano/cifrado7d: run52759a15ad454050aef8b5c1a9b3f122
+  stopped con5calls. Caso1 passed técnico+2labels pass/3calls; caso2
+  InvalidPresentationOutputError sin observación,3restantes no iniciados. No tecla p
+  ni setup demostrado como causa. No reconstruir salida faltante ni repetir run.
+  Incremento local diagnóstico allowlist/counters/estado terminal/checkpoint/status,
+  sin contenido extra, retries ni cambios prompts/provider/guard de aceptación.
+  Reproducciones offline/caso mixto guionizado y158focales/1skip superados;
+  1925unitarias/1skip,80,98 %,14integraciones focales PostgreSQL local,
+  Ruff/mypy178/catálogos/diff limpios. Nueva
+  huella requiere SHA/CI/publicación y aprobación independientes. Causa histórica
+  exacta/validación E2E completa siguen abiertas; no inferir por publicar.
   1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
   Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
 
@@ -100,10 +110,13 @@ recordatorios y eventos, con trazabilidad completa.
   sólo aceptaba UUID+fila. Fix local acepta sólo ambas combinaciones exactas,
   manteniendo rechazo de contenido/errores/inconsistencias;158 focales pasan,
   1898 unitarias/1skip,80,85 %,Ruff/mypy177/diff limpios.
-  Publicación del helper/CI/nuevo workflow pendientes; candidato puede seguir7ea0cf06.
+  Publicado helper1c700339 en workflow39173039736: deployed_idle_verified,
+  candidato7ea0cf06/deployment085cb777-6e58-489b-93ef-c4596d68e0c7,1RUNNING/0crashed,
+  sin pendingWork/volumen y otros servicios conservados según workflow/MCP.
   Propietario reporta clave eval r4 nominal0,10USD/7d creada sin inferencia; variables
-  guardadas sin reiniciar (valores no consultados); mismas instancia/volumen.
-  Sin inferencia ni CLI local; despliegue de variables/aprobación y revisión real pendientes.
+  aplicadas mediante nueva publicación (valores no consultados), volumen conservado.
+  Campaña posterior parcial real descrita arriba; sin inferencia ni CLI local por
+  agente. Diagnóstico nuevo sólo local; no relanzar campaña histórica.
   Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
 
 ---

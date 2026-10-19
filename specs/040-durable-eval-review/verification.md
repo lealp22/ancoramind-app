@@ -1,4 +1,49 @@
-# Verificación local — specs/040 (2026-10-18)
+# Verificación — specs/040 (2026-10-18)
+
+## Campaña real y corrección local de diagnóstico — estado vigente
+
+- Workflow39173039736/control1c700339 publicó candidato7ea0cf06 en
+  deployment085cb777-6e58-489b-93ef-c4596d68e0c7; GitHub summary
+  deployed_idle_verified, MCP Online/1RUNNING/0crashed/sin pendingWork contrastados
+  antes de campaña. Variables presentes por nombre, sin leer valores.
+- Propietario autorizó una campaña5casos/nominal0,10USD/humano/cifrado7d;
+  reportó run52759a15ad454050aef8b5c1a9b3f122 stopped/inference_started=true/5calls.
+  Reporte metadata específico: single_proposal passed determinista+semántico,
+  dos labels pass/3calls/estimated0,0035629999999999999USD/actualnull;
+  mixed_read_proposal stopped/InvalidPresentationOutputError/not_evaluated;
+  otros3not_started. No asignar costes cero al segundo caso ni total factura exacta.
+- Causa histórica acotada: reply_from_run rechazó estructura terminal antes de
+  construir la observación, por lo que no hay contenido/trace del segundo caso
+  recuperables. No prueba de culpa modelo vs proveedor ni qué variante del guard.
+  Pulsar p sí quedó guardado y el primer caso pasó. No fallo de setup demostrado.
+- Regresiones rojas: status no exponía estado/error por caso; excepción perdía
+  motivo estructural fijo. Incremento sólo harness captura TerminalDiagnostic
+  tipado/allowlist sin texto y lo propaga en excepción eval; runner persiste razón,
+  contadores/estado y uso no completado. Status revalida metadata con allowlist,
+  reporta error histórico sin inventar motivo terminal si no se guardó.
+- Caso mixto real del catálogo ejecutado offline con Model Agno guionizado:
+  list_todo_lists → list_todo_items → propose_todo_item(priority=high) → present_reply,
+  payload/Core/answer separados/veredicto correcto. Esto demuestra capacidad del
+  harness, no corrige ni reproduce por sí solo la respuesta probabilística histórica.
+- Variantes sin red: ausente/duplicada/noúltima/error/resultadonostring/payload
+  inválido; estado AgnoERROR sin atribuir causa; campos privados/adicionales
+  rechazados; HTTP503 test anterior sigue sin retries. Prueba integral cifrada
+  primer caso3calls/pass+pass → segundo2calls/fallo → restantes no iniciados;
+  status tras reabrir store preserva diagnóstico, no respuesta/labels nuevas;
+  replay y promoción sin observación rechazados. No I/O canónico ni proveedores.
+- Validación focal harness/presentación: **158 passed/1skip** Windows symlink.
+  Global `pytest tests/unit/ -q --cov=src`: **1925 passed/1skip**, **80,98 %**;
+  `ruff check src/ tests/ scripts/ migrations/` y `mypy src/` (**178 fuentes**)
+  limpios. `scripts/run_evals.py`:36casos/6categorías/9provisionales válidos.
+  **14 integraciones focales** processor/presentation pasan, DB dedicada
+  `ancoramind_test` en127.0.0.1:5432/PostgreSQL Docker local fijada explícitamente,
+  sin fixtures en productivas. No se repite toda la suite de integración.
+  Diff limpio; warnings CRLF Git/Collector localhost4318 ausente conocidos,
+  sin fallos ni cambio de telemetría. Sin cambios prompts/tools/models/proveedor/config productiva.
+  Cambia huella de fuentes del harness (cambio evaluable); no aprobación nueva de gasto,
+  commit/push/deploy/secretos leídos ni inferencia real por el agente.
+
+## Implementación original — evidencia histórica
 
 Implementación local terminada, sin commit/push del agente, despliegue, claves
 nuevas ni inferencia pagada. El candidato Railway db0c59b no se modifica ni se

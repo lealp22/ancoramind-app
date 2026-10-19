@@ -63,6 +63,49 @@ def test_evidence_ciphertext_private_metadata_and_duplicate_capture(archive):
         EvalEvidenceStore(store.root, Fernet.generate_key().decode()).events(run)
 
 
+def test_status_exposes_historical_failure_without_reconstructing_missing_output(archive):
+    store, run, case, _, _ = archive
+    store.append(run, "checkpoint", {
+        "status": "stopped", "inference_started": True, "recorded_model_calls": 5,
+        "results": [{"case_id": case.case_id, "status": "stopped",
+                     "semantic_status": "not_evaluated",
+                     "error_class": "InvalidPresentationOutputError",
+                     "private": "PRIVATE_OUTPUT_MUST_NOT_BE_EXPORTED"}],
+    })
+    summary = store.status(run)
+    assert summary["cases"][0]["execution_status"] == "stopped"
+    assert summary["cases"][0]["error_class"] == "InvalidPresentationOutputError"
+    assert summary["cases"][0]["terminal_diagnostic"] is None
+    assert summary["cases"][0]["evidence_available"] is False
+    assert "PRIVATE_OUTPUT" not in json.dumps(summary)
+    with pytest.raises(ValueError, match="complete_human_review"):
+        store.promote(run, case.case_id, dataset="judge", reviewer="owner",
+                      sanitized_approved=True, split="development")
+
+
+def test_status_includes_only_validated_terminal_metadata(archive):
+    store, run, case, _, _ = archive
+    diagnostic = {"reason": "missing_terminal", "presentation_count": 0,
+                  "tool_execution_count": 1, "run_status": "COMPLETED"}
+    result = {"case_id": case.case_id, "status": "stopped",
+              "error_class": "InvalidPresentationOutputError", "model_calls": 2,
+              "usage_error_count": 0, "terminal_diagnostic": diagnostic}
+    store.append(run, "checkpoint", {"status": "stopped", "results": [result]})
+    summary = store.status(run)["cases"][0]
+    assert summary["terminal_diagnostic"] == diagnostic
+    assert summary["model_calls"] == 2 and summary["usage_error_count"] == 0
+    store.append(run, "checkpoint", {"status": "stopped", "results": [{
+        **result, "error_class": "PRIVATE_ERROR_CLASS", "model_calls": "PRIVATE_COUNT",
+        "deterministic_status": {"private": "PRIVATE_STATE"},
+        "terminal_diagnostic": {**diagnostic, "extra": "PRIVATE_OUTPUT"},
+    }]})
+    summary = store.status(run)
+    assert summary["cases"][0]["terminal_diagnostic"] is None
+    assert summary["cases"][0]["model_calls"] is None
+    assert summary["cases"][0]["error_class"] == "OtherError"
+    assert "PRIVATE" not in json.dumps(summary)
+
+
 async def test_each_label_is_saved_before_disconnect_and_review_reopens_without_inference(archive):
     store, run, case, observed, reviewer = archive
     reviewer.capture(case, observed, {"passed": True})

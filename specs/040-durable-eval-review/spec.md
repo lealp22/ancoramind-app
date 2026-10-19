@@ -51,3 +51,30 @@ checkpoint antes de humano incluso fallo técnico; payload incorrecto/trivial no
 cuenta propuesta; renderer fecha/prioridad; golden Agent/juez distintos sin
 secretos/no evaluados; aprobación y replay preservados; worker idle/detach sin
 consola y tests sin inferencia real.
+
+## Incremento local — diagnóstico terminal seguro tras campaña real (2026-10-18)
+
+La campaña autorizada del candidato7ea0cf06, run52759a15ad454050aef8b5c1a9b3f122,
+pasó el primer caso y se detuvo en el segundo con InvalidPresentationOutputError.
+La observación se guardaba después de validar el cierre, por lo que el segundo
+caso no conserva respuesta ni hechos terminales recuperables. No reconstruirlos.
+
+El incremento captura únicamente metadata estructural antes de propagar el rechazo:
+reason fijo (`missing_terminal`, `multiple_terminals`, `terminal_not_last`,
+`terminal_tool_error`, `terminal_result_not_string`, `invalid_terminal_payload`),
+número de herramientas/presentaciones y estado Agno normalizado. El runner añade
+llamadas registradas y número de eventos de uso no completados por caso, aunque
+execute falle. Se conserva en checkpoint/journal cifrado; status publica sólo la
+proyección revalidada, estado técnico/semántico y clase de error allowlist.
+
+No guarda texto rechazado, mensajes, argumentos, resultados de tools ni excepciones
+del proveedor; no amplía captura de contenido. La excepción sigue siendo subtipo
+del rechazo terminal; reporte conserva la clase InvalidPresentationOutputError.
+reply_from_run, terminal tool, prompts/providers y permisos/retries no cambian.
+Estado ERROR/eventos de uso fallidos son hechos, no prueba de causa/modelo culpable.
+
+Compatibilidad histórica: sin diagnóstico guardado, status devuelve null y nunca
+inventa el motivo. No crea observación, etiqueta ni golden del caso fallido. Cambia
+huella del harness: nuevo SHA/CI/publicación y aprobación independiente antes de
+cualquier ejecución real; la autorización única anterior está consumida. No
+repetir caso/campaña para verificar este cambio offline ni borrar reservas.

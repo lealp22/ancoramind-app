@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Literal, Protocol, TextIO
 
 from src.agent.eval_campaign import EvalCampaignPlan, EvalUsageRecorder
+from src.agent.eval_diagnostics import EvalPresentationError
 from src.agent.eval_tools import SyntheticProposalStore, build_eval_tools
 from src.agent.evals import (
     EvalCase,
@@ -202,6 +203,7 @@ class EvalCampaignRunner:
         try:
             for index, case in enumerate(self._cases):
                 result: dict[str, object] = {"case_id": case.case_id, "status": "started"}
+                offset = len(self._recorder.events)
                 results.append(result)
                 if checkpoint:
                     checkpoint(self.report)
@@ -211,7 +213,6 @@ class EvalCampaignRunner:
                     self.report["inference_started"] = True
                     if checkpoint:
                         checkpoint(self.report)  # durable intent before crossing the model boundary
-                    offset = len(self._recorder.events)
                     request = EvalExecutionRequest(case, self._plan.logical_route,
                                                    self._plan.config_revision)
                     observation = await self._executor.execute(request)
@@ -247,7 +248,16 @@ class EvalCampaignRunner:
                     # No exception/response/provider text is safe report material.
                     result["status"] = "stopped"
                     result.setdefault("semantic_status", "not_evaluated")
-                    result["error_class"] = type(error).__name__
+                    events = self._recorder.events[offset:]
+                    result["model_calls"] = len(events)
+                    result["usage_error_count"] = sum(
+                        event.status != "completed" for event in events
+                    )
+                    if isinstance(error, EvalPresentationError):
+                        result["error_class"] = "InvalidPresentationOutputError"
+                        result["terminal_diagnostic"] = error.diagnostic.model_dump()
+                    else:
+                        result["error_class"] = type(error).__name__
                     results.extend({"case_id": c.case_id, "status": "not_started"}
                                    for c in self._cases[index + 1:])
                     self.report["status"] = "stopped"
