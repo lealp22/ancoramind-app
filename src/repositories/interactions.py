@@ -988,7 +988,7 @@ class TelegramInteractionsRepository:
         """Persist a deterministic command reply before any Telegram side effect.
 
         The transition is gated on ``accepted`` (or an explicitly requested
-        pre-Agent ambiguous voice failure notice), so a replayed update can never
+        pre-Agent voice failure notice, ambiguous or controlled), so a replayed update can never
         be answered twice. Nothing external happens before the commit: unlike an
         Agent run, a crash here leaves plain accepted work that the next cycle
         re-derives deterministically, never an ambiguous effect.
@@ -1006,7 +1006,8 @@ class TelegramInteractionsRepository:
                         SELECT 1 FROM ancora.logical_responses WHERE interaction_id = :id
                     ) AND (
                         status = 'accepted' OR (
-                            :voice_failure_notice AND status = 'failed_ambiguous'
+                            :voice_failure_notice
+                            AND status IN ('failed_ambiguous', 'failed_controlled')
                             AND error_class IN ('VoicePreparationError', 'VoicePreparationRecovery')
                             AND agent_started_at IS NULL
                         )
@@ -1071,7 +1072,8 @@ class TelegramInteractionsRepository:
             await self._session.execute(
                 text("""
             SELECT i.* FROM ancora.telegram_interactions i
-            WHERE i.status = 'failed_ambiguous' AND i.agent_started_at IS NULL
+            WHERE i.status IN ('failed_ambiguous', 'failed_controlled')
+              AND i.agent_started_at IS NULL
               AND i.error_class IN ('VoicePreparationError', 'VoicePreparationRecovery')
               AND NOT EXISTS (SELECT 1 FROM ancora.logical_responses r
                               WHERE r.interaction_id = i.id)

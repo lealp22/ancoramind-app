@@ -64,6 +64,47 @@ async def test_reject_real_invalid_audio_and_cleanup(tmp_path, kind):
     assert list(root.iterdir()) == []
 
 
+def _drop_last_page(content: bytes) -> bytes:
+    """Cut at a page boundary, i.e. a stream whose last page has no EOS flag."""
+    offset = last = 0
+    while offset < len(content):
+        last = offset
+        count = content[offset + 26]
+        table_end = offset + 27 + count
+        offset = table_end + sum(content[offset + 27 : table_end])
+    return content[:last]
+
+
+async def test_missing_eos_flag_is_accepted_as_telegram_voice_notes_omit_it(tmp_path):
+    """Regression: real Telegram notes end without EOS and were rejected."""
+    content = _drop_last_page(generate(tmp_path, duration="2"))
+    assert content.startswith(b"OggS")
+    root = tmp_path / "private"
+    root.mkdir()
+    result = await FFmpegVoiceInspector(temporary_root=str(root)).inspect(content)
+    assert result.duration_seconds > 0
+    assert list(root.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "kind,code",
+    [
+        ("fake", "voice_ogg_structure_invalid"),
+        ("truncated", "voice_ogg_structure_invalid"),
+        ("vorbis", "voice_format_not_allowed"),
+    ],
+)
+async def test_invalid_audio_reports_specific_fixed_code(tmp_path, kind, code):
+    content = generate(tmp_path, codec="libvorbis" if kind == "vorbis" else "libopus")
+    if kind == "fake":
+        content = b"OggSfake"
+    elif kind == "truncated":
+        content = content[:-50]
+    with pytest.raises(SpeechInputError) as error:
+        await FFmpegVoiceInspector().inspect(content)
+    assert error.value.code == code
+
+
 @pytest.mark.parametrize("failure", ["cancel", "timeout"])
 async def test_cancel_timeout_remove_temporary_input(tmp_path, failure):
     root = tmp_path / "private"

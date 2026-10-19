@@ -34,6 +34,10 @@ class SpeechInputError(ValueError):
             "voice_too_large",
             "voice_format_not_allowed",
             "voice_empty_or_invalid",
+            "voice_ogg_structure_invalid",
+            "voice_probe_failed",
+            "voice_decode_failed",
+            "voice_duration_mismatch",
         ],
     ) -> None:
         self.code = code

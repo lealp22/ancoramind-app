@@ -194,6 +194,32 @@ class VoicePreparationsRepository:
             },
         )
 
+    async def close_failed(
+        self, interaction_id: UUID, user_id: int, owner_token: UUID, *, ambiguous: bool
+    ) -> VoicePreparation | None:
+        """Close this owner's unfinished row when preparation fails in-process.
+
+        Only the caller's own non-terminal row moves; nothing is requeued, no
+        transcript is touched and no STT/Agent attempt is granted. Must run
+        while the parent interaction is still ``accepted`` (parent-first lock).
+        """
+        return await self._write(
+            """
+            UPDATE ancora.voice_preparations
+            SET status = CASE WHEN :ambiguous OR status = 'transcribing'
+                              THEN 'failed_ambiguous' ELSE 'failed_controlled' END,
+                updated_at = now()
+            WHERE interaction_id = :id AND user_id = :user_id AND owner_token = :owner
+              AND status IN ('preparing', 'downloaded', 'transcribing') RETURNING *
+        """,
+            {
+                "id": interaction_id,
+                "user_id": user_id,
+                "owner": owner_token,
+                "ambiguous": ambiguous,
+            },
+        )
+
     async def get(self, interaction_id: UUID, user_id: int) -> VoicePreparation | None:
         result = await self._session.execute(
             text("""

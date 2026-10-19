@@ -172,11 +172,11 @@ de operador autorizado. Hasta entonces, la revisión activa remota no cambia.
 ```powershell
 $env:RUNTIME_CONFIG_ADMIN_TOKEN='<token>'
 $env:RUNTIME_CONFIG_ADMIN_ACTOR='<operador>'
-python scripts/runtime_config.py status --base-url <app-url>
-python scripts/runtime_config.py validate --base-url <app-url> --config candidato.json
-python scripts/runtime_config.py create-revision --base-url <app-url> `
+python scripts/runtime_config.py --base-url <app-url> status
+python scripts/runtime_config.py --base-url <app-url> validate --config candidato.json
+python scripts/runtime_config.py --base-url <app-url> create-revision `
   --config candidato.json --reason "<motivo>"
-python scripts/runtime_config.py activate --base-url <app-url> `
+python scripts/runtime_config.py --base-url <app-url> activate `
   --revision <N> --expected-current-revision <M> --reason "<motivo>"
 ```
 
@@ -192,13 +192,14 @@ Candidato preparado, **no publicado ni activado** y con voz OFF. Alias nuevo
 `ancoramind-stt-r1` (Whisper large v3 turbo vía OpenRouter, ruta compatible
 `openai/` + `api_base`; sin reintentos). Ejecutar desde un entorno de operador:
 
-```powershell
-python scripts/litellm_gateway_alias.py --dry-run publish --alias ancoramind-stt-r1 `
-  --model openai/openai/whisper-large-v3-turbo `
-  --api-base https://openrouter.ai/api/v1 --num-retries 0
-python scripts/litellm_gateway_alias.py publish --alias ancoramind-stt-r1 `
-  --model openai/openai/whisper-large-v3-turbo `
-  --api-base https://openrouter.ai/api/v1 --num-retries 0
+Una sola línea por comando (el shell del servicio es bash; no usar
+continuaciones de PowerShell). `publish` exige `--allow-base` porque el script
+trata todo `*-r1` como alias base, aunque `ancoramind-stt-r1` no está declarado
+en `gateway/litellm-config.yaml`:
+
+```bash
+python scripts/litellm_gateway_alias.py --dry-run publish --alias ancoramind-stt-r1 --allow-base --model openai/openai/whisper-large-v3-turbo --api-base https://openrouter.ai/api/v1 --num-retries 0
+python scripts/litellm_gateway_alias.py publish --alias ancoramind-stt-r1 --allow-base --model openai/openai/whisper-large-v3-turbo --api-base https://openrouter.ai/api/v1 --num-retries 0
 python scripts/litellm_gateway_alias.py grant --alias ancoramind-stt-r1
 python scripts/litellm_gateway_alias.py verify --alias ancoramind-stt-r1
 ```
@@ -368,7 +369,7 @@ comparar `limit`/`limit_remaining` y usage diario/semanal/mensual.
 ```powershell
 $env:RUNTIME_CONFIG_ADMIN_TOKEN='<token>'
 $env:RUNTIME_CONFIG_ADMIN_ACTOR='<operador>'
-python scripts/runtime_config.py activate --base-url <app-url> `
+python scripts/runtime_config.py --base-url <app-url> activate `
   --revision <N> --expected-current-revision <M> --reason "<motivo>"
 ```
 
@@ -501,11 +502,11 @@ Toda activación usa CAS: ante `409`, releer `status` y reintentar.
 ```powershell
 $env:RUNTIME_CONFIG_ADMIN_TOKEN='<token>'
 $env:RUNTIME_CONFIG_ADMIN_ACTOR='<operador>'
-python scripts/runtime_config.py status --base-url <app-url>
-python scripts/runtime_config.py validate --base-url <app-url> --config candidato.json
-python scripts/runtime_config.py activate --base-url <app-url> `
+python scripts/runtime_config.py --base-url <app-url> status
+python scripts/runtime_config.py --base-url <app-url> validate --config candidato.json
+python scripts/runtime_config.py --base-url <app-url> activate `
   --revision <N> --expected-current-revision <M> --reason "<motivo>"
-python scripts/runtime_config.py rollback --base-url <app-url> `
+python scripts/runtime_config.py --base-url <app-url> rollback `
   --revision <M> --expected-current-revision <N> --reason "<motivo>"
 ```
 

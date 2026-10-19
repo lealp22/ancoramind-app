@@ -668,13 +668,13 @@ class InteractionProcessor:
                 error_class="VoicePreparationError",
                 error_detail_code=code,
             )
-            if ambiguous:
-                return await self._reply_deterministically(
-                    interaction,
-                    VOICE_NOT_UNDERSTOOD_REPLY,
-                    voice_failure_notice=True,
-                )
-            return True
+            # Controlled and ambiguous failures both notify the user; neither
+            # retries STT nor starts the Agent (the notice is a fixed constant).
+            return await self._reply_deterministically(
+                interaction,
+                VOICE_NOT_UNDERSTOOD_REPLY,
+                voice_failure_notice=True,
+            )
 
     def _provenance(self, interaction: TelegramInteraction) -> InteractionProvenance | None:
         """Trusted origin for ``propose_*`` tools; ``None`` while the rollout is off."""

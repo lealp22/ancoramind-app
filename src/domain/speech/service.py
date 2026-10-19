@@ -82,6 +82,7 @@ class VoicePreparationService:
         sent = False
         content = None
         audio = None
+        repo: VoicePreparationsRepository | None = None
         try:
             speech = context.config.config.speech
             billing = speech.billing if speech else self._billing
@@ -143,18 +144,38 @@ class VoicePreparationService:
                 return result.text
         except asyncio.CancelledError:
             raise
-        except VoicePreparationError:
+        except VoicePreparationError as exc:
+            await self._close_failed(repo, interaction.id, user_id, owner, exc.ambiguous)
             raise
         except SpeechInputError as exc:
+            await self._close_failed(repo, interaction.id, user_id, owner, sent)
             raise VoicePreparationError(exc.code, ambiguous=sent) from None
         except TimeoutError:
+            await self._close_failed(repo, interaction.id, user_id, owner, sent)
             raise VoicePreparationError("stt_timeout", ambiguous=sent) from None
         except Exception:
+            await self._close_failed(repo, interaction.id, user_id, owner, sent)
             raise VoicePreparationError("stt_failed", ambiguous=sent) from None
         finally:
             content = None
             audio = None
             await session.close()
+
+    @staticmethod
+    async def _close_failed(
+        repo: VoicePreparationsRepository | None,
+        interaction_id: UUID,
+        user_id: int,
+        owner: UUID,
+        ambiguous: bool,
+    ) -> None:
+        """Best effort: never mask the original failure or retry anything."""
+        if repo is None:
+            return
+        try:
+            await repo.close_failed(interaction_id, user_id, owner, ambiguous=ambiguous)
+        except Exception:  # noqa: BLE001 - recovery sweeps any row left behind
+            return
 
     async def maintain(self) -> int:
         return await maintain_voice_preparations(self._sessions)

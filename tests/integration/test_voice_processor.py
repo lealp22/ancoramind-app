@@ -338,6 +338,66 @@ async def test_restart_delivers_only_missing_voice_notice(session):
     )
 
 
+async def test_controlled_voice_failure_notifies_once_and_never_retries(session):
+    from src.domain.speech.policy import SpeechInputError
+
+    _, service, stt, processor, interaction, agent_factory = await setup(session)
+    service._inspector.inspect.side_effect = SpeechInputError("voice_probe_failed")
+    assert await processor._run_agent(interaction)
+    stored = (
+        (
+            await session.execute(
+                text(
+                    "SELECT status, error_detail_code FROM ancora.telegram_interactions "
+                    "WHERE id = :id"
+                ),
+                {"id": interaction.id},
+            )
+        )
+        .mappings()
+        .one()
+    )
+    assert stored["error_detail_code"] == "voice_probe_failed"
+    prep = await session.scalar(
+        text("SELECT status FROM ancora.voice_preparations WHERE interaction_id = :id"),
+        {"id": interaction.id},
+    )
+    assert prep == "failed_controlled"
+    processor._sender.send_text.assert_awaited_once()
+    assert "No he podido entender el audio" in processor._sender.send_text.call_args.args[1]
+    stt.transcribe.assert_not_awaited()
+    assert not agent_factory.agent.calls
+    service.maintain = AsyncMock()
+    assert await processor.run_once() == 0
+    processor._sender.send_text.assert_awaited_once()
+    assert (
+        await session.scalar(
+            text("SELECT count(*) FROM ancora.logical_responses WHERE interaction_id = :id"),
+            {"id": interaction.id},
+        )
+        == 1
+    )
+
+
+async def test_restart_delivers_missing_notice_for_controlled_voice_failure(session):
+    _, service, stt, processor, interaction, agent_factory = await setup(session)
+    await session.execute(
+        text(
+            "UPDATE ancora.telegram_interactions SET status = 'failed_controlled', "
+            "error_class = 'VoicePreparationError', payload_ciphertext = NULL, "
+            "payload_key_version = NULL WHERE id = :id"
+        ),
+        {"id": interaction.id},
+    )
+    await session.commit()
+    service.maintain = AsyncMock()
+    assert await processor.run_once() == 0
+    assert await processor.run_once() == 0
+    stt.transcribe.assert_not_awaited()
+    assert not agent_factory.agent.calls
+    processor._sender.send_text.assert_awaited_once()
+
+
 async def test_two_processors_cannot_transcribe_same_voice(session):
     _, _, stt, processor, interaction, agent_factory = await setup(session)
     await asyncio.gather(processor._run_agent(interaction), processor._run_agent(interaction))

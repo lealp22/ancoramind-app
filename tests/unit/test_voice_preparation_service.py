@@ -211,6 +211,44 @@ async def test_mark_downloaded_failure_blocks_stt_without_ambiguity():
     stt.transcribe.assert_not_awaited()
 
 
+@pytest.mark.parametrize("sent", [False, True])
+async def test_failure_closes_own_preparation_row_without_stt_replay(sent):
+    """A failed preparation must not leave its row in a non-terminal state."""
+    from src.domain.speech.policy import SpeechInputError
+
+    ctx = await speech_context()
+    stt = AsyncMock()
+    stt.transcribe.side_effect = _transcribe_echo
+    repo = _repo()
+    service = _service(stt=stt)
+    if sent:
+        repo.persist_transcript.side_effect = RuntimeError("boom")
+    else:
+        service._inspector.inspect.side_effect = SpeechInputError("voice_probe_failed")
+
+    with patch(_REPO_TARGET, return_value=repo), pytest.raises(VoicePreparationError) as error:
+        await service.prepare(_interaction(), _attachment(), context=ctx)
+
+    assert error.value.ambiguous is sent
+    repo.close_failed.assert_awaited_once()
+    assert repo.close_failed.call_args.kwargs == {"ambiguous": sent}
+    assert stt.transcribe.await_count == (1 if sent else 0)
+
+
+async def test_close_failure_never_masks_original_error():
+    ctx = await speech_context()
+    stt = AsyncMock()
+    repo = _repo()
+    repo.close_failed.side_effect = RuntimeError("db down")
+    service = _service(stt=stt)
+    service._inspector.inspect.side_effect = RuntimeError("inspect")
+
+    with patch(_REPO_TARGET, return_value=repo), pytest.raises(VoicePreparationError) as error:
+        await service.prepare(_interaction(), _attachment(), context=ctx)
+
+    assert error.value.code == "stt_failed"
+
+
 async def test_claim_miss_returns_none_without_stt():
     """Another worker already owns this preparation: no STT, no exception."""
     ctx = await speech_context()

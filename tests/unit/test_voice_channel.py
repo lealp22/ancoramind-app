@@ -129,13 +129,12 @@ async def test_stt_failure_never_starts_agent(ambiguous):
     )
     processor._agent_runner.run.assert_not_awaited()
     service.prepare.assert_awaited_once()
-    if ambiguous:
-        processor._reply_deterministically.assert_awaited_once()
-        assert processor._reply_deterministically.call_args.args[1] == (
-            "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
-        )
-    else:
-        processor._reply_deterministically.assert_not_awaited()
+    # Controlled and ambiguous failures both notify the user (fixed constant).
+    processor._reply_deterministically.assert_awaited_once()
+    assert processor._reply_deterministically.call_args.args[1] == (
+        "No he podido entender el audio. Por favor, envía tus indicaciones de nuevo."
+    )
+    assert processor._reply_deterministically.call_args.kwargs == {"voice_failure_notice": True}
 
 
 async def test_stream_download_checks_actual_bytes_and_closes():
@@ -186,6 +185,7 @@ async def test_invalid_reference_never_downloads(changes):
         voice_preparation=service,
     )
     processor._mark_terminal = AsyncMock()
+    processor._reply_deterministically = AsyncMock(return_value=True)
     normalized = normalize_telegram_update(update(**changes))
     await processor._prepare_voice(
         _interaction(), normalized.attachments[0], normalized.model_dump(mode="json")
@@ -193,6 +193,8 @@ async def test_invalid_reference_never_downloads(changes):
     service.prepare.assert_not_awaited()
     processor._agent_runner.run.assert_not_awaited()
     processor._mark_terminal.assert_awaited_once()
+    # A rejected reference now tells the user instead of failing silently.
+    processor._reply_deterministically.assert_awaited_once()
 
 
 def test_malformed_voice_cannot_fall_back_to_document():

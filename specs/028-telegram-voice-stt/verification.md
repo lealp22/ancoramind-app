@@ -225,3 +225,40 @@ real siguen pendientes en T4; ver incremento posterior abajo.
 - Cat?logo: turbo prompt 0.00000333, large-v3 0.0000075, whisper-1 0.0001. Documentaci?n confirma familia por segundo; m?nimos/redondeos no verificados.
 - No inferencia ni alias publicado: Gateway/clave local no configurados, audio sint?tico hablado y tarifa aprobada todav?a pendientes.
 - git diff --check global informa whitespace en TODO.md ajeno a esta tarea; no se modifica.
+
+## 2026-10-20 — Primera nota real de Telegram: inspector, cierre de fila y aviso
+
+- **Hallazgo E2E (Supabase, interacción `03749fa5…`):** `failed_controlled` /
+  `VoicePreparationError` / `voice_empty_or_invalid`, `agent_started_at` nulo,
+  0 llamadas de modelo y coste 0. La fila `voice_preparations` quedó en `preparing`
+  y el usuario no recibió respuesta.
+- **Causa raíz (reproducida con la nota real, OGG/Opus 4,22 s, 213 páginas, un stream):**
+  `FFmpegVoiceInspector.inspect` exigía el flag EOS en la última página OGG. Las notas
+  de voz de Telegram no lo traen, así que se rechazaban antes de ffprobe/ffmpeg. ffprobe
+  y ffmpeg aceptan el fichero sin stderr y la duración decodificada coincide (4,2135 s).
+  La hipótesis inicial (stderr o duración) era incorrecta; sólo la reproducción la descartó.
+- **Inspector:** ya no exige EOS. Se conservan: páginas completas, serial único,
+  secuencia contigua, BOS inicial, un solo stream Opus, `-xerror`/`explode` y
+  coincidencia de duración. Test de regresión sin EOS.
+- **Códigos fijos nuevos** (sin contenido, caben en `error_detail_code`):
+  `voice_ogg_structure_invalid`, `voice_probe_failed`, `voice_decode_failed`,
+  `voice_duration_mismatch`. `voice_empty_or_invalid` queda para vacío/cabecera/timeout.
+- **Fila huérfana:** `VoicePreparationsRepository.close_failed` cierra sólo la fila no
+  terminal del propio dueño (`failed_controlled`, o `failed_ambiguous` si ya se envió a
+  STT; nunca toca `transcribed`). `prepare` lo invoca en cada rama de error, best effort,
+  sin enmascarar el error original, sin reintento ni STT nuevo. `recover_abandoned`
+  sigue como respaldo.
+- **Aviso en `failed_controlled`:** decisión del propietario. Ambos fallos previos al
+  Agent notifican con la constante «No he podido entender el audio…» vía el outbox
+  durable (`voice_failure_notice`), una sola vez y también tras reinicio. Sin STT ni
+  Agent nuevos. Cambia de comportamiento: antes los controlados eran silenciosos.
+- **Alcance del cambio de aviso:** también avisa de rechazos de referencia
+  (duración/tamaño/origen) que antes eran silenciosos. Los avisos sólo se emiten si la
+  interacción no tuvo Agent ni respuesta previa.
+- **Validación:** pytest unit completa, integración de voz contra PostgreSQL local
+  (32 pasan, incluidos `close_failed`, aviso controlado y reinicio), Ruff y mypy limpios.
+  Los dos tests de aviso fallan sin el cambio SQL y pasan con él.
+- **Pendiente:** commit, CI en el mismo SHA, despliegue manual y reenvío de la nota para
+  confirmar STT real. La interacción histórica `03749fa5…` cumple la forma de aviso
+  recuperable: tras el despliegue, el worker le enviaría el aviso una vez (retraso
+  tardío); la fila `voice_preparations` histórica sigue en `preparing` hasta decidir.

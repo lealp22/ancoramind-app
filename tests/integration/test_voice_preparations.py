@@ -150,6 +150,55 @@ async def test_recovery_never_requeues_or_retranscribes(session, stage, expected
     assert await TelegramInteractionsRepository(session).claim_agent_start(interaction_id) is None
 
 
+@pytest.mark.parametrize(
+    "stage,ambiguous,expected",
+    [
+        ("preparing", False, "failed_controlled"),
+        ("downloaded", False, "failed_controlled"),
+        ("preparing", True, "failed_ambiguous"),
+        ("transcribing", False, "failed_ambiguous"),
+    ],
+)
+async def test_close_failed_closes_only_own_unfinished_row(session, stage, ambiguous, expected):
+    interaction_id, _ = await admitted(session)
+    owner = uuid4()
+    repo = VoicePreparationsRepository(session)
+    if stage == "transcribing":
+        await transcribing(repo, interaction_id, owner)
+    else:
+        await repo.claim(interaction_id, 40, owner, 0)
+        if stage == "downloaded":
+            await repo.mark_downloaded(interaction_id, 40, owner)
+    # Another owner or another user can never close it.
+    assert await repo.close_failed(interaction_id, 40, uuid4(), ambiguous=ambiguous) is None
+    assert await repo.close_failed(interaction_id, 41, owner, ambiguous=ambiguous) is None
+    closed = await repo.close_failed(interaction_id, 40, owner, ambiguous=ambiguous)
+    assert closed is not None and closed.status.value == expected
+    # Terminal rows are never reopened, requeued or re-closed.
+    assert await repo.close_failed(interaction_id, 40, owner, ambiguous=ambiguous) is None
+    assert await repo.mark_downloaded(interaction_id, 40, owner) is None
+    assert await repo.claim(interaction_id, 40, uuid4(), 0) is None
+
+
+async def test_close_failed_does_not_touch_a_transcribed_row(session):
+    interaction_id, cipher = await admitted(session)
+    owner = uuid4()
+    repo = VoicePreparationsRepository(session)
+    call_id = await transcribing(repo, interaction_id, owner)
+    await repo.persist_transcript(
+        interaction_id,
+        40,
+        owner,
+        result=SpeechToTextResult(
+            text="Sí", duration_seconds="2", call_id=call_id, usage_event_id=uuid4()
+        ),
+        cipher=cipher,
+    )
+    assert await repo.close_failed(interaction_id, 40, owner, ambiguous=True) is None
+    row = await repo.get(interaction_id, 40)
+    assert row.status.value == "transcribed" and row.transcript_ciphertext is not None
+
+
 async def test_expiry_purges_ciphertext_without_removing_audit(session):
     interaction_id, cipher = await admitted(session)
     owner = uuid4()
