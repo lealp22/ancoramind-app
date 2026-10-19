@@ -233,6 +233,31 @@ class EvalValidationSession:
             self._save(value)
             return self.summary(value)
 
+    def reclassify_imported(self, history: list[dict[str, Any]]) -> list[str]:
+        """Re-evaluate imported ``uncertain`` attempts against their saved report.
+
+        Only imported attempts whose report proves a terminal presentation failure
+        with accounted usage change to ``failed``. Reservation/charge, spend,
+        baseline, expiry and every other entry are left untouched.
+        """
+        changed: list[str] = []
+        with self.storage._lock(self.folder):
+            value = self._read()
+            for run in history:
+                for result in run["results"]:
+                    if (result.get("status") != "stopped" or run.get("usage_complete") is not True
+                        or result.get("error_class") != "InvalidPresentationOutputError"):
+                        continue
+                    for item in value["attempts"]:
+                        if (item.get("imported") is True and item["status"] == "uncertain"
+                            and item["run_id"] == run["run_id"]
+                            and item["case_id"] == result["case_id"]):
+                            item["status"] = "failed"
+                            changed.append(item["case_id"])
+            if changed:
+                self._save(value)
+        return changed
+
     def validate(self, scope: str, key: str) -> None:
         value = self._read()
         if (value["scope"] != scope

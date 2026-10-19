@@ -123,8 +123,14 @@ def session_history(state: Path, plan: EvalCampaignPlan) -> list[dict[str, Any]]
         history.append({
             "run_id": "legacy:" + hashlib.sha256(path.name.encode()).hexdigest(),
             "source": report["source_fingerprint"], "results": report["results"],
+            # A provider-side error event is bounded by the case reservation that
+            # is already charged; any other error class (timeout, network, ...)
+            # stays uncertain.
             "usage_complete": (len(usage) == report.get("recorded_model_calls")
-                               and all(item.get("status") == "completed" for item in usage)),
+                               and all(item.get("status") == "completed"
+                                       or (item.get("status") == "error"
+                                           and item.get("error_class") == "ModelProviderError")
+                                       for item in usage)),
         })
     return history
 
@@ -159,7 +165,15 @@ def prepare_session(store: EvalEvidenceStore, state: Path,
     # Do not pay again for already passed cases; historic labels stay attached
     # to their original candidate, never certify the new candidate retroactively.
     passed = {item["case_id"] for item in attempts if item["status"] == "passed"}
-    case_ids = tuple(selected) if selected else tuple(c for c in plan.case_ids if c not in passed)
+    # Default selection runs only never-started cases. Uncertain/reserved/already
+    # used cases are skipped, never retried; an explicit --cases stays strict.
+    unavailable = {item["case_id"] for item in attempts if (
+        item["status"] in {"uncertain", "reserved"}
+        or item["source"] == identity["source_fingerprint"]
+    )}
+    case_ids = tuple(selected) if selected else tuple(
+        c for c in plan.case_ids if c not in passed and c not in unavailable
+    )
     if (not case_ids or len(set(case_ids)) != len(case_ids)
         or any(c not in plan.case_ids for c in case_ids)):
         raise EvalSessionError("session_case_selection_invalid_or_complete")
@@ -337,7 +351,7 @@ async def review_loop(store: EvalEvidenceStore, run_id: str, reviewer: str) -> d
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("command", choices=["run", "worker", "review", "status", "list", "label",
-      "promote", "export", "purge", "session-init", "session-status"])
+      "promote", "export", "purge", "session-init", "session-status", "session-reclassify"])
     result.add_argument("--run", dest="run_id")
     result.add_argument("--reviewer", default="owner")
     result.add_argument("--case")
@@ -412,6 +426,16 @@ def main(argv: list[str] | None = None) -> int:
             report = asyncio.run(check_session_access(session, plan, dict(os.environ)))
         elif args.command == "session-status":
             report = EvalValidationSession(store).summary()
+        elif args.command == "session-reclassify":
+            plan, snapshot = campaign_config()
+            validate_state_directory(state, dict(os.environ), sealed_image=True)
+            session = EvalValidationSession(store)
+            session.validate(session_scope(ROOT, plan, snapshot),
+                             gateway_settings(dict(os.environ)).litellm_proxy_virtual_key)
+            if (session.folder / "worker.lease").exists():
+                raise EvalSessionError("session_worker_active_or_uncertain")
+            changed = session.reclassify_imported(session_history(state, plan))
+            report = {**session.summary(), "reclassified_cases": changed}
         elif args.command == "label":
             store.review(args.run_id, args.case, args.criterion, args.label,
                          args.reviewer, args.comment)

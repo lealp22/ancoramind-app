@@ -208,6 +208,52 @@ def test_prepare_uses_one_session_not_stale_approval_per_sha(configured):
     assert session.summary()["attempts"] == []  # preparation never spends or reserves calls
 
 
+def _history(plan, error_class):
+    results = [{"case_id": c, "status": "not_started"} for c in plan.case_ids]
+    results[0]["status"] = "passed"
+    results[1].update(status="stopped", error_class="InvalidPresentationOutputError")
+    return [{"run_id": "legacy:" + "a" * 64, "source": "d" * 64, "results": results,
+             "usage_complete": error_class == "ModelProviderError"}]
+
+
+def test_reclassify_only_proven_provider_error_and_keeps_charge(configured):
+    session, _, plan, *_ = configured
+    value = session._read()
+    value["attempts"] = [
+        {"run_id": "legacy:" + "a" * 64, "source": "d" * 64, "case_id": plan.case_ids[0],
+         "imported": True, "charged": "0.02", "status": "passed"},
+        {"run_id": "legacy:" + "a" * 64, "source": "d" * 64, "case_id": plan.case_ids[1],
+         "imported": True, "charged": "0.02", "status": "uncertain"},
+    ]
+    session._save(value)
+    # Unproven history (e.g. timeout/network) changes nothing.
+    assert session.reclassify_imported(_history(plan, "TimeoutError")) == []
+    assert session.summary()["attempts"][1]["status"] == "uncertain"
+    assert session.reclassify_imported(_history(plan, "ModelProviderError")) == [plan.case_ids[1]]
+    summary = session.summary()
+    assert [a["status"] for a in summary["attempts"]] == ["passed", "failed"]
+    assert summary["charged_or_reserved_usd"] == "0.04"
+    assert session.reclassify_imported(_history(plan, "ModelProviderError")) == []
+
+
+def test_default_selection_skips_uncertain_and_passed_cases(configured):
+    session, store, plan, _, state, _ = configured
+    session.observe_gateway(info(spend=0), KEY, plan)
+    value = session._read()
+    value["attempts"] = [
+        {"run_id": "d" * 32, "source": "e" * 64, "case_id": plan.case_ids[0],
+         "imported": True, "charged": "0.02", "status": "passed"},
+        {"run_id": "d" * 32, "source": "e" * 64, "case_id": plan.case_ids[1],
+         "imported": True, "charged": "0.02", "status": "uncertain"},
+    ]
+    session._save(value)
+    run = cli.prepare_session(store, state)
+    assert store.manifest(run)["plan"]["case_ids"] == list(plan.case_ids[2:])
+    # Explicit selection of the uncertain case is still refused.
+    with pytest.raises(EvalSessionError, match="consumed_or_uncertain"):
+        cli.prepare_session(store, state, [plan.case_ids[1]])
+
+
 def test_init_without_explicit_acceptance_never_creates_allowance(configured, monkeypatch, capsys):
     _, store, *_ = configured
     monkeypatch.setattr(cli, "store_from_env", lambda _: (store, store.root.parent))
