@@ -335,8 +335,9 @@ def test_history_missing_results_never_imports_zero_cost(configured):
         session.check_history([{"source": SOURCE, "results": []}], plan)
 
 
+@pytest.mark.parametrize("pre_session_status", [None, "reserved", "running", "stopped"])
 def test_cli_init_imports_history_once_and_never_starts_worker(
-    configured, monkeypatch, capsys,
+    configured, monkeypatch, capsys, pre_session_status,
 ):
     _, existing, plan, snapshot, state, identity = configured
     store = EvalEvidenceStore(state / "separate", Fernet.generate_key().decode())
@@ -354,6 +355,14 @@ def test_cli_init_imports_history_once_and_never_starts_worker(
               "results": results, "usage": [{"status": "completed"}] * 5,
               "recorded_model_calls": 5}
     (state / (plan.checksum() + "." + "d" * 64 + ".report.json")).write_text(json.dumps(report))
+    pre_session = state / (plan.checksum() + ".report.json")
+    pre_session.write_text(json.dumps({"code_sha": cli.PRE_SESSION_SHA,
+                                      "status": pre_session_status}))
+    original_pre_session = pre_session.read_bytes()
+    reservation = state / (plan.checksum() + ".reserved.json")
+    reservation.write_text(json.dumps({"code_sha": cli.PRE_SESSION_SHA,
+                                       "status": "consumed_do_not_replay"}))
+    original_reservation = reservation.read_bytes()
     monkeypatch.setattr(cli, "store_from_env", lambda _: (store, state))
     monkeypatch.setattr(cli, "start_worker", lambda *_: pytest.fail("init must not infer"))
     requests = []
@@ -370,6 +379,9 @@ def test_cli_init_imports_history_once_and_never_starts_worker(
     summary = json.loads(capsys.readouterr().out)
     assert summary["available_usd"] == "0.06"
     assert summary["gateway_spend_usd"] == "0.005"
+    assert len(summary["attempts"]) == 2
+    assert pre_session.read_bytes() == original_pre_session
+    assert reservation.read_bytes() == original_reservation
     assert store.observation(old_run, cases[1].case_id) is None
     ledger = EvalValidationSession(store)
     initial_expiry = ledger.summary()["expires"]
@@ -626,10 +638,11 @@ def test_failed_read_does_not_rebase_prior_spend_or_restore_credit(configured):
     assert session.summary()["gateway_observed"] is True
 
 
-def test_known_pre_session_candidate_report_is_preserved_not_charged_again(configured):
+@pytest.mark.parametrize("status", [None, "reserved", "running", "stopped", "passed"])
+def test_known_pre_session_candidate_report_is_preserved_not_charged_again(configured, status):
     _, _, plan, snapshot, state, _ = configured
     old = state / (plan.checksum() + ".report.json")
-    old.write_text(json.dumps({"status": "stopped", "code_sha": cli.PRE_SESSION_SHA,
+    old.write_text(json.dumps({"status": status, "code_sha": cli.PRE_SESSION_SHA,
                                "source_fingerprint": "d" * 64}))
     assert cli.session_history(state, plan) == []
     assert old.exists()
@@ -644,6 +657,32 @@ def test_known_pre_session_candidate_report_is_preserved_not_charged_again(confi
     history = cli.session_history(state, plan)
     assert len(history) == 1 and history[0]["source"] == SOURCE
     assert old.exists() and current.exists()
+
+
+@pytest.mark.parametrize("sha", ["a" * 40, "7ea0cf06002d76692f230d189c43e8f9f5e742b1", None])
+@pytest.mark.parametrize("status", [None, "reserved", "running", "consumed_do_not_replay"])
+def test_excluding_pre_session_report_never_skips_current_or_unknown_active_report(
+    configured, sha, status,
+):
+    session, _, plan, _, state, _ = configured
+    old = state / (plan.checksum() + ".report.json")
+    old.write_text(json.dumps({"code_sha": cli.PRE_SESSION_SHA, "status": "reserved"}))
+    current = state / (plan.checksum() + "." + SOURCE + ".report.json")
+    current.write_text(json.dumps({"code_sha": sha, "status": status}))
+    original = {path: path.read_bytes() for path in (old, current, session.path)}
+    with pytest.raises(EvalSessionError, match="session_prior_execution_not_terminal"):
+        cli.session_history(state, plan)
+    assert all(path.read_bytes() == raw for path, raw in original.items())
+
+
+@pytest.mark.parametrize("payload", [[], None, "PRIVATE_REPORT_NOT_AN_OBJECT"])
+def test_history_non_object_remains_blocked_without_echoing_contents(configured, payload):
+    _, _, plan, _, state, _ = configured
+    path = state / (plan.checksum() + ".report.json")
+    path.write_text(json.dumps(payload))
+    with pytest.raises(EvalSessionError, match="session_history_unverifiable") as error:
+        cli.session_history(state, plan)
+    assert "PRIVATE" not in str(error.value)
 
 
 def test_same_source_different_subset_cannot_bypass_completed_selection(configured):

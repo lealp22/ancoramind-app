@@ -1,4 +1,18 @@
-# Sesión acotada de evals — código local, todavía no publicado
+# Sesión acotada de evals — publicada en32474d5b; corrección de import sólo local
+
+## Incidencia de inicialización (2026-10-19)
+
+Workflow39239239445 publicó32474d5b correctamente. El propietario recibió
+`session_prior_execution_not_terminal` al inicializar, sin inferencia. No repetir
+run, borrar reportes, cambiar claves ni reiniciar ledger. Hay un bug de orden
+reproducido/corregido localmente: el check de terminalidad precedía a la separación
+del candidato histórico db0c59b; reserved/running de ese antiguo run bloqueaban.
+Metadata aportada por propietario confirma pre_session_db0c59b/running y el
+reporte actual/otro stopped: es el caso reproducido. Running sólo es el estado
+guardado, no evidencia de worker vivo; no cambiarlo ni borrar el reporte. Falta
+publicar el fix antes de volver a inicializar; no afirmar resolución remota por
+tests. SHA actual/desconocido no terminal sigue siendo bloqueo legítimo, nunca se
+omite por este fix. Evidencia y gates en [verification.md](verification.md).
 
 No ejecutar estos comandos en el candidato7ea0cf06/3f2e8b89: falta este incremento.
 No cambia claves/variables ya preparadas ni añade servicios. Propietario ya autorizó
@@ -72,6 +86,11 @@ lanzamiento; no fabricar cambios SHA para eludir un bloqueo de replay.
   falta evidencia de gasto/estado anterior. Guardar y resolver sin modelo.
   El reporte conocido db0c59b de claves2h anteriores se conserva separado de esta
   sesión; no se exige borrarlo para importar7ea0cf06.
+- `session_prior_execution_not_terminal`: identificar sólo metadata del reporte
+  antes de actuar. En32474d5b el checkpoint db0c59b no terminal reproduce el bug
+  anterior; necesita el fix del importador, no cambiar el reporte a stopped ni
+  borrarlo. Si pertenece a7ea0cf06/actual/desconocido, investigar ejecución previa;
+  no declarar stopped ni liberar reservas por asumir que es histórico.
 
 ## Contabilidad y retención
 

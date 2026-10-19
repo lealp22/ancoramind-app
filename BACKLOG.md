@@ -1656,6 +1656,16 @@ paquete sellado/help local sin commit ni inferencia.14integraciones focales
 bloqueadas en setup: Docker daemon/PG local ausentes, no usar productiva. Pendiente
 SHA/CI/publicación; import separa db0c59b/claves2h previas de7ea0cf06, sin borrar
 históricos ni gastar como si empezase desde cero.
+**Publicación y bloqueo posterior2026-10-19:**32474d5b/CI39237715770,
+workflow39239239445/deploymente30e1e80 idle verificado; propietario ejecuta init
+y reporta session_prior_execution_not_terminal sin inferencia. Repro local prueba
+orden erróneo: estado terminal exigido antes de excluir candidato db0c59b antiguo.
+Fix mínimo local prioriza exclusión conocida, sin relajar bloqueo de actual/
+desconocido ni tocar reportes/markers/budget.80focales,1991unitarias/1skip,81,22 %,
+Ruff/mypy180/diff limpios. Metadata posterior del propietario confirma histórico
+db0c59b/running junto a actual/otro stopped; bug de orden acreditado, no evidencia
+de worker activo.21focales recheck pasan; publicación/aceptación remota fix pendientes,
+sin borrar reportes/editar estado ni reset saldo. Sin commit/push/deploy/inferencia por agente.
 Validación continuación: **1660 unitarias, 80,58 % cobertura**, Ruff/mypy limpios,
 catálogo estático válido; paquete reproducible build/preflight local sin red
 superado. No nuevas integraciones PostgreSQL (últimas 207/1 skip); sin commit/push.

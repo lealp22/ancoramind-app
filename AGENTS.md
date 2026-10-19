@@ -94,6 +94,16 @@ recordatorios y eventos, con trazabilidad completa.
   Integraciones intentadas bloqueadas14errores setup: Docker daemon/PG local
   ausentes, no fixtures remotos. No afirmar passed. Pendiente SHA/CI/publicación;
   import separa db0c59b/claves2h previas de7ea0cf06, sin borrar/mutar históricos.
+  Sesión publicada32474d5b/CI39237715770/workflow39239239445,
+  deploymente30e1e80-fc2d-4cfd-b4b7-6652f667f349 idle verificado. Propietario reporta
+  session-init bloqueado session_prior_execution_not_terminal/sin inferencia.
+  Bug de orden reproducido: check terminal antes de excluir db0c59b interrumpido;
+  fix sólo local separa histórico primero, estado actual/desconocido no terminal
+  sigue bloqueado.80focales/1991unitarias/1skip/81,22 %,Ruff/mypy180/diff limpios.
+  Metadata posterior del propietario confirma current_or_other/stopped y
+  pre_session_db0c59b/running: mecanismo confirmado, no worker vivo demostrado.
+  Recheck21focales pasa; fix sin publicar, no afirmar E2E resuelto. No borrar
+  archivos/editar estados/reiniciar presupuesto.
   1753 unitarias/1 skip symlink Windows,207 integración/1 STT skip,80,85 % cobertura;
   Ruff/mypy src177 limpios. Detalle `specs/040-durable-eval-review/`.
 

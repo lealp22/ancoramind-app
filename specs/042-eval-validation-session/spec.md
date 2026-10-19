@@ -26,6 +26,11 @@ sesión; cada SHA/huella/run sí se registra, la trazabilidad no se elimina.
   decisión distinta, no edición silenciosa del ledger.
 - Importa reportes metadata anteriores del plan; no borra/rescribe/resume runs.
   Reporte ausente/incompleto/en curso, symlink o evidencia sin reporte bloquean.
+  El candidato PRE_SESSION_SHA=db0c59b se separa explícitamente ANTES del check de
+  terminalidad: su checkpoint interrumpido puede conservar reserved/running. Esto
+  no lo declara terminado ni lo reanuda; mantiene fuera de sesión sus claves2h
+  históricas. Controles de fichero/JSON permanecen; SHA actual/desconocido no
+  terminal sigue bloqueando. Fix de orden tras reporte real2026-10-19.
   Cada caso histórico iniciado reserva el techo antiguo0,02, aunque actualnull:
   primer passed+segundo detenido consumen conservadoramente0,04, no0,003563 total.
   Segundo sólo permite diagnóstico nuevo si todos los eventos de uso completaron

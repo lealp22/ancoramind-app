@@ -1,8 +1,42 @@
 # Verificación local — sesión acumulada de evals
 
+## Incidencia session-init y corrección local — 2026-10-19
+
+- Versión32474d5bdb264e0ff5f34a1435de69519b1d16ea publicada por propietario:
+  CI39237715770 success; workflow39239239445 deployed_idle_verified,
+  huella4d685a9925e6d28e94e0f90e775dc801d7d942e8aad28ea8bd308e6c82792cf2,
+  deploymente30e1e80-fc2d-4cfd-b4b7-6652f667f349 Online/1RUNNING/0crashed/
+  sin pendingWork comprobados sólo lectura GitHub/MCP. No otro despliegue por agente.
+- Propietario reporta session-init --accept-session bloqueado con
+  session_prior_execution_not_terminal/inference_started=false. Comprobación metadata
+  posterior ejecutada por propietario: current_or_other/stopped y
+  pre_session_db0c59b/running. Confirma el caso de orden incorrecto en ese histórico
+  excluido; running es checkpoint persistido, no prueba de proceso aún activo.
+  No se han exportado respuestas/args/claves ni leído el volumen por el agente.
+- Bug reproducido offline: session_history comprobaba estado terminal ANTES de
+  excluir PRE_SESSION_SHA=db0c59b. Un checkpoint histórico reservado/en curso (o
+  estado ausente) de ese candidato conocido bloqueaba indebidamente la sesión,
+  pese al contrato de separarlo de la clave reutilizable. El test previo sólo
+  incluía histórico stopped, por lo que no detectaba esta rama.
+- Regresión roja6fail/3pass: casos unitarios y recorrido CLI init completos, con
+  ambos reportes/marker histórico coexistiendo. Fix mínimo: separar el SHA antiguo
+  antes de exigir terminalidad, después de validar fichero/no symlink/tamaño/JSON
+  objeto. No reescribir reportes/ledger/markers, inferir pass histórico, cambiar
+  saldo, liberar reservas ni conceder replay. Desconocido/7ea0cf06/actual no terminal
+  sigue bloqueado; nueva matriz12 variantes lo verifica. JSON no objeto falla fijo.
+- Validación: **80 focales sesión/consola passed**; global **1991 passed/1skip**,
+  cobertura **81,22 %**, Ruff global/mypy180/diff limpios. Integraciones no repetidas:
+  sólo script import/tests/docs; CI previa de32474d5b sí pasó, no equivale a CI del fix.
+  Warning conocido Collector localhost4318 ausente; sin cambio telemetría.
+- Corrección sólo local, sin commit/push/deploy/inferencia/claves nuevas/lectura de
+  secretos. La metadata del propietario confirma el mecanismo; no demuestra éxito
+  remoto del fix aún sin publicar. Recheck focal21passed al recibir la evidencia.
+  No borrar el reporte running ni editarlo a stopped para eludir el importador.
+
 ## Estado
 
-Base3f2e8b89/CI39219285248 verde era sólo diagnóstico. Este incremento nuevo es local:
+Registro original previo a publicación32474d5b: base3f2e8b89/CI39219285248 verde era sólo diagnóstico.
+El incremento inicial se validó localmente:
 sin commit/push, CLI Railway local, credenciales leídas, mutaciones remotas, nuevas
 claves ni inferencias por el agente. Autorización de gasto vigente0,10 acumulado,
 no renovar por intento. No reabre run52759a15 ni inventa su salida faltante.

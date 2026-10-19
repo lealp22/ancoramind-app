@@ -105,10 +105,15 @@ def session_history(state: Path, plan: EvalCampaignPlan) -> list[dict[str, Any]]
         if path.is_symlink() or path.stat().st_size > 2_000_000:
             raise EvalSessionError("session_history_unverifiable")
         report = json.loads(path.read_text(encoding="utf-8"))
-        if report.get("status") not in {"stopped", "passed"}:
-            raise EvalSessionError("session_prior_execution_not_terminal")
+        if not isinstance(report, dict):
+            raise EvalSessionError("session_history_unverifiable")
+        # Separate the explicitly excluded, pre-session candidate first. Its
+        # interrupted checkpoint is not evidence of a running reusable-key job.
+        # Preserve every file/marker; this grants no replay of that historical run.
         if report.get("code_sha") == PRE_SESSION_SHA:
             continue
+        if report.get("status") not in {"stopped", "passed"}:
+            raise EvalSessionError("session_prior_execution_not_terminal")
         if (report.get("plan_checksum") != plan.checksum()
             or report.get("cases_fingerprint") != campaign_cases_fingerprint(
                 plan.validate_snapshot(campaign_config()[1]),
