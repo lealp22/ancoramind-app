@@ -15,8 +15,10 @@
       Tests: cada motivo, `unexpected`, ausencia de texto de excepción y rutas.
       Motivos: `console_not_interactive`, `review_disconnected`,
       `evidence_unreadable_or_wrong_key`, `run_not_found`, `unexpected`.
-- [ ] T5 · `--human` en `status` y `session-status` con tabla fija de siguiente
+- [x] T5 · `--human` en `status` y `session-status` con tabla fija de siguiente
       paso. Test: JSON sin `--human` idéntico; ningún paso sugiere `run`.
+      `human_status`/`human_session` en `eval_console.py`; estados desconocidos
+      → «Sin acción sugerida».
 - [ ] T6 · Comprobar que solo cambian ficheros de `_HARNESS` (test sobre
       `session_scope` antes/después) y documentar la nueva huella en el runbook.
 - [ ] T7 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.

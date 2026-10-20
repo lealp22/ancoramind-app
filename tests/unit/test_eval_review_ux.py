@@ -201,3 +201,89 @@ def test_session_blocked_output_is_unchanged(monkeypatch, capsys):
     assert out["status"] == "eval_session_blocked"
     assert out["inference_started"] is False and out["do_not_replay"] is True
 
+
+
+# --- T5: --human status -----------------------------------------------------------------
+
+@pytest.fixture
+def cli_for(saved, monkeypatch, tmp_path):
+    from scripts import eval_console as cli
+
+    store, run, case = saved
+    monkeypatch.setattr(cli, "store_from_env", lambda _env: (store, tmp_path))
+    return cli, store, run, case
+
+
+def test_status_without_human_flag_is_the_same_json(cli_for, capsys):
+    cli, store, run, _case = cli_for
+    assert cli.main(["status", "--run", run]) == 0
+    printed = capsys.readouterr().out
+    assert printed == json.dumps(store.status(run), ensure_ascii=True, allow_nan=False) + "\n"
+
+
+def test_status_human_is_readable_text_not_json(cli_for, capsys):
+    cli, _store, run, case = cli_for
+    assert cli.main(["status", "--run", run, "--human"]) == 0
+    printed = capsys.readouterr().out
+    assert not printed.lstrip().startswith("{")
+    assert f"Run {run}" in printed and "Estado: " in printed
+    assert case.case_id in printed and f"criterios=0/{len(case.response_criteria)}" in printed
+    assert "Siguiente paso: " in printed
+
+
+def test_human_status_counts_labelled_criteria(cli_for, capsys):
+    cli, store, run, case = cli_for
+    store.review(run, case.case_id, 0, "pass", "owner")
+    assert cli.main(["status", "--run", run, "--human"]) == 0
+    assert f"criterios=1/{len(case.response_criteria)}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("state", [
+    "not_started", "reserved", "running", "passed", "stopped",
+    "uncertain_do_not_restart", "algo_desconocido",
+])
+def test_no_next_step_tells_the_owner_to_run_again(state):
+    from scripts import eval_console as cli
+
+    text = cli.human_status({"run_id": "r", "execution_status": state, "cases": []})
+    step = text.split("Siguiente paso: ", 1)[1].casefold()
+    assert "`run`" not in step and "relanza" not in step.replace("no relances", "")
+    assert "run --" not in step and "worker_launched" not in step
+
+
+def test_human_status_escapes_untrusted_fields():
+    from scripts import eval_console as cli
+
+    text = cli.human_status({
+        "run_id": "r\u202e", "execution_status": "x\nSiguiente paso: ejecuta run",
+        "cases": [{"case_id": "c\u2028d", "criteria": []}],
+    })
+    assert "\u202e" not in text and "\u2028" not in text
+    lines = text.splitlines()
+    assert sum(line.startswith("Siguiente paso: ") for line in lines) == 1
+    assert lines[-1].startswith("Siguiente paso: ")
+    assert len(lines) == 7
+
+
+def test_session_status_without_human_flag_is_the_same_json(monkeypatch, capsys, tmp_path):
+    from scripts import eval_console as cli
+
+    summary = {"status": "session_ready", "limit_usd": "0.10", "attempts": []}
+
+    class FakeSession:
+        def __init__(self, _store):
+            pass
+
+        def summary(self):
+            return summary
+
+    monkeypatch.setattr(cli, "store_from_env", lambda _env: (object(), tmp_path))
+    monkeypatch.setattr(cli, "EvalValidationSession", FakeSession)
+    assert cli.main(["session-status"]) == 0
+    assert capsys.readouterr().out == json.dumps(summary, ensure_ascii=True,
+                                                 allow_nan=False) + "\n"
+    assert cli.main(["session-status", "--human"]) == 0
+    printed = capsys.readouterr().out
+    assert "Sesión de validación" in printed and "no factura" in printed
+    assert "Siguiente paso: " in printed and not printed.lstrip().startswith("{")
+

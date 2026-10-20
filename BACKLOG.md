@@ -8,7 +8,7 @@
 > (`specs/00X-...`) y se trabaja con SDD (spec.md → tasks.md → implementación).
 > Al completarse, se tacha aquí con fecha y se enlaza su spec.
 
-Última actualización: 2026-10-18 (BL-55)
+Última actualización: 2026-10-20 (BL-56)
 
 ---
 
@@ -40,6 +40,7 @@
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
 | BL-55 Gap analysis contra rúbrico de evaluación académica | 🆕 registrado; huecos priorizados en justificación de modelo/coste proyectado, LLM-juez (Jev) ejecutado, red-teaming (PyRIT/Garak) ejecutado y documento de riesgos propio — ver `docs/academic-rubric-gap-analysis.md` |
+| BL-56 Trazas con contenido enmascarado en Phoenix | 🆕 Phoenix + Postgres desplegados y vacíos (auth, retención 30 d); sin código ni conexión con la app; pendiente spike y aceptación de ADR-007 — specs/046 |
 | MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
 Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL
@@ -3258,6 +3259,30 @@ interruptor. 31 tests nuevos, 1111 unit tests (suite completa), Ruff y
   este incremento; la API HTTP y el CLI ya permiten operar manualmente.
 - **Sin broadcast multi-instancia** — cada réplica tendría su propio estado
   en memoria (no es un escenario de despliegue actual conocido).
+
+### BL-56 · Trazas con contenido enmascarado en Phoenix 🆕 infraestructura desplegada, sin código — specs/046 + ADR-007
+
+Hoy no se puede saber qué vio el modelo ni por qué falló una petición concreta
+(p. ej. `InvalidPresentationOutputError` solo deja un contador). ADR-007
+(*Proposed*) propone Arize Phoenix autoalojado con contenido enmascarado.
+
+**Estado (2026-10-20):** Phoenix 15.1.0 + Postgres propio (`Postgres-lM2q`)
+desplegados por el propietario en Railway (`ancoramind-app`), auth activa,
+retención 30 días, `PHOENIX_TELEMETRY_ENABLED=false`, contraseña inicial cambiada
+y API key generada. Sin conexión con la app: no hay código, variables ni
+dependencias `openinference`; no recibe ni guarda datos personales. Dominio
+público aún presente; retirarlo (acceso solo por red privada) queda pendiente.
+
+**Pendiente, no implementado:**
+- Spike de compatibilidad (`specs/046-phoenix-masked-traces/spike.md`, Q1–Q9).
+- Aceptación del ADR-007 y de la enmienda acotada del principio 11 por el
+  propietario; decidir qué usuarios pueden entrar en las trazas.
+- Código (`masking.py`, exporter envolvente fail-closed, flag OFF por defecto),
+  tests de privacidad y actualización de `docs/production-security-privacy.md`.
+
+**Prioridad:** tras BL-1/MVP según la decisión del propietario de 2026-10-17
+(alcance de gobernanza nuevo congelado). No bloquea ni reabre ningún incremento
+existente; Grafana (ADR-006) sigue sin contenido.
 
 ---
 

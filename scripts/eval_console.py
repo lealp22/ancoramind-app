@@ -33,7 +33,10 @@ from scripts.execute_eval_campaign import (  # noqa: E402
     validate_state_directory,
 )
 from src.agent.eval_campaign import EvalCampaignPlan, gateway_settings  # noqa: E402
-from src.agent.eval_campaign_runner import campaign_cases_fingerprint  # noqa: E402
+from src.agent.eval_campaign_runner import (  # noqa: E402
+    _escape,
+    campaign_cases_fingerprint,
+)
 from src.agent.eval_durable_review import case_record, review_saved  # noqa: E402
 from src.agent.eval_evidence import EvalEvidenceStore  # noqa: E402
 from src.agent.eval_validation_session import (  # noqa: E402
@@ -65,6 +68,71 @@ _CONSOLE_REASONS: dict[str, str] = {
     "eval_evidence_invalid_run": "run_not_found",
     "eval_evidence_unknown_case": "run_not_found",
 }
+
+
+# Fixed next-step table for `--human` (specs/045 D). No entry tells the operator to
+# launch a new run to reconnect or retry: a consumed case is never replayed.
+_NEXT_STEP: dict[str, str] = {
+    "not_started": "Aún no hay worker. Espera unos segundos y consulta `status` de nuevo; "
+                   "no relances la campaña.",
+    "reserved": "El worker está arrancando. Consulta `status` de nuevo en unos segundos.",
+    "running": "El worker sigue en marcha. Abre `review --run ID` para etiquetar lo capturado.",
+    "passed": "Campaña completada. Usa `review --run ID` si quedan criterios sin etiquetar "
+              "y después `promote` si procede.",
+    "stopped": "Campaña detenida. Usa `review --run ID` para etiquetar lo capturado; "
+               "un caso consumido no se repite.",
+    "uncertain_do_not_restart": "Estado incierto. No relances nada: pide inspección antes "
+                                "de cualquier otra acción.",
+}
+_NEXT_STEP_UNKNOWN = "Sin acción sugerida para este estado."
+
+
+def _human_count(value: object) -> str:
+    return str(value) if type(value) is int else "?"
+
+
+def human_status(status: dict[str, Any], totals: dict[str, int] | None = None) -> str:
+    """Plain-text run summary. Every value is escaped; no content beyond status fields."""
+    totals = totals or {}
+    state = str(status.get("execution_status"))
+    lines = [
+        f"Run {_escape(str(status.get('run_id')))}",
+        f"Estado: {_escape(state)}",
+        f"Inferencia iniciada: {'sí' if status.get('inference_started') else 'no'}",
+        f"Llamadas al modelo registradas: {_human_count(status.get('recorded_model_calls'))}",
+        "Casos:",
+    ]
+    for case in status.get("cases", []):
+        case_id = str(case.get("case_id"))
+        labelled = len(case.get("criteria", []))
+        total = totals.get(case_id)
+        lines.append(
+            f"  - {_escape(case_id)}: técnico={_escape(str(case.get('execution_status')))}"
+            f" semántico={_escape(str(case.get('semantic_status')))}"
+            f" criterios={labelled}/{'?' if total is None else total}"
+        )
+    lines.append("Siguiente paso: " + _NEXT_STEP.get(state, _NEXT_STEP_UNKNOWN))
+    return "\n".join(lines)
+
+
+def human_session(summary: dict[str, Any]) -> str:
+    """Plain-text session balance. Reservations are conservative, not an invoice."""
+    attempts = summary.get("attempts", [])
+    lines = [
+        "Sesión de validación",
+        f"Límite: {_escape(str(summary.get('limit_usd')))} USD (reservas conservadoras, "
+        "no factura)",
+        f"Cargado o reservado: {_escape(str(summary.get('charged_or_reserved_usd')))} USD",
+        f"Disponible: {_escape(str(summary.get('available_usd')))} USD",
+        f"Intentos registrados: {len(attempts)}",
+    ]
+    lines.extend(
+        f"  - {_escape(str(item.get('case_id')))}: {_escape(str(item.get('status')))}"
+        f" ({_escape(str(item.get('charged')))} USD)" for item in attempts
+    )
+    lines.append("Siguiente paso: lanzar casos nuevos es una decisión del propietario; "
+                 "un caso ya consumido no se repite.")
+    return "\n".join(lines)
 
 
 def console_failure_reason(error: BaseException) -> str:
@@ -394,6 +462,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--approval", type=Path)
     result.add_argument("--cases", nargs="+")
     result.add_argument("--accept-session", action="store_true")
+    result.add_argument("--human", action="store_true",
+                        help="readable summary for status/session-status; JSON by default")
     return result
 
 
@@ -429,6 +499,11 @@ def main(argv: list[str] | None = None) -> int:
             report = asyncio.run(review_loop(store, args.run_id, args.reviewer))
         elif args.command == "status":
             report = store.status(args.run_id)
+            if args.human:
+                totals = {c["id"]: len(c["criteria"])
+                          for c in store.manifest(args.run_id)["cases"]}
+                print(human_status(report, totals))
+                return 0
         elif args.command == "list":
             report = {"runs": store.runs()}
         elif args.command == "session-init":
@@ -454,6 +529,9 @@ def main(argv: list[str] | None = None) -> int:
             report = asyncio.run(check_session_access(session, plan, dict(os.environ)))
         elif args.command == "session-status":
             report = EvalValidationSession(store).summary()
+            if args.human:
+                print(human_session(report))
+                return 0
         elif args.command == "session-reclassify":
             plan, snapshot = campaign_config()
             validate_state_directory(state, dict(os.environ), sealed_image=True)
