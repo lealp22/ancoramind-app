@@ -19,7 +19,8 @@
       paso. Test: JSON sin `--human` idéntico; ningún paso sugiere `run`.
       `human_status`/`human_session` en `eval_console.py`; estados desconocidos
       → «Sin acción sugerida».
-- [ ] T6 · Comprobar que solo cambian ficheros de `_HARNESS` (test sobre
+- [x] T6 · Comprobar que solo cambian ficheros de `_HARNESS` (test sobre
       `session_scope` antes/después) y documentar la nueva huella en el runbook.
+      Scope idéntico entre `f4d8bd8` y el árbol actual; 2 tests; `runbook.md`.
 - [ ] T7 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.
       Sin commit, push, despliegue ni inferencia por el agente.

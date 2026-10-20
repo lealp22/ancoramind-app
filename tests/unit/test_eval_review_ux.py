@@ -287,3 +287,39 @@ def test_session_status_without_human_flag_is_the_same_json(monkeypatch, capsys,
     assert "Sesión de validación" in printed and "no factura" in printed
     assert "Siguiente paso: " in printed and not printed.lstrip().startswith("{")
 
+
+
+# --- T6: session scope is untouched by this increment -------------------------------------
+
+SPEC_045_CODE = (
+    "src/agent/eval_campaign_runner.py", "src/agent/eval_durable_review.py",
+    "scripts/eval_console.py",
+)
+
+
+def test_spec_045_code_lives_only_in_harness_files():
+    from src.agent.eval_validation_session import _HARNESS
+
+    assert set(SPEC_045_CODE) <= _HARNESS
+
+
+def test_editing_spec_045_files_keeps_the_session_scope(tmp_path):
+    from src.agent.eval_validation_session import session_scope
+
+    folder = ROOT / "evals/response_style"
+    plan = EvalCampaignPlan.model_validate_json((folder / "bl48-campaign-plan.json").read_text())
+    snapshot = RuntimeConfigSnapshot.model_validate_json(
+        (folder / "runtime-rev8-snapshot.json").read_text())
+    root = tmp_path / "tree"
+    for name in (*SPEC_045_CODE, "src/agent/eval_tools.py", "prompts/identity.md",
+                 "pyproject.toml", "evals/Dockerfile", "evals/Dockerfile.dockerignore"):
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic")
+    original = session_scope(root, plan, snapshot)
+    for name in SPEC_045_CODE:
+        (root / name).write_text("review ux change")
+    assert session_scope(root, plan, snapshot) == original
+    (root / "src/agent/eval_tools.py").write_text("behaviour change")
+    assert session_scope(root, plan, snapshot) != original
+
