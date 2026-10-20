@@ -18,4 +18,4 @@
 - [x] T8 · `EXPLAIN` de las consultas con 90 días sobre datos locales sintéticos.
 - [x] T9 · Documentar en `docs/development.md` y en el cuerpo del panel qué
       gasto no se incluye (Dream, voz sin evento).
-- [ ] T10 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.
+- [x] T10 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.
