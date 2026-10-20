@@ -16,6 +16,6 @@
 - [x] T7 · Panel en `dashboard.html` (barras CSS, tablas, selector de ventana,
       `textContent`, sin recursos externos).
 - [x] T8 · `EXPLAIN` de las consultas con 90 días sobre datos locales sintéticos.
-- [ ] T9 · Documentar en `docs/development.md` y en el cuerpo del panel qué
+- [x] T9 · Documentar en `docs/development.md` y en el cuerpo del panel qué
       gasto no se incluye (Dream, voz sin evento).
 - [ ] T10 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.

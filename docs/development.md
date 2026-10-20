@@ -380,6 +380,41 @@ Todavía quedan límites deliberados:
   Gateway declara circuit breaker (`allowed_fails/cooldown_time`) y RPM/TPM por
   alias + límites por virtual key. Retries/fallbacks siguen a 0 por decisión.
 
+### Panel FinOps y calidad (specs/043)
+
+`/admin/dashboard` incluye el panel «FinOps y calidad», de sólo lectura. Lo sirven
+`GET /admin/dashboard/api/finops` y `/api/quality` (`days` 1–90, por defecto 30, días
+UTC incluyendo hoy; fuera de rango ⇒ 422). Usa el mismo token admin que el resto del
+dashboard y sólo consulta `llm_usage_events`, `telegram_interactions` y
+`action_proposals`. No devuelve contenido, `payload` ni IDs de Telegram: el usuario
+sale como `u-` + 8 hex de un HMAC con `TELEGRAM_PAIRING_CODE_PEPPER`. Es una
+protección frente a capturas, no anonimización. Medición de consultas:
+`specs/043-admin-finops-quality-panel/explain.md`.
+
+**Qué NO incluye el coste del panel** (el panel lo rotula con «No incluido en el coste»):
+
+- **Dream** (`dream_runs`): audita su inferencia en su propia tabla, fuera del ledger.
+  Tampoco entra en el hard stop (`evaluate_cost_governance`).
+- **Voz sin evento**: filas de `voice_preparations` con `call_id` y sin fila en
+  `llm_usage_events`. El panel las ignora, pero `LlmUsageRepository.summarize_spend`
+  sí las suma.
+- **Interacciones `rejected`/`ignored`**: nunca ejecutaron el Agent, así que no
+  aportan coste en el panel. Sí cuentan en «Interacciones por estado» (calidad).
+- **Coste estimado**: sin `actual_cost` se usa `estimated_cost`; el desglose por
+  `cost_source` lo separa. No es una factura.
+
+**Cuándo el panel y el hard stop pueden diferir.** El coste usa
+`COALESCE(actual_cost, estimated_cost, 0)`, igual que `summarize_spend`, y el test de
+integración comprueba que coinciden para el mismo periodo. Esa paridad sólo vale sin
+voz sin evento. Las barras de presupuesto (mes/hoy) salen de `summarize_spend`, por lo
+que **sí** incluyen esa voz, mientras que los KPIs del panel no. Si «Coste total» de
+un mes natural es menor que la barra «Mes», la diferencia es voz sin evento. El panel
+tampoco reproduce el reparto por ruta del presupuesto.
+
+El presupuesto es `null` (se muestra «Sin presupuesto configurado») si la revisión
+activa no tiene `cost_governance`.
+
+
 ## Project Conventions
 
 - **No Agno inheritance in domain code** — domain services are plain Python;
