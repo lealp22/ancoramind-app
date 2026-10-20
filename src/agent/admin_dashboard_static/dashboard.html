@@ -84,6 +84,20 @@
   #login-panel.hidden, #app.hidden { display: none; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
   .row > div { flex: 1; min-width: 140px; }
+  .panel.wide { grid-column: 1 / -1; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+  .kpi { background: #0b1220; border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  .kpi .v { font-size: 1.15rem; font-weight: 600; }
+  .kpi .l { font-size: 0.72rem; color: var(--muted); }
+  .bar { background: #0b1220; border: 1px solid var(--border); border-radius: 4px; height: 12px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .bar.warn > div { background: var(--degraded); }
+  .bar.bad > div { background: var(--bad); }
+  .bars { display: grid; grid-template-columns: 90px 1fr 120px; gap: 4px 8px; align-items: center; font-size: 0.78rem; margin-top: 8px; }
+  .bars .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  select { background: #0b1220; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 0.85rem; }
+  .error-text { color: var(--bad); font-size: 0.8rem; }
 </style>
 </head>
 <body>
@@ -104,6 +118,43 @@
 <div id="app" class="hidden">
   <button class="secondary" onclick="logout()" style="margin-bottom:12px;">Cerrar sesión</button>
   <div class="grid">
+
+    <div class="panel wide" id="finops-panel">
+      <h2>FinOps y calidad</h2>
+      <div class="row" style="align-items:flex-end;">
+        <div style="flex:0 0 auto; min-width:0;">
+          <label for="fo-days">Ventana</label>
+          <select id="fo-days" onchange="loadFinops()">
+            <option value="7">7 días</option>
+            <option value="30" selected>30 días</option>
+            <option value="90">90 días</option>
+          </select>
+        </div>
+        <div style="flex:0 0 auto; min-width:0;"><button class="secondary" onclick="loadFinops()">Refrescar</button></div>
+      </div>
+      <p id="fo-error" class="error-text" style="display:none;"></p>
+      <div class="kpis" id="fo-kpis"></div>
+      <div id="fo-budget"></div>
+      <div class="cols">
+        <div><h2>Coste por día (USD)</h2><div class="bars" id="fo-daily"></div></div>
+        <div><h2>Por usuario (seudónimo)</h2>
+          <table id="fo-users"><thead><tr><th>Usuario</th><th>USD</th><th>Tokens</th><th>Llamadas</th></tr></thead><tbody></tbody></table></div>
+        <div><h2>Por ruta y modelo</h2>
+          <table id="fo-routes"><thead><tr><th>Ruta</th><th>Modelo</th><th>USD</th><th>Llamadas</th></tr></thead><tbody></tbody></table></div>
+        <div><h2>Origen del coste</h2>
+          <table id="fo-sources"><thead><tr><th>Origen</th><th>USD</th><th>Llamadas</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <h2 style="margin-top:16px;">Calidad</h2>
+      <div class="kpis" id="fo-quality-kpis"></div>
+      <div class="cols">
+        <div><h2>Interacciones por estado</h2>
+          <table id="fo-statuses"><thead><tr><th>Estado</th><th>Nº</th></tr></thead><tbody></tbody></table></div>
+        <div><h2>Propuestas</h2>
+          <table id="fo-proposals"><thead><tr><th>Tool</th><th>Estado</th><th>Consentimiento</th><th>Nº</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <p class="hint" id="fo-excluded"></p>
+      <p class="hint">Sólo lectura sobre el ledger de uso, las interacciones y las propuestas. Días en UTC. No se muestran identificadores de Telegram ni contenido de mensajes.</p>
+    </div>
 
     <div class="panel">
       <h2>Invitaciones (pairing)</h2>
@@ -241,6 +292,141 @@ function enterApp() {
   loadRuntimeStatus();
   loadHealth();
   loadLinks();
+  loadFinops();
+}
+
+// ---- FinOps y calidad (specs/043): sólo textContent, nunca innerHTML ----
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  if (className) node.className = className;
+  return node;
+}
+
+function usd(value) {
+  return "$" + Number(value || 0).toFixed(4);
+}
+
+function pct(rate) {
+  return rate === null || rate === undefined ? "—" : (rate * 100).toFixed(1) + " %";
+}
+
+function ms(value) {
+  return value === null || value === undefined ? "—" : Math.round(value) + " ms";
+}
+
+function renderKpis(containerId, items) {
+  const box = document.getElementById(containerId);
+  box.replaceChildren();
+  for (const [label, value] of items) {
+    const kpi = el("div", null, "kpi");
+    kpi.appendChild(el("div", value, "v"));
+    kpi.appendChild(el("div", label, "l"));
+    box.appendChild(kpi);
+  }
+}
+
+function fillTable(tableId, rows) {
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  tbody.replaceChildren();
+  if (!rows.length) {
+    const tr = el("tr");
+    const td = el("td", "Sin datos en la ventana", "hint");
+    td.colSpan = document.querySelectorAll(`#${tableId} thead th`).length;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const cells of rows) {
+    const tr = el("tr");
+    for (const cell of cells) tr.appendChild(el("td", cell));
+    tbody.appendChild(tr);
+  }
+}
+
+function renderBar(parent, label, fraction, valueText, level) {
+  parent.appendChild(el("span", label));
+  const bar = el("div", null, "bar" + (level ? " " + level : ""));
+  const fill = document.createElement("div");
+  fill.style.width = Math.max(0, Math.min(100, fraction * 100)).toFixed(1) + "%";
+  bar.appendChild(fill);
+  parent.appendChild(bar);
+  parent.appendChild(el("span", valueText, "num"));
+}
+
+function renderBudget(budget) {
+  const box = document.getElementById("fo-budget");
+  box.replaceChildren();
+  if (!budget) {
+    box.appendChild(el("p", "Sin presupuesto configurado (cost_governance ausente en la revisión activa).", "hint"));
+    return;
+  }
+  const bars = el("div", null, "bars");
+  for (const [label, used, limit, usedPct] of [
+    ["Mes", budget.month_usd, budget.monthly_budget_usd, budget.month_used_pct],
+    ["Hoy", budget.today_usd, budget.daily_budget_usd, budget.day_used_pct],
+  ]) {
+    if (limit === null || limit === undefined) continue;
+    const level = usedPct >= 90 ? "bad" : usedPct >= 60 ? "warn" : "";
+    renderBar(bars, label, (usedPct || 0) / 100, `${usd(used)} / ${usd(limit)} (${usedPct} %)`, level);
+  }
+  box.appendChild(bars);
+}
+
+function renderFinops(data) {
+  const t = data.totals;
+  renderKpis("fo-kpis", [
+    ["Coste total", usd(t.cost_usd)],
+    ["Coste medio / interacción", usd(t.avg_cost_per_interaction_usd)],
+    ["Interacciones", t.interactions],
+    ["Llamadas LLM", t.calls],
+    ["Llamadas con error", t.error_calls],
+    ["Tokens", t.total_tokens],
+  ]);
+  renderBudget(data.budget);
+  const daily = document.getElementById("fo-daily");
+  daily.replaceChildren();
+  const max = Math.max(0, ...data.daily.map((d) => d.cost_usd));
+  for (const d of data.daily) renderBar(daily, d.day, max ? d.cost_usd / max : 0, usd(d.cost_usd));
+  if (!data.daily.length) daily.appendChild(el("span", "Sin datos en la ventana", "hint"));
+  fillTable("fo-users", data.by_user.map((u) => [u.user, usd(u.cost_usd), u.total_tokens, u.calls]));
+  fillTable("fo-routes", data.by_route_model.map((r) => [r.effective_gateway_route, r.model || "—", usd(r.cost_usd), r.calls]));
+  fillTable("fo-sources", data.by_cost_source.map((s) => [s.cost_source, usd(s.cost_usd), s.calls]));
+  document.getElementById("fo-excluded").textContent =
+    "No incluido en el coste: " + data.excluded.join(", ") + ".";
+}
+
+function renderQuality(data) {
+  const r = data.proposal_rates;
+  renderKpis("fo-quality-kpis", [
+    ["Llamadas a tools", data.tool_calls_total],
+    ["Propuestas resueltas", r.resolved],
+    ["Ejecutadas", pct(r.executed_rate)],
+    ["Descartadas", pct(r.discarded_rate)],
+    ["Caducadas", pct(r.expired_rate)],
+    ["Latencia p50 / p95", `${ms(data.latency.p50_ms)} / ${ms(data.latency.p95_ms)}`],
+    ["TTFT p50 / p95", `${ms(data.latency.ttft_p50_ms)} / ${ms(data.latency.ttft_p95_ms)}`],
+    ["Reintentos / fallbacks", `${data.latency.retried_calls} / ${data.latency.fallback_calls}`],
+  ]);
+  fillTable("fo-statuses", data.interactions_by_status.map((s) => [s.status, s.count]));
+  fillTable("fo-proposals", data.proposals.map((p) => [p.tool_name, p.status, p.consent_mode, p.count]));
+}
+
+async function loadFinops() {
+  const errorBox = document.getElementById("fo-error");
+  errorBox.style.display = "none";
+  const days = parseInt(document.getElementById("fo-days").value, 10);
+  try {
+    const [finops, quality] = await Promise.all([
+      apiGet(`/admin/dashboard/api/finops?days=${days}`),
+      apiGet(`/admin/dashboard/api/quality?days=${days}`),
+    ]);
+    renderFinops(finops);
+    renderQuality(quality);
+  } catch (err) {
+    errorBox.textContent = "No se pudo cargar FinOps/calidad: " + String(err);
+    errorBox.style.display = "block";
+  }
 }
 
 async function apiGet(path) {

@@ -13,6 +13,7 @@ re-issues HTTP calls to ``/admin/runtime-config/*`` or
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,17 +37,28 @@ from src.agent.runtime_config_admin import (
 from src.agent.telegram_pairing_admin import CreateInvitationRequest
 from src.agent.telegram_pairing_admin import _service_factory as _pairing_service_factory
 from src.config import Settings
+from src.domain.finops.service import (
+    FinopsService,
+    InvalidWindowError,
+    budget_status,
+    window_start,
+)
 from src.domain.interactions.pairing import PairingInvitationCreate
 from src.domain.interactions.pairing_service import TelegramPairingService
+from src.domain.llm_access.cost_governance import LlmSpendReader
 from src.domain.runtime_config.models import RuntimeConfigValidationError
 from src.domain.runtime_config.service import (
     RuntimeConfigControlPlaneUnavailableError,
     RuntimeConfigManager,
 )
+from src.repositories.finops import FinopsRepository
+from src.repositories.llm_usage import LlmUsageRepository
 from src.repositories.runtime_config import RuntimeConfigConflictError
 
 SessionFactory = Callable[[], Awaitable[AsyncSession]]
 PairingServiceFactory = Callable[[AsyncSession], TelegramPairingService]
+FinopsServiceFactory = Callable[[AsyncSession], FinopsService]
+SpendReaderFactory = Callable[[AsyncSession], LlmSpendReader]
 
 _DASHBOARD_HTML_PATH = Path(__file__).parent / "admin_dashboard_static" / "dashboard.html"
 
@@ -87,6 +99,8 @@ def install_admin_dashboard(
     health_registry: HealthRegistry,
     runtime_config_manager: RuntimeConfigManager,
     pairing_service_factory: PairingServiceFactory | None = None,
+    finops_service_factory: FinopsServiceFactory | None = None,
+    spend_reader_factory: SpendReaderFactory | None = None,
 ) -> None:
     """Register the disabled-by-default dashboard page and its JSON API."""
     validate_admin_dashboard_settings(settings)
@@ -94,6 +108,12 @@ def install_admin_dashboard(
         return
 
     create_service = pairing_service_factory or _pairing_service_factory(settings)
+    create_finops = finops_service_factory or (
+        lambda session: FinopsService(
+            FinopsRepository(session), pseudonym_key=settings.telegram_pairing_code_pepper
+        )
+    )
+    create_spend_reader = spend_reader_factory or LlmUsageRepository
     dashboard_html = _DASHBOARD_HTML_PATH.read_text(encoding="utf-8")
 
     @app.middleware("http")
@@ -140,6 +160,51 @@ def install_admin_dashboard(
                 entry["health_status"] = components[health_component]["status"]
             links.append(entry)
         return {"links": links}
+
+    def _invalid_window() -> HTTPException:
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="days must be between 1 and 90",
+        )
+
+    @app.get("/admin/dashboard/api/finops")
+    async def finops_report(request: Request, days: int = 30) -> dict[str, Any]:
+        _auth(request)
+        now = datetime.now(tz=UTC)
+        try:
+            since = window_start(now, days)
+        except InvalidWindowError:
+            raise _invalid_window() from None
+        session = await session_factory()
+        try:
+            governance = runtime_config_manager.snapshot().config.cost_governance
+            budget = None
+            if governance is not None:
+                spend = await create_spend_reader(session).summarize_spend(now=now)
+                budget = budget_status(
+                    spend.month_usd,
+                    spend.today_usd,
+                    governance.monthly_budget_usd,
+                    governance.daily_budget_usd,
+                )
+            report = await create_finops(session).finops_report(since, days, budget=budget)
+        finally:
+            await session.close()
+        return report.model_dump(mode="json")
+
+    @app.get("/admin/dashboard/api/quality")
+    async def quality_report(request: Request, days: int = 30) -> dict[str, Any]:
+        _auth(request)
+        try:
+            since = window_start(datetime.now(tz=UTC), days)
+        except InvalidWindowError:
+            raise _invalid_window() from None
+        session = await session_factory()
+        try:
+            report = await create_finops(session).quality_report(since, days)
+        finally:
+            await session.close()
+        return report.model_dump(mode="json")
 
     @app.get("/admin/dashboard/api/invitations")
     async def list_invitations(request: Request) -> dict[str, Any]:

@@ -20,6 +20,7 @@ from src.domain.finops.service import (
     proposal_rates,
     pseudonymise_user,
     validate_window,
+    window_start,
 )
 
 SINCE = datetime(2026, 10, 1, tzinfo=UTC)
@@ -108,3 +109,11 @@ async def test_reports_reject_invalid_window_without_reading() -> None:
 def test_service_requires_a_pseudonym_key() -> None:
     with pytest.raises(ValueError):
         FinopsService(_reader(), pseudonym_key="")
+
+
+def test_window_start_is_utc_midnight_of_the_oldest_day() -> None:
+    now = datetime(2026, 10, 20, 15, 30, tzinfo=UTC)
+    assert window_start(now, 1) == datetime(2026, 10, 20, tzinfo=UTC)
+    assert window_start(now, 30) == datetime(2026, 9, 21, tzinfo=UTC)
+    with pytest.raises(InvalidWindowError):
+        window_start(now, 91)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from src.domain.finops.models import (
@@ -40,6 +40,13 @@ def validate_window(days: int) -> int:
     if isinstance(days, bool) or not MIN_WINDOW_DAYS <= days <= MAX_WINDOW_DAYS:
         raise InvalidWindowError("days_out_of_range")
     return days
+
+
+def window_start(now: datetime, days: int) -> datetime:
+    """UTC midnight of the oldest day: the window is ``days`` calendar days incl. today."""
+    validate_window(days)
+    today = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    return today - timedelta(days=days - 1)
 
 
 def pseudonymise_user(key: str, user_id: str) -> str:
