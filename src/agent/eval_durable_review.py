@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import replace
 from typing import Any, TextIO
 
 from src.agent.eval_campaign_runner import ReviewLabel, TerminalCampaignReviewer
@@ -95,18 +94,19 @@ async def review_saved(store: EvalEvidenceStore, run_id: str, reviewer: str,
         evidence = store.observation(run_id, case.case_id)
         if evidence is None:
             continue
-        for index, criterion in enumerate(case.response_criteria):
-            prior = store.labels(run_id, case.case_id)
-            if index in prior:
-                continue
-            def save(_index: int, label: ReviewLabel, *, case_id: str = case.case_id,
-                     criterion_index: int = index) -> None:
-                store.review(run_id, case_id, criterion_index, label, reviewer)
-            terminal = TerminalCampaignReviewer(reader, writer, save=save, criterion_offset=index,
-                                                 pause_on_disconnect=True)
-            labels = await terminal.review(
-                replace(case, response_criteria=(criterion,)), stored_observation(evidence),
-            )
-            if not labels or labels[0] != "pass":
-                return store.status(run_id)
+        prior = store.labels(run_id, case.case_id)
+        pending = tuple(i for i in range(len(case.response_criteria)) if i not in prior)
+        if not pending:
+            continue
+
+        def save(index: int, label: ReviewLabel, *, case_id: str = case.case_id) -> None:
+            store.review(run_id, case_id, index, label, reviewer)
+
+        # One reviewer per case: the case block is printed once, then the pending
+        # criteria follow (specs/045). Labels are still saved one criterion at a time.
+        terminal = TerminalCampaignReviewer(reader, writer, save=save,
+                                            criterion_indices=pending, pause_on_disconnect=True)
+        labels = await terminal.review(case, stored_observation(evidence))
+        if any(label != "pass" for label in labels):
+            return store.status(run_id)
     return store.status(run_id)

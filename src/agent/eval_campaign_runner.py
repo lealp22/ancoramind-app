@@ -8,7 +8,7 @@ import inspect
 import json
 import sys
 import unicodedata
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
 from typing import Literal, Protocol, TextIO
 
@@ -116,36 +116,43 @@ class TerminalCampaignReviewer:
 
     def __init__(self, reader: TextIO, writer: TextIO,
                  save: Callable[[int, ReviewLabel], None] | None = None,
-                 criterion_offset: int = 0, pause_on_disconnect: bool = False) -> None:
+                 criterion_indices: Sequence[int] | None = None,
+                 pause_on_disconnect: bool = False) -> None:
         if not reader.isatty() or not writer.isatty():
             raise ValueError("eval_human_console_required")
         self._reader = reader
         self._writer = writer
         self._save = save
-        self._criterion_offset = criterion_offset
+        self._criterion_indices = None if criterion_indices is None else tuple(criterion_indices)
         self._pause_on_disconnect = pause_on_disconnect
 
     async def review(self, case: EvalCase, observation: EvalObservation) -> tuple[ReviewLabel, ...]:
         reply = observation.reply
+        indices = (tuple(range(len(case.response_criteria)))
+                   if self._criterion_indices is None else self._criterion_indices)
         if reply is None:
-            return tuple("not_evaluated" for _ in case.response_criteria)
-        # JSON escaping prevents synthetic/model text from injecting terminal
-        # escape sequences or impersonating the rubric's console controls.
+            return tuple("not_evaluated" for _ in indices)
+        # Escaping prevents synthetic/model text from injecting terminal escape
+        # sequences or impersonating the rubric's console controls. The case block
+        # is printed once; criteria follow without repeating it (specs/045).
         self._writer.write(
-            "\nCaso sintético: " + case.case_id
-            + "\nInput (DATA): " + console_data(case.input_text)
-            + "\nContexto (DATA): " + console_data(dict(case.synthetic_context))
-            + "\nanswer (DATA): " + console_data(reply.answer)
-            + "\nproposal_text (DATA): " + console_data(reply.proposal_text)
-            + "\nPropuestas sintéticas (DATA): " + console_data(observation.proposals)
-            + "\nPresentación Core simulada (DATA): " + console_data(observation.delivered_text)
-            + "\nHechos de tools (DATA): " + console_data(observation.tool_trace)
-            + "\nTools: " + json.dumps(observation.tool_names) + "\n"
+            "\nCaso sintético: " + case.case_id + "\n"
+            + "\n".join((
+                render_section("Input", case.input_text),
+                render_section("Contexto", dict(case.synthetic_context)),
+                render_section("answer", reply.answer),
+                render_section("proposal_text", reply.proposal_text),
+                render_section("Propuestas sintéticas", observation.proposals),
+                render_section("Presentación Core simulada", observation.delivered_text),
+                render_section("Hechos de tools", list(observation.tool_trace)),
+                render_section("Tools", list(observation.tool_names)),
+            )) + "\n"
         )
         labels: list[ReviewLabel] = []
-        for index, criterion in enumerate(case.response_criteria):
+        for position, index in enumerate(indices):
+            criterion = case.response_criteria[index]
             self._writer.write(
-                f"Criterio {index + self._criterion_offset}: " + console_data(criterion)
+                f"Criterio {index}: " + console_data(criterion)
                 + "\n[p] pass / [f] fail / [x] not_evaluated: "
             )
             self._writer.flush()
@@ -180,7 +187,7 @@ class TerminalCampaignReviewer:
             if self._save:
                 self._save(index, label)
             if label != "pass":
-                labels.extend("not_evaluated" for _ in case.response_criteria[index + 1:])
+                labels.extend("not_evaluated" for _ in indices[position + 1:])
                 break
         return tuple(labels)
 

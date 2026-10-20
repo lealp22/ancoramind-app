@@ -7,9 +7,10 @@
       prefijo fijo por línea, escapado de controles/bidi/formato y saltos).
       Tests de inyección: valor que imita sección o `[p]/[f]/[x]`.
       `render_section` + 8 tests; aún no cableado a la consola (eso es T3).
-- [ ] T3 · `review_saved` y `TerminalCampaignReviewer`: un revisor por caso, con
+- [x] T3 · `review_saved` y `TerminalCampaignReviewer`: un revisor por caso, con
       criterios pendientes seguidos. Mantener `save` por criterio y
       `pause_on_disconnect`.
+      `criterion_offset` se sustituye por `criterion_indices` (índices absolutos).
 - [ ] T4 · Lista cerrada de `reason` en `eval_console.py` y mapeo de excepciones.
       Tests: cada motivo, `unexpected`, ausencia de texto de excepción y rutas.
 - [ ] T5 · `--human` en `status` y `session-status` con tabla fija de siguiente
