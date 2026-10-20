@@ -3276,7 +3276,9 @@ público aún presente; retirarlo (acceso solo por red privada) queda pendiente.
 **Pendiente, no implementado:**
 - Spike de compatibilidad (`specs/046-phoenix-masked-traces/spike.md`, Q1–Q9).
 - Aceptación del ADR-007 y de la enmienda acotada del principio 11 por el
-  propietario; decidir qué usuarios pueden entrar en las trazas.
+  propietario. Decidido (2026-10-20): entran las trazas de todos los usuarios
+  autorizados, sin lista adicional; exige actualizar los términos del piloto y el
+  inventario de privacidad antes de activar el flag.
 - Código (`masking.py`, exporter envolvente fail-closed, flag OFF por defecto),
   tests de privacidad y actualización de `docs/production-security-privacy.md`.
 

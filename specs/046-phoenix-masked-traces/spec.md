@@ -44,11 +44,17 @@ pipeline de Grafana y cualquier uso de Phoenix como fuente de verdad.
 5. **Fail-closed por span:** si el enmascarador falla, el span no se exporta.
 6. **Correlación:** atributos `ancora.correlation_id` e `ancora.interaction_id`.
 7. **Usuario:** HMAC-SHA256 truncado de `telegram_user_id` con prefijo de dominio
-   propio (`phoenix-user-v1:`). Clave: se reutiliza el patrón de specs/043
-   (derivada de un secreto ya existente) salvo que el spike indique lo contrario.
+   propio (`phoenix-user-v1:`). Clave propia e independiente
+   (`PHOENIX_USER_PSEUDONYM_KEY`, decisión del propietario 2026-10-20), no
+   derivada de ningún otro secreto: rotar otras claves no altera los seudónimos
+   de Phoenix. Rotarla rompe la agrupación histórica por usuario; documentarlo.
 8. **Transporte:** red privada de Railway; la app nunca usa el dominio público.
-9. **Usuarios cuyo texto entra:** por defecto solo el propietario
-   (`PHOENIX_TRACING_USER_IDS`, lista explícita). Ampliar requiere decisión propia.
+9. **Usuarios cuyo texto entra:** todos los usuarios autorizados, sin lista
+   adicional (decisión del propietario, 2026-10-20). Consecuencia: el texto de
+   terceros del piloto también se guarda enmascarado, así que los términos del
+   piloto y el inventario de privacidad deben decirlo antes de activar el flag
+   (ver Gate de activación). Los rechazados (`rejected`/`ignored`) no ejecutan el
+   Agent y por tanto no generan trazas.
 10. **Retención:** 30 días (valor ya configurado en Phoenix). Borrado por usuario:
     procedimiento documentado, ejecutable desde la UI/API de Phoenix filtrando por
     el seudónimo.
@@ -56,15 +62,16 @@ pipeline de Grafana y cualquier uso de Phoenix como fuente de verdad.
 ## Configuración nueva
 
 | Variable | Default | Notas |
-|---|---|---|
+| --- | --- | --- |
 | `PHOENIX_TRACING_ENABLED` | `false` | Interruptor general |
 | `PHOENIX_COLLECTOR_ENDPOINT` | vacío | URL privada de Phoenix |
 | `PHOENIX_API_KEY` | vacío | Secreto; solo en Railway |
-| `PHOENIX_TRACING_USER_IDS` | vacío | Lista blanca de usuarios; vacío ⇒ ninguno |
-| `PHOENIX_PROJECT_NAME` | `ancoramind` | |
+| `PHOENIX_USER_PSEUDONYM_KEY` | vacío | Secreto (≥32 bytes aleatorios) para el HMAC de usuario; solo en Railway |
+| `PHOENIX_PROJECT_NAME` | `ancoramind` | Proyecto en la UI de Phoenix |
 
-Sin endpoint, clave o lista de usuarios, el pipeline no se activa (fail-closed
-de configuración, a diferencia del fail-open de ejecución).
+Sin endpoint, API key o clave de seudónimo, el pipeline no se activa aunque el
+flag sea `true`
+(fail-closed de configuración, a diferencia del fail-open de ejecución).
 
 ## Componentes
 
@@ -87,7 +94,8 @@ de configuración, a diferencia del fail-open de ejecución).
 5. El pipeline de Grafana no recibe ningún atributo con contenido (test de
    privacidad sobre el exporter del Collector).
 6. Audio, adjuntos y contenido de documentos no aparecen en ningún span.
-7. Usuarios fuera de `PHOENIX_TRACING_USER_IDS` no generan spans con contenido.
+7. Sin endpoint, API key o clave de seudónimo, el pipeline no se activa aunque
+   el flag sea `true`.
 8. Cada traza es localizable desde `telegram_interactions`/`llm_usage_events` por
    `correlation_id`.
 9. El enmascarado no altera lo enviado al LLM ni lo persistido en PostgreSQL.
@@ -108,5 +116,6 @@ de configuración, a diferencia del fail-open de ejecución).
 ## Gate de activación en producción
 
 Flag a `true` solo tras: spike cerrado, ADR-007 *Accepted*, criterios 1–11
-verdes, documentación de privacidad actualizada y primer uso solo con el
-propietario. Despliegue manual y comprobación de SHA/CI como en AGENTS.md §10.
+verdes, documentación de privacidad actualizada, términos del piloto
+(`docs/` de pilot terms) que mencionen la copia enmascarada de mensajes y la
+retención de 30 días, y primera verificación E2E con el propietario. Despliegue manual y comprobación de SHA/CI como en AGENTS.md §10.
