@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     """BL-52: bounded deterministic notice for rejected private users, without Agent/LLM.
     Independent of pairing; off by default until an explicit rollout.
     """
+    pilot_notice_url: str = ""
+    """Optional https link to the pilot terms, appended to the fixed /pair and /help
+    replies. Empty (default) leaves those replies unchanged."""
     telegram_processor_enabled: bool = False
     telegram_voice_enabled: bool = False
     """Voice rollout gate; requires FFmpeg, private Gateway and versioned speech config."""
@@ -291,6 +294,14 @@ class Settings(BaseSettings):
             raise ValueError("LITELLM_PROXY_ENABLED requires: " + ", ".join(missing))
         if not self.litellm_proxy_default_route.strip():
             raise ValueError("LITELLM_PROXY_DEFAULT_ROUTE must not be blank")
+        return self
+
+    @model_validator(mode="after")
+    def validate_pilot_notice_url(self) -> "Settings":
+        """The link is sent verbatim to users: only a plain https URL is accepted."""
+        url = self.pilot_notice_url.strip()
+        if url and (not url.startswith("https://") or any(ch.isspace() for ch in url)):
+            raise ValueError("PILOT_NOTICE_URL must be an https:// URL without whitespace")
         return self
 
     @model_validator(mode="after")

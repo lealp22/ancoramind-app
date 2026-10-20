@@ -14,7 +14,10 @@ from src.domain.interactions.commands import (
     parse_telegram_command,
     parse_telegram_pairing_command,
     telemetry_label,
+    with_pilot_notice,
 )
+
+PILOT_URL = "https://example.org/pilot-terms"
 
 
 class TestParseTelegramCommand:
@@ -104,6 +107,40 @@ class TestHandleTelegramCommand:
         for reply in (HELP_REPLY, NEW_SESSION_REPLY, UNSUPPORTED_COMMAND_REPLY):
             assert "**" not in reply
             assert "`" not in reply
+
+    @pytest.mark.parametrize("text", ["/help", "/start"])
+    def test_help_appends_the_pilot_notice_when_configured(self, text: str) -> None:
+        command = parse_telegram_command(text)
+        assert command is not None
+
+        handling = handle_telegram_command(command, pilot_notice_url=PILOT_URL)
+
+        assert handling.reply_text == with_pilot_notice(HELP_REPLY, PILOT_URL)
+        assert handling.reply_text.startswith(HELP_REPLY)
+        assert PILOT_URL in handling.reply_text
+
+    @pytest.mark.parametrize("text", ["/new", "/borralotodo"])
+    def test_other_commands_never_carry_the_pilot_notice(self, text: str) -> None:
+        command = parse_telegram_command(text)
+        assert command is not None
+
+        handling = handle_telegram_command(command, pilot_notice_url=PILOT_URL)
+
+        assert PILOT_URL not in handling.reply_text
+
+
+class TestWithPilotNotice:
+    @pytest.mark.parametrize("url", [None, ""])
+    def test_without_url_the_reply_is_unchanged(self, url: str | None) -> None:
+        assert with_pilot_notice(HELP_REPLY, url) == HELP_REPLY
+
+    def test_with_url_adds_one_fixed_line_and_no_markdown(self) -> None:
+        reply = with_pilot_notice("hola", PILOT_URL)
+
+        assert reply.startswith("hola\n\n")
+        assert reply.endswith(PILOT_URL)
+        assert "datos ficticios" in reply
+        assert "**" not in reply and "`" not in reply
 
 
 class TestSessionGenerations:

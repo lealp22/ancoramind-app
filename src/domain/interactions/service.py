@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from src.domain.interactions.admission import TelegramAdmissionPolicy
-from src.domain.interactions.commands import parse_telegram_pairing_command
+from src.domain.interactions.commands import parse_telegram_pairing_command, with_pilot_notice
 from src.domain.interactions.models import (
     InteractionStatus,
     TelegramAdmissionLimits,
@@ -44,7 +44,9 @@ class TelegramInteractionService:
         pairing_service: TelegramPairingService | None = None,
         pairing_enabled: bool = False,
         access_notice_enabled: bool = False,
+        pilot_notice_url: str | None = None,
     ):
+        self._pilot_notice_url = pilot_notice_url
         self._repository = repository
         self._payload_cipher = payload_cipher
         self._pairing_repository = pairing_repository
@@ -124,14 +126,17 @@ class TelegramInteractionService:
                 pairing_command.code,
                 telegram_user_id=normalized.telegram_user_id,
             )
-            pairing_reply = (
-                PAIRING_AUTO_APPROVED_REPLY
-                if redemption.status is PairingRedemptionStatus.AUTO_APPROVED
-                else PAIRING_PENDING_REPLY
-                if redemption.status
-                in {PairingRedemptionStatus.PENDING, PairingRedemptionStatus.ALREADY_PENDING}
-                else PAIRING_UNAVAILABLE_REPLY
-            )
+            if redemption.status is PairingRedemptionStatus.AUTO_APPROVED:
+                pairing_reply = with_pilot_notice(
+                    PAIRING_AUTO_APPROVED_REPLY, self._pilot_notice_url
+                )
+            elif redemption.status in {
+                PairingRedemptionStatus.PENDING,
+                PairingRedemptionStatus.ALREADY_PENDING,
+            }:
+                pairing_reply = with_pilot_notice(PAIRING_PENDING_REPLY, self._pilot_notice_url)
+            else:
+                pairing_reply = PAIRING_UNAVAILABLE_REPLY
             # Never write the raw credential to the encrypted interaction payload.
             normalized = normalized.model_copy(update={"text": "/pair"})
         encrypted = (

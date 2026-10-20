@@ -178,6 +178,7 @@ def _service_factory(settings: Settings) -> ServiceFactory:
             pairing_service=pairing_service,
             pairing_enabled=settings.telegram_pairing_enabled,
             access_notice_enabled=settings.telegram_access_notice_enabled,
+            pilot_notice_url=settings.pilot_notice_url or None,
         )
 
     return create

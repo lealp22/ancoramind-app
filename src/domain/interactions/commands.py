@@ -54,6 +54,17 @@ UNSUPPORTED_COMMAND_REPLY = (
 )
 
 
+def with_pilot_notice(reply: str, notice_url: str | None) -> str:
+    """Append the pilot-terms line to a fixed reply when an operator configured one.
+
+    ``notice_url`` comes from validated operator config (``PILOT_NOTICE_URL``),
+    never from user content. Without it the reply is returned unchanged.
+    """
+    if not notice_url:
+        return reply
+    return f"{reply}\n\n📄 Piloto de pruebas: usa solo datos ficticios. Condiciones: {notice_url}"
+
+
 @dataclass(frozen=True)
 class TelegramCommand:
     """One parsed bot command, resolved from Telegram text only."""
@@ -139,12 +150,19 @@ def parse_telegram_pairing_command(
     return TelegramPairingCommand(code=code)
 
 
-def handle_telegram_command(command: TelegramCommand) -> CommandHandling:
+def handle_telegram_command(
+    command: TelegramCommand,
+    *,
+    pilot_notice_url: str | None = None,
+) -> CommandHandling:
     """Map a parsed command to its fixed reply and session effect."""
     if command.name in _SESSION_RESET_COMMANDS:
         return CommandHandling(reply_text=NEW_SESSION_REPLY, resets_session=True)
     if command.name in _HELP_COMMANDS:
-        return CommandHandling(reply_text=HELP_REPLY, resets_session=False)
+        return CommandHandling(
+            reply_text=with_pilot_notice(HELP_REPLY, pilot_notice_url),
+            resets_session=False,
+        )
     return CommandHandling(reply_text=UNSUPPORTED_COMMAND_REPLY, resets_session=False)
 
 

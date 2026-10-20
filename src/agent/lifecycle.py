@@ -219,6 +219,7 @@ def install_interaction_processor_lifespan(
                 voice_maintenance=lambda: maintain_voice_preparations(get_session),
                 fast_ack_enabled=settings.telegram_fast_ack_enabled,
                 access_notice_enabled=settings.telegram_access_notice_enabled,
+                pilot_notice_url=settings.pilot_notice_url or None,
                 summarizer=context_compaction_summarizer,
                 context_compaction_enabled=settings.context_compaction_enabled,
                 context_compaction_token_threshold=settings.context_compaction_token_threshold,

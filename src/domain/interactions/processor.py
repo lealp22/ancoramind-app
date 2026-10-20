@@ -188,7 +188,9 @@ class InteractionProcessor:
         context_compaction_enabled: bool = False,
         context_compaction_token_threshold: int = 60_000,
         context_compaction_ratio: float = 0.4,
+        pilot_notice_url: str | None = None,
     ):
+        self._pilot_notice_url = pilot_notice_url
         self._session_factory = session_factory
         self._payload_cipher = payload_cipher
         self._agent_runner = agent_runner
@@ -916,7 +918,7 @@ class InteractionProcessor:
         (chunking, delivery state, ambiguity rules), so delivery semantics stay
         identical while the model never sees the command nor the chat history.
         """
-        handling = handle_telegram_command(command)
+        handling = handle_telegram_command(command, pilot_notice_url=self._pilot_notice_url)
         chat_id = interaction.chat_id
         if chat_id is None:  # pragma: no cover - _run_agent validates identity first
             await self._mark_terminal(
