@@ -48,13 +48,63 @@ def campaign_cases_fingerprint(cases: tuple[EvalCase, ...]) -> str:
     ).hexdigest()
 
 
-def console_data(value: object) -> str:
-    """Readable Spanish; never render terminal controls, bidi or format characters."""
-    text = json.dumps(value, ensure_ascii=False, default=str)
+def _escape(text: str) -> str:
     return "".join(
         f"\\u{ord(char):04x}" if unicodedata.category(char).startswith("C")
         or char in {"\u2028", "\u2029"} else char for char in text
     )
+
+
+def _scalar(value: object) -> str:
+    if value is True or value is False:
+        return "true" if value else "false"
+    return "(vacío)" if value == "" else _escape(str(value))
+
+
+def _lines(value: object, depth: int = 0) -> list[str]:
+    pad = "  " * depth
+    if isinstance(value, dict):
+        out: list[str] = []
+        for key, item in value.items():
+            if isinstance(item, dict | list | tuple) and item:
+                out.append(f"{pad}{_escape(str(key))}:")
+                out.extend(_lines(item, depth + 1))
+            else:
+                out.append(f"{pad}{_escape(str(key))}: {_inline(item)}")
+        return out
+    if isinstance(value, list | tuple):
+        out = []
+        for item in value:
+            if isinstance(item, dict | list | tuple) and item:
+                out.append(f"{pad}-")
+                out.extend(_lines(item, depth + 1))
+            else:
+                out.append(f"{pad}- {_inline(item)}")
+        return out
+    return [pad + _scalar(value)]
+
+
+def _inline(value: object) -> str:
+    if isinstance(value, dict | list | tuple):
+        return "(vacío)"
+    return _scalar(value)
+
+
+def render_section(label: str, value: object) -> str:
+    """Labelled, line-oriented DATA block for the human review console.
+
+    Only this function creates line structure. Every data line carries a fixed
+    ``  | `` prefix and is escaped (controls, bidi, format, line separators), so a
+    value cannot forge a section header, a criterion or a ``[p]/[f]/[x]`` control.
+    """
+    body = ["(ninguno)"] if value is None else _lines(value)
+    return "\n".join([f"{label} (DATA):", *("  | " + line for line in body)])
+
+
+def console_data(value: object) -> str:
+    """Readable Spanish; never render terminal controls, bidi or format characters."""
+    text = json.dumps(value, ensure_ascii=False, default=str)
+    return _escape(text)
 
 
 class TerminalCampaignReviewer:

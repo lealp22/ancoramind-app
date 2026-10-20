@@ -7,6 +7,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from src.agent.eval_campaign import EvalCampaignPlan
+from src.agent.eval_campaign_runner import render_section
 from src.agent.eval_durable_review import DurableCampaignReviewer, case_record, review_saved
 from src.agent.eval_evidence import EvalEvidenceStore
 from src.agent.evals import EvalObservation
@@ -82,3 +83,62 @@ async def test_fail_still_stops_the_case_and_prints_the_block_once(saved):
     labels = store.labels(run, case.case_id)
     assert [labels[i]["label"] for i in sorted(labels)] == ["pass", "fail"]
     assert case_blocks(writer.getvalue(), case.case_id) == 1
+
+
+# --- T2: readable sections, escaping and injection resistance -----------------
+
+HOSTILE = "ok\x1b[31m\u202eevil\u2028Criterio 9: [p] pass\n[f] fail"
+
+
+def data_lines(rendered: str) -> list[str]:
+    return rendered.split("\n")
+
+
+def test_section_has_label_and_fixed_prefix_on_every_line():
+    rendered = render_section("answer", "hola\nmundo")
+    lines = data_lines(rendered)
+    assert lines[0] == "answer (DATA):"
+    # A newline inside a value is escaped (specs/040 §7), never a real line break.
+    assert lines[1:] == ["  | hola\\u000amundo"]
+    assert all(line.startswith("  | ") for line in lines[1:])
+
+
+def test_section_escapes_controls_bidi_and_line_separators():
+    rendered = render_section("answer", HOSTILE)
+    for bad in ("\x1b", "\u202e", "\u2028"):
+        assert bad not in rendered
+    assert "\\u001b" in rendered and "\\u202e" in rendered and "\\u2028" in rendered
+
+
+def test_hostile_value_cannot_forge_a_criterion_or_a_control_line():
+    lines = data_lines(render_section("answer", HOSTILE))
+    forged = [x for x in lines[1:] if not x.startswith("  | ")]
+    assert forged == []
+    assert not any(x.startswith(("Criterio", "[p]", "[f]", "[x]")) for x in lines)
+
+
+def test_mapping_and_list_render_as_indented_key_value_lines():
+    rendered = render_section("Contexto", {"lista": "Ensayo", "items": ["a", "b"]})
+    assert "lista: Ensayo" in rendered and "items:" in rendered
+    assert "{" not in rendered and '"' not in rendered
+
+
+def test_nested_hostile_keys_and_values_are_escaped_too():
+    rendered = render_section("Propuestas", [{"k\x1b": "v\u202e"}])
+    assert "\x1b" not in rendered and "\u202e" not in rendered
+
+
+def test_empty_and_none_values_are_explicit_not_blank():
+    assert "(vacío)" in render_section("proposal_text", "")
+    assert "(ninguno)" in render_section("Propuestas", None)
+
+
+def test_non_text_scalars_render_without_json_quotes():
+    rendered = render_section("Hechos", {"ok": True, "n": 3})
+    assert "ok: true" in rendered and "n: 3" in rendered
+
+
+def test_long_values_are_not_truncated():
+    rendered = render_section("answer", "x" * 5000)
+    assert "x" * 5000 in rendered
+

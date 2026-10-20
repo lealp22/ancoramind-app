@@ -2998,8 +2998,10 @@ y `--human` en `status`/`session-status`. Seguir revisando tras un fail **no
 cambia** (decisión del propietario). Sin módulos nuevos fuera de la allowlist
 `_HARNESS` de specs/042; cambia la huella del harness (commit/CI/publicación
 manual) pero no amplía gasto. No desbloquea la publicación pendiente. Evidently
-y Phoenix valorados el mismo día: aparcados mientras haya 5 casos y un solo run;
-Phoenix pertenece a ADR-007 (trazas de producción), no a este incremento.
+valorado el mismo día: aparcado mientras haya 5 casos y un solo run (retomar con
+golden set de decenas de casos, 3+ ejecuciones comparables y un juez calibrado).
+Phoenix **no** está aparcado: sigue su propio camino en ADR-007 (trazas de
+producción con contenido enmascarado) y es independiente de este incremento.
 
 
 
