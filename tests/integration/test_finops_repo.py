@@ -9,10 +9,12 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.finops.service import proposal_rates
 from src.domain.runtime_config.models import bootstrap_runtime_configuration
 from src.domain.runtime_config.service import RuntimeConfigManager
 from src.repositories.database import get_session
 from src.repositories.finops import FinopsRepository
+from src.repositories.llm_usage import LlmUsageRepository
 
 pytestmark = pytest.mark.integration
 
@@ -113,3 +115,47 @@ async def test_quality_queries_run_and_empty_window_is_zero(session: AsyncSessio
     assert stats.p50_ms == pytest.approx(100.0)
     assert {s.status: s.count for s in await repo.interactions_by_status(SINCE)} == {"completed": 1}
     assert await repo.tool_calls_total(SINCE) == 2
+
+
+async def test_proposal_outcomes_group_by_tool_status_and_mode(session: AsyncSession) -> None:
+    rows = [
+        ("create_note", "executed", "self_authorized"),
+        ("create_note", "executed", "self_authorized"),
+        ("create_reminder", "executed", "explicit_confirmation"),
+        ("create_reminder", "discarded", "explicit_confirmation"),
+        ("create_reminder", "pending_confirmation", "explicit_confirmation"),
+    ]
+    for tool, status, mode in rows:
+        await session.execute(
+            text(
+                "INSERT INTO ancora.action_proposals "
+                "(user_id, tool_name, status, consent_mode) "
+                "VALUES ('u', :tool, :status, :mode)"
+            ),
+            {"tool": tool, "status": status, "mode": mode},
+        )
+    await session.commit()
+
+    repo = FinopsRepository(session)
+    got = {(o.tool_name, o.status, o.consent_mode): o.count for o in await repo.proposals(SINCE)}
+    assert got == {
+        ("create_note", "executed", "self_authorized"): 2,
+        ("create_reminder", "executed", "explicit_confirmation"): 1,
+        ("create_reminder", "discarded", "explicit_confirmation"): 1,
+        ("create_reminder", "pending_confirmation", "explicit_confirmation"): 1,
+    }
+    assert proposal_rates(await repo.proposals(SINCE)).executed_rate == 0.75
+
+
+async def test_cost_matches_summarize_spend_for_same_period(session: AsyncSession) -> None:
+    revision = await _revision()
+    a = await _interaction(session, user=7201, update=21, status="completed")
+    await _usage(session, a, revision, actual=0.004, estimated=0.9)
+    await _usage(session, a, revision, actual=None, estimated=0.006)
+    await session.commit()
+
+    now = datetime.now(tz=UTC)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    ledger = await LlmUsageRepository(session).summarize_spend(now=now)
+    panel = await FinopsRepository(session).totals(month_start)
+    assert panel.cost_usd == pytest.approx(ledger.month_usd)
