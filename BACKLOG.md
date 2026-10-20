@@ -2990,6 +2990,18 @@ calibración/validación independiente, segunda opinión y solo entonces automat
 acotada/gates si se aprueban. Nueve ejemplos provisionales no son golden set; web
 no implementada ni requisito de T7, sin CI pagada ni ampliación de cinco casos.
 Ver specs/018 `incremental-roadmap.md` y `tasks.md` T7c–T7d. BL-8 continúa abierto.
+**Legibilidad de la revisión humana (2026-10-20; specs/045, propuesta):** la
+consola de revisión vuelca el caso completo una vez por criterio, en JSON
+compacto, con errores genéricos y estado solo en JSON. Spec 045: caso impreso una
+vez, secciones legibles con escapado intacto, `reason` de error de lista cerrada
+y `--human` en `status`/`session-status`. Seguir revisando tras un fail **no
+cambia** (decisión del propietario). Sin módulos nuevos fuera de la allowlist
+`_HARNESS` de specs/042; cambia la huella del harness (commit/CI/publicación
+manual) pero no amplía gasto. No desbloquea la publicación pendiente. Evidently
+y Phoenix valorados el mismo día: aparcados mientras haya 5 casos y un solo run;
+Phoenix pertenece a ADR-007 (trazas de producción), no a este incremento.
+
+
 
 **Propuesta para el siguiente incremento (2026-09-26; no implementada):** probar
 Jev como juez semántico *opcional* de los casos sintéticos de `response_style`,
