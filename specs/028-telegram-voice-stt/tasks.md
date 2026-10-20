@@ -171,4 +171,6 @@ inferencia upstream y coste real aún pendientes; no activar opt-in implícitame
 - [ ] Unit suite, integration PostgreSQL, Ruff, mypy y matriz specs/013 afectada.
 - [ ] Benchmark sintético/consentido; fijar métricas/umbrales antes de medir.
 - [ ] E2E V34–V36 con evidencia metadata-only, ejecución del consentimiento real.
+  V34 parcial (2026-10-20, ver `verification.md`); V35 planificado sin ejecutar:
+  `v35-e2e-plan.md`; V36 abierto.
 - [ ] Activación gradual explícita, runbook/rollback por flag y cierre de BL-26.

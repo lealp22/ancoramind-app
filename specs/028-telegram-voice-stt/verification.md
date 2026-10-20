@@ -262,3 +262,29 @@ real siguen pendientes en T4; ver incremento posterior abajo.
   confirmar STT real. La interacción histórica `03749fa5…` cumple la forma de aviso
   recuperable: tras el despliegue, el worker le enviaría el aviso una vez (retraso
   tardío); la fila `voice_preparations` histórica sigue en `preparing` hasta decidir.
+
+### Confirmación E2E en producción (2026-10-20, tras el despliegue del arreglo)
+
+- **Notas reales, metadata-only (Supabase):** las 5 últimas notas de voz del
+  propietario (23:34–23:37 UTC, 1,1–16,8 s) terminaron `transcribed` /
+  `completed`, sin `error_detail_code`. Ruta `ancoramind-stt` →
+  `ancoramind-stt-r1`; 2–3 llamadas de modelo y 1–2 de herramientas por
+  interacción (un Agent por nota). `estimated_cost` 0,0000333–0,0000566 USD;
+  `actual_cost` sigue `NULL` en todas (desconocido, no inventado).
+- **Cierre de la fila histórica `03749fa5…`:** el propietario ejecutó a mano el
+  `UPDATE` acotado (sólo `preparing`, sin `call_id` ni transcripción) y la fila
+  quedó `failed_controlled`. Estado verificado: interacción `completed` con 1
+  respuesta `completed`. El aviso tardío se entregó una sola vez al desplegar
+  (confirmado por el propietario): el worker de avisos recuperó una interacción
+  `failed_controlled` sin Agent, sin STT y sin duplicar.
+- **Cobertura de la matriz:** esto es evidencia parcial de **V34** (una STT
+  auditada, un Agent, respuesta textual, coste registrado; la latencia no se
+  midió aquí) y de **V17/V18** en el sentido de no repetir STT/Agent. No cubre
+  V35 (consentimiento verbal real tras propuesta entregada) ni V36 (benchmark de
+  español/ruido/fechas/matrículas/negaciones/silencio).
+- **Sigue abierto en T7 (no cerrado por este fallo):** validación PostgreSQL del
+  aviso durable ante fallo ambiguo; unit/integration/Ruff/mypy y matriz
+  specs/013 como casilla formal; benchmark con umbrales previos; E2E V35–V36;
+  activación gradual explícita, runbook/rollback y cierre de BL-26. Que la voz
+  funcione para el propietario **no** cumple por sí solo el gate de producción de
+  `acceptance.md`. La decisión de cierre de BL-26 queda en manos del propietario.
