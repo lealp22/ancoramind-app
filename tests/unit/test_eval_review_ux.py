@@ -1,6 +1,7 @@
 """specs/045 T1 — the review console prints each case once and keeps label semantics."""
 
 import io
+import json
 from pathlib import Path
 
 import pytest
@@ -141,4 +142,62 @@ def test_non_text_scalars_render_without_json_quotes():
 def test_long_values_are_not_truncated():
     rendered = render_section("answer", "x" * 5000)
     assert "x" * 5000 in rendered
+
+
+
+# --- T4: closed failure reasons -------------------------------------------------------
+
+def _run_with_error(monkeypatch, capsys, error):
+    from scripts import eval_console as cli
+
+    def boom(_env):
+        raise error
+
+    monkeypatch.setattr(cli, "store_from_env", boom)
+    assert cli.main(["list"]) == 1
+    return json.loads(capsys.readouterr().out)
+
+
+@pytest.mark.parametrize(("error", "reason"), [
+    (ValueError("eval_initial_human_console_required"), "console_not_interactive"),
+    (ValueError("eval_human_console_required"), "console_not_interactive"),
+    (EOFError("eval_review_disconnected_no_label_saved"), "review_disconnected"),
+    (KeyboardInterrupt(), "review_disconnected"),
+    (TimeoutError("eval_review_wait_expired"), "review_disconnected"),
+    (ValueError("eval_evidence_corrupted_or_wrong_key"), "evidence_unreadable_or_wrong_key"),
+    (ValueError("eval_evidence_encryption_key_required"), "evidence_unreadable_or_wrong_key"),
+    (ValueError("eval_evidence_chain_corrupted"), "evidence_unreadable_or_wrong_key"),
+    (ValueError("eval_evidence_invalid_run"), "run_not_found"),
+    (FileNotFoundError("/secret/path/run"), "run_not_found"),
+    (RuntimeError("anything else"), "unexpected"),
+    (ValueError("eval_unknown_new_code"), "unexpected"),
+])
+def test_each_failure_maps_to_one_closed_reason(monkeypatch, capsys, error, reason):
+    out = _run_with_error(monkeypatch, capsys, error)
+    assert out == {
+        "status": "eval_console_blocked_or_disconnected", "reason": reason,
+        "do_not_replay": True, "review_can_reopen_saved_evidence": True,
+    }
+
+
+def test_failure_output_never_contains_exception_text_or_paths(monkeypatch, capsys):
+    secret = "C:\\private\\evidence\\token-abc123 contenido personal"
+    for error in (RuntimeError(secret), ValueError(secret), FileNotFoundError(secret)):
+        out = _run_with_error(monkeypatch, capsys, error)
+        assert "abc123" not in str(out) and "private" not in str(out)
+        assert out["reason"] in {"unexpected", "run_not_found"}
+
+
+def test_session_blocked_output_is_unchanged(monkeypatch, capsys):
+    from scripts import eval_console as cli
+    from src.agent.eval_validation_session import EvalSessionError
+
+    def boom(_env):
+        raise EvalSessionError("session_worker_active_or_uncertain")
+
+    monkeypatch.setattr(cli, "store_from_env", boom)
+    assert cli.main(["list"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "eval_session_blocked"
+    assert out["inference_started"] is False and out["do_not_replay"] is True
 

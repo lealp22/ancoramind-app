@@ -49,6 +49,34 @@ from src.domain.runtime_config.models import RuntimeConfigSnapshot  # noqa: E402
 # and current cumulative authorization. Preserve it; never charge it a second time.
 PRE_SESSION_SHA = "db0c59be0b2eeb807d4222aeb5a62b622d90b200"
 
+# Closed reasons for eval_console_blocked_or_disconnected (specs/045 C). Keys are the
+# fixed internal error codes; exception text is never echoed, only looked up.
+_CONSOLE_REASONS: dict[str, str] = {
+    "eval_initial_human_console_required": "console_not_interactive",
+    "eval_human_console_required": "console_not_interactive",
+    "eval_review_disconnected_no_label_saved": "review_disconnected",
+    "eval_review_wait_expired": "review_disconnected",
+    "eval_evidence_encryption_key_required": "evidence_unreadable_or_wrong_key",
+    "eval_evidence_corrupted_or_wrong_key": "evidence_unreadable_or_wrong_key",
+    "eval_evidence_corrupted": "evidence_unreadable_or_wrong_key",
+    "eval_evidence_sequence_corrupted": "evidence_unreadable_or_wrong_key",
+    "eval_evidence_chain_corrupted": "evidence_unreadable_or_wrong_key",
+    "eval_evidence_missing_head": "evidence_unreadable_or_wrong_key",
+    "eval_evidence_invalid_run": "run_not_found",
+    "eval_evidence_unknown_case": "run_not_found",
+}
+
+
+def console_failure_reason(error: BaseException) -> str:
+    """Map an exception to a closed reason; anything unrecognised is `unexpected`."""
+    if isinstance(error, KeyboardInterrupt | EOFError):
+        return "review_disconnected"
+    if isinstance(error, FileNotFoundError):
+        return "run_not_found"
+    if isinstance(error, ValueError | TimeoutError):
+        return _CONSOLE_REASONS.get(str(error), "unexpected")
+    return "unexpected"
+
 
 def store_from_env(env: dict[str, str]) -> tuple[EvalEvidenceStore, Path]:
     state = Path(env.get("ANCORA_EVAL_STATE_DIR", "/eval-state"))
@@ -457,8 +485,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": "eval_session_blocked", "reason": session_reason(str(error)),
                           "inference_started": False, "do_not_replay": True}))
         return 1
-    except (Exception, KeyboardInterrupt):
+    except (Exception, KeyboardInterrupt) as error:
         print(json.dumps({"status": "eval_console_blocked_or_disconnected",
+                          "reason": console_failure_reason(error),
                           "do_not_replay": True, "review_can_reopen_saved_evidence": True}))
         return 1
     finally:

@@ -11,8 +11,10 @@
       criterios pendientes seguidos. Mantener `save` por criterio y
       `pause_on_disconnect`.
       `criterion_offset` se sustituye por `criterion_indices` (índices absolutos).
-- [ ] T4 · Lista cerrada de `reason` en `eval_console.py` y mapeo de excepciones.
+- [x] T4 · Lista cerrada de `reason` en `eval_console.py` y mapeo de excepciones.
       Tests: cada motivo, `unexpected`, ausencia de texto de excepción y rutas.
+      Motivos: `console_not_interactive`, `review_disconnected`,
+      `evidence_unreadable_or_wrong_key`, `run_not_found`, `unexpected`.
 - [ ] T5 · `--human` en `status` y `session-status` con tabla fija de siguiente
       paso. Test: JSON sin `--human` idéntico; ningún paso sugiere `run`.
 - [ ] T6 · Comprobar que solo cambian ficheros de `_HARNESS` (test sobre
