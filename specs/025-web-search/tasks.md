@@ -21,6 +21,10 @@
       reales, privacidad en logs). Resultado en `verification.md`.
 - [ ] Validación del flujo del Agent por Telegram (Playwright sobre Telegram
       Web; el propietario inicia sesión). Bloqueada por el incidente de Railway.
+- [x] Evaluados `search_depth=advanced`, `country`/`language` e `include_answer`:
+      descartados (ver spec §"Parámetros de Tavily evaluados y descartados").
+- [ ] Opcional: ajustar `prompts/skills/web_search.md` para priorizar fuentes
+      oficiales y nombrar el país/tipo de cada fuente (cambio evaluable).
 - [ ] Opcional, bajo demanda: emitir `credits`/`cache_hit` como atributos
       allowlisted del span de la tool para poder contar uso de Tavily.
 

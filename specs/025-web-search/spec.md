@@ -101,6 +101,49 @@ search_web (tool Agno fina)
    detalle de proveedor.
 8. `pytest`, Ruff y mypy siguen verdes.
 
+## Parámetros de Tavily evaluados y descartados (2026-10-21)
+
+Se evaluó si otros parámetros del endpoint Search mejoraban los resultados
+(docs.tavily.com, Search API). **Decisión: Fase 1 mantiene el request fijo
+(`basic`, sin `country`/`language`, sin `include_answer`). No reabrir sin
+evidencia nueva.**
+
+| Parámetro | Decisión | Motivo |
+|---|---|---|
+| `include_answer` | Descartado | La respuesta la genera un LLM de Tavily: inferencia fuera de `LLMAccess` (sin Gateway, presupuesto, ruta versionada ni trazabilidad; principio 9 de AGENTS.md) y duplica la síntesis del Agent con una respuesta no respaldada por las fuentes citadas. |
+| `search_depth=advanced` | Descartado | 2 créditos en vez de 1. En la prueba perdió fuentes neutrales (Banco de España, Wikipedia) a favor de bancos comerciales, un resultado con 154 caracteres y fragmentos de ~2100 que la tool recorta a 1600. No hay presupuesto por run para créditos de Tavily, así que el coste se duplicaría sin control. |
+| `country` + `language` | Descartado por falta de efecto medible | Ver prueba. Efecto dentro del ruido entre ejecuciones idénticas; no justifica dos variables de configuración, tests y un cambio evaluable. |
+| `auto_parameters` | Sigue apagado | Según la documentación puede subir a `advanced` (2 créditos) sin avisar. |
+| `topic`, `time_range`, `include_domains`, `exact_match` | Fuera de alcance | Exigirían que el modelo los elija, ampliando la superficie de la tool y los evals de inyección. Candidatos de una fase posterior. |
+
+**Prueba realizada (10 créditos, consultas en español, 5 resultados):**
+
+| Consulta | `basic` | `basic` + `country=spain`, `language=es` |
+|---|---|---|
+| ¿Qué es la inflación? | 1/5 dominios `.es` | 2/5 |
+| ¿Cómo funciona el IRPF? | 2/5 | 2/5 |
+| ¿Qué requisitos tiene la ITV? | 4/5 | 4/5 |
+| ¿Qué es un agujero negro? (global) | 0/5 | 1/5 |
+
+Con `country`/`language`, los resultados cambian en uno o dos dominios y en
+ambos sentidos (en IRPF sale `finect.com` y entra `sumup.com`). En la
+inflación, `basic` devolvió Perú y México, y con los parámetros desaparecieron,
+pero una repetición de `basic` otro día ya había mostrado una composición
+distinta, así que no se puede separar el efecto del ruido. En la consulta global
+no empeora. Escribir la consulta en español ya prioriza fuentes en español.
+
+**Limitaciones de la prueba:** 4 consultas, una métrica burda (el sufijo `.es`
+no mide calidad: `bbva.com` o `finect.com` son españolas sin él) y sin juicio
+sobre el contenido. Una decisión contraria requeriría ~15 consultas, una
+métrica mejor y comparar varias ejecuciones de la misma configuración para
+medir el ruido propio.
+
+**Problema residual y vía preferida:** aparecen vídeos de YouTube en 2 de 4
+consultas y fuentes de otros países. Se corrige mejor desde el prompt
+(`prompts/skills/web_search.md`: priorizar fuentes oficiales y nombrar el país
+o tipo de cada fuente), sin coste en créditos. Es un cambio evaluable
+(AGENTS.md §10.4) y no está hecho.
+
 ## Fase 2 — diferida: spike OpenRouter/LiteLLM
 
 No implementar hasta que Fase 1 tenga validación real de producto, cuota y
