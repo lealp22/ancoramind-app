@@ -16,8 +16,11 @@
 - [x] Casos de prompt injection web en `evals/security/cases.json` (6 casos,
       tag `web`) + `search_web` simulado en `src/agent/eval_tools.py`. Catálogo
       estático; ejecución con Agent real pendiente (misma aprobación que BL-8).
-- [ ] Validación manual con la API key Tavily de `.env` (Playwright sobre
-      Telegram Web; el propietario inicia sesión).
+- [x] Validación local del servicio con la clave de `.env`:
+      `scripts/validate_web_search.py` (rechazos, errores controlados, 5 fuentes
+      reales, privacidad en logs). Resultado en `verification.md`.
+- [ ] Validación del flujo del Agent por Telegram (Playwright sobre Telegram
+      Web; el propietario inicia sesión). Bloqueada por el incidente de Railway.
 - [ ] Opcional, bajo demanda: emitir `credits`/`cache_hit` como atributos
       allowlisted del span de la tool para poder contar uso de Tavily.
 

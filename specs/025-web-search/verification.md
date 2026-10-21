@@ -39,11 +39,35 @@
 - No se ha ejecutado inferencia real: los casos son contratos, no miden
   resistencia del modelo.
 
+## Manual — validación local sin Telegram (2026-10-21)
+
+`python -m scripts.validate_web_search [--live]` ejercita la tool `search_web`
+real y `WebSearchService`, no el Agent. Los rechazos usan un proveedor falso
+(no llegan a Tavily); los errores usan una clave inválida (sin cobro); solo
+`--live` gasta 1 crédito. Clave de `.env`, nunca impresa.
+
+- [x] Rechazo local con mensaje controlado: DNI, tarjeta, email, teléfono,
+  matrícula, IBAN, consulta vacía y de más de 300 caracteres. Cero llamadas al
+  proveedor.
+- [x] Errores controlados: HTTP 401, timeout/transporte y servicio sin
+  configurar devuelven mensaje en español sin proveedor, código ni clave.
+- [x] Búsqueda real ("¿Qué es la inflación?"): **5 fuentes**, todas `https`,
+  origen `public_web`, fecha de consulta presente, envoltorio `untrusted_data`.
+  Fuentes: Banco de España, Banxico, FocusEconomics, YouTube (Santander), INE
+  Uruguay. Tavily informó **1 crédito**; la segunda consulta idéntica salió de
+  la caché.
+- [x] Privacidad en los logs capturados durante la ejecución: no aparecen la
+  clave, las consultas ni los snippets.
+
+**Límites de esta validación:** no cubre el flujo del Agent (cuándo decide
+buscar, si cita las URLs, cómo sintetiza) ni la telemetría real de Grafana/OTel,
+solo los logs de Python capturados en el proceso. Calidad de fuentes: una de
+cinco es un vídeo y dos son de otros países, algo a tener en cuenta en el prompt.
+
 ## Manual pendiente
 
-- [ ] En un entorno no productivo, fijar `WEB_SEARCH_ENABLED=true` y una
-  `TAVILY_API_KEY` de prueba, iniciar la app y solicitar una búsqueda pública
-  actual. Confirmar 3–5 fuentes, URLs visibles/citadas y que no aparece la
-  consulta/snippets en logs o telemetría.
-- [ ] Confirmar que un email/teléfono en la consulta se rechaza localmente y
-  que un timeout/error de Tavily devuelve el mensaje controlado.
+- [ ] Flujo del Agent por Telegram (Railway + Telegram Web con Playwright,
+  sesión iniciada por el propietario): confirmar que el Agent decide buscar,
+  cita las URLs y que no aparecen consulta/snippets en la telemetría. Bloqueado
+  por el incidente de Railway; las variables ya están puestas, falta que el
+  deployment pendiente (`NEEDS_APPROVAL`) se despliegue y verificar su SHA.
