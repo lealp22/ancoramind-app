@@ -49,6 +49,11 @@ async def test_service_normalizes_bounds_and_caches_query() -> None:
         ("contacta persona@example.com", "sensitive_query"),
         ("llama al +34 612 345 678", "sensitive_query"),
         ("DNI 12345678", "sensitive_query"),
+        ("dni 12345678Z", "sensitive_query"),
+        ("tarjeta 4539 1488 0343 6467", "sensitive_query"),
+        ("IBAN ES91 2100 0418 4502 0005 1332", "sensitive_query"),
+        ("matrícula 1234 BCD", "sensitive_query"),
+        ("bastidor WVWZZZ1JZXW000001", "sensitive_query"),
     ],
 )
 async def test_service_rejects_out_of_policy_queries(query: str, reason: str) -> None:

@@ -22,5 +22,7 @@
 - [x] T6 · Comprobar que solo cambian ficheros de `_HARNESS` (test sobre
       `session_scope` antes/después) y documentar la nueva huella en el runbook.
       Scope idéntico entre `f4d8bd8` y el árbol actual; 2 tests; `runbook.md`.
-- [ ] T7 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.
+- [x] T7 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`.
       Sin commit, push, despliegue ni inferencia por el agente.
+      Unit 2112 passed/1 skip; integración 218 passed/1 skip (PostgreSQL Docker
+      local); Ruff, mypy 184 ficheros y `git diff --check` limpios.

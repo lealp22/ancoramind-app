@@ -92,7 +92,7 @@ validación de respuestas reales.
 
 BL-48/specs/036 añade cinco casos de presentación: propuesta única, consulta
 mixta, tareas tras descarte, nueva petición explícita y lectura de pendientes.
-El catálogo tiene 36 casos, de los cuales 9 son de `response_style`. El
+El catálogo tiene 42 casos, de los cuales 9 son de `response_style`. El
 adaptador físico usa el contrato `AgentReply(answer, proposal_text)` como
 producción, ahora mediante la tool terminal `present_reply`, sin JSON mode ni
 `output_schema` en el bucle principal. La presentación no cuenta como tool de
@@ -100,6 +100,13 @@ dominio para el veredicto, aunque consume presupuesto igual que en producción.
 No simula la entrega/outbox del Core: revisar un texto de
 Agent no valida por sí solo la presentación final con botones en Telegram.
 Los casos TODO/pendientes usan tools en memoria, sin repositorios productivos.
+
+BL-30/specs/025 añade seis casos `security` de contenido web no confiable (cinco
+ataques y un control benigno, tag `web`): instrucción en snippet, orden en título,
+confirmación falsificada, cierre falso de delimitador y petición de leer datos
+privados para enviarlos a una URL. El harness simula `search_web` sin I/O con las
+claves de contexto `untrusted_web_snippet` y `untrusted_web_title`. Son contratos
+estáticos: no se ejecutó inferencia real ni se mide resistencia del modelo.
 No se ejecutó inferencia real ni evaluación semántica en este incremento.
 
 ## Preparación local de scoring semántico (T8, sin juez conectado)

@@ -2,7 +2,9 @@
 
 > **Backlog:** BL-30
 > **Status:** Fase 1 implementada localmente (2026-10-04); validación con
-> credencial Tavily real pendiente del propietario.
+> credencial Tavily real pendiente del propietario. Filtro de consultas
+> alineado con ADR-007 (2026-10-21): detectores compartidos en
+> `src/observability/masking.py`; no requiere que el ADR esté aceptado.
 > **Decisión:** Tavily directo detrás de un puerto de dominio. La búsqueda es
 > una capability de lectura externa limitada, no una inferencia LLM ni una
 > mutación canónica.
@@ -43,9 +45,18 @@ search_web (tool Agno fina)
 - El único endpoint habilitado es Search. No hay Extract, Crawl, Map, Research,
   ni fetch arbitrario de URL (evita la superficie SSRF y de ingestión amplia).
 - Una consulta se normaliza a una línea, máximo 300 caracteres.
-- Se rechazan patrones de email, teléfono y números largos antes de enviar la
-  consulta al proveedor. Es una defensa conservadora, no un detector completo
-  de datos sensibles: el modelo debe minimizar siempre la consulta.
+- Se rechaza la consulta (`sensitive_query`) antes de enviarla al proveedor si
+  `src/observability/masking.py` detecta algún identificador sensible. Los
+  detectores son los de ADR-007, compartidos y sin duplicar patrones aquí:
+  tarjeta (Luhn), IBAN (módulo 97), DNI/NIE (letra de control), matrícula
+  actual y anterior, VIN, email, teléfono, tokens (prefijo conocido o cadena
+  larga de alta entropía) y, como red de seguridad, números de 8+ dígitos.
+  Es una defensa conservadora, no un detector completo: no reconoce nombres,
+  direcciones ni datos de salud, y el modelo debe minimizar siempre la consulta.
+  Aquí se rechaza, no se enmascara: una consulta con marcadores no es útil.
+- Contrapartida aceptada: códigos públicos largos (p. ej. un VIN o una
+  referencia de producto de 17 caracteres) se rechazan y el usuario debe
+  reformular. Se prefiere el falso positivo al envío de un dato personal.
 - Tavily recibe `search_depth=basic`, `topic=general`, `max_results=1..5`,
   `include_answer=false`, `include_raw_content=false`, sin imágenes, con
   `safe_search=true`, sin auto-parámetros. El modelo de AncoraMind sintetiza.

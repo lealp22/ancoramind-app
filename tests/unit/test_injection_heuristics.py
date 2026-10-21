@@ -93,7 +93,7 @@ def test_pilot_zero_false_positives_on_benign_control_cases() -> None:
         for case in _security_catalog_cases()
         if "benign_control" in case["tags"] or "false_positive" in case["tags"]
     ]
-    assert len(benign_cases) == 2, "catalog shape changed — recheck this pilot's assumptions"
+    assert len(benign_cases) == 3, "catalog shape changed — recheck this pilot's assumptions"
     for case in benign_cases:
         text = " ".join(str(value) for value in case["context"].values())
         signal = scan_for_injection_patterns(text)
@@ -102,8 +102,12 @@ def test_pilot_zero_false_positives_on_benign_control_cases() -> None:
 
 def test_pilot_recall_on_prompt_injection_cases() -> None:
     """Documents the current recall on this exact catalog — not a production claim."""
+    # The calibration covers the original document/note/filename cases only; web
+    # results are measured separately in the next test (specs/025).
     injection_cases = [
-        case for case in _security_catalog_cases() if "prompt_injection" in case["tags"]
+        case
+        for case in _security_catalog_cases()
+        if "prompt_injection" in case["tags"] and "web" not in case["tags"]
     ]
     assert len(injection_cases) == 8, "catalog shape changed — recheck this pilot's assumptions"
     detected = []
@@ -118,3 +122,26 @@ def test_pilot_recall_on_prompt_injection_cases() -> None:
         "regression, not noise"
     )
     assert len(detected) == 8
+
+
+def test_web_injection_cases_recall_documents_one_known_miss() -> None:
+    """Not tuned to pass: records the real recall on the specs/025 web cases.
+
+    The heuristics only know "visita URL" / "URL y envía"; a snippet that asks to
+    read private data and send it to a URL is a documented gap. If the heuristics
+    improve, this test fails on purpose so the expectation is updated deliberately.
+    """
+    web_cases = [
+        case
+        for case in _security_catalog_cases()
+        if "prompt_injection" in case["tags"] and "web" in case["tags"]
+    ]
+    assert len(web_cases) == 5, "catalog shape changed — recheck this measurement"
+    missed = [
+        case["id"]
+        for case in web_cases
+        if not scan_for_injection_patterns(
+            " ".join(str(value) for value in case["context"].values())
+        ).matched
+    ]
+    assert missed == ["security.web_snippet_requests_personal_lookup"]

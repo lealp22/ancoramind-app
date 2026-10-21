@@ -10,7 +10,16 @@
       en `src/main.py` sin depender de `ANCORA_DATABASE_URL`.
 - [x] Contrato de prompt, skill `prompts/skills/web_search.md`, `.env.example`
       y backlog actualizados.
-- [ ] Validación manual con una API key Tavily de entorno no productivo.
+- [x] Filtro de consultas alineado con ADR-007: `src/observability/masking.py`
+      (detectores compartidos) + `tests/unit/test_masking.py` (corpus válido/
+      inválido y falsos positivos sobre español cotidiano).
+- [x] Casos de prompt injection web en `evals/security/cases.json` (6 casos,
+      tag `web`) + `search_web` simulado en `src/agent/eval_tools.py`. Catálogo
+      estático; ejecución con Agent real pendiente (misma aprobación que BL-8).
+- [ ] Validación manual con la API key Tavily de `.env` (Playwright sobre
+      Telegram Web; el propietario inicia sesión).
+- [ ] Opcional, bajo demanda: emitir `credits`/`cache_hit` como atributos
+      allowlisted del span de la tool para poder contar uso de Tavily.
 
 ## Fase 2 — OpenRouter/LiteLLM (diferida)
 

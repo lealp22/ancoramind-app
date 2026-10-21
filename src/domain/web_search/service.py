@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 import time
 from dataclasses import replace
 
 from src.domain.web_search.models import WebSearchOutcome, WebSearchRequest
 from src.domain.web_search.port import WebSearchPort
+from src.observability.masking import detect_sensitive
 
 MAX_QUERY_CHARS = 300
 
@@ -24,10 +24,6 @@ class WebSearchService:
     rejected rather than sent to a third party because Phase 1 has no separate
     consent flow for external search.
     """
-
-    _EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
-    _PHONE = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){8,}\d(?!\d)")
-    _LONG_IDENTIFIER = re.compile(r"\b\d{8,}\b")
 
     def __init__(
         self,
@@ -63,5 +59,5 @@ class WebSearchService:
             raise WebSearchPolicyError("empty_query")
         if len(query) > MAX_QUERY_CHARS:
             raise WebSearchPolicyError("query_too_long")
-        if any(pattern.search(query) for pattern in (cls._EMAIL, cls._PHONE, cls._LONG_IDENTIFIER)):
+        if detect_sensitive(query):
             raise WebSearchPolicyError("sensitive_query")

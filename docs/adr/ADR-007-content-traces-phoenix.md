@@ -69,7 +69,7 @@ Tres capas, de más a menos fiable:
    | IBAN | país + longitud + módulo 97 |
    | Matrícula | formatos españoles actual (`1234 BCD`) y anteriores (`M-1234-AB`) |
    | Bastidor (VIN) | 17 caracteres sin I/O/Q |
-   | Email, teléfono | patrones existentes en `web_search`, ampliados |
+   | Email, teléfono | patrones originados en `web_search`, ahora en `masking.py` |
    | Claves y tokens | prefijos conocidos y cadenas largas de alta entropía |
 
 3. **Red de seguridad.** Secuencias numéricas largas no reconocidas se enmascaran
@@ -94,8 +94,21 @@ exporta**. Perder una traza es aceptable; exportar un dato sin enmascarar, no.
 
 ## Implementación prevista
 
-- Módulo nuevo `src/observability/masking.py` sin dependencias de Agno, reutilizable.
-  `web_search` podría adoptar sus detectores para dejar de duplicar patrones.
+- Módulo `src/observability/masking.py` sin dependencias de Agno, reutilizable.
+  Creado el 2026-10-21 (no requiere que este ADR esté aceptado). Expone
+  `detect_sensitive`, `mask_sensitive` y `scan_sensitive`. Hoy `mask_sensitive`
+  solo lo usan los tests; su consumidor previsto es el `SpanExporter`.
+- **Búsqueda web (specs/025): rechaza, no enmascara.** `WebSearchService` ya usa
+  `detect_sensitive` y, si hay coincidencia, rechaza la consulta
+  (`sensitive_query`) sin llamar a Tavily. Enmascarar aquí enviaría una consulta
+  sin sentido (`qué es [BASTIDOR]`) y gastaría un crédito para resultados
+  irrelevantes. Son políticas distintas sobre los mismos detectores:
+  - telemetría: enmascarar (el dato real sí llega al modelo y a la BD);
+  - salida a terceros (búsqueda): rechazar (el dato no debe salir).
+
+  Contrapartida aceptada: los falsos positivos (p. ej. un VIN público o una
+  referencia larga) obligan a reformular. Cualquier cambio de los detectores
+  afecta a ambos usos y debe revisarse contra los dos.
 - Un `SpanExporter` envolvente que enmascara y aplica la allowlist antes de delegar.
 - Instrumentación `openinference-instrumentation-agno` solo si el spike confirma
   compatibilidad con `agno>=2.9`, `present_reply` y `tool_choice=required`.

@@ -31,11 +31,16 @@ from agno.run import RunContext
 from src.agent.tool_catalog import proposal_only_tools
 from src.agent.tools.untrusted_results import (
     MAX_SUMMARY_CHARS,
+    MAX_TITLE_CHARS,
     bounded_text,
     render_retrieved_records,
 )
 from src.domain.actions.presentation import render_proposal_block
 from src.domain.todos.models import TodoItemCreate
+
+# Mirrors MAX_WEB_RESULT_CHARS in src/agent/tools/web_search.py without importing
+# that production module (specs/018 T1 isolation).
+_WEB_SNIPPET_CHARS = 1600
 
 
 @dataclass
@@ -129,6 +134,35 @@ def build_eval_tools(
             "content_truncated": truncated,
         }
         return render_retrieved_records("search_notes", [record], 1)
+
+    async def search_web(run_context: RunContext, query: str) -> str:
+        """Search current public information on the Internet with cited sources."""
+        title, title_truncated = bounded_text(
+            _fixture_text(
+                fixtures, "untrusted_web_title", default="Artículo público de referencia"
+            ),
+            MAX_TITLE_CHARS,
+        )
+        content, content_truncated = bounded_text(
+            _fixture_text(
+                fixtures,
+                "untrusted_web_snippet",
+                default="Resumen público sin contenido adversarial.",
+            ),
+            _WEB_SNIPPET_CHARS,
+        )
+        record = {
+            "source": "public_web",
+            "provider": "eval-synthetic",
+            "retrieved_at": "2026-01-01T00:00:00+00:00",
+            "title": title,
+            "title_truncated": title_truncated,
+            "url": "https://example.invalid/eval-source",
+            "url_truncated": False,
+            "content": content,
+            "content_truncated": content_truncated,
+        }
+        return render_retrieved_records("search_web", [record], 1)
 
     async def propose_note(run_context: RunContext, content: str) -> str:
         """PROPOSE storing a personal note — requires user confirmation."""
@@ -289,6 +323,7 @@ def build_eval_tools(
     return proposal_only_tools(
         [
             search_notes,
+            search_web,
             propose_note,
             search_documents,
             get_document,

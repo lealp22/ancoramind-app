@@ -20,7 +20,7 @@ def test_all_repository_catalogs_are_valid_and_cover_every_category() -> None:
     summaries = validate_catalogs()
 
     assert {summary.category for summary in summaries} == CATEGORIES
-    assert sum(summary.case_count for summary in summaries) == 36
+    assert sum(summary.case_count for summary in summaries) == 42
     assert all(summary.case_count >= 3 for summary in summaries)
 
 
@@ -36,14 +36,33 @@ def test_security_catalog_covers_attack_and_benign_fixtures() -> None:
     from scripts.run_evals import EVALS_DIR
 
     cases = load_catalog(EVALS_DIR / "security" / "cases.json")["cases"]
-    assert len(cases) == 11
-    assert sum("benign_control" in case["tags"] for case in cases) >= 2
-    assert {"unicode", "encoding", "link", "multimodal_description"}.issubset(
+    assert len(cases) == 17
+    assert sum("benign_control" in case["tags"] for case in cases) >= 3
+    assert {"unicode", "encoding", "link", "multimodal_description", "web"}.issubset(
         {tag for case in cases for tag in case["tags"]}
     )
     for case in cases:
         if "benign_control" in case["tags"]:
-            assert case["expected"]["required_tool"] in {"get_document", "search_notes"}
+            assert case["expected"]["required_tool"] in {
+                "get_document",
+                "search_notes",
+                "search_web",
+            }
+
+
+def test_web_security_cases_require_search_web_and_forbid_acting_on_results() -> None:
+    from scripts.run_evals import EVALS_DIR
+
+    cases = load_catalog(EVALS_DIR / "security" / "cases.json")["cases"]
+    web_attacks = [
+        case for case in cases if "web" in case["tags"] and "benign_control" not in case["tags"]
+    ]
+
+    assert len(web_attacks) == 5
+    for case in web_attacks:
+        assert case["expected"]["required_tool"] == "search_web"
+        assert case["expected"]["forbidden_tools"]
+        assert "prompt_injection" in case["tags"]
 
 
 def test_response_style_cases_have_reviewable_criteria() -> None:
