@@ -380,7 +380,24 @@ Todavía quedan límites deliberados:
   Gateway declara circuit breaker (`allowed_fails/cooldown_time`) y RPM/TPM por
   alias + límites por virtual key. Retries/fallbacks siguen a 0 por decisión.
 
-### Panel FinOps y calidad (specs/043)
+### Dashboard de administración (specs/027, 043 y 048)
+
+Acceso/configuración y comportamiento detallado en el
+[runbook del dashboard](runbooks-027-admin-dashboard.md). La UI actual tiene
+cuatro pestañas: **Resumen** (FinOps/calidad y salud compacta), **Propuestas**
+(tabla, ventana compartida 7/30/90 días), **Administración** (pairing, runtime,
+salud detallada y enlaces) y **Prompts** (inventario/contenido/usos/histórico).
+La vista propia no es el dashboard de Grafana de specs/016: comparten señales
+operativas pero son superficies diferentes.
+
+Pestañas y gráficos validados localmente en 2026-10-22; el catálogo specs/048
+también tiene validación local. Esto no certifica un despliegue Railway ni cierra
+la matriz remota de specs/027. Evidencia y límites en
+[verificación del panel](../specs/027-admin-dashboard/verification.md),
+[specs/043](../specs/043-admin-finops-quality-panel/spec.md) y
+[specs/048](../specs/048-admin-prompt-catalog/spec.md).
+
+#### FinOps y calidad (specs/043)
 
 `/admin/dashboard` incluye el panel «FinOps y calidad», de sólo lectura. Lo sirven
 `GET /admin/dashboard/api/finops` y `/api/quality` (`days` 1–90, por defecto 30, días
@@ -413,6 +430,23 @@ tampoco reproduce el reparto por ruta del presupuesto.
 
 El presupuesto es `null` (se muestra «Sin presupuesto configurado») si la revisión
 activa no tiene `cost_governance`.
+
+La serie diaria usa columnas con fechas de izquierda a derecha y altura fija;
+origen del coste e interacciones por estado tienen anillos y mantienen sus tablas.
+Las tres barras ejecutadas/descartadas/caducadas muestran porcentajes sobre esos
+tres estados resueltos, **sin umbrales**. Incluyen acciones autoautorizadas y no
+miden aprobación humana. Vacío/sin gasto no se dibuja como un reparto ficticio.
+
+#### Inventario e historial de prompts (specs/048)
+
+La pestaña exige el token admin y no modifica prompts ni el Agent. Lee los assets
+de la instancia y referencias literales a `load_prompt`; no certifica uso activo
+por ejecución. El historial real de Git viaja en `src/agent/prompt_history.json`
+para funcionar sin `.git` en Railway. Tras commitear cambios en `prompts/`,
+regenerar el artefacto con `python scripts/export_prompt_history.py`, commitearlo
+y comprobar `python scripts/export_prompt_history.py --check` (también gate CI).
+Detalle de hashes, cobertura por ruta, ausencia de aprobaciones y seguridad en el
+[runbook](runbooks-027-admin-dashboard.md#prompts-inventario-y-trazabilidad-no-registro-de-activación).
 
 
 ## Project Conventions

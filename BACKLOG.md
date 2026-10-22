@@ -3188,6 +3188,17 @@ mismo SHA a Supabase y confirmar que desaparece `function_search_path_mutable`;
 
 ### BL-43 · Pantalla de administración centralizada 🔶 implementado localmente — specs/027
 
+**Incrementos locales 2026-10-22 (sin nuevo despliegue):** organización en pestañas
+y salud compacta (`82d924e`); gráficos FinOps/calidad (`64bd683`, specs/043):
+columnas diarias compactas, anillos coste/estados y barras ejecutadas/descartadas/
+caducadas sin umbrales. Catálogo de prompts specs/048 preparado localmente:
+cuarta pestaña con contenido, referencias estáticas, SHA-256 e histórico real
+exportado para el paquete sin `.git`. No editor/aprobaciones/activación ni evidencia
+prompt efectivo por run. 2260 unitarias/2 skips, Ruff/mypy 187 y navegador aislado
+superados en ese incremento; no cierre remoto de BL-43. Documentación funcional
+en `docs/runbooks-027-admin-dashboard.md`; evidencia en specs/027, 043 y 048.
+Los cuatro paneles descritos más abajo corresponden al incremento original.
+
 **E2E remoto parcial 2026-10-17:** panel HTTPS, auth/separación token CLI,
 login, emisión/listado de invitación manual, sessionStorage sin localStorage y
 logout validados. Cuenta evaluadora completó circuito manual sin inferencia.

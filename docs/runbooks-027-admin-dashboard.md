@@ -1,7 +1,8 @@
 # AncoraMind — Runbook del dashboard de administración (BL-43 / spec 027)
 
-> **Alcance:** cómo arrancar y acceder a `GET /admin/dashboard` (invitaciones,
-> runtime-config, salud, enlaces). El dashboard está apagado por defecto y
+> **Alcance:** cómo arrancar y acceder a `GET /admin/dashboard`: Resumen
+> (FinOps/calidad y salud compacta), Propuestas, Administración y Prompts.
+> El dashboard está apagado por defecto y
 > convive con `scripts/runtime_config.py`/`scripts/telegram_pairing.py` sin
 > reemplazarlos.
 
@@ -9,6 +10,15 @@
 en Railway tras las pruebas. El default OFF no implica apagarlos al cerrar un
 E2E; cualquier desactivación global requiere acuerdo explícito. Revocar un
 evaluador no exige quitar el panel ni las APIs al operador.
+
+**Incrementos locales 2026-10-22:** pestañas/salud compacta (`82d924e`), gráficos
+de Resumen (`64bd683`) y catálogo de prompts (specs/048, aún sin commit en esta
+revisión documental) validados localmente. No se ha desplegado ni validado en
+Railway ninguno de estos incrementos en esta sesión; no confundir el panel remoto
+original ya habilitado con la versión local. Evidencia en
+[specs/027](../specs/027-admin-dashboard/verification.md),
+[specs/043](../specs/043-admin-finops-quality-panel/spec.md) y
+[specs/048](../specs/048-admin-prompt-catalog/spec.md).
 
 ## 1. Invariantes operativos
 
@@ -171,6 +181,8 @@ Siguiente fase posible, **no implementada**: propietario/revisor, estado de revi
 evaluaciones y aprobación vinculadas a huellas, diferencias entre versiones y
 asociación inmutable prompt/run. Editar/activar/rollback requeriría decisión y
 gobernanza propias; abrir este visor nunca modifica el comportamiento del Agent.
+
+### Operaciones en Administración
 
 - **Invitaciones** — crea (`issue_invitation`) y lista (`list_invitations`)
   invitaciones de pairing (BL-24). El código generado se muestra **una sola

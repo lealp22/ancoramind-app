@@ -4,6 +4,30 @@
 > en Railway parcial: login/HTTPS, emisión manual y logout validados 2026-10-17;
 > inactividad, runtime-config completo y resto de matriz pendientes.
 
+## Incrementos de UI validados localmente — 2026-10-22
+
+- `82d924e`: pestañas Resumen/Propuestas/Administración, selección accesible por
+  teclado y estado de salud en una línea, compartiendo lectura con el detalle.
+  Periodo FinOps/propuestas sincronizado; cambio de pestaña sin requests/escrituras.
+  Navegador con datos sintéticos: vacío/error/escape de estados, limpieza de
+  estados antiguos, móvil y logout. 75 focales passed; suite 2221 passed/1 skip,
+  Ruff y mypy 186 fuentes correctos.
+- `64bd683`: serie diaria compacta izquierda→derecha, dos anillos y tres barras
+  de resultados de propuestas sin umbrales. Denominadores/casos sin datos y
+  evidencia en [specs/043](../043-admin-finops-quality-panel/spec.md).
+- Specs/048 (preparado localmente, sin commit al registrar esta nota): cuarta
+  pestaña Prompts, APIs de inventario/contenido/histórico protegidas, sin cambios
+  a carga/instrucciones/LLM. Evidencia, export Git y límites en
+  [specs/048](../048-admin-prompt-catalog/spec.md).
+
+Los resultados globales corresponden a cada incremento, no se suman. Pruebas con
+WEB_SEARCH_ENABLED=false y export OTLP desactivado sólo en subproceso para no
+heredar el entorno operativo; sin edición de `.env`. No son integración con BD
+productiva ni inferencia. **Sin publicación/validación Railway de estos cambios**
+en esta sesión; la matriz remota histórica sigue parcial. El HTML shell se carga
+al instalar el dashboard: refrescar la página basta si el proceso recargó código;
+si sirve una copia antigua, reiniciar sólo la app local por el procedimiento habitual.
+
 ## Emisión autoaprobada desde panel — 2026-10-17
 
 Segunda ventana remota autorizada: Auto-aprobar marcado al emitir un uso/TTL

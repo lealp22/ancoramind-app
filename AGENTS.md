@@ -153,6 +153,18 @@ recordatorios y eventos, con trazabilidad completa.
   agente. Diagnóstico nuevo sólo local; no relanzar campaña histórica.
   Instrucciones navegador `specs/041-manual-eval-deploy/runbook.md`.
 
+  **Dashboard propio (local, 2026-10-22):** `/admin/dashboard` tiene Resumen,
+  Propuestas, Administración y Prompts. Pestañas/salud compacta y gráficos
+  FinOps (columnas diarias, dos anillos, tres barras sin umbrales) documentados
+  en `docs/runbooks-027-admin-dashboard.md` y specs/027/043. Catálogo specs/048:
+  contenido de `prompts/`, usos literales detectados y versiones Git exportadas
+  en `src/agent/prompt_history.json`; no edita/aprueba/activa ni prueba prompt/run.
+  Tras commitear cambios de prompts, regenerar con
+  `python scripts/export_prompt_history.py` y commitear el artefacto;
+  `--check` es gate CI (checkout completo). No necesita `.git`/GitHub en runtime.
+  2260 unitarias/2 skips, Ruff/mypy187 y navegador aislado superados en specs/048;
+  no despliegue ni validación remota nueva. No confundir con Grafana/specs016.
+
 ---
 
 ## 2. Principios arquitectónicos NO negociables

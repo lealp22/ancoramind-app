@@ -86,6 +86,8 @@ Railway deployment, see [Quick Start](docs/quick-start.md) and
 | [ADR-005](docs/adr/ADR-005-governed-llm-access-runtime-config.md) | Runtime model configuration and LiteLLM Gateway |
 | [ADR-006](docs/adr/ADR-006-opentelemetry-observability.md) | OpenTelemetry and Grafana Cloud observability |
 | [Development](docs/development.md) | Local development guide |
+| [Admin Dashboard](docs/runbooks-027-admin-dashboard.md) | Resumen, Propuestas, Administración y Prompts: acceso, gráficos, métricas e historial Git empaquetado |
+| [Prompt Catalog](specs/048-admin-prompt-catalog/spec.md) | Inventario y trazabilidad de prompts de sólo lectura; límites y validación local |
 | [Adding Tools](docs/adding-tools.md) | Capability/tool implementation guide |
 | [Quick Start](docs/quick-start.md) | Guía de arranque rápido diario |
 | [E2E Deployment](docs/deployment-e2e.md) | Step-by-step Telegram + PostgreSQL deployment |

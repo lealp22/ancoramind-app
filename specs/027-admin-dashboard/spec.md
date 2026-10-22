@@ -6,6 +6,15 @@
 > (invitaciones, runtime-config, salud, enlaces externos) que convive con los
 > CLIs existentes sin reemplazarlos.
 
+**Extensiones locales 2026-10-22:** el diseño original descrito debajo se amplía
+con pestañas, salud compacta y gráficos FinOps/calidad (specs/043), y catálogo
+de prompts de sólo lectura (specs/048). No implica despliegue ni cierre de E2E
+remoto. Comportamiento actual en el
+[runbook](../../docs/runbooks-027-admin-dashboard.md) y evidencia en
+[verification.md](verification.md),
+[specs/043](../043-admin-finops-quality-panel/spec.md) y
+[specs/048](../048-admin-prompt-catalog/spec.md).
+
 ---
 
 ## Contexto

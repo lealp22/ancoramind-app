@@ -60,18 +60,43 @@ prompts/
     ├── vehicle_maintenance.md
     ├── calendar.md
     ├── todos.md
-    └── document_extraction.md   ← NO se carga aquí (ver nota)
+    ├── web_search.md
+    ├── export.md
+    ├── presentation.md          ← descripción de la tool terminal present_reply
+    ├── document_extraction.md   ← extracción estructurada separada
+    ├── context_compaction.md    ← compactación de contexto separada
+    ├── dream_consolidation.md   ← consolidación Dream separada
+    ├── reminders.md             ← sin llamada literal de carga detectada
+    └── dream.md                 ← sin llamada literal de carga detectada
 ```
 
 No crear un único system prompt gigantesco. `assemble_instructions()`
 (`src/agent/instructions.py`) carga identity, soul, tool_contract, telegram
-y todas las skills de dominio, **excepto** `document_extraction.md`: ese
-prompt es el system prompt de la llamada de extracción estructurada separada
+y las skills `documents`, `vehicle_maintenance`, `calendar`, `todos`, `web_search`
+y `export`. No todos los archivos del directorio se ensamblan en el agente:
+`document_extraction.md` es el system prompt de la extracción estructurada separada
 (`src/agent/document_extraction.py`, schema-constrained), no del agente
 conversacional principal — exclusión intencional, no un olvido
 (specs/023 T6.5). Hasta 2026-10-03, `skills/calendar.md` existía en disco
 pero no estaba cableado en `assemble_instructions()` (olvido real, corregido
 en specs/023 Fase 6).
+
+### Visibilidad de prompts en administración (specs/048)
+
+El [catálogo del dashboard](runbooks-027-admin-dashboard.md#prompts-inventario-y-trazabilidad-no-registro-de-activación)
+permite inventariar archivos, inspeccionar contenido y SHA-256, referencias
+estáticas de carga y versiones Git exportadas con fecha/commit. Es de **sólo
+lectura** y requiere el bearer propio del panel. El historial se empaqueta para
+Railway sin `.git`; CI comprueba que esté actualizado.
+
+No es un registro de aprobación ni activa/restaura versiones. La huella del
+archivo presente no demuestra el prompt efectivo por run; hay instrucciones
+cargadas desde el arranque y otras bajo demanda. Las referencias detectadas no
+prueban uso con flags activos. Los límites del histórico (rutas actuales, sin
+seguir renombrados/archivos borrados) y la validación local están en
+[specs/048](../specs/048-admin-prompt-catalog/spec.md).
+Revisiones humanas, evaluaciones vinculadas a huellas y asociación inmutable
+prompt/run siguen fuera de este incremento, no se declaran implementadas.
 
 ---
 

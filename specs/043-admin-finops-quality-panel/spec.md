@@ -1,7 +1,10 @@
 # Spec 043 — Panel FinOps y calidad en `/admin/dashboard`
 
-Estado: propuesta, sin implementar. Fase 1 del plan de observabilidad
-(ADR-007 en borrador es la fase 3 y no es prerrequisito).
+Estado: implementado y validado localmente; UI ampliada el 2026-10-22.
+Publicación/validación Railway de estos incrementos no realizada en esta sesión.
+Fase 1 del plan de observabilidad (ADR-007 en borrador es la fase 3 y no es
+prerrequisito). Tareas originales en `tasks.md`; operación en el
+[runbook del dashboard](../../docs/runbooks-027-admin-dashboard.md).
 
 ## Problema
 
@@ -28,13 +31,14 @@ datos, presupuestos por usuario, alertas, gasto de `dream_runs` y de
    FastAPI) → `src/repositories/finops.py` (SQL `text()` con bind params) →
    rutas en `admin_dashboard.py`. Las rutas no contienen SQL.
 3. **Coste** = `COALESCE(actual_cost, estimated_cost, 0)`, igual que
-   `LlmUsageRepository.summarize_spend`, para que el panel y el hard stop
-   coincidan. Se muestra además el desglose por `cost_source` (real vs estimado).
+   `LlmUsageRepository.summarize_spend`. La paridad sólo vale para igual periodo
+   y sin voz sin evento: las barras de presupuesto del hard stop sí incluyen esa
+   voz, los KPIs del panel no. Se muestra además el desglose por `cost_source`.
 4. **Atribución a usuario** por `llm_usage_events.interaction_id` →
    `telegram_interactions.telegram_user_id`.
 5. **Seudónimo de usuario.** El panel nunca muestra `telegram_user_id`: muestra
-   `u-` + 8 hex de `HMAC-SHA256(clave, "finops-user-v1:" + id)`, con clave derivada
-   del `TELEGRAM_PAIRING_CODE_PEPPER` ya obligatorio para el panel (sin secreto
+   `u-` + 8 hex de `HMAC-SHA256(clave, "ancoramind/finops-user/v1:" + id)`, usando
+   `TELEGRAM_PAIRING_CODE_PEPPER` ya obligatorio para el panel (sin secreto
    nuevo). Estable entre peticiones, no reversible desde la respuesta.
 6. **Ventana.** Parámetro `days` entero 1–90 (por defecto 30), días UTC.
    Fuera de rango ⇒ 422. Sin `days` libre ni SQL dinámico.
@@ -47,7 +51,7 @@ datos, presupuestos por usuario, alertas, gasto de `dream_runs` y de
 | Ruta | Contenido |
 |---|---|
 | `/admin/dashboard/api/finops` | Totales (coste, tokens, llamadas, errores, coste medio por interacción), serie diaria, desglose por usuario seudonimizado, por ruta efectiva y modelo, por `cost_source`, y presupuesto |
-| `/admin/dashboard/api/quality` | Interacciones por estado, tools por interacción, propuestas por `tool_name` × `status` × `consent_mode`, tasa de confirmación/descarte/expiración, latencia p50/p95 y TTFT, reintentos y fallbacks |
+| `/admin/dashboard/api/quality` | Interacciones por estado, total de tool calls, propuestas por `tool_name` × `status` × `consent_mode`, proporciones de ejecución/descarte/caducidad sobre resueltas, latencia p50/p95 y TTFT, reintentos y fallbacks |
 
 ## Privacidad
 
@@ -59,10 +63,25 @@ consulta del repositorio referencia esas columnas. Las respuestas no incluyen
 
 ## UI
 
-Nuevo panel en `dashboard.html`: tarjetas de totales, barras CSS por día, tablas
-por usuario/ruta/modelo/tool y selector de ventana. Sin librerías ni scripts
-externos (la CSP solo permite `'self'`). Los valores se insertan con
+`dashboard.html`: FinOps/calidad en **Resumen**, tabla de propuestas en
+**Propuestas**, selector compartido 7/30/90 días. Administración y Prompts son
+otras pestañas, no métricas de esta spec. La salud compacta reutiliza el mismo
+request que el detalle de Administración. Sin librerías/scripts externos;
+CSS/JS inline bajo la CSP existente. Los datos del panel se insertan con
 `textContent`, no con `innerHTML`.
+
+- Coste diario: fechas izquierda→derecha y columnas de altura proporcional, altura
+  fija para 90 días, etiquetas espaciadas, tooltip/foco y detalle desplegable con
+  importes exactos. Días UTC sin registro quedan como huecos, no como coste cero.
+- Dos anillos con leyendas/valores/porcentajes y tablas: origen por importe USD
+  (`cost_source`, no proveedor ni llamadas) e interacciones por cantidad. Estos
+  estados incluyen rejected/ignored aunque no contribuyan al coste/uso LLM.
+- Tres barras independientes 0–100 %: ejecutadas/descartadas/caducadas. Denominador
+  común = esos tres estados resueltos, excluyendo pendientes/en curso. Incluyen
+  ejecutadas autoautorizadas; no miden aprobación humana. **Sin umbrales** 90/10,
+  alarmas ni juicios de calidad (decisión del propietario).
+- Sin propuestas resueltas: ausencia de datos, no 0 %. Sin gasto/interacciones:
+  mensajes explícitos, sin anillos ficticios. Valores cero reales se conservan.
 
 ## Criterios de aceptación
 
@@ -70,7 +89,7 @@ externos (la CSP solo permite `'self'`). Los valores se insertan con
    no existen.
 2. `days` fuera de 1–90 ⇒ 422.
 3. El coste usa actual sobre estimado y coincide con `summarize_spend` para el
-   mismo periodo.
+   mismo periodo cuando no hay voz sin evento (exclusión declarada).
 4. El gasto de un usuario no se mezcla con el de otro; el seudónimo es estable y
    distinto por usuario, y no contiene el ID.
 5. Interacciones `rejected`/`ignored` no aportan coste ni aparecen como uso LLM.
@@ -86,3 +105,14 @@ externos (la CSP solo permite `'self'`). Los valores se insertan con
   una protección frente a capturas y exportaciones, no anonimización.
 - Consultas sobre hasta 90 días: dependen de `idx_llm_usage_created_at`. Medir con
   `EXPLAIN` sobre datos locales antes de dar por buena la ventana máxima.
+
+## Verificación de gráficos — 2026-10-22
+
+Incremento `64bd683`: navegador con respuestas sintéticas (90 días, layout móvil,
+gasto cero/ausencia de datos, categorías, escape de etiquetas y barras sin
+umbrales); 83 focales passed, suite 2229 passed/1 skipped, Ruff y mypy 186 fuentes
+correctos. No consultas de producción ni inferencia. La ejecución JS offline
+de `tests/unit/test_admin_dashboard_charts.py` usa Node si está disponible
+(sin dependencia nueva de runtime); se omite en entornos Python sin Node.
+Sin cambio de APIs, cálculo del ledger, DB ni prompts. No es evidencia remota
+ni repetición de la medición PostgreSQL original de `explain.md`.
