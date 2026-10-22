@@ -109,6 +109,12 @@ claves de contexto `untrusted_web_snippet` y `untrusted_web_title`. Son contrato
 estáticos: no se ejecutó inferencia real ni se mide resistencia del modelo.
 No se ejecutó inferencia real ni evaluación semántica en este incremento.
 
+BL-53/BL-55 (2026-10-22): política evaluable de presentación documental y fechas.
+Tres casos `response_style.document_*` cubren nombre/procedencia sin UUID en uso
+normal, ID solicitado y homónimos. Fixtures simuladas conservan IDs y procedencia;
+no campaña ejecutada ni baseline humano nuevo. Catálogos: 45 casos/6 categorías.
+Evidencia y límites en `specs/047-readable-presentation/verification.md`.
+
 ## Preparación local de scoring semántico (T8, sin juez conectado)
 
 **Preparación T7 posterior (2026-10-16):** el candidato

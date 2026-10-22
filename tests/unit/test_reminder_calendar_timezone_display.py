@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
 from agno.run import RunContext
 
 from src.agent.tools import calendar, reminders
@@ -181,3 +182,31 @@ class TestCheckCalendarDisplay:
 
         assert "17:30" in reply
         assert "15:30" not in reply
+
+
+@pytest.mark.parametrize("hour,offset", [(0, "UTC+02:00"), (1, "UTC+01:00")])
+async def test_read_tools_preserve_precision_and_disambiguate_dst_fold(monkeypatch, hour, offset):
+    instant = datetime(2026, 10, 25, hour, 30, 1, 123, tzinfo=UTC)
+    reminder = Reminder(
+        id=uuid4(), user_id="42", title="Ensayo", trigger_at=instant,
+        status="pending", created_at=instant, description=None,
+        source_document_id=None, source_action_id=None,
+    )
+    event = CalendarEvent(
+        id=uuid4(), user_id="42", title="Ensayo", start_at=instant,
+        end_at=instant, created_at=instant, description=None, location=None,
+        provider_event_id=None, source_document_id=None,
+    )
+    reminder_service = AsyncMock()
+    reminder_service.list_reminders.return_value = [reminder]
+    calendar_service = AsyncMock()
+    calendar_service.check_calendar.return_value = [event]
+    monkeypatch.setattr(
+        reminders, "_get_reminder_service", AsyncMock(return_value=reminder_service),
+    )
+    monkeypatch.setattr(calendar, "_get_calendar_service", AsyncMock(return_value=calendar_service))
+    for reply in (
+        await reminders.list_reminders(_run_context()),
+        await calendar.check_calendar(_run_context(), "2026-10-25"),
+    ):
+        assert f"2026-10-25 02:30:01.000123 (Europe/Madrid, {offset})" in reply

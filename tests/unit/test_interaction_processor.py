@@ -941,7 +941,7 @@ async def test_proposal_composition_replaces_only_proposal_narration(monkeypatch
     assert content.count("Pulsa ✅ Sí") == 1
     assert "¿Confirmas?" not in content
     assert "Prioridad: alta" in content
-    assert "20 de octubre de 2026" in content
+    assert "2026-10-20" in content
     assert content.startswith(answer) if answer else content.startswith("📋")
     assert reply.proposal_text == "Renovar seguro, alta. ¿Confirmas?"
     actions.list_created_in_interaction.assert_awaited_once_with(interaction.id, user_id="5")

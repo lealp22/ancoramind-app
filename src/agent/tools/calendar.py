@@ -23,10 +23,10 @@ from src.agent.tools.validation import (
 )
 from src.domain.calendar.models import CalendarEvent
 from src.domain.calendar.service import CalendarService
+from src.domain.preferences.display import format_temporal
 from src.domain.preferences.timezone import (
     AmbiguousOrNonExistentTimeError,
     resolve_user_timezone,
-    to_local_display,
     to_utc,
 )
 from src.domain.reminders.service import ReminderService
@@ -113,15 +113,15 @@ async def check_calendar(
     records: list[dict[str, object]] = []
     for event in bounded_events:
         title, title_truncated = bounded_text(event.title, MAX_TITLE_CHARS)
-        local_start = to_local_display(event.start_at, tz)
+        local_start = format_temporal(event.start_at, tz)
         record: dict[str, object] = {
             "source": "calendar_event",
             "id": str(event.id),
             "title": title,
             "title_truncated": title_truncated,
-            "start_at": local_start.strftime("%Y-%m-%d %H:%M"),
+            "start_at": local_start,
             "end_at": (
-                to_local_display(event.end_at, tz).strftime("%Y-%m-%d %H:%M")
+                format_temporal(event.end_at, tz)
                 if event.end_at
                 else None
             ),
@@ -228,13 +228,14 @@ async def propose_calendar_event(
         source_document_id=src_doc,
     )
 
+    display_start = format_temporal(start_dt, resolve_user_timezone(user_ctx), allow_date=False)
     lines = [
         f"📅 **Propuesta de evento** (`{proposal['id']}`)",
         f"   Título: {title}",
-        f"   Inicio: {start_dt.strftime('%Y-%m-%d %H:%M')}",
+        f"   Inicio: {display_start}",
     ]
     if end_dt:
-        lines.append(f"   Fin: {end_dt.strftime('%H:%M')}")
+        lines.append(f"   Fin: {format_temporal(end_dt, resolve_user_timezone(user_ctx))}")
     if location:
         lines.append(f"   📍 {location}")
     if rule:
@@ -283,10 +284,10 @@ async def execute_calendar_event(run_context: RunContext, proposal_id: str) -> s
             recurrence_rule=rule,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
-        local_start = to_local_display(event.start_at, resolve_user_timezone(user_ctx))
+        local_start = format_temporal(event.start_at, resolve_user_timezone(user_ctx))
         lines = [
             f"✅ **Evento añadido al calendario**: {event.title}",
-            f"   Inicio: {local_start.strftime('%Y-%m-%d %H:%M')}",
+            f"   Inicio: {local_start}",
             f"   ID: `{event.id}`",
         ]
         if payload.get("with_reminder"):

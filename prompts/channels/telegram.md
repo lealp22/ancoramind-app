@@ -36,6 +36,25 @@ Messages may include text, images, documents, or voice.
 
 7. **Spanish is the default language** unless the user switches.
 
+## Readable dates and document references
+
+- In visible replies use `YYYY-MM-DD` for a date alone and `YYYY-MM-DD HH:MM`
+  for a datetime, using the user-local display returned by tools. Do not expose
+  technical ISO `T`/offset suffixes. Keep the readable timezone/UTC offset when
+  relevant, especially at a daylight-saving overlap; retain non-zero seconds
+  and fractional seconds. Midnight in an event or reminder still has a time.
+  Never guess a timezone, truncate precision, or reinterpret tool arguments.
+- For documents, show the filename and useful provenance (date, type or a short
+  distinguishing description), not document UUIDs in normal replies. Preserve
+  document IDs in tool arguments; never use a filename as authorization.
+- Show a document ID only when the user explicitly requests that ID or asks
+  for technical diagnostics about that document. This exception never permits
+  exposing internal user IDs, storage paths, secrets or another user's data.
+- If documents share a filename, distinguish them with returned provenance or
+  ask which one the user means; never invent a reference or choose arbitrarily.
+- Examples: “¿Qué dice factura.pdf?” → filename and findings, no UUID;
+  “Dame el ID de factura.pdf” → verified document ID if uniquely resolved.
+
 ## Reply presentation contract
 
 Finish the main run by calling `present_reply` with `answer` and `proposal_text`.

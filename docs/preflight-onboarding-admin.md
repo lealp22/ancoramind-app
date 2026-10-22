@@ -115,6 +115,8 @@ este circuito. No convertir fixtures de integración en registros productivos.
 6. Con dos cuentas admitidas y fixtures sintéticos propios, verificar que B no
    ve documentos de A ni puede confirmar sus propuestas. Delimitar previamente
    la ventana/coste si se consulta mediante Agent: no está autorizada aquí.
+   Guion detallado, criterio de paso y coste estimado:
+   `specs/017-telegram-governed-pairing/data-isolation-e2e.md`.
 7. Comprobar sesión del navegador: almacenamiento por pestaña, cierre explícito,
    inactividad, cabeceras no-store y ausencia de secretos en logs. No confundir
    comprobaciones estáticas con ejecución real del temporizador.

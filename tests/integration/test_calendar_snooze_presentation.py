@@ -117,7 +117,9 @@ async def test_calendar_persisted_payload_reaches_html_with_recurrence_and_remin
     html = markdown_to_telegram_html(content)
     assert "Clase &lt;sintética&gt;" in html
     assert "Repetición: cada 2 semanas" in html
-    assert "Repetir hasta (inclusive): 2026-12-31T23:59:59+00:00" in html
+    assert "Inicio: 2026-11-01 11:00 (Europe/Madrid, UTC+01:00)" in html
+    assert "Fin: 2026-11-01 12:00 (Europe/Madrid, UTC+01:00)" in html
+    assert "Repetir hasta (inclusive): 2027-01-01 00:59:59 (Europe/Madrid, UTC+01:00)" in html
     assert "Aviso: sí" in html
     assert "Antelación: al inicio" in html
     assert "Narración" not in html

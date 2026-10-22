@@ -171,13 +171,18 @@ def build_eval_tools(
 
     async def search_documents(run_context: RunContext, query: str | None = None) -> str:
         """Search personal documents by filename."""
+        document_records = fixtures.get("document_records")
+        if isinstance(document_records, list):
+            return render_retrieved_records(
+                "search_documents", document_records, len(document_records),
+            )
         text, truncated = bounded_text(
             _fixture_text(fixtures, "untrusted_filename", default="factura_sintetica.pdf"),
             MAX_SUMMARY_CHARS,
         )
         record = {
             "source": "canonical_document",
-            "id": "eval-document-1",
+            "id": fixtures.get("document_id", "eval-document-1"),
             "filename": text,
             "filename_truncated": truncated,
         }
@@ -196,7 +201,10 @@ def build_eval_tools(
         )
         record: dict[str, object] = {
             "source": "canonical_document",
-            "id": "eval-document-1",
+            "id": fixtures.get("document_id", "eval-document-1"),
+            "filename": _fixture_text(
+                fixtures, "untrusted_filename", default="factura_sintetica.pdf",
+            ),
             "extraction": {
                 "source": "ai_extraction_unverified",
                 "summary": text,

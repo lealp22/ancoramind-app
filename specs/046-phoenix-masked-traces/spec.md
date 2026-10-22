@@ -4,6 +4,11 @@ Estado: propuesta, sin implementar. Desarrolla el ADR-007 (Proposed). Nada de
 esta spec se implementa hasta cerrar el spike (`spike.md`) y que el propietario
 acepte el ADR.
 
+**2026-10-22:** trabajo experimental autorizado, no integración: masking puro ya
+existente + `scripts/phoenix_spike/` sólo sintético y `spike-result.md`. ADR sigue
+Proposed; nuevas restricciones de procedencia/coste/medición pendientes. No hay
+conexión entre app y Phoenix ni nuevos settings productivos.
+
 ## Problema
 
 Ante un fallo concreto (p. ej. `InvalidPresentationOutputError`) solo queda un

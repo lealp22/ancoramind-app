@@ -99,6 +99,12 @@ LLM-juez está diseñado pero no ejecutado.
   subsección dentro de `llm-security-hardening.md` (§"Alcance y modelo de
   amenaza"), no como artefacto propio.
 
+> **Actualización 2026-10-22:** el hueco de justificación de modelo y proyección
+> de coste del módulo 1 queda cubierto parcialmente por
+> `docs/model-selection-and-cost-projection.md`. Sigue abierto el *motivo
+> histórico* de pasar de GLM a GPT-6 Luna y la comparación de calidad entre
+> ambos, que no están documentados y no se reconstruyen.
+
 ## Resumen priorizado (esfuerzo vs. impacto en el rúbrico)
 
 | Prioridad | Hueco | Esfuerzo estimado | Módulo |

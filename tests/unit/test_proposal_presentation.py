@@ -59,7 +59,7 @@ def test_block_is_built_from_the_stored_payload_only() -> None:
 
     assert "Crear recordatorio" in block
     assert "Título: ITV" in block
-    assert "Cuándo: 2026-10-20T09:00:00" in block
+    assert "Cuándo: 2026-10-20 09:00 (sin zona horaria)" in block
     assert str(proposal_id) not in block
     assert "ID:" not in block
     assert "Descripción" not in block
@@ -100,7 +100,7 @@ def test_todo_due_date_is_readable_without_mutating_payload(tool, stored) -> Non
     payload = {"due_date": stored}
     before = payload_hash(tool, payload)
     block = render_proposal_block(uuid4(), tool, payload)
-    assert "Fecha límite: 20 de octubre de 2026" in block
+    assert "Fecha límite: 2026-10-20" in block
     assert "T00:00:00" not in block
     assert payload["due_date"] == stored
     assert payload_hash(tool, payload) == before
@@ -109,19 +109,19 @@ def test_todo_due_date_is_readable_without_mutating_payload(tool, stored) -> Non
 @pytest.mark.parametrize(
     "stored,time_text",
     [
-        ("2026-10-20T16:30:01", "16:30:01"),
-        ("2026-10-20T00:00:00+02:00", "00:00:00+02:00"),
-        ("2026-10-20T00:00:00Z", "00:00:00+00:00"),
-        ("2026-10-20T00:00:00.000123", "00:00:00.000123"),
-        ("2026-10-20T23:59:59.999999-03:30", "23:59:59.999999-03:30"),
-        ("2026-10-20T00:00:00.000123+05:45", "00:00:00.000123+05:45"),
+        ("2026-10-20T16:30:01", "16:30:01 (sin zona horaria)"),
+        ("2026-10-20T00:00:00+02:00", "00:00 (UTC+02:00)"),
+        ("2026-10-20T00:00:00Z", "00:00 (UTC+00:00)"),
+        ("2026-10-20T00:00:00.000123", "00:00:00.000123 (sin zona horaria)"),
+        ("2026-10-20T23:59:59.999999-03:30", "23:59:59.999999 (UTC-03:30)"),
+        ("2026-10-20T00:00:00.000123+05:45", "00:00:00.000123 (UTC+05:45)"),
     ],
 )
 def test_todo_explicit_times_and_offsets_are_preserved(stored, time_text) -> None:
     payload = {"due_date": stored}
     before = payload_hash("create_todo_item", payload)
     block = render_proposal_block(uuid4(), "create_todo_item", payload)
-    assert f"Fecha límite: 20 de octubre de 2026, {time_text}" in block
+    assert f"Fecha límite: 2026-10-20 {time_text}" in block
     assert payload["due_date"] == stored
     assert payload_hash("create_todo_item", payload) == before
 
@@ -133,7 +133,7 @@ def test_midnight_reminder_and_event_are_not_reinterpreted_as_date_only(tool, ke
     stored = "2026-10-20T00:00:00+02:00"
     payload = {key: stored}
     before = payload_hash(tool, payload)
-    assert stored in render_proposal_block(uuid4(), tool, payload)
+    assert "2026-10-20 00:00 (UTC+02:00)" in render_proposal_block(uuid4(), tool, payload)
     assert payload_hash(tool, payload) == before
 
 
@@ -178,11 +178,11 @@ def test_calendar_recurrence_is_reviewable_without_changing_payload(
     before = payload_hash("create_calendar_event", payload)
     block = render_proposal_block(uuid4(), "create_calendar_event", payload)
     assert f"Repetición: {display}" in block
-    assert "Repetir hasta (inclusive): 2027-10-20T00:00:00+02:00" in block
+    assert "Repetir hasta (inclusive): 2027-10-20 00:00 (UTC+02:00)" in block
     assert "Aviso: sí" in block
     assert "Antelación: 1 h 30 min antes del inicio" in block
-    assert f"Inicio: {payload['start_at']}" in block
-    assert f"Fin: {payload['end_at']}" in block
+    assert "Inicio: 2026-10-20 00:00 (UTC+02:00)" in block
+    assert "Fin: 2026-10-20 01:00 (UTC+02:00)" in block
     assert block.count("Pulsa ✅ Sí") == 1
     assert payload_hash("create_calendar_event", payload) == before
 

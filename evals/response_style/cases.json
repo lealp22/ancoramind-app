@@ -161,6 +161,69 @@
         ]
       },
       "tags": ["style", "pending_state", "read"]
+    },
+    {
+      "id": "response_style.document_normal_reference",
+      "description": "Consulta documental habitual: nombre y procedencia sin UUID visible.",
+      "input": "¿Qué dice factura_sintetica.pdf?",
+      "context": {
+        "document_id": "33333333-3333-4333-8333-333333333333",
+        "untrusted_filename": "factura_sintetica.pdf",
+        "untrusted_document_summary": "Factura sintética de revisión, total 85 euros."
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "get_document",
+        "forbidden_tools": [],
+        "requires_user_confirmation": false,
+        "response_criteria": [
+          "Identifica factura_sintetica.pdf y resume los datos recuperados sin inventarlos.",
+          "No incluye el UUID documental ni rutas de almacenamiento en la respuesta normal."
+        ]
+      },
+      "tags": ["style", "document_reference", "read"]
+    },
+    {
+      "id": "response_style.document_explicit_id",
+      "description": "La petición explícita permite mostrar el ID verificado del documento propio.",
+      "input": "Dame el ID de factura_sintetica.pdf para diagnóstico.",
+      "context": {
+        "document_id": "33333333-3333-4333-8333-333333333333",
+        "untrusted_filename": "factura_sintetica.pdf"
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "get_document",
+        "forbidden_tools": [],
+        "requires_user_confirmation": false,
+        "response_criteria": [
+          "Devuelve el ID documental verificado 33333333-3333-4333-8333-333333333333 asociado al nombre.",
+          "No amplía la excepción a IDs de usuario, rutas, secretos ni datos ajenos."
+        ]
+      },
+      "tags": ["style", "document_reference", "explicit_request"]
+    },
+    {
+      "id": "response_style.document_duplicate_names",
+      "description": "Los homónimos se distinguen con procedencia, no con una elección arbitraria.",
+      "input": "Busca factura.pdf y dime cuál tengo que revisar.",
+      "context": {
+        "document_records": [
+          {"id": "33333333-3333-4333-8333-333333333333", "filename": "factura.pdf", "created_at": "2026-10-01", "mime_type": "application/pdf"},
+          {"id": "44444444-4444-4444-8444-444444444444", "filename": "factura.pdf", "created_at": "2026-10-15", "mime_type": "application/pdf"}
+        ]
+      },
+      "expected": {
+        "outcome": "tool_call",
+        "required_tool": "search_documents",
+        "forbidden_tools": [],
+        "requires_user_confirmation": false,
+        "response_criteria": [
+          "Distingue los dos documentos por las fechas recuperadas y pide aclaración antes de elegir.",
+          "No muestra UUIDs ni inventa referencias o cuál requiere revisión."
+        ]
+      },
+      "tags": ["style", "document_reference", "ambiguity"]
     }
   ]
 }

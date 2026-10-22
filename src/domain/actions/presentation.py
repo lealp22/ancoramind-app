@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, time
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
+
+from src.domain.preferences.display import format_temporal
 
 _UUID = r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
 _CALLBACK = re.compile(rf"(?P<action>[cd]):(?P<proposal_id>{_UUID})")
@@ -118,41 +120,20 @@ _RECURRENCE_UNITS = {
     "monthly": ("mes", "meses"),
     "yearly": ("año", "años"),
 }
-_MONTHS = (
-    "enero",
-    "febrero",
-    "marzo",
-    "abril",
-    "mayo",
-    "junio",
-    "julio",
-    "agosto",
-    "septiembre",
-    "octubre",
-    "noviembre",
-    "diciembre",
-)
 
 
-def _render_field(tool_name: str, key: str, value: Any) -> str:
+def _render_field(tool_name: str, key: str, value: Any, tz: ZoneInfo | None) -> str:
     if key == "priority" and isinstance(value, str):
         return _PRIORITIES.get(value, value)
-    if (
-        key == "due_date"
-        and tool_name in {"create_todo_item", "update_todo_item"}
-        and isinstance(value, str)
-    ):
-        try:
-            due = datetime.fromisoformat(value)
-        except ValueError:
-            return value
-        date_text = f"{due.day} de {_MONTHS[due.month - 1]} de {due.year}"
-        # TODO date-only input is currently persisted as naive midnight.
-        # Keep every explicit time/offset, including aware midnight; do
-        # not apply this convention to reminder/calendar timestamps.
-        if due.tzinfo is None and due.time() == time.min:
-            return date_text
-        return f"{date_text}, {due.timetz().isoformat()}"
+    if key in {"trigger_at", "start_at", "end_at", "due_date", "date"} and isinstance(value, str):
+        return format_temporal(
+            value,
+            tz,
+            allow_date=key in {"due_date", "date"},
+            naive_midnight_is_date=(
+                key == "due_date" and tool_name in {"create_todo_item", "update_todo_item"}
+            ),
+        )
     return ", ".join(map(str, value)) if isinstance(value, list) else str(value)
 
 
@@ -166,7 +147,7 @@ def _duration(minutes: Any) -> str:
     return f"{hours} h {remainder} min" if remainder else f"{hours} h"
 
 
-def _calendar_fields(payload: dict[str, Any]) -> list[tuple[str, Any]]:
+def _calendar_fields(payload: dict[str, Any], tz: ZoneInfo | None) -> list[tuple[str, Any]]:
     frequency = payload.get("recurrence_frequency")
     fields: list[tuple[str, Any]] = []
     if frequency is None:
@@ -178,8 +159,14 @@ def _calendar_fields(payload: dict[str, Any]) -> list[tuple[str, Any]]:
         units = _RECURRENCE_UNITS.get(str(frequency))
         unit = units[0 if interval == 1 else 1] if units else str(frequency)
         fields.append(("Repetición", f"cada {interval} {unit}"))
+        until = payload.get("recurrence_until")
         fields.append(
-            ("Repetir hasta (inclusive)", payload.get("recurrence_until") or "sin fecha límite")
+            (
+                "Repetir hasta (inclusive)",
+                format_temporal(until, tz, allow_date=False)
+                if isinstance(until, str) and until
+                else until or "sin fecha límite",
+            )
         )
     with_reminder = bool(payload.get("with_reminder"))
     fields.append(("Aviso", "sí" if with_reminder else "no"))
@@ -197,6 +184,7 @@ def render_proposal_block(
     payload: dict[str, Any],
     *,
     reminder_title: str | None = None,
+    timezone: ZoneInfo | None = None,
 ) -> str:
     """Fixed, Core-generated summary of exactly what «Sí» will execute."""
     lines = [f"📋 **Propuesta**: {_TOOL_TITLES.get(tool_name, tool_name)}"]
@@ -213,9 +201,9 @@ def render_proposal_block(
             value = payload.get(key)
             if value is None or value == "" or value == []:
                 continue
-            fields.append((label, _render_field(tool_name, key, value)))
+            fields.append((label, _render_field(tool_name, key, value, timezone)))
         if tool_name == "create_calendar_event":
-            fields.extend(_calendar_fields(payload))
+            fields.extend(_calendar_fields(payload, timezone))
     for label, value in fields:
         rendered = str(value)
         rendered = " ".join(rendered.split())

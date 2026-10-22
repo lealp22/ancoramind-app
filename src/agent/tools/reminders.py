@@ -20,7 +20,8 @@ from src.agent.tools.validation import (
     parse_optional_uuid,
     parse_uuid,
 )
-from src.domain.preferences.timezone import resolve_user_timezone, to_local_display
+from src.domain.preferences.display import format_temporal
+from src.domain.preferences.timezone import resolve_user_timezone
 from src.domain.reminders.service import ReminderService
 from src.domain.shared.recurrence import recurrence_rule_from_flat, recurrence_rule_to_flat
 from src.repositories.actions import ActionProposalsRepository
@@ -70,7 +71,7 @@ async def list_reminders(run_context: RunContext, status: str | None = None) -> 
             "title": title,
             "title_truncated": title_truncated,
             "status": r.status,
-            "trigger_at": to_local_display(r.trigger_at, tz).strftime("%Y-%m-%d %H:%M"),
+            "trigger_at": format_temporal(r.trigger_at, tz, allow_date=False),
             "recurring": bool(r.recurrence_rule),
         }
         if r.description:
@@ -149,7 +150,7 @@ async def propose_reminder(
     lines = [
         f"⏰ **Propuesta de recordatorio** (`{proposal['id']}`)",
         f"   Título: {title}",
-        f"   Cuándo: {parsed.strftime('%Y-%m-%d %H:%M')}",
+        f"   Cuándo: {format_temporal(parsed, resolve_user_timezone(user_ctx), allow_date=False)}",
     ]
     if description:
         lines.append(f"   Detalle: {description}")
@@ -195,10 +196,10 @@ async def execute_reminder(run_context: RunContext, proposal_id: str) -> str:
             recurrence_rule=rule,
         )
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
-        local_trigger = to_local_display(reminder.trigger_at, resolve_user_timezone(user_ctx))
+        local_trigger = format_temporal(reminder.trigger_at, resolve_user_timezone(user_ctx))
         return (
             f"✅ **Recordatorio creado**: {reminder.title}\n"
-            f"   Cuándo: {local_trigger.strftime('%Y-%m-%d %H:%M')}"
+            f"   Cuándo: {local_trigger}"
         )
     except (KeyError, TypeError, ValueError) as e:
         return invalid_proposal_reply("execute_reminder", e)
@@ -287,10 +288,10 @@ async def execute_reminder_snooze(run_context: RunContext, proposal_id: str) -> 
         if snoozed is None:
             return "No se encontró ese recordatorio o no te pertenece."
         await actions_repo.mark_executed(user_ctx.user_id, proposal_id)
-        local_trigger = to_local_display(snoozed.trigger_at, resolve_user_timezone(user_ctx))
+        local_trigger = format_temporal(snoozed.trigger_at, resolve_user_timezone(user_ctx))
         return (
             f"✅ **Recordatorio aplazado**: {snoozed.title}\n"
-            f"   Próximo aviso: {local_trigger.strftime('%Y-%m-%d %H:%M')}"
+            f"   Próximo aviso: {local_trigger}"
         )
     except (KeyError, TypeError, ValueError) as e:
         return invalid_proposal_reply("execute_reminder_snooze", e)

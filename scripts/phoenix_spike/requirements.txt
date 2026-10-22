@@ -1,0 +1,4 @@
+# Optional spike only; do not install into production or import from src/.
+openinference-instrumentation-agno==1.0.3
+openinference-instrumentation==0.1.57
+openinference-semantic-conventions==0.1.32

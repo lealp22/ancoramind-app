@@ -58,6 +58,7 @@ from src.domain.llm_access.models import (
     ExecutionContext,
     InteractionProvenance,
 )
+from src.domain.preferences.timezone import resolve_user_timezone
 from src.domain.speech.consent import parse_voice_consent_intent
 from src.domain.speech.models import VoiceReference
 from src.domain.speech.service import VoicePreparationError, VoicePreparationService
@@ -66,6 +67,7 @@ from src.repositories.actions import ActionProposalsRepository
 from src.repositories.interactions import TelegramInteractionsRepository
 from src.repositories.llm_usage import LlmUsageRepository
 from src.repositories.reminders import RemindersRepository
+from src.security.user_context import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -733,7 +735,10 @@ class InteractionProcessor:
                             reminder_title = reminder.title
                 blocks.append(
                     render_proposal_block(
-                        row["id"], row["tool_name"], row["payload"], reminder_title=reminder_title
+                        row["id"], row["tool_name"], row["payload"], reminder_title=reminder_title,
+                        timezone=resolve_user_timezone(
+                            UserContext(user_id=str(interaction.telegram_user_id))
+                        ),
                     )
                 )
             return "\n\n".join(part for part in (content.answer.strip(), *blocks) if part)

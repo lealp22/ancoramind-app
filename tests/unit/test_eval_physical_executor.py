@@ -160,7 +160,7 @@ async def test_proposal_verdict_depends_on_state_not_function_name(extra, create
     assert bool(observed.delivered_text) is created
     if created:
         assert observed.proposals[0]["payload"]["priority"] == "high"
-        assert "20 de noviembre de 2026" in observed.delivered_text
+        assert "2026-11-20" in observed.delivered_text
         assert "alta" in observed.delivered_text
     assert observed.tool_trace[0]["name"] == "propose_todo_item"
 

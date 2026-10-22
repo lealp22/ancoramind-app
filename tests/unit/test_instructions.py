@@ -42,6 +42,17 @@ class TestLoadPrompt:
 class TestAssembleInstructions:
     """Tests for assembling the full instruction context."""
 
+    def test_readable_dates_keep_precision_and_document_ids_are_explicit_only(self):
+        text = "\n".join(assemble_instructions())
+        assert "`YYYY-MM-DD HH:MM`" in text
+        assert "retain non-zero seconds" in text
+        assert "Midnight in an event or reminder still has a time" in text
+        assert "not document UUIDs in normal replies" in text
+        assert "only when the user explicitly requests that ID" in text
+        assert "never use a filename as authorization" in text
+        assert "If documents share a filename" in text
+        assert "never permits\n  exposing internal user IDs" in text
+
     def test_returns_list_of_strings(self):
         """Should return a list of strings."""
         instructions = assemble_instructions()

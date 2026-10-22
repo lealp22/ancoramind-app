@@ -40,7 +40,7 @@
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
 | BL-55 Gap analysis contra rúbrico de evaluación académica | 🆕 registrado; huecos priorizados en justificación de modelo/coste proyectado, LLM-juez (Jev) ejecutado, red-teaming (PyRIT/Garak) ejecutado y documento de riesgos propio — ver `docs/academic-rubric-gap-analysis.md` |
-| BL-56 Trazas con contenido enmascarado en Phoenix | 🆕 Phoenix + Postgres desplegados y vacíos (auth, retención 30 d); sin código ni conexión con la app; pendiente spike y aceptación de ADR-007 — specs/046 |
+| BL-56 Trazas con contenido enmascarado en Phoenix | 🔶 exporter/spike local sólo sintético; auth/OTLP/borrado probados sin Railway; captura productiva bloqueada por procedencia de documentos/voz, coste/UI y aceptación ADR-007 — specs/046 |
 | MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
 Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL
@@ -898,7 +898,7 @@ reenviar el PDF al Agent principal. Esta evidencia cierra el ensayo E2E de PDF
 textual de BL-38/Fase 1 y avanza M3, pero **no** valida todavía imágenes ni PDFs
 escaneados (ruta visual), ni los flujos M4–M5.
 
-### BL-55 · Fechas legibles en mensajes y propuestas, sin ISO técnico 🆕 registrado — 2026-10-17
+### BL-55 · Fechas legibles en mensajes y propuestas, sin ISO técnico 🔶 implementado local — specs/047
 
 Preferencia explícita del propietario al revisar la propuesta natural BL-54:
 `2026-11-01T10:00:00+01:00` añade ruido. Formato visible deseado:
@@ -914,7 +914,7 @@ El renderer `src/domain/actions/presentation.py` muestra start_at/end_at/
 trigger_at y recurrence_until como valores almacenados; las fechas límite
 TODO ya tienen otro formato legible. No es un fallo de parsing o ejecución.
 
-**Pendiente, no implementado:** definir presentación consistente usando la
+**Contrato del incremento:** presentación consistente usando la
 resolución de timezone existente, sin cambiar el instante ni ocultar una
 zona relevante para confirmar. No basta sustituir `T` y cortar el offset:
 cuando sea necesario, indicar la zona de forma legible aparte en vez de un
@@ -929,7 +929,17 @@ zona del usuario, UTC y cambio horario; conservar fallback seguro para valores
 inválidos y procedencia. Si se cambian prompts/descripciones, tratar como
 cambio evaluable. Revalidación Telegram sólo en ventana autorizada; no repetir
 inferencias para registrar este hallazgo ni reabrir el cierre acotado BL-54.
-Registro documental únicamente; se conserva pendiente para priorización.
+**Implementado local (2026-10-22):** formateador compartido, timezone resuelta
+desde identidad, zona/offset legibles y precisión conservada; renderer Core y
+tools calendario/recordatorios alineados, fechas TODO normalizadas al formato
+acordado. Hash/payload/parser/consentimiento intactos; integración local comprueba
+conversión y no ejecución. Cambio evaluable de prompts; sin inferencia ni deploy.
+Detalles/resultados y límites: `specs/047-readable-presentation/verification.md`.
+Validación global junto con BL-53/56: 2211 unitarias/1 skip, 81,69 % cobertura;
+218 integraciones locales/1 STT skip; Ruff/mypy186/catálogos/diff limpios.
+Incluye regresiones de lectura DST y filtrado de tracestate/scope/links.
+Pendientes SHA/CI, publicación y evaluación semántica/E2E autorizada; no afirmar
+que la instrucción de formato del Agent esté ya validada contra un modelo real.
 
 ### BL-54 · Investigar rechazo de recurrencia en petición natural de calendario ✅ contrato corregido y regresión natural E2E acotada superada — 2026-10-17
 
@@ -1022,7 +1032,7 @@ es puramente un registro de priorización. Revisar vigencia de
 `docs/academic-rubric-gap-analysis.md` antes de usarlo — puede quedar
 obsoleto si se cierran estos puntos.
 
-### BL-53 · Ocultar IDs técnicos documentales en respuestas de uso normal 🆕 registrado — 2026-10-17
+### BL-53 · Ocultar IDs técnicos documentales en respuestas de uso normal 🔶 implementado local — specs/047
 
 Preferencia explícita del propietario al revisar el E2E visual de BL-1/6:
 los UUIDs internos de documentos añaden ruido y pueden confundir al usuario.
@@ -1040,12 +1050,13 @@ que ese ensayo no demuestra incumplimiento del Agent: registra una mejora de
 UX para el uso normal y para futuros guiones de validación. La procedencia
 técnica puede comprobarse aparte sin exigir UUIDs en la respuesta visible.
 
-**Pendiente, no implementado:** revisar las instrucciones de presentación y
-añadir regresiones para consulta normal sin IDs y petición explícita de ID,
-preservando nombre/procedencia y resolución inequívoca del documento. No
-repetir ingesta ni inferencia para registrar este hallazgo. Separado de BL-50
-(campos estructurados omitidos) y sin ampliar implícitamente BL-48 ni la campaña
-autorizada BL-49/52. Ningún cambio de código/prompts o despliegue en este registro.
+**Implementado local (2026-10-22):** instrucciones Telegram/documentos para uso
+normal sin UUID, excepción explícita de ID documental y homónimos con procedencia
+o aclaración; IDs internos/autoridad intactos. Tres casos evaluables y fixtures
+sintéticos, tests de instrucciones y del contrato de tools. No se filtra la salida
+con regex ni se promete cumplimiento semántico por tests estáticos. Sin ingesta,
+inferencia real, publicación o ampliación de campaña histórica. Separado de BL-50.
+Evidencia y gates conjuntos con BL-55: `specs/047-readable-presentation/verification.md`.
 
 ### BL-52 · Aviso determinista y acotado para cuentas sin acceso ✅ desplegado; E2E acotado superado — 2026-10-17
 
@@ -3260,7 +3271,7 @@ interruptor. 31 tests nuevos, 1111 unit tests (suite completa), Ruff y
 - **Sin broadcast multi-instancia** — cada réplica tendría su propio estado
   en memoria (no es un escenario de despliegue actual conocido).
 
-### BL-56 · Trazas con contenido enmascarado en Phoenix 🆕 infraestructura desplegada, sin código — specs/046 + ADR-007
+### BL-56 · Trazas con contenido enmascarado en Phoenix 🔶 exporter/spike sintético local — specs/046 + ADR-007
 
 Hoy no se puede saber qué vio el modelo ni por qué falló una petición concreta
 (p. ej. `InvalidPresentationOutputError` solo deja un contador). ADR-007
@@ -3273,18 +3284,29 @@ y API key generada. Sin conexión con la app: no hay código, variables ni
 dependencias `openinference`; no recibe ni guarda datos personales. Dominio
 público aún presente; retirarlo (acceso solo por red privada) queda pendiente.
 
-**Pendiente, no implementado:**
-- Spike de compatibilidad (`specs/046-phoenix-masked-traces/spike.md`, Q1–Q9).
+**Incremento local autorizado (2026-10-22):** masking existente conservado;
+`scripts/phoenix_spike/` implementa exporter experimental fail-closed por span,
+allowlist/esquema/patrones y reconstrucción de superficies SDK, sin imports desde
+la app. Agent gobernado real + HTTP simulado, terminal/correlación/aislamiento,
+fallo de sink y benchmark 50+50; backend Phoenix15.1 local desechable con auth,
+OTLP enmascarado y borrado por seudónimo probado. Sin LLM real, Railway ni flag.
+Informe Q1–Q9: `specs/046-phoenix-masked-traces/spike-result.md`.
+
+**Pendiente, no implementado en producción:**
+- Cierre sin reservas del spike: coste recibido como atributo no demuestra
+  cálculo/UI, overhead sin SLO aceptado, no prueba fresh install ni backend PG.
+- Seam de captura confiable: mensajes genéricos/historial pueden arrastrar
+  documentos/voz; no basta allowlist de nombres. No auto-instrumentar globalmente.
 - Aceptación del ADR-007 y de la enmienda acotada del principio 11 por el
   propietario. Decidido (2026-10-20): entran las trazas de todos los usuarios
   autorizados, sin lista adicional; exige actualizar los términos del piloto y el
   inventario de privacidad antes de activar el flag.
-- Código (`masking.py`, exporter envolvente fail-closed, flag OFF por defecto),
+- Integración del exporter productivo y configuración (sin activar por defecto),
   tests de privacidad y actualización de `docs/production-security-privacy.md`.
 
-**Prioridad:** tras BL-1/MVP según la decisión del propietario de 2026-10-17
-(alcance de gobernanza nuevo congelado). No bloquea ni reabre ningún incremento
-existente; Grafana (ADR-006) sigue sin contenido.
+**Gobernanza:** propietario autoriza este trabajo aislado; no equivale a aceptar
+ADR-007 ni habilitar captura. No bloquea ni reabre incrementos existentes;
+Grafana (ADR-006) sigue sin contenido.
 
 ---
 

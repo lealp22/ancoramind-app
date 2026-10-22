@@ -137,6 +137,15 @@ exporta**. Perder una traza es aceptable; exportar un dato sin enmascarar, no.
 
 ## Pendiente antes de aceptar
 
-- Spike de compatibilidad del instrumentor y del cálculo de coste con aliases propios.
-- Fijar retención, política de borrado y acceso a la UI.
-- Decidir si el texto de usuarios distintos del propietario puede entrar.
+- Spike sintético ejecutado (2026-10-22): compatibilidad Agno/terminal, provider
+  separado, exporter experimental, auth y borrado local probados; límites en
+  `specs/046-phoenix-masked-traces/spike-result.md`. Coste/UI y overhead aceptable
+  no demostrados; sin inferencia real ni integración productiva.
+- Resolver exclusión de documentos/transcripciones en mensajes e historial:
+  auto-instrumentar globalmente Agno y filtrar nombres de atributos no basta.
+  Propuesta de seam manual con procedencia confiable en adaptador gobernado;
+  no decisión arquitectónica aceptada automáticamente.
+- Retención 30 días y todos los usuarios autorizados ya decididos por propietario
+  en specs/046 (2026-10-20). Pendiente ejecución productiva de borrado paginado,
+  privacidad/términos y control de acceso/red antes de activar.
+- Aceptación explícita de ADR-007/enmiendas por el propietario sigue pendiente.

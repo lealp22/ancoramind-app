@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 
+import pytest
 from agno.run import RunContext
 
 import src.agent.eval_tools as eval_tools_module
@@ -179,7 +180,7 @@ async def test_reviewable_todo_stores_actual_payload_and_uses_core_renderer():
     evidence = store.evidence()[0]
     assert evidence["payload"]["title"] == "Revisar póliza"
     assert evidence["payload"]["priority"] == "high"
-    assert "alta" in evidence["core_block"] and "20 de noviembre de 2026" in evidence["core_block"]
+    assert "alta" in evidence["core_block"] and "2026-11-20" in evidence["core_block"]
     assert "Pulsa ✅ Sí" in evidence["core_block"]
     assert evidence["created_this_run"] is True
 
@@ -192,3 +193,32 @@ async def test_invalid_structured_payload_never_creates_proposal():
     await add(_run_context(), list_id="synthetic", title="Title", priority="invalid")
     await add(_run_context(), list_id="synthetic", title="Title", due_date="not-a-date")
     assert not store.evidence()
+
+
+@pytest.mark.parametrize("tool_name", ["search_documents", "get_document"])
+async def test_document_reference_fixture_keeps_id_and_provenance_for_explicit_requests(tool_name):
+    document_id = "33333333-3333-4333-8333-333333333333"
+    tools = build_eval_tools(SyntheticProposalStore(), {
+        "document_id": document_id, "untrusted_filename": "factura_sintetica.pdf",
+    })
+    tool = _tool(tool_name, tools)
+    kwargs = {"document_id": document_id} if tool_name == "get_document" else {}
+    result = json.loads((await tool(_run_context(), **kwargs)).split("\n", 1)[1])
+    assert result["trust"] == "untrusted_data"
+    assert result["records"][0]["id"] == document_id
+    assert result["records"][0]["filename"] == "factura_sintetica.pdf"
+
+
+async def test_duplicate_document_fixture_keeps_both_ids_without_choosing():
+    records = [
+        {"id": "33333333-3333-4333-8333-333333333333", "filename": "factura.pdf",
+         "created_at": "2026-10-01"},
+        {"id": "44444444-4444-4444-8444-444444444444", "filename": "factura.pdf",
+         "created_at": "2026-10-15"},
+    ]
+    tools = build_eval_tools(SyntheticProposalStore(), {"document_records": records})
+    reply = await _tool("search_documents", tools)(_run_context(), query="factura.pdf")
+    result = json.loads(reply.split("\n", 1)[1])
+    assert result["trust"] == "untrusted_data"
+    assert result["records"] == records
+    assert result["total_matches"] == 2
