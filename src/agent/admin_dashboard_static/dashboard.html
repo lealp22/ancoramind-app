@@ -102,6 +102,31 @@
   .bars { display: grid; grid-template-columns: 90px 1fr 120px; gap: 4px 8px; align-items: center; font-size: 0.78rem; margin-top: 8px; }
   .bars .num { text-align: right; font-variant-numeric: tabular-nums; }
   .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .cols > div { min-width: 0; }
+  .chart-wide { grid-column: 1 / -1; }
+  .daily-chart { display: flex; height: 190px; gap: 8px; margin-top: 16px; }
+  .daily-axis { display: flex; flex-direction: column; justify-content: space-between; flex: 0 0 74px; text-align: right; font-size: 0.72rem; color: var(--muted); }
+  .daily-plot { position: relative; flex: 1; border-bottom: 1px solid var(--muted); background: repeating-linear-gradient(to top, transparent 0, transparent calc(50% - 1px), var(--border) calc(50% - 1px), var(--border) 50%); }
+  .daily-column { position: absolute; bottom: 0; background: var(--accent); min-height: 2px; }
+  .daily-column.zero { background: var(--muted); }
+  .daily-column:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .daily-dates { position: relative; height: 24px; margin: 6px 0 0 82px; font-size: 0.72rem; color: var(--muted); }
+  .daily-dates span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .chart-detail { margin: 8px 0 16px; font-size: 0.8rem; }
+  .chart-detail summary { cursor: pointer; color: var(--accent); }
+  .distribution { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 12px 0; }
+  .donut { width: 160px; height: 160px; flex: 0 0 160px; border-radius: 50%; display: grid; place-items: center; }
+  .donut-center { width: 112px; height: 112px; border-radius: 50%; background: var(--panel); display: grid; place-content: center; text-align: center; font-size: 0.85rem; }
+  .chart-legend { list-style: none; margin: 0; padding: 0; flex: 1 1 180px; font-size: 0.8rem; }
+  .chart-legend li { display: flex; gap: 8px; align-items: baseline; margin: 6px 0; overflow-wrap: anywhere; }
+  .chart-swatch { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; }
+  .rate-scale { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
+  .rate-label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; margin: 12px 0 6px; }
+  .proposal-rates .bar { height: 16px; }
+  @media (max-width: 600px) {
+    .grid, .cols { grid-template-columns: minmax(0, 1fr); }
+    .panel { padding: 12px; }
+  }
   select { background: #0b1220; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 0.85rem; }
   .error-text { color: var(--bad); font-size: 0.8rem; }
 </style>
@@ -153,18 +178,24 @@
       <div class="kpis" id="fo-kpis"></div>
       <div id="fo-budget"></div>
       <div class="cols">
-        <div><h2>Coste por día (USD)</h2><div class="bars" id="fo-daily"></div></div>
+        <div class="chart-wide"><h2>Coste por día (USD)</h2><div id="fo-daily"></div></div>
         <div><h2>Por usuario (seudónimo)</h2>
           <table id="fo-users"><thead><tr><th>Usuario</th><th>USD</th><th>Tokens</th><th>Llamadas</th></tr></thead><tbody></tbody></table></div>
         <div><h2>Por ruta y modelo</h2>
           <table id="fo-routes"><thead><tr><th>Ruta</th><th>Modelo</th><th>USD</th><th>Llamadas</th></tr></thead><tbody></tbody></table></div>
         <div><h2>Origen del coste</h2>
+          <div id="fo-sources-chart"></div>
           <table id="fo-sources"><thead><tr><th>Origen</th><th>USD</th><th>Llamadas</th></tr></thead><tbody></tbody></table></div>
       </div>
       <h2 style="margin-top:16px;">Calidad</h2>
       <div class="kpis" id="fo-quality-kpis"></div>
       <div class="cols">
+        <div><h2>Resultados de propuestas</h2>
+          <div id="fo-proposal-rates" class="proposal-rates"></div>
+          <p class="hint">Porcentaje sobre ejecutadas + descartadas + caducadas; excluye pendientes y en curso. Incluye ejecutadas autoautorizadas: no es una tasa de aprobación humana ni un indicador automático de calidad. Sin umbrales.</p></div>
         <div><h2>Interacciones por estado</h2>
+          <div id="fo-statuses-chart"></div>
+          <p class="hint">Sobre todas las interacciones de la ventana, incluidas rechazadas e ignoradas sin ejecución del Agent.</p>
           <table id="fo-statuses"><thead><tr><th>Estado</th><th>Nº</th></tr></thead><tbody></tbody></table></div>
       </div>
       <p class="hint" id="fo-excluded"></p>
@@ -432,6 +463,139 @@ function renderBudget(budget) {
   box.appendChild(bars);
 }
 
+function renderDaily(rows) {
+  const box = document.getElementById("fo-daily");
+  box.replaceChildren();
+  if (!rows.length) {
+    box.appendChild(el("p", "Sin datos en la ventana", "hint"));
+    return;
+  }
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day));
+  const dayNumber = (day) => Date.parse(day + "T00:00:00Z") / 86400000;
+  const first = dayNumber(sorted[0].day);
+  const span = dayNumber(sorted[sorted.length - 1].day) - first + 1;
+  const maximum = Math.max(0, ...sorted.map((row) => row.cost_usd));
+  const chart = el("div", null, "daily-chart");
+  const axis = el("div", null, "daily-axis");
+  for (const value of [maximum, maximum / 2, 0]) axis.appendChild(el("span", usd(value)));
+  const plot = el("div", null, "daily-plot");
+  plot.setAttribute("role", "group");
+  plot.setAttribute("aria-label", "Coste diario en USD; fechas de izquierda a derecha, días UTC");
+  const dates = el("div", null, "daily-dates");
+  const labelled = new Set([0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]);
+  for (const [index, row] of sorted.entries()) {
+    const position = (dayNumber(row.day) - first + 0.5) / span * 100;
+    const column = el("div", null, "daily-column" + (row.cost_usd === 0 ? " zero" : ""));
+    const description = `${row.day}: ${usd(row.cost_usd)}`;
+    column.style.left = ((dayNumber(row.day) - first + 0.1) / span * 100) + "%";
+    column.style.width = (0.8 / span * 100) + "%";
+    column.style.height = (maximum ? row.cost_usd / maximum * 100 : 0) + "%";
+    column.tabIndex = 0;
+    column.setAttribute("role", "img");
+    column.setAttribute("aria-label", description);
+    column.title = description;
+    plot.appendChild(column);
+    if (labelled.has(index)) {
+      const label = el("span", row.day.slice(5));
+      label.style.left = position + "%";
+      if (index === 0) label.style.transform = "none";
+      else if (index === sorted.length - 1) label.style.transform = "translateX(-100%)";
+      dates.appendChild(label);
+    }
+  }
+  chart.append(axis, plot);
+  box.append(chart, dates);
+  box.appendChild(el("p", "Días UTC con registros. Los huecos no se rellenan; una marca en la base indica coste cero. Fecha e importe exactos al pasar el cursor, enfocar o abrir el detalle.", "hint"));
+  const details = el("details", null, "chart-detail");
+  details.appendChild(el("summary", "Ver importes por día"));
+  const table = el("table");
+  const heading = el("tr");
+  for (const name of ["Fecha UTC", "USD"]) heading.appendChild(el("th", name));
+  const thead = el("thead");
+  thead.appendChild(heading);
+  const tbody = el("tbody");
+  for (const row of sorted) {
+    const tr = el("tr");
+    tr.append(el("td", row.day), el("td", usd(row.cost_usd)));
+    tbody.appendChild(tr);
+  }
+  table.append(thead, tbody);
+  details.appendChild(table);
+  box.appendChild(details);
+}
+
+const distributionColors = ["#38bdf8", "#a78bfa", "#2dd4bf", "#fb923c", "#f472b6", "#a3e635", "#818cf8", "#facc15"];
+
+function renderDonut(containerId, title, rows, formatValue, emptyText) {
+  const box = document.getElementById(containerId);
+  box.replaceChildren();
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  if (!rows.length || !Number.isFinite(total) || total <= 0 || rows.some((row) => row.value < 0)) {
+    box.appendChild(el("p", emptyText, "hint"));
+    return;
+  }
+  const distribution = el("div", null, "distribution");
+  const ring = el("div", null, "donut");
+  ring.setAttribute("role", "img");
+  ring.setAttribute("aria-label", `${title}: total ${formatValue(total)}. Reparto en la leyenda y la tabla.`);
+  const legend = el("ul", null, "chart-legend");
+  let end = 0;
+  const slices = [];
+  for (const [index, row] of rows.entries()) {
+    const color = distributionColors[index % distributionColors.length];
+    const start = end;
+    end += row.value / total * 100;
+    slices.push(`${color} ${start}% ${end}%`);
+    const item = el("li");
+    const swatch = el("span", null, "chart-swatch");
+    swatch.style.backgroundColor = color;
+    swatch.setAttribute("aria-hidden", "true");
+    item.append(swatch, el("span", `${row.label}: ${formatValue(row.value)} · ${pct(row.value / total)}`));
+    legend.appendChild(item);
+  }
+  ring.style.background = `conic-gradient(${slices.join(", ")})`;
+  const center = el("div", null, "donut-center");
+  center.append(el("strong", formatValue(total)), el("span", "Total", "hint"));
+  ring.appendChild(center);
+  distribution.append(ring, legend);
+  box.appendChild(distribution);
+}
+
+function renderProposalRates(rates) {
+  const box = document.getElementById("fo-proposal-rates");
+  box.replaceChildren();
+  if (!rates.resolved) {
+    box.appendChild(el("p", "Sin propuestas resueltas en la ventana", "hint"));
+    return;
+  }
+  for (const [label, rate, count] of [
+    ["Ejecutadas", rates.executed_rate, rates.executed],
+    ["Descartadas", rates.discarded_rate, rates.discarded],
+    ["Caducadas", rates.expired_rate, rates.expired],
+  ]) {
+    const caption = el("div", null, "rate-label");
+    caption.append(el("span", label), el("span", `${pct(rate)} (${count} / ${rates.resolved})`));
+    box.appendChild(caption);
+    if (rate === null || rate === undefined) {
+      box.appendChild(el("p", "Sin datos", "hint"));
+      continue;
+    }
+    const bar = el("div", null, "bar");
+    bar.setAttribute("role", "meter");
+    bar.setAttribute("aria-label", label);
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", "100");
+    bar.setAttribute("aria-valuenow", String(rate * 100));
+    bar.setAttribute("aria-valuetext", `${pct(rate)}, ${count} de ${rates.resolved} propuestas resueltas`);
+    const fill = el("div");
+    fill.style.width = Math.max(0, Math.min(100, rate * 100)) + "%";
+    bar.appendChild(fill);
+    const scale = el("div", null, "rate-scale");
+    scale.append(el("span", "0 %"), el("span", "100 %"));
+    box.append(bar, scale);
+  }
+}
+
 function renderFinops(data) {
   const t = data.totals;
   renderKpis("fo-kpis", [
@@ -443,14 +607,11 @@ function renderFinops(data) {
     ["Tokens", t.total_tokens],
   ]);
   renderBudget(data.budget);
-  const daily = document.getElementById("fo-daily");
-  daily.replaceChildren();
-  const max = Math.max(0, ...data.daily.map((d) => d.cost_usd));
-  for (const d of data.daily) renderBar(daily, d.day, max ? d.cost_usd / max : 0, usd(d.cost_usd));
-  if (!data.daily.length) daily.appendChild(el("span", "Sin datos en la ventana", "hint"));
+  renderDaily(data.daily);
   fillTable("fo-users", data.by_user.map((u) => [u.user, usd(u.cost_usd), u.total_tokens, u.calls]));
   fillTable("fo-routes", data.by_route_model.map((r) => [r.effective_gateway_route, r.model || "—", usd(r.cost_usd), r.calls]));
   fillTable("fo-sources", data.by_cost_source.map((s) => [s.cost_source, usd(s.cost_usd), s.calls]));
+  renderDonut("fo-sources-chart", "Origen del coste", data.by_cost_source.map((s) => ({label: s.cost_source, value: s.cost_usd})), usd, "Sin gasto registrado en la ventana; no hay reparto que mostrar.");
   document.getElementById("fo-excluded").textContent =
     "No incluido en el coste: " + data.excluded.join(", ") + ".";
 }
@@ -460,14 +621,13 @@ function renderQuality(data) {
   renderKpis("fo-quality-kpis", [
     ["Llamadas a tools", data.tool_calls_total],
     ["Propuestas resueltas", r.resolved],
-    ["Ejecutadas", pct(r.executed_rate)],
-    ["Descartadas", pct(r.discarded_rate)],
-    ["Caducadas", pct(r.expired_rate)],
     ["Latencia p50 / p95", `${ms(data.latency.p50_ms)} / ${ms(data.latency.p95_ms)}`],
     ["TTFT p50 / p95", `${ms(data.latency.ttft_p50_ms)} / ${ms(data.latency.ttft_p95_ms)}`],
     ["Reintentos / fallbacks", `${data.latency.retried_calls} / ${data.latency.fallback_calls}`],
   ]);
+  renderProposalRates(r);
   fillTable("fo-statuses", data.interactions_by_status.map((s) => [s.status, s.count]));
+  renderDonut("fo-statuses-chart", "Interacciones por estado", data.interactions_by_status.map((s) => ({label: s.status, value: s.count})), String, "Sin interacciones en la ventana.");
   fillTable("fo-proposals", data.proposals.map((p) => [p.tool_name, p.status, p.consent_mode, p.count]));
 }
 

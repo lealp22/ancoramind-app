@@ -102,6 +102,28 @@ Inicio y Fin):
 Cambiar de pestaña sólo cambia la vista: no hace peticiones ni mutaciones. Las
 operaciones administrativas y su autenticación permanecen como antes.
 
+### Gráficos de Resumen
+
+- **Coste por día:** columnas de altura proporcional al coste, fechas de izquierda
+  a derecha y altura fija incluso con 90 días. Se muestran hasta tres etiquetas
+  de fecha; cursor/foco y «Ver importes por día» permiten leer todos los valores.
+  Sólo se dibujan días UTC con registros; los huecos se conservan sin inventar
+  días con coste cero. Un registro de coste cero se marca en la base.
+- **Origen del coste:** anillo por importe USD (no por número de llamadas), con
+  leyenda, porcentajes y tabla. Es la fuente del coste registrado (`cost_source`),
+  no el proveedor/modelo. Sin gasto no hay reparto ni anillo ficticio.
+- **Interacciones por estado:** anillo por cantidad, con leyenda, porcentajes y
+  tabla; incluye rechazadas/ignoradas aunque no ejecutaran el Agent.
+- **Resultados de propuestas:** tres barras independientes 0–100 % para ejecutadas,
+  descartadas y caducadas, con numerador y total resuelto. Denominador = suma de
+  esos tres estados, no pendientes/en curso. Incluye ejecutadas autoautorizadas;
+  no mide aprobación humana ni establece calidad. Sin umbrales, alarmas ni colores
+  de juicio. Sin propuestas resueltas se muestra ausencia de datos, no 0 %.
+
+Todo se renderiza localmente con HTML/CSS y los agregados existentes, sin recursos
+externos, inferencia ni peticiones adicionales. La paleta distingue categorías,
+no severidades; las tablas/leyendas conservan valores exactos y acceso textual.
+
 - **Invitaciones** — crea (`issue_invitation`) y lista (`list_invitations`)
   invitaciones de pairing (BL-24). El código generado se muestra **una sola
   vez**: cópialo y entrégalo por un canal privado aprobado antes de refrescar
