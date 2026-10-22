@@ -121,6 +121,26 @@
       ],
       "title": "Errores por tipo",
       "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Invocaciones de tools del Agent por nombre y resultado. Solo metadata: nunca argumentos ni resultados. Pendiente de confirmar los nombres de serie en Grafana Explore (specs/016 verification).",
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 29},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum(increase(ancora_tool_calls_total[$__rate_interval])) by (ancora_tool_name, ancora_tool_outcome)", "legendFormat": "{{ancora_tool_name}} {{ancora_tool_outcome}}", "refId": "A"}],
+      "title": "Tools invocadas",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Latencia p95 por tool (solo ejecuciones completadas). Solo metadata. Pendiente de confirmar los nombres de serie en Grafana Explore (specs/016 verification).",
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 29},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(ancora_tool_call_duration_milliseconds_bucket[$__rate_interval])) by (le, ancora_tool_name))", "legendFormat": "{{ancora_tool_name}} p95", "refId": "A"}],
+      "title": "Latencia p95 por tool",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -131,5 +151,5 @@
   "timezone": "browser",
   "title": "AncoraMind · Salud operativa",
   "uid": "ancoramind-health",
-  "version": 1
+  "version": 2
 }

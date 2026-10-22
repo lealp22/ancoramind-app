@@ -1,5 +1,45 @@
 # Verification: 016 — Health Signals and Dashboard
 
+## Dashboard v2 — paneles de tools (2026-10-22, preparado, NO importado)
+
+`observability/dashboards/ancoramind-health.json` pasa de v1 a **v2** con dos
+paneles nuevos en una fila propia (`y: 29`), sin mover los 11 existentes:
+
+| Panel | Serie |
+|---|---|
+| Tools invocadas | `ancora_tool_calls_total` por `ancora_tool_name` y `ancora_tool_outcome` |
+| Latencia p95 por tool | `ancora_tool_call_duration_milliseconds_bucket` por `ancora_tool_name` |
+
+Origen: el hook `src/agent/tool_budget_hooks.py` ya emite el contador
+`ancora.tool.calls` y el histograma `ancora.tool.call.duration` con
+`ancora.tool.name` y `ancora.tool.outcome` (atributos de la allowlist de métricas).
+El dashboard v1 no mostraba nada de esto. Útil en la demo para ver qué tools usa el
+Agent, incluida `search_web` si está activa. Solo metadata: ni argumentos ni
+resultados.
+
+**Estado: los nombres de serie están INFERIDOS, no confirmados.** Siguen la
+convención de los paneles ya importados (`.` → `_`, contadores `_total`, histogramas
+de ms `_milliseconds_bucket`), pero el dashboard v1 ya tuvo dos nombres mal supuestos
+(`ancora_health_heartbeat_total`, `ancora_telegram_admissions_total`) y no hay
+evidencia en el repo de que estas series existan en Grafana Cloud. El test
+`test_tool_panels_match_the_metrics_the_hook_emits` solo protege contra un renombrado
+en el hook.
+
+### Comprobación antes de reimportar (Grafana → Explore, datasource `grafanacloud-prom`)
+
+1. `ancora_tool_calls_total` → ¿devuelve series? Si no, buscar el nombre real con
+   `{__name__=~"ancora_tool.*"}`.
+2. `count by (ancora_tool_name, ancora_tool_outcome) (ancora_tool_calls_total)` → las
+   etiquetas deben llamarse exactamente así.
+3. `ancora_tool_call_duration_milliseconds_bucket` → ¿existe? Si falta el sufijo
+   `_milliseconds`, probar `{__name__=~"ancora_tool_call_duration.*"}`.
+4. Sin tráfico reciente puede no haber muestras: provocar una interacción con una tool
+   de lectura (autorizada, coste ≈ 0,0034 USD) o consultar con ventana de 24 h. Una
+   serie vacía **no** es cero ni prueba de fallo.
+
+Si algún nombre difiere, corregir el JSON **y** `test_tool_panels_match_the_metrics_the_hook_emits`
+antes de importar. Reimportar sobrescribe el v1 por UID: exportar antes una copia.
+
 ## Incremento demo — 2026-10-17 (no cierra T7)
 
 Reutilizado el Collector privado existente y confirmado el datasource
