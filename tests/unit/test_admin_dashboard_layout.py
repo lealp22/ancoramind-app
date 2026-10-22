@@ -37,8 +37,13 @@ class DashboardStructure(HTMLParser):
 
 def test_dashboard_tabs_have_linked_panels_and_summary_selected_by_default() -> None:
     layout = DashboardStructure(HTML.read_text(encoding="utf-8"))
-    assert [tab["id"] for tab in layout.tabs] == ["tab-summary", "tab-proposals", "tab-admin"]
-    assert len(layout.panels) == 3
+    assert [tab["id"] for tab in layout.tabs] == [
+        "tab-summary",
+        "tab-proposals",
+        "tab-admin",
+        "tab-prompts",
+    ]
+    assert len(layout.panels) == 4
     for index, tab in enumerate(layout.tabs):
         panel = layout.panels[tab["aria-controls"]]
         assert panel["aria-labelledby"] == tab["id"]
@@ -72,6 +77,7 @@ def test_dashboard_tabs_have_linked_panels_and_summary_selected_by_default() -> 
             ),
         ),
         ("panel-proposals", ("fo-proposals", "proposals-days", "proposals-error")),
+        ("panel-prompts", ("prompt-list", "prompt-content", "prompt-version", "prompt-usages")),
         (
             "panel-admin",
             (

@@ -85,7 +85,7 @@ dominio/puerto sin TLS.
 
 ## 4. Qué hace cada panel
 
-La información se organiza en tres pestañas (también navegables con las flechas,
+La información se organiza en cuatro pestañas (también navegables con las flechas,
 Inicio y Fin):
 
 - **Resumen** — FinOps y calidad, hasta «Interacciones por estado», y una línea
@@ -98,6 +98,8 @@ Inicio y Fin):
   ventana de 7/30/90 días con Resumen; cambiarla en cualquiera actualiza ambas
   vistas. Es de sólo lectura, no confirma ni ejecuta propuestas.
 - **Administración** — invitaciones, runtime config, salud detallada y enlaces.
+- **Prompts** — inventario, contenido, referencias estáticas de uso y versiones
+  Git exportadas; sólo lectura, no aprobación ni activación.
 
 Cambiar de pestaña sólo cambia la vista: no hace peticiones ni mutaciones. Las
 operaciones administrativas y su autenticación permanecen como antes.
@@ -123,6 +125,52 @@ operaciones administrativas y su autenticación permanecen como antes.
 Todo se renderiza localmente con HTML/CSS y los agregados existentes, sin recursos
 externos, inferencia ni peticiones adicionales. La paleta distingue categorías,
 no severidades; las tablas/leyendas conservan valores exactos y acceso textual.
+
+### Prompts: inventario y trazabilidad, no registro de activación
+
+Las APIs `GET /admin/dashboard/api/prompts` y `/prompts/detail?path=...&revision=...`
+exigen el mismo bearer del dashboard, `no-store` y flag del panel. No consultan BD,
+Git, GitHub, proveedores ni variables secretas. El HTML público no contiene prompts;
+el contenido se obtiene autenticado y se muestra como texto, nunca Markdown/HTML
+ejecutable. Se limpia al cerrar sesión; no se guarda en sessionStorage.
+
+El catálogo descubre sólo `.md` regulares bajo `prompts/`, sin enlaces simbólicos,
+con un límite de 256 KiB por archivo. La selección debe coincidir exactamente con
+un nombre del inventario; no es una API para leer rutas arbitrarias. El SHA-256
+identifica UTF-8 con saltos universales y `strip()`, como `load_prompt` (no los bytes
+crudos Windows/Linux). «Presente en instancia» no significa «activo para cada run»:
+las instrucciones principales se cargan al arrancar y otras se leen bajo demanda.
+
+Los usos son llamadas literales a `load_prompt` detectadas en el AST de `src/`:
+fuente y línea, sin afirmar ejecución ni flags activos. Escaneo incompleto y falta
+de referencia se muestran explícitamente. No sigue alias/cargas dinámicas ni muestra
+usos históricos. Hoy `skills/reminders.md` y `skills/dream.md` no tienen una llamada
+detectada; no se altera su cableado en este incremento.
+
+**Railway:** el Dockerfile ya copia `prompts/` y `src/`; no hace falta otra ruta
+ni volumen. `.git` queda excluido. El historial se exporta offline al archivo
+`src/agent/prompt_history.json`, que también se copia con `src/`. Tras commitear un
+cambio de prompts, regenerarlo y commitear el artefacto antes de publicar:
+
+```powershell
+python scripts/export_prompt_history.py
+python scripts/export_prompt_history.py --check
+```
+
+El job de calidad usa checkout completo y comprueba el artefacto. Exporta contenido,
+hash, SHA y fecha de commit, nunca autores/emails/mensajes de commit. Cubre cambios
+AM de las rutas actuales alcanzables desde HEAD; no sigue renombrados ni incluye
+archivos borrados o ramas ajenas. Un clon shallow lo declara como parcial. No son
+versiones semánticas ni aprobaciones. El SHA de origen corresponde al último commit
+que tocó prompts, no necesariamente al commit de despliegue. Archivo presente distinto
+del último exportado se indica sin atribuir causa. Si falta/corrompe el historial,
+se permite leer el archivo presente pero no se inventan versiones. No hay fallback
+a GitHub ni necesidad de tokens nuevos. El artefacto tiene límite de 5 MiB.
+
+Siguiente fase posible, **no implementada**: propietario/revisor, estado de revisión,
+evaluaciones y aprobación vinculadas a huellas, diferencias entre versiones y
+asociación inmutable prompt/run. Editar/activar/rollback requeriría decisión y
+gobernanza propias; abrir este visor nunca modifica el comportamiento del Agent.
 
 - **Invitaciones** — crea (`issue_invitation`) y lista (`list_invitations`)
   invitaciones de pairing (BL-24). El código generado se muestra **una sola

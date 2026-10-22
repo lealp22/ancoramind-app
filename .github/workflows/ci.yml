@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -32,6 +34,9 @@ jobs:
 
       - name: Type check
         run: mypy src/
+
+      - name: Check packaged prompt history
+        run: python scripts/export_prompt_history.py --check
 
       - name: Unit tests
         run: pytest tests/unit/ -q --cov=src --cov-report=term-missing

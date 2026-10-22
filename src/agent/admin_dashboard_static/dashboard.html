@@ -123,8 +123,15 @@
   .rate-scale { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
   .rate-label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; margin: 12px 0 6px; }
   .proposal-rates .bar { height: 16px; }
+  .prompt-layout { display: grid; grid-template-columns: minmax(230px, 1fr) minmax(0, 3fr); gap: 16px; }
+  #prompt-list { list-style: none; padding: 0; margin: 0; }
+  #prompt-list button { display: block; width: 100%; text-align: left; overflow-wrap: anywhere; margin: 4px 0; }
+  #prompt-list button[aria-pressed="true"] { outline: 2px solid var(--accent); }
+  #prompt-meta { overflow-wrap: anywhere; }
+  #prompt-content { max-height: 65vh; overflow-y: auto; }
+  #prompt-version { max-width: 100%; }
   @media (max-width: 600px) {
-    .grid, .cols { grid-template-columns: minmax(0, 1fr); }
+    .grid, .cols, .prompt-layout { grid-template-columns: minmax(0, 1fr); }
     .panel { padding: 12px; }
   }
   select { background: #0b1220; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 0.85rem; }
@@ -152,6 +159,7 @@
     <button type="button" id="tab-summary" role="tab" aria-controls="panel-summary" aria-selected="true" tabindex="0" onclick="selectTab(this)">Resumen</button>
     <button type="button" id="tab-proposals" role="tab" aria-controls="panel-proposals" aria-selected="false" tabindex="-1" onclick="selectTab(this)">Propuestas</button>
     <button type="button" id="tab-admin" role="tab" aria-controls="panel-admin" aria-selected="false" tabindex="-1" onclick="selectTab(this)">Administración</button>
+    <button type="button" id="tab-prompts" role="tab" aria-controls="panel-prompts" aria-selected="false" tabindex="-1" onclick="selectTab(this)">Prompts</button>
   </div>
   <section class="grid" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
 
@@ -279,6 +287,30 @@
     </div>
 
   </section>
+
+  <section class="grid" id="panel-prompts" role="tabpanel" aria-labelledby="tab-prompts" hidden>
+    <div class="panel wide">
+      <h2>Prompts · Inventario y trazabilidad</h2>
+      <p class="hint">Sólo lectura de los archivos presentes en esta instancia. No edita, aprueba ni activa versiones. El contenido empaquetado no demuestra qué prompt usó cada ejecución: las instrucciones principales pueden estar cargadas en memoria desde el arranque.</p>
+      <button class="secondary" onclick="loadPrompts()">Refrescar catálogo</button>
+      <p id="prompt-catalog-status" class="hint" role="status">Sin cargar</p>
+      <p id="prompt-error" class="error-text" role="alert" hidden></p>
+      <div class="prompt-layout">
+        <div><h2>Archivos de prompts/</h2><ul id="prompt-list"></ul></div>
+        <div>
+          <h2 id="prompt-title">Selecciona un prompt</h2>
+          <p id="prompt-meta" class="hint"></p>
+          <h2>Uso detectado en código</h2>
+          <ul id="prompt-usages"></ul>
+          <p class="hint">Referencias estáticas a load_prompt con nombre literal en src/. No prueban ejecución, flags activos ni cubren cargas dinámicas. Los usos mostrados corresponden al código actual, no al histórico.</p>
+          <label for="prompt-version">Contenido / versión Git</label>
+          <select id="prompt-version" onchange="loadPromptVersion()" disabled></select>
+          <p id="prompt-version-meta" class="hint"></p>
+          <pre id="prompt-content" tabindex="0" aria-label="Contenido del prompt">Selecciona un archivo para ver su contenido.</pre>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -292,6 +324,10 @@
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 let lastActivityAt = Date.now();
 let idleCheckTimer = null;
+let promptEntries = [];
+let selectedPrompt = null;
+let promptRequest = 0;
+let catalogRequest = 0;
 
 const authHeaders = () => ({
   "Authorization": "Bearer " + sessionStorage.getItem("admin_token"),
@@ -336,6 +372,7 @@ function login() {
 }
 
 function logout(reason) {
+  clearPrompts();
   sessionStorage.removeItem("admin_token");
   sessionStorage.removeItem("admin_actor");
   document.getElementById("app").classList.add("hidden");
@@ -383,6 +420,114 @@ function enterApp() {
   loadHealth();
   loadLinks();
   loadFinops();
+  loadPrompts();
+}
+
+// ---- Prompt inventory: authenticated, read-only, text-only rendering ----
+function clearPromptDetail() {
+  selectedPrompt = null;
+  promptRequest += 1;
+  document.getElementById("prompt-title").textContent = "Selecciona un prompt";
+  document.getElementById("prompt-meta").textContent = "";
+  document.getElementById("prompt-usages").replaceChildren();
+  document.getElementById("prompt-version").replaceChildren();
+  document.getElementById("prompt-version").disabled = true;
+  document.getElementById("prompt-version-meta").textContent = "";
+  document.getElementById("prompt-content").textContent = "Selecciona un archivo para ver su contenido.";
+}
+
+function clearPrompts() {
+  catalogRequest += 1;
+  promptEntries = [];
+  document.getElementById("prompt-list").replaceChildren();
+  document.getElementById("prompt-catalog-status").textContent = "Sin cargar";
+  document.getElementById("prompt-error").hidden = true;
+  clearPromptDetail();
+}
+
+function promptError(error) {
+  const box = document.getElementById("prompt-error");
+  box.textContent = "No se pudo cargar el catálogo/contenido: " + String(error);
+  box.hidden = false;
+}
+
+async function loadPrompts() {
+  clearPrompts();
+  const request = catalogRequest;
+  document.getElementById("prompt-catalog-status").textContent = "Cargando catálogo…";
+  try {
+    const data = await apiGet("/admin/dashboard/api/prompts");
+    if (request !== catalogRequest || !sessionStorage.getItem("admin_token")) return;
+    promptEntries = data.prompts;
+    const history = data.history_status === "available"
+      ? `Historial exportado de Git hasta ${data.history_source_revision}${data.history_shallow ? " (clon superficial; cobertura parcial)" : ""}.`
+      : "Historial no disponible o inválido; sólo contenido presente.";
+    document.getElementById("prompt-catalog-status").textContent = `${promptEntries.length} prompts. ${history} ${data.usage_scan_complete ? "" : "Escaneo de usos incompleto."} Historial de archivos actuales por ruta; no sigue renombrados ni incluye archivos borrados. No es un registro de aprobaciones.`;
+    const list = document.getElementById("prompt-list");
+    for (const item of promptEntries) {
+      const li = el("li");
+      const button = el("button", item.path, "secondary");
+      button.type = "button";
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => selectPrompt(item));
+      li.appendChild(button);
+      list.appendChild(li);
+    }
+  } catch (error) {
+    if (request !== catalogRequest) return;
+    document.getElementById("prompt-catalog-status").textContent = "Catálogo no disponible";
+    promptError(error);
+  }
+}
+
+async function selectPrompt(item) {
+  clearPromptDetail();
+  selectedPrompt = item;
+  document.getElementById("prompt-error").hidden = true;
+  document.getElementById("prompt-title").textContent = item.path;
+  const match = item.matches_latest_export === null ? "Sin versión histórica exportada."
+    : item.matches_latest_export ? "Coincide con la última versión exportada." : "Difiere de la última versión exportada; puede haber cambios locales o un historial desactualizado.";
+  document.getElementById("prompt-meta").textContent = `Presente en instancia · SHA-256 (texto normalizado como load_prompt): ${item.sha256} · ${item.version_count} versiones exportadas. ${match}`;
+  const usages = document.getElementById("prompt-usages");
+  for (const usage of item.usages) usages.appendChild(el("li", `${usage.source}:${usage.line}`));
+  if (!item.usages.length) usages.appendChild(el("li", "Sin referencia de carga detectada; no se afirma uso activo."));
+  for (const button of document.querySelectorAll("#prompt-list button")) button.setAttribute("aria-pressed", String(button.textContent === item.path));
+  await loadPromptVersion(true);
+}
+
+async function loadPromptVersion(reset = false) {
+  if (!selectedPrompt) return;
+  const request = ++promptRequest;
+  const name = selectedPrompt.path;
+  const select = document.getElementById("prompt-version");
+  const revision = reset ? "" : select.value;
+  document.getElementById("prompt-error").hidden = true;
+  document.getElementById("prompt-content").textContent = "Cargando contenido…";
+  document.getElementById("prompt-version-meta").textContent = "";
+  try {
+    const params = new URLSearchParams({path: name});
+    if (revision) params.set("revision", revision);
+    const data = await apiGet("/admin/dashboard/api/prompts/detail?" + params);
+    if (request !== promptRequest || !sessionStorage.getItem("admin_token")) return;
+    if (reset) {
+      const current = el("option", "Presente en esta instancia (no implica activación)");
+      current.value = "";
+      select.appendChild(current);
+      for (const version of data.versions) {
+        const option = el("option", `${version.committed_at} · ${version.revision.slice(0, 12)}`);
+        option.value = version.revision;
+        select.appendChild(option);
+      }
+      select.disabled = false;
+    }
+    document.getElementById("prompt-version-meta").textContent = `${data.revision ? "Histórico Git " + data.revision : "Archivo presente"} · SHA-256: ${data.sha256}`;
+    document.getElementById("prompt-content").textContent = data.content;
+  } catch (error) {
+    if (request !== promptRequest) return;
+    document.getElementById("prompt-content").textContent = "Contenido no disponible";
+    document.getElementById("prompt-version-meta").textContent = "";
+    promptError(error);
+  }
 }
 
 // ---- FinOps y calidad (specs/043): sólo textContent, nunca innerHTML ----

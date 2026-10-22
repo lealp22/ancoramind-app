@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agent.health import HealthRegistry
+from src.agent.prompt_catalog import PromptCatalog
 from src.agent.runtime_config_admin import (
     RuntimeConfigActivateRequest,
     RuntimeConfigCreateRevisionRequest,
@@ -101,6 +102,7 @@ def install_admin_dashboard(
     pairing_service_factory: PairingServiceFactory | None = None,
     finops_service_factory: FinopsServiceFactory | None = None,
     spend_reader_factory: SpendReaderFactory | None = None,
+    prompt_catalog: PromptCatalog | None = None,
 ) -> None:
     """Register the disabled-by-default dashboard page and its JSON API."""
     validate_admin_dashboard_settings(settings)
@@ -115,6 +117,7 @@ def install_admin_dashboard(
     )
     create_spend_reader = spend_reader_factory or LlmUsageRepository
     dashboard_html = _DASHBOARD_HTML_PATH.read_text(encoding="utf-8")
+    catalog = prompt_catalog or PromptCatalog()
 
     @app.middleware("http")
     async def _dashboard_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -143,6 +146,26 @@ def install_admin_dashboard(
     @app.get("/admin/dashboard", response_class=HTMLResponse)
     async def dashboard_page() -> HTMLResponse:
         return HTMLResponse(dashboard_html)
+
+    @app.get("/admin/dashboard/api/prompts")
+    def prompt_inventory(request: Request) -> dict[str, Any]:
+        _auth(request)
+        try:
+            return catalog.inventory()
+        except (OSError, UnicodeError):
+            raise HTTPException(status_code=503, detail="Prompt catalog unavailable") from None
+
+    @app.get("/admin/dashboard/api/prompts/detail")
+    def prompt_detail(
+        request: Request, path: str, revision: str | None = None
+    ) -> dict[str, Any]:
+        _auth(request)
+        try:
+            return catalog.detail(path, revision)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Prompt/version not found") from None
+        except (OSError, UnicodeError):
+            raise HTTPException(status_code=503, detail="Prompt catalog unavailable") from None
 
     @app.get("/admin/dashboard/api/links")
     async def dashboard_links(request: Request) -> dict[str, Any]:
