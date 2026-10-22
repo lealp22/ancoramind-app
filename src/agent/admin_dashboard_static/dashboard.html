@@ -81,7 +81,13 @@
   .badge.disabled, .badge.unknown { background: var(--muted); color: #0b1220; }
   a { color: var(--accent); }
   .hint { color: var(--muted); font-size: 0.78rem; }
+  [hidden] { display: none !important; }
   #login-panel.hidden, #app.hidden { display: none; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tabs button { background: var(--panel); color: var(--muted); border: 1px solid var(--border); margin: 0; }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: #0b1220; border-color: var(--accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .health-summary { white-space: nowrap; overflow-x: auto; padding-bottom: 6px; font-size: 0.8rem; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
   .row > div { flex: 1; min-width: 140px; }
   .panel.wide { grid-column: 1 / -1; }
@@ -117,14 +123,25 @@
 
 <div id="app" class="hidden">
   <button class="secondary" onclick="logout()" style="margin-bottom:12px;">Cerrar sesión</button>
-  <div class="grid">
+  <div class="tabs" role="tablist" aria-label="Secciones del dashboard" onkeydown="handleTabKey(event)">
+    <button type="button" id="tab-summary" role="tab" aria-controls="panel-summary" aria-selected="true" tabindex="0" onclick="selectTab(this)">Resumen</button>
+    <button type="button" id="tab-proposals" role="tab" aria-controls="panel-proposals" aria-selected="false" tabindex="-1" onclick="selectTab(this)">Propuestas</button>
+    <button type="button" id="tab-admin" role="tab" aria-controls="panel-admin" aria-selected="false" tabindex="-1" onclick="selectTab(this)">Administración</button>
+  </div>
+  <section class="grid" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
+
+    <div class="panel wide">
+      <h2>Salud de los servicios</h2>
+      <div id="health-summary" class="health-summary" role="status" aria-live="polite">Sin cargar</div>
+      <button class="secondary" onclick="loadHealth()">Refrescar salud</button>
+    </div>
 
     <div class="panel wide" id="finops-panel">
       <h2>FinOps y calidad</h2>
       <div class="row" style="align-items:flex-end;">
         <div style="flex:0 0 auto; min-width:0;">
           <label for="fo-days">Ventana</label>
-          <select id="fo-days" onchange="loadFinops()">
+          <select id="fo-days" onchange="setFinopsWindow(this.value)">
             <option value="7">7 días</option>
             <option value="30" selected>30 días</option>
             <option value="90">90 días</option>
@@ -149,12 +166,29 @@
       <div class="cols">
         <div><h2>Interacciones por estado</h2>
           <table id="fo-statuses"><thead><tr><th>Estado</th><th>Nº</th></tr></thead><tbody></tbody></table></div>
-        <div><h2>Propuestas</h2>
-          <table id="fo-proposals"><thead><tr><th>Tool</th><th>Estado</th><th>Consentimiento</th><th>Nº</th></tr></thead><tbody></tbody></table></div>
       </div>
       <p class="hint" id="fo-excluded"></p>
       <p class="hint">Sólo lectura sobre el ledger de uso, las interacciones y las propuestas. Días en UTC. El coste es el registrado (real si el proveedor lo informa; si no, estimado) y no es una factura. Las barras de presupuesto usan el agregado del hard stop, que también suma voz sin evento; el coste total de arriba no. No se muestran identificadores de Telegram ni contenido de mensajes.</p>
     </div>
+  </section>
+
+  <section class="grid" id="panel-proposals" role="tabpanel" aria-labelledby="tab-proposals" hidden>
+    <div class="panel wide">
+      <h2>Propuestas</h2>
+      <label for="proposals-days">Ventana compartida con Resumen</label>
+      <select id="proposals-days" onchange="setFinopsWindow(this.value)">
+        <option value="7">7 días</option>
+        <option value="30" selected>30 días</option>
+        <option value="90">90 días</option>
+      </select>
+      <button class="secondary" onclick="loadFinops()">Refrescar</button>
+      <p id="proposals-error" class="error-text" style="display:none;"></p>
+      <table id="fo-proposals"><thead><tr><th>Tool</th><th>Estado</th><th>Consentimiento</th><th>Nº</th></tr></thead><tbody></tbody></table>
+      <p class="hint">Sólo lectura. Días en UTC. La ventana se aplica también a FinOps y calidad.</p>
+    </div>
+  </section>
+
+  <section class="grid" id="panel-admin" role="tabpanel" aria-labelledby="tab-admin" hidden>
 
     <div class="panel">
       <h2>Invitaciones (pairing)</h2>
@@ -213,7 +247,7 @@
       <table id="links-table"><tbody></tbody></table>
     </div>
 
-  </div>
+  </section>
 </div>
 
 <script>
@@ -233,6 +267,30 @@ const authHeaders = () => ({
   "X-Ancora-Admin-Actor": sessionStorage.getItem("admin_actor") || "",
   "Content-Type": "application/json",
 });
+
+function selectTab(selected) {
+  for (const tab of document.querySelectorAll('[role="tab"]')) {
+    const active = tab === selected;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")).hidden = !active;
+  }
+}
+
+function handleTabKey(event) {
+  const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+  const index = tabs.indexOf(event.target);
+  if (index < 0) return;
+  let next;
+  if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+  else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  selectTab(tabs[next]);
+  tabs[next].focus();
+}
 
 function login() {
   const token = document.getElementById("token").value.trim();
@@ -287,6 +345,7 @@ function showLoginError(message) {
 function enterApp() {
   document.getElementById("login-panel").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
+  selectTab(document.getElementById("tab-summary"));
   startIdleWatch();
   loadInvitations();
   loadRuntimeStatus();
@@ -412,9 +471,15 @@ function renderQuality(data) {
   fillTable("fo-proposals", data.proposals.map((p) => [p.tool_name, p.status, p.consent_mode, p.count]));
 }
 
+function setFinopsWindow(days) {
+  document.getElementById("fo-days").value = days;
+  document.getElementById("proposals-days").value = days;
+  loadFinops();
+}
+
 async function loadFinops() {
-  const errorBox = document.getElementById("fo-error");
-  errorBox.style.display = "none";
+  const errorBoxes = ["fo-error", "proposals-error"].map((id) => document.getElementById(id));
+  for (const box of errorBoxes) box.style.display = "none";
   const days = parseInt(document.getElementById("fo-days").value, 10);
   try {
     const [finops, quality] = await Promise.all([
@@ -424,8 +489,10 @@ async function loadFinops() {
     renderFinops(finops);
     renderQuality(quality);
   } catch (err) {
-    errorBox.textContent = "No se pudo cargar FinOps/calidad: " + String(err);
-    errorBox.style.display = "block";
+    for (const box of errorBoxes) {
+      box.textContent = "No se pudo cargar FinOps/calidad: " + String(err);
+      box.style.display = "block";
+    }
   }
 }
 
@@ -538,18 +605,33 @@ async function rollbackRuntimeRevision() {
 }
 
 async function loadHealth() {
+  const summary = document.getElementById("health-summary");
+  const tbody = document.querySelector("#health-table tbody");
   try {
     const res = await fetch("/health/readiness");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const tbody = document.querySelector("#health-table tbody");
-    tbody.innerHTML = "";
-    for (const [name, info] of Object.entries(data.components || {})) {
+    const components = Object.entries(data.components || {});
+    const indicators = { healthy: "🟢", degraded: "🟠", disabled: "🔘", unknown: "❔" };
+    summary.textContent = components.map(([name, info]) => {
+      const state = Object.hasOwn(indicators, info.status) ? info.status : "unknown";
+      return `${name}: ${indicators[state]}${state}`;
+    }).join(" | ") || "Sin datos de salud";
+    tbody.replaceChildren();
+    for (const [name, info] of components) {
+      const state = Object.hasOwn(indicators, info.status) ? info.status : "unknown";
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${name}</td><td><span class="badge ${info.status}">${info.status}</span></td>`;
+      const statusCell = el("td");
+      statusCell.appendChild(el("span", state, `badge ${state}`));
+      tr.append(el("td", name), statusCell);
       tbody.appendChild(tr);
     }
     showPre("health-raw", data);
-  } catch (err) { showPre("health-raw", String(err)); }
+  } catch (err) {
+    summary.textContent = "❔ Salud no disponible";
+    tbody.replaceChildren();
+    showPre("health-raw", String(err));
+  }
 }
 
 async function loadLinks() {

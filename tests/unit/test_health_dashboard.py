@@ -48,6 +48,22 @@ def test_tool_panels_match_the_metrics_the_hook_emits() -> None:
     assert "ancora_tool_name" in latency
 
 
+def test_cost_panel_uses_the_estimated_cost_series_that_has_samples() -> None:
+    """Grafana (2026-10-22) has samples for the estimated cost, not for actual cost/tokens.
+
+    ``ancora.llm.actual_cost_usd`` and ``ancora.llm.total_tokens`` are emitted only when
+    the provider returns usage, which it does not today. The panel must not depend on
+    them, and must not present an estimate as billing.
+    """
+    panels = {panel["title"]: panel for panel in _dashboard()["panels"]}
+    panel = panels["Coste estimado LLM (USD)"]
+    exprs = " ".join(target["expr"] for target in panel["targets"])
+
+    assert "ancora_llm_estimated_cost_usd_total[" in exprs
+    assert "actual_cost" not in exprs and "total_tokens" not in exprs
+    assert "estimado" in panel["description"].lower()
+
+
 def test_dashboard_panels_are_unique_and_do_not_overlap() -> None:
     panels = _dashboard()["panels"]
     titles = [panel["title"] for panel in panels]

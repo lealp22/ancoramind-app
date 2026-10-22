@@ -1,6 +1,6 @@
 {
   "apiVersion": 1,
-  "description": "Versioned alert definitions for AncoraMind metadata-only health. Normalize metric names against Grafana Cloud OTLP ingestion before provisioning.",
+  "description": "Versioned alert definitions for AncoraMind metadata-only health. Metric names checked against Grafana Cloud on 2026-10-22. AncoraMindGatewayCircuitOpen is NOT provisioned: HealthRegistry.set_circuit_state is only ever called with 'unknown' (src/agent/health.py), so that series is never 'open' and the rule cannot fire. Use AncoraMindGatewayDown until the real circuit state is wired.",
   "groups": [
     {
       "name": "ancoramind-health",
@@ -12,6 +12,13 @@
           "for": "2m",
           "labels": {"severity": "critical", "component": "gateway"},
           "annotations": {"summary": "El circuit breaker del Gateway está abierto.", "runbook": "docs/runbooks-013.md#3-circuit-open"}
+        },
+        {
+          "alert": "AncoraMindGatewayDown",
+          "expr": "min(ancora_health_component{ancora_health_component=\"gateway\"}) == 0",
+          "for": "5m",
+          "labels": {"severity": "critical", "component": "gateway"},
+          "annotations": {"summary": "El probe del Gateway LiteLLM falla: la app no puede hacer inferencia.", "runbook": "docs/runbooks-013.md#10-alertas-de-salud-specs016"}
         },
         {
           "alert": "AncoraMindCostHardStop",

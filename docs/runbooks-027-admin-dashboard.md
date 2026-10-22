@@ -85,6 +85,23 @@ dominio/puerto sin TLS.
 
 ## 4. Qué hace cada panel
 
+La información se organiza en tres pestañas (también navegables con las flechas,
+Inicio y Fin):
+
+- **Resumen** — FinOps y calidad, hasta «Interacciones por estado», y una línea
+  de salud por servicio: `app: 🟢healthy | database: 🟢healthy | gateway: 🔘disabled`.
+  `🟠` indica degradación y `❔` estado desconocido. La línea no se parte; en
+  pantallas pequeñas tiene desplazamiento horizontal. «Refrescar salud» actualiza
+  tanto el resumen como el detalle de Administración con una sola consulta a
+  `/health/readiness`. Un error muestra «Salud no disponible», no estados antiguos.
+- **Propuestas** — tabla por tool, estado y modo de consentimiento. Comparte la
+  ventana de 7/30/90 días con Resumen; cambiarla en cualquiera actualiza ambas
+  vistas. Es de sólo lectura, no confirma ni ejecuta propuestas.
+- **Administración** — invitaciones, runtime config, salud detallada y enlaces.
+
+Cambiar de pestaña sólo cambia la vista: no hace peticiones ni mutaciones. Las
+operaciones administrativas y su autenticación permanecen como antes.
+
 - **Invitaciones** — crea (`issue_invitation`) y lista (`list_invitations`)
   invitaciones de pairing (BL-24). El código generado se muestra **una sola
   vez**: cópialo y entrégalo por un canal privado aprobado antes de refrescar

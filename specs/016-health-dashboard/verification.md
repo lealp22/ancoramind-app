@@ -1,9 +1,21 @@
 # Verification: 016 — Health Signals and Dashboard
 
-## Dashboard v2 — paneles de tools (2026-10-22, preparado, NO importado)
+## Dashboard actualizado vía MCP de Grafana (2026-10-22)
 
-`observability/dashboards/ancoramind-health.json` pasa de v1 a **v2** con dos
-paneles nuevos en una fila propia (`y: 29`), sin mover los 11 existentes:
+Con el servidor MCP de Grafana (solo lectura de series + una escritura del
+dashboard) se contrastaron las consultas con las series reales de
+`grafanacloud-prom` y se aplicó el cambio al dashboard `ancoramind-health`
+(versión 2 en Grafana; la 1, "Initial save" del 2026-10-17, queda en el historial y
+es restaurable). El `version` del JSON del repo (3) y el de Grafana (2) son
+contadores distintos. Dos cambios:
+
+1. **Panel de coste corregido.** "Coste y tokens LLM" consultaba
+   `ancora_llm_actual_cost_usd_total` y `ancora_llm_total_tokens_total`, que **no
+   existen** en Grafana: solo se emiten si el proveedor devuelve uso, y hoy no lo
+   hace. Ahora es "Coste estimado LLM (USD)" sobre `ancora_llm_estimated_cost_usd_total`
+   (con muestras: 0,246 USD en 7 días, 0,0097 en 24 h) y su descripción dice que es
+   una estimación, no facturación.
+2. **Dos paneles de tools nuevos** (`y: 29`), sin mover los 11 existentes:
 
 | Panel | Serie |
 |---|---|
@@ -17,28 +29,54 @@ El dashboard v1 no mostraba nada de esto. Útil en la demo para ver qué tools u
 Agent, incluida `search_web` si está activa. Solo metadata: ni argumentos ni
 resultados.
 
-**Estado: los nombres de serie están INFERIDOS, no confirmados.** Siguen la
-convención de los paneles ya importados (`.` → `_`, contadores `_total`, histogramas
-de ms `_milliseconds_bucket`), pero el dashboard v1 ya tuvo dos nombres mal supuestos
-(`ancora_health_heartbeat_total`, `ancora_telegram_admissions_total`) y no hay
-evidencia en el repo de que estas series existan en Grafana Cloud. El test
-`test_tool_panels_match_the_metrics_the_hook_emits` solo protege contra un renombrado
-en el hook.
+**Nombres de serie CONFIRMADOS** contra Grafana el 2026-10-22: existen
+`ancora_tool_calls_total` y `ancora_tool_call_duration_milliseconds_bucket`, con las
+etiquetas `ancora_tool_name` y `ancora_tool_outcome`, y con muestras reales en 7 días
+(`present_reply`, `list_todo_lists`, `list_todo_items`, `list_pending_proposals`,
+`propose_todo_item`, `find_vehicle`, etc.). Las tools sin uso en la ventana tienen la
+serie pero valor 0/`NaN`: en la gráfica simplemente no se dibujan. `search_web` no
+aparece porque el servicio desplegado aún no la incluye (deployments de Railway
+pendientes). El test `test_tool_panels_match_the_metrics_the_hook_emits` protege
+contra un renombrado en el hook.
 
-### Comprobación antes de reimportar (Grafana → Explore, datasource `grafanacloud-prom`)
+### Series del dashboard que no tienen muestras (no es un error de nombre)
 
-1. `ancora_tool_calls_total` → ¿devuelve series? Si no, buscar el nombre real con
-   `{__name__=~"ancora_tool.*"}`.
-2. `count by (ancora_tool_name, ancora_tool_outcome) (ancora_tool_calls_total)` → las
-   etiquetas deben llamarse exactamente así.
-3. `ancora_tool_call_duration_milliseconds_bucket` → ¿existe? Si falta el sufijo
-   `_milliseconds`, probar `{__name__=~"ancora_tool_call_duration.*"}`.
-4. Sin tráfico reciente puede no haber muestras: provocar una interacción con una tool
-   de lectura (autorizada, coste ≈ 0,0034 USD) o consultar con ventana de 24 h. Una
-   serie vacía **no** es cero ni prueba de fallo.
+Comprobado con `list_prometheus_metric_names` en 30 días. No existen y no se
+presentan como cero:
 
-Si algún nombre difiere, corregir el JSON **y** `test_tool_panels_match_the_metrics_the_hook_emits`
-antes de importar. Reimportar sobrescribe el v1 por UID: exportar antes una copia.
+| Serie | Motivo |
+|---|---|
+| `ancora_llm_actual_cost_usd_total`, `ancora_llm_total_tokens_total` | Solo se emiten si el proveedor devuelve uso (`governed_model.py`) |
+| `ancora_execution_budget_exceeded_total` | Evento: no se ha excedido ningún presupuesto |
+| `ancora_cost_governance_hard_stop_total` | Evento: no ha habido corte duro de coste |
+| `ancora_gateway_circuit_state` | **Ver el hallazgo siguiente** |
+
+### Hallazgo: el estado del circuit breaker nunca se publica como `open`
+
+`HealthRegistry.set_circuit_state` es la única fuente de `ancora_gateway_circuit_state`,
+y su **único** llamador (`src/agent/health.py:272`, el monitor) lo invoca siempre con
+`"unknown"`. Con `"unknown"` la métrica vale 0 y el componente queda `unknown`. Por
+tanto:
+
+- El panel "Estado del circuit breaker" no puede mostrar nunca un circuito abierto.
+- La alerta `max(ancora_gateway_circuit_state{ancora_circuit_state="open"}) > 0`
+  (`observability/alerts/ancoramind-health-alerts.json`, regla 1) **no puede dispararse**
+  con el código actual, aunque el Gateway abra su circuito.
+
+Es una limitación del código, no de la consulta. **No se ha corregido**: hacerlo
+exige leer el estado real del circuito del Gateway (LiteLLM), una decisión de
+diseño que toca BL-33/T7, fuera de la ventana de alcance del 2026-10-17. Mientras
+tanto, la señal fiable de caída del Gateway es `ancora_health_component{ancora_health_component="gateway"}`,
+que sí se actualiza con el probe.
+
+### Alertas en Grafana
+
+`alerting_rules_read(list)` devuelve vacío: **no hay reglas provisionadas** en
+Grafana Cloud. Las cinco reglas versionadas siguen sin importar. Estado de sus
+series: `ancora_telegram_deliveries_total` (solo estado `completed` en 7 días),
+`ancora_health_heartbeat_total` y `ancora_telegram_admissions_total` existen;
+`ancora_cost_governance_hard_stop_total` y `ancora_gateway_circuit_state` no (ver
+arriba). No se han creado alertas.
 
 ## Incremento demo — 2026-10-17 (no cierra T7)
 

@@ -103,11 +103,11 @@
       "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "description": "Coste ESTIMADO con el pricing_snapshot de la ruta, no facturación. El coste real del proveedor y los tokens solo se emiten si el proveedor los devuelve; hoy no hay muestras y no se muestran como cero.",
       "targets": [
-        {"expr": "sum(increase(ancora_llm_actual_cost_usd_total[$__rate_interval]))", "legendFormat": "coste USD", "refId": "A"},
-        {"expr": "sum(increase(ancora_llm_total_tokens_total[$__rate_interval]))", "legendFormat": "tokens", "refId": "B"}
+        {"expr": "sum(increase(ancora_llm_estimated_cost_usd_total[$__rate_interval]))", "legendFormat": "coste estimado USD", "refId": "A"}
       ],
-      "title": "Coste y tokens LLM",
+      "title": "Coste estimado LLM (USD)",
       "type": "timeseries"
     },
     {
@@ -151,5 +151,5 @@
   "timezone": "browser",
   "title": "AncoraMind · Salud operativa",
   "uid": "ancoramind-health",
-  "version": 2
+  "version": 3
 }

@@ -20,6 +20,7 @@ def test_health_alerts_reference_existing_metrics_and_bounded_metric_labels() ->
 
     assert set(expressions) == {
         "AncoraMindGatewayCircuitOpen",
+        "AncoraMindGatewayDown",
         "AncoraMindCostHardStop",
         "AncoraMindTelegramDeliveryErrors",
         "AncoraMindReminderWorkerHeartbeatMissing",
@@ -28,6 +29,10 @@ def test_health_alerts_reference_existing_metrics_and_bounded_metric_labels() ->
     assert (
         'ancora_gateway_circuit_state{ancora_circuit_state="open"}'
         in expressions["AncoraMindGatewayCircuitOpen"]
+    )
+    assert (
+        'ancora_health_component{ancora_health_component="gateway"}'
+        in expressions["AncoraMindGatewayDown"]
     )
     assert "ancora_cost_governance_hard_stop_total" in expressions["AncoraMindCostHardStop"]
     assert (
