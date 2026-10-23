@@ -1,0 +1,351 @@
+{
+ "date": "2026-10-23",
+ "thresholds": {
+  "pass_at": 0.8,
+  "fail_at": 0.2
+ },
+ "results": [
+  {
+   "model": "openai/gpt-6-luna-decisions",
+   "spent_usd": 0.000494,
+   "rows": [
+    {
+     "id": "response_style.brief_question.good#0",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.good#1",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.bad#0",
+     "label": "pass",
+     "p": 0.99,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.bad#1",
+     "label": "fail",
+     "p": 0.0,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.brief_question.ambiguous#0",
+     "label": "pass",
+     "p": 0.93,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.ambiguous#1",
+     "label": "ambiguous",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#0",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#1",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#2",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.bad#0",
+     "label": "fail",
+     "p": 0.0,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.bad#1",
+     "label": "fail",
+     "p": 0.0,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.bad#2",
+     "label": "fail",
+     "p": 0.0,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#0",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#1",
+     "label": "pass",
+     "p": 1.0,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#2",
+     "label": "ambiguous",
+     "p": 0.2,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.single_proposal.good#1",
+     "label": "pass",
+     "p": 0.92,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.single_proposal.bad#1",
+     "label": "fail",
+     "p": 0.12,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.single_proposal.ambiguous#1",
+     "label": "pass",
+     "p": 0.69,
+     "got": "uncertain"
+    }
+   ]
+  },
+  {
+   "model": "respan/span-02",
+   "spent_usd": 4.1e-05,
+   "rows": [
+    {
+     "id": "response_style.brief_question.good#0",
+     "label": "pass",
+     "p": 0.9753594,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.good#1",
+     "label": "pass",
+     "p": 0.9972237,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.bad#0",
+     "label": "pass",
+     "p": 0.9301223,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.bad#1",
+     "label": "fail",
+     "p": 0.069419414,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.brief_question.ambiguous#0",
+     "label": "pass",
+     "p": 0.88357407,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.ambiguous#1",
+     "label": "ambiguous",
+     "p": 0.99302953,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#0",
+     "label": "pass",
+     "p": 0.998748,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#1",
+     "label": "pass",
+     "p": 0.9988436,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#2",
+     "label": "pass",
+     "p": 0.9506583,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.bad#0",
+     "label": "fail",
+     "p": 0.14562081,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.bad#1",
+     "label": "fail",
+     "p": 0.017811563,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.bad#2",
+     "label": "fail",
+     "p": 0.2117248,
+     "got": "uncertain"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#0",
+     "label": "pass",
+     "p": 0.96999896,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#1",
+     "label": "pass",
+     "p": 0.9416732,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#2",
+     "label": "ambiguous",
+     "p": 0.8438878,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.single_proposal.good#1",
+     "label": "pass",
+     "p": 0.872939,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.single_proposal.bad#1",
+     "label": "fail",
+     "p": 0.0073310155,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.single_proposal.ambiguous#1",
+     "label": "pass",
+     "p": 0.8827589,
+     "got": "pass"
+    }
+   ]
+  },
+  {
+   "model": "typesafe/jev-1.14",
+   "spent_usd": 0.000326,
+   "rows": [
+    {
+     "id": "response_style.brief_question.good#0",
+     "label": "pass",
+     "p": 0.97,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.good#1",
+     "label": "pass",
+     "p": 0.97,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.bad#0",
+     "label": "pass",
+     "p": 0.92,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.bad#1",
+     "label": "fail",
+     "p": 0.07,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.brief_question.ambiguous#0",
+     "label": "pass",
+     "p": 0.94,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.brief_question.ambiguous#1",
+     "label": "ambiguous",
+     "p": 0.94,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#0",
+     "label": "pass",
+     "p": 0.98,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#1",
+     "label": "pass",
+     "p": 0.97,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.good#2",
+     "label": "pass",
+     "p": 0.68,
+     "got": "uncertain"
+    },
+    {
+     "id": "response_style.uncertainty.bad#0",
+     "label": "fail",
+     "p": 0.05,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.bad#1",
+     "label": "fail",
+     "p": 0.02,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.bad#2",
+     "label": "fail",
+     "p": 0.07,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#0",
+     "label": "pass",
+     "p": 0.92,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#1",
+     "label": "pass",
+     "p": 0.88,
+     "got": "pass"
+    },
+    {
+     "id": "response_style.uncertainty.ambiguous#2",
+     "label": "ambiguous",
+     "p": 0.67,
+     "got": "uncertain"
+    },
+    {
+     "id": "response_style.single_proposal.good#1",
+     "label": "pass",
+     "p": 0.61,
+     "got": "uncertain"
+    },
+    {
+     "id": "response_style.single_proposal.bad#1",
+     "label": "fail",
+     "p": 0.06,
+     "got": "fail"
+    },
+    {
+     "id": "response_style.single_proposal.ambiguous#1",
+     "label": "pass",
+     "p": 0.46,
+     "got": "uncertain"
+    }
+   ]
+  }
+ ]
+}
