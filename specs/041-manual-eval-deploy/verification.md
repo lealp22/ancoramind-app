@@ -1,5 +1,38 @@
 # Verificación — 2026-10-18
 
+## Recuperación sin deployment — implementación local 2026-10-23
+
+- Intento manual39874388814/control y candidato18ecd5bf30351877debe03bf820c313af8853f35,
+  CI39873946042: preparación válida, publicación falla en preflight con reason
+  genérico `eval_deploy_railway_command_failed`. Los logs no conservan la fase ni
+  código CLI. Node24.21.0/npm11.19.0; aviso allowScripts no demuestra script bloqueado.
+  Causa histórica exacta no identificada, no atribuirla a credenciales ni npm.
+- Lectura remota anterior: evaluador sin latestDeployment/último histórico REMOVED,
+  volumen esperado montado y sin pendingWork. Mecanismo adicional reproducido offline:
+  null de deployment + numReplicas null ⇒ faltaba evidencia, aunque configuración
+  live declara una región/réplica. No reactivar antiguo deployment ni default null→1.
+- Helper local consulta config live con decryptVariables=false únicamente para null
+  explícito y proyecta campos no secretos en memoria. Comprueba activeDeployments=[],
+  identidad, entero1/región única, comando idle y mount esperado; controles previos
+  de pending/tracing/exposición/volumen y post-upload exacto se conservan.
+  Nuevo check-cli sin token previo al publish; allowance npm sólo CLI5.70.0.
+  Diagnóstico allowlist fase/código sin salida cruda ni reintentos.
+- **210 focales** publicación/recuperación (65 regresiones nuevas), **24** packaging/idle.
+  Suite completa: primer intento2337passed/2skips/1fallo ajeno (proceso heredaba
+  WEB_SEARCH_ENABLED=true, test de wiring esperaba default false). Sin editar ese
+  test: segundo intento en proceso hijo WEB_SEARCH_ENABLED=false/AGNO_TELEMETRY=false
+  **2338passed/2skips**, **81,83 %**, exit0. Avisos de exporter local4318 ausente sin
+  fallos. Ruff global, mypy187, prompt history16 y diff limpios.
+- Workspace pasó de18ecd5bf a daec3be0 por commit concurrente de Phoenix del
+  propietario; no efectuado por este incremento, ni incluidos/modificados archivos
+  ajenos. No tests PostgreSQL (no cambia src/schema), ni inferencia/CLI Railway local,
+  lectura del volumen/secretos, push, deploy o campaña. Cambios de publicador aún
+  sin commit/CI/publicación; recuperación E2E pendiente del nuevo workflow manual.
+- API/forma contrastadas con fuentes CLI5.70.0: EnvironmentConfig.graphql,
+  controllers/config/environment.rs, schema.json y EnvironmentInstances.graphql.
+  Pruebas de adaptador usan payloads **sintéticos** y subprocess mock, no afirmar
+  que el token remoto tiene permiso de lectura/config ni de upload por estas pruebas.
+
 ## Bloqueo legítimo por despliegues ajenos pendientes — 2026-10-19
 
 - Workflow39248955747/candidato/control68ae6654a9ff12b1ff600a24a5f44465b44464f4,

@@ -62,7 +62,11 @@ jobs:
           node-version: "24"
 
       - name: Install pinned Railway CLI (GitHub runner only)
-        run: npm install --global @railway/cli@5.70.0
+        # Only this pinned package's reviewed downloader needs a lifecycle script.
+        run: npm install --global @railway/cli@5.70.0 --allow-scripts=@railway/cli@5.70.0
+
+      - name: Verify pinned CLI before exposing deployment token
+        run: python scripts/deploy_eval_candidate.py check-cli
 
       - name: Publish only ancoramind-evals and verify idle identity
         env:

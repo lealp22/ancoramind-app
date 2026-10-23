@@ -184,6 +184,43 @@ políticas de software/red del ordenador gestionado.
   es una afirmación humana, no un lock distribuido contra campañas concurrentes.
   Cerrar Actions no garantiza cancelar un build ya recibido por Railway.
 
+## Recuperar el servicio tras quedar sin despliegue (2026-10-23)
+
+No crear otro servicio, borrar/recrear el volumen, cambiar claves, reiniciar la
+sesión/presupuesto, usar Deploy Latest Commit ni reconnect del pin histórico.
+El publicador anterior dependía del manifiesto del último deployment y no admitía
+la ausencia de deployment. El incremento local permite recuperarlo con evidencia
+explícita de la configuración live y cero activeDeployments, no por defaults.
+
+1. Publicar el helper/workflow corregidos en main y esperar su CI exacta verde.
+   No mezclar cambios locales ajenos. El candidato puede ser otro SHA de main con
+   su propia CI verde; el código de publicación debe ser la nueva revisión.
+2. Nueva ejecución **Run workflow**, SHA candidato completo, confirm_idle sólo si
+   no hay campaña/revisión en curso y `check_only=true`. Esperar
+   `cli_verified_without_token` y `preflight_verified_no_upload`.
+   Evidencia esperada sin deployment: `live_configuration_single_region_no_deployment`.
+   Esto valida lectura/configuración, no permisos de escritura ni disponibilidad del build.
+3. Si pasa, nueva ejecución manual con el mismo candidato y `check_only=false`.
+   Arranca únicamente `eval_service.py` idle. Éxito sólo `deployed_idle_verified`,
+   deployment exacto SUCCESS/RUNNING, SHA/huella y `inference_started=false`.
+4. Un fallo sigue sin autorizar repetición ciega. Guardar phase/reason/código e ID
+   si existe; consultar historial antes de otro intento. No iniciar una campaña
+   para «probar» la recuperación. Volumen conservado no certifica su contenido:
+   no se consulta ni altera evidencia, ledger o reservas durante publicación.
+
+El preflight lee el scalar `config(decryptVariables:false)` sólo cuando el último
+deployment es null explícito. No imprime ni persiste configuración/cifrados ni
+variables de otros servicios. Fallan cerrado región/réplica desconocida, volumen
+distinto, comando incorrecto, trabajo pendiente o cualquier respuesta incompleta.
+No hay lock distribuido contra cambios concurrentes de otro operador.
+
+Diagnóstico nuevo: `phase` separa cli_version/inventory/pending_work/
+recovery_configuration/metadata_variables/upload/deployment_poll/idle_identity_logs;
+`command_exit_code` es entero o null si timeout/no arrancó el proceso. No es un
+mensaje crudo del proveedor. Un fallo en cli_version ocurre sin exponer el token;
+no rotar credenciales para arreglarlo. El aviso npm observado con npm11.19 no
+demostraba script bloqueado: la causa exacta del intento histórico sigue abierta.
+
 ## Referencias
 
 - [GitHub: ejecutar manualmente un workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)

@@ -765,7 +765,8 @@ def test_workflow_temp_directory_uses_runtime_environment_not_job_runner_context
     # jobs.<job_id>.env has no runner context, unlike step env/run expressions.
     assert all("runner." not in value for value in job["env"].values())
     commands = [step["run"] for step in job["steps"]
-                if step.get("run", "").startswith("python scripts/deploy_eval_candidate.py")]
+                if step.get("run", "").startswith("python scripts/deploy_eval_candidate.py")
+                and not step["run"].endswith(" check-cli")]
     assert len(commands) == 2
     assert all('--directory "$RUNNER_TEMP/eval-candidate"' in command for command in commands)
 

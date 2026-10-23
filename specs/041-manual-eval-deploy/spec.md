@@ -80,6 +80,33 @@ de variable set/up. No es un despliegue ni garantiza permisos de escritura/build
 Errores de inventario separan identidad/start/réplicas/exposición/volumen mediante
 reason fijos sin eco de configuración. Sin mutaciones para «arreglar» drift.
 
+### Recuperación sin deployment y diagnóstico seguro (2026-10-23)
+
+El servicio existente puede recuperarse si `latestDeployment` es **null explícito**
+y `activeDeployments` es exactamente `[]`. No se interpreta un campo ausente,
+objeto vacío, estado desconocido ni despliegue en curso como ausencia segura.
+En ese caso se consulta sólo por lectura `environment(id, projectId) { id projectId
+config(decryptVariables:false) }`: la API expone un scalar de configuración live,
+no una selección de campos del servicio. Puede incluir valores cifrados y configuración
+ajena: todo queda sólo en memoria; nunca logs, archivos, resúmenes ni errores crudos.
+Se proyectan únicamente deploy/startCommand/multiRegionConfig, volumeMounts y flags
+de creación/borrado del servicio fijo. Identidad exacta, comando idle, volumen único
+esperado y **una región con entero uno explícito** son obligatorios. Se mantiene
+la verificación de inventario, exposición/tracing/cron, borrador vacío y pendingWork.
+No default null→1, ni fuentes de evidencia de recuperación para estados desconocidos.
+Después de subir sigue siendo obligatorio deployment exacto SUCCESS/RUNNING,
+manifiesto válido e identidad idle del candidato; null post-upload nunca es éxito.
+
+Workflow permite el lifecycle script únicamente de `@railway/cli@5.70.0` y ejecuta
+`check-cli` sin token antes del paso autenticado. No supone que el aviso npm del
+intento anterior probara un bloqueo: npm11.19 sólo avisaba de scripts no revisados.
+Fallos de comandos reportan fase allowlist y código de salida entero/null;
+timeout/error de arranque no exponen stdout/stderr, argumentos, rutas ni excepciones.
+No retries mutantes, fallback de credenciales, nuevos recursos, campaña ni reset
+de claves/presupuesto. Es recuperación por upload del servicio/volumen existentes,
+no reconnect de la fuente histórica ni rollback automático. Aún requiere CI/nueva
+ejecución manual; las pruebas offline no demuestran recuperación en Railway.
+
 ## No objetivos y límites
 
 No arreglar dispatcher interno Railway, promover golden, configurar presupuesto,

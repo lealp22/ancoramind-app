@@ -155,25 +155,51 @@ def prepare(root: Path, sha: str, destination: Path, env: dict[str, str]) -> dic
     return metadata
 
 
+class RailwayCommandError(ValueError):
+    """Only fixed phase labels and numeric exit status may leave the CLI boundary."""
+
+    def __init__(self, phase: str, exit_code: int | None, failure: str = "failed"):
+        super().__init__("eval_deploy_railway_command_" + failure)
+        self.phase = phase
+        self.exit_code = exit_code
+
+
 class Railway:
     """Explicit targets on every command. No local linking or credential listing."""
 
-    def __init__(self, token: str):
-        if not token or sys.platform != "linux":
+    def __init__(self, token: str | None):
+        # None is the credential-free version probe, never an authenticated adapter.
+        if (sys.platform != "linux" or token == ""
+            or (token is None and os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted")):
             raise ValueError("eval_deploy_remote_linux_token_required")
         binary = shutil.which("railway")
         if binary is None:
             raise ValueError("eval_deploy_runner_cli_missing")
         self.binary = binary
         self.env = {key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR") if key in os.environ}
-        self.env.update(RAILWAY_TOKEN=token, CI="true", NO_COLOR="1")
+        self.env.update(CI="true", NO_COLOR="1")
+        if token is not None:
+            self.env["RAILWAY_TOKEN"] = token
 
-    def call(self, args: list[str], *, cwd: Path | None = None) -> str:
-        process = subprocess.run([self.binary, *args], env=self.env, cwd=cwd,
-                                 capture_output=True, text=True, timeout=180, check=False)
+    def call(self, args: list[str], *, cwd: Path | None = None, phase: str | None = None) -> str:
+        labels = {"--version": "cli_version", "status": "inventory", "api": "api_query",
+                  "variable": "metadata_variables", "up": "upload",
+                  "deployment": "deployment_poll", "logs": "idle_identity_logs"}
+        label = phase or labels.get(args[0], "unknown_command")
+        if label not in {*labels.values(), "pending_work", "recovery_configuration"}:
+            raise ValueError("eval_deploy_invalid_command_phase")
+        if "RAILWAY_TOKEN" not in self.env and args != ["--version"]:
+            raise ValueError("eval_deploy_remote_linux_token_required")
+        try:
+            process = subprocess.run([self.binary, *args], env=self.env, cwd=cwd,
+                                     capture_output=True, text=True, timeout=180, check=False)
+        except subprocess.TimeoutExpired:
+            raise RailwayCommandError(label, None, "timeout") from None
+        except OSError:
+            raise RailwayCommandError(label, None, "unavailable") from None
         if process.returncode:
             # Do not leak CLI/GraphQL exception text, values or arbitrary container logs.
-            raise ValueError("eval_deploy_railway_command_failed")
+            raise RailwayCommandError(label, process.returncode)
         return process.stdout
 
     def status(self) -> dict[str, Any]:
@@ -184,8 +210,65 @@ class Railway:
                  + '") { id status environmentId patch } '
                  + 'environmentPendingWork(environmentId: "' + ENVIRONMENT
                  + '") { id kind status environmentId children { id } } }')
-        validate_pending_work(json.loads(self.call(["api", query])))
+        validate_pending_work(json.loads(self.call(["api", query], phase="pending_work")))
+        environments = [edge["node"] for edge in value["environments"]["edges"]
+                        if edge["node"]["id"] == ENVIRONMENT]
+        if value.get("id") == PROJECT and len(environments) == 1:
+            candidates = [edge["node"] for edge in environments[0]["serviceInstances"]["edges"]
+                          if edge["node"]["serviceId"] == SERVICE]
+            if (len(candidates) == 1 and "latestDeployment" in candidates[0]
+                and candidates[0]["latestDeployment"] is None):
+                # The API exposes configuration as a scalar blob. Never decrypt,
+                # print, persist or return variables/other services from that blob.
+                query = ('query { environment(id: "' + ENVIRONMENT + '", projectId: "'
+                         + PROJECT + '") { id projectId config(decryptVariables: false) } }')
+                response = json.loads(self.call(["api", query], phase="recovery_configuration"))
+                candidates[0]["_eval_recovery_config"] = recovery_configuration(response)
         return value
+
+
+def recovery_configuration(response: Any) -> dict[str, Any]:
+    """Project only non-secret evidence from live configuration; no staged overlay."""
+    if (not isinstance(response, dict) or response.get("errors")
+        or not isinstance(response.get("data"), dict)):
+        raise ValueError("eval_deploy_recovery_configuration_unavailable")
+    environment = response["data"].get("environment")
+    if (not isinstance(environment, dict) or environment.get("id") != ENVIRONMENT
+        or environment.get("projectId") != PROJECT
+        or not isinstance(environment.get("config"), dict)):
+        raise ValueError("eval_deploy_recovery_configuration_unavailable")
+    services = environment["config"].get("services")
+    service = services.get(SERVICE) if isinstance(services, dict) else None
+    if not isinstance(service, dict) or not isinstance(service.get("deploy"), dict):
+        raise ValueError("eval_deploy_recovery_configuration_unavailable")
+    return {"deploy": {key: service["deploy"][key]
+                       for key in ("startCommand", "multiRegionConfig")
+                       if key in service["deploy"]},
+            **{key: service[key] for key in ("volumeMounts", "isCreated", "isDeleted")
+               if key in service}}
+
+
+def recovery_replica_evidence(candidate: dict[str, Any]) -> str:
+    """No deployment is recoverable only with explicit live settings and no active work."""
+    if candidate.get("activeDeployments") != []:
+        raise ValueError("eval_deploy_existing_deployment_in_progress_or_unknown")
+    config = candidate.get("_eval_recovery_config")
+    if not isinstance(config, dict) or not isinstance(config.get("deploy"), dict):
+        raise ValueError("eval_deploy_recovery_configuration_unavailable")
+    if any(key in config and config[key] is not False for key in ("isCreated", "isDeleted")):
+        raise ValueError("eval_deploy_recovery_configuration_unavailable")
+    deploy = config["deploy"]
+    if deploy.get("startCommand") != "python /app/scripts/eval_service.py":
+        raise ValueError("eval_deploy_start_command_drift")
+    if config.get("volumeMounts") != {VOLUME: {"mountPath": "/eval-state"}}:
+        raise ValueError("eval_deploy_volume_drift")
+    regions = deploy.get("multiRegionConfig")
+    if (not isinstance(regions, dict) or len(regions) != 1
+        or not all(isinstance(region, str) and region for region in regions)
+        or not all(isinstance(row, dict) and type(row.get("numReplicas")) is int
+                   and row["numReplicas"] == 1 for row in regions.values())):
+        raise ValueError("eval_deploy_replica_configuration_drift")
+    return "live_configuration_single_region_no_deployment"
 
 
 def validate_pending_work(response: Any) -> None:
@@ -229,6 +312,8 @@ def single_replica_evidence(candidate: dict[str, Any]) -> str:
         legacy is not None and (type(legacy) is not int or legacy != 1)
     ):
         raise ValueError("eval_deploy_replica_configuration_drift")
+    if "latestDeployment" in candidate and candidate["latestDeployment"] is None:
+        return recovery_replica_evidence(candidate)
     meta = (candidate.get("latestDeployment") or {}).get("meta")
     if meta is not None:
         if not isinstance(meta, dict):
@@ -293,7 +378,10 @@ def inventory(value: dict[str, Any]) -> tuple[dict[str, str | None], dict[str, A
         or volume[0].get("isPendingDeletion") is not False):
         raise ValueError("eval_deploy_volume_drift")
     latest_status = (candidate.get("latestDeployment") or {}).get("status")
-    if latest_status not in {"SUCCESS", "FAILED", "CRASHED", "REMOVED", "STOPPED"}:
+    no_deployment = "latestDeployment" in candidate and candidate["latestDeployment"] is None
+    if not no_deployment and latest_status not in {
+        "SUCCESS", "FAILED", "CRASHED", "REMOVED", "STOPPED",
+    }:
         raise ValueError("eval_deploy_existing_deployment_in_progress_or_unknown")
     other = {service_id: (node.get("latestDeployment") or {}).get("id")
              for service_id, node in services.items() if service_id != SERVICE}
@@ -361,6 +449,7 @@ def publish(directory: Path, env: dict[str, str], railway: Railway,
         raise ValueError("eval_deploy_context_changed")
     if railway.call(["--version"]).strip() != "railway " + CLI_VERSION:
         raise ValueError("eval_deploy_cli_version_mismatch")
+    report["phase"] = "preflight"
     other, node = inventory(railway.status())
     report.update(metadata, service_id=SERVICE, preflight_verified=True,
                   replica_evidence=single_replica_evidence(node))
@@ -368,10 +457,12 @@ def publish(directory: Path, env: dict[str, str], railway: Railway,
         report.update(status="preflight_verified_no_upload", inference_started=False)
         return report
     report.update(metadata, status="publication_started_no_automatic_retry", service_id=SERVICE)
+    report["phase"] = "metadata_variables"
     railway.call(["variable", "set", *SERVICE_TARGET, "--skip-deploys",
                   "ANCORA_EVAL_BUILD_SHA=" + sha, "ANCORA_EVAL_BUILD_SOURCE=" + fingerprint,
                   "RAILWAY_DOCKERFILE_PATH=Dockerfile"])
     report["status"] = "upload_attempted_outcome_unknown"
+    report["phase"] = "upload"
     uploaded = json.loads(railway.call([
         "up", str(context), "--path-as-root", *SERVICE_TARGET, "--detach", "--json",
         "--message", "manual-eval:" + sha,
@@ -383,6 +474,7 @@ def publish(directory: Path, env: dict[str, str], railway: Railway,
     print(json.dumps({"deployment_id": deployment_id, "status": "uploaded_not_verified"}),
           flush=True)
     started = time.monotonic()
+    report["phase"] = "deployment_verification"
     while time.monotonic() - started < wait_seconds:
         deployments = json.loads(railway.call([
             "deployment", "list", *SERVICE_TARGET, "--json", "--limit", "20",
@@ -409,13 +501,20 @@ def publish(directory: Path, env: dict[str, str], railway: Railway,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["prepare", "publish"])
+    parser.add_argument("command", choices=["prepare", "check-cli", "publish"])
     parser.add_argument("--sha")
-    parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--directory", type=Path)
     args = parser.parse_args(argv)
+    if args.command != "check-cli" and args.directory is None:
+        parser.error("--directory is required for prepare/publish")
     report: dict[str, Any] = {"status": "blocked", "inference_started": False}
     try:
-        if args.command == "prepare":
+        if args.command == "check-cli":
+            validate_dispatch(os.environ.get("CANDIDATE_SHA", ""), dict(os.environ))
+            if Railway(None).call(["--version"]).strip() != "railway " + CLI_VERSION:
+                raise ValueError("eval_deploy_cli_version_mismatch")
+            report.update(status="cli_verified_without_token", cli_version=CLI_VERSION)
+        elif args.command == "prepare":
             report = prepare(ROOT, args.sha or "", args.directory, dict(os.environ))
         else:
             check_only = os.environ.get("EVAL_DEPLOY_CHECK_ONLY", "false")
@@ -431,6 +530,8 @@ def main(argv: list[str] | None = None) -> int:
         reason = str(error) if isinstance(error, ValueError) else ""
         if re.fullmatch(r"eval_deploy_[a-z_]+", reason):
             report["reason"] = reason
+        if isinstance(error, RailwayCommandError):
+            report.update(phase=error.phase, command_exit_code=error.exit_code)
         print(json.dumps(report, ensure_ascii=True))
         return 1
     finally:
