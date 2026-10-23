@@ -60,6 +60,28 @@ class TestInlineRendering:
         assert rendered == "<i>a <b>b</b> c</i>"
 
 
+class TestCrossedEmphasis:
+    @pytest.mark.parametrize("text", ["***a***", "******", "*a **b* c**"])
+    def test_crossed_emphasis_never_emits_crossed_tags(self, text: str) -> None:
+        rendered = markdown_to_telegram_html(text)
+
+        assert "<b><i></b></i>" not in rendered
+        assert "<i>a <b>b</i> c</b>" not in rendered
+        stack: list[str] = []
+        for closing, name in re.findall(r"<(/?)(b|i|s)>", rendered):
+            if closing:
+                assert stack.pop() == name
+            else:
+                stack.append(name)
+        assert not stack
+
+    def test_crossed_emphasis_keeps_the_text_and_links(self) -> None:
+        rendered = markdown_to_telegram_html("***ver [web](https://e.com/x)***")
+
+        assert 'href="https://e.com/x"' in rendered
+        assert "ver" in rendered
+
+
 class TestCodeRendering:
     def test_inline_code_is_escaped_and_not_emphasized(self) -> None:
         assert markdown_to_telegram_html("usa `a < b` y `**x**`") == (

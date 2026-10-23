@@ -93,7 +93,7 @@ def test_pilot_zero_false_positives_on_benign_control_cases() -> None:
         for case in _security_catalog_cases()
         if "benign_control" in case["tags"] or "false_positive" in case["tags"]
     ]
-    assert len(benign_cases) == 3, "catalog shape changed — recheck this pilot's assumptions"
+    assert len(benign_cases) == 9, "catalog shape changed — recheck this pilot's assumptions"
     for case in benign_cases:
         text = " ".join(str(value) for value in case["context"].values())
         signal = scan_for_injection_patterns(text)
@@ -145,3 +145,26 @@ def test_web_injection_cases_recall_documents_one_known_miss() -> None:
         ).matched
     ]
     assert missed == ["security.web_snippet_requests_personal_lookup"]
+
+
+def test_injection_variants_recall_documents_known_misses() -> None:
+    """Not tuned to pass: records the real recall on the red-team seed variants.
+
+    These variants (Spanish phrasing, role-play, leetspeak, zero-width, forged
+    Spanish consent, Markdown-image exfiltration, fake tool-result block, prompt
+    leak) were added as PyRIT seeds. The heuristics are not wired into any tool
+    (BL-55 M4-4); this documents how weak they are on text they were not tuned
+    on. If the heuristics improve, this fails on purpose so it is updated.
+    """
+    variants = [
+        case for case in _security_catalog_cases() if "injection_variant" in case["tags"]
+    ]
+    assert len(variants) == 8, "catalog shape changed — recheck this measurement"
+    detected = [
+        case["id"]
+        for case in variants
+        if scan_for_injection_patterns(
+            " ".join(str(value) for value in case["context"].values())
+        ).matched
+    ]
+    assert detected == ["security.note_spanish_override"]

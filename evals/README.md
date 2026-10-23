@@ -115,6 +115,15 @@ normal, ID solicitado y homónimos. Fixtures simuladas conservan IDs y procedenc
 no campaña ejecutada ni baseline humano nuevo. Catálogos: 45 casos/6 categorías.
 Evidencia y límites en `specs/047-readable-presentation/verification.md`.
 
+Semillas de red-teaming (2026-10-23, preparación de PyRIT): `security` pasa de 17 a
+31 casos (59 en total). Ocho variantes de ataque (tag `injection_variant`: español,
+rol, leetspeak, ancho cero, consentimiento falso en español, imagen Markdown para
+exfiltrar, bloque de tool-result falso, fuga de prompt) y seis controles benignos.
+Sólo usan claves de contexto que el ejecutor físico simula (`untrusted_note`,
+`untrusted_document_*`, `untrusted_filename`, `untrusted_web_*`). La heurística de
+inyección detecta 1 de las 8 variantes (`test_injection_variants_recall_documents_known_misses`);
+sigue sin estar cableada. Contratos estáticos: ninguna ejecución con modelo real.
+
 ## Preparación local de scoring semántico (T8, sin juez conectado)
 
 **Preparación T7 posterior (2026-10-16):** el candidato

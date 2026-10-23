@@ -12,7 +12,9 @@ from dataclasses import dataclass
 from uuid import UUID
 
 _UUID = r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
-_CONFIRMATION = re.compile(rf"(?:sí|si)(?:[ ]+(?P<proposal_id>{_UUID}))?", re.IGNORECASE)
+# Explicit ASCII-and-accent classes instead of re.IGNORECASE: Unicode case folding
+# would also accept look-alikes such as dotless "ı", "İ" or long "ſ" as "Sí".
+_CONFIRMATION = re.compile(rf"[sS][iIíÍ](?:[ ]+(?P<proposal_id>{_UUID}))?")
 
 
 @dataclass(frozen=True)

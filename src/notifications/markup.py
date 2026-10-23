@@ -33,6 +33,7 @@ _BOLD = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", re.DOTALL)
 _STRIKE = re.compile(r"~~(?=\S)(.+?)(?<=\S)~~", re.DOTALL)
 _ITALIC_STAR = re.compile(r"(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])")
 _ITALIC_UNDERSCORE = re.compile(r"(?<![\w_])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w_])")
+_EMITTED_TAG = re.compile(r'<(/?)(b|i|s|code|pre|a)(?: href="[^"]*")?>')
 
 
 def escape_telegram_html(text: str) -> str:
@@ -101,8 +102,32 @@ def _render_inline(text: str) -> str:
 
 def _render_emphasis(segment: str) -> str:
     escaped = escape_telegram_html(segment)
-    escaped = _LINK.sub(_link_replacement, escaped)
-    return _apply_emphasis(escaped)
+    rendered = _apply_emphasis(_LINK.sub(_link_replacement, escaped))
+    if _tags_are_nested(rendered):
+        return rendered
+    # Sequential emphasis passes can cross tags (``***a***`` -> ``<b><i></b></i>``),
+    # which Telegram rejects. Drop the emphasis, keep meaning and links.
+    return _LINK.sub(_plain_link_replacement, escaped)
+
+
+def _plain_link_replacement(match: re.Match[str]) -> str:
+    return f'<a href="{match.group(2)}">{match.group(1)}</a>'
+
+
+def _tags_are_nested(rendered: str) -> bool:
+    """True when every emitted tag opens and closes in properly nested order.
+
+    All literal text is escaped before tags are added, so every ``<`` in
+    ``rendered`` belongs to a whitelisted tag.
+    """
+    open_tags: list[str] = []
+    for match in _EMITTED_TAG.finditer(rendered):
+        closing, name = match.group(1), match.group(2)
+        if not closing:
+            open_tags.append(name)
+        elif not open_tags or open_tags.pop() != name:
+            return False
+    return not open_tags
 
 
 def _link_replacement(match: re.Match[str]) -> str:

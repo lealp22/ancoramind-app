@@ -43,6 +43,11 @@ def test_explicit_id_is_only_a_candidate_intent(text: str) -> None:
         "Sí 1234",
         f"Sí {str(PROPOSAL_ID).replace('-', '')}",
         "Sí." * 100,
+        # Unicode case-folding look-alikes of "i"/"s" must not read as a "Sí".
+        "Sı",
+        "Sİ",
+        "ſi",
+        "Ki",
     ],
 )
 def test_quotes_extra_content_and_bad_identifiers_are_not_intents(text: str | None) -> None:

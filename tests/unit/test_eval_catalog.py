@@ -20,7 +20,7 @@ def test_all_repository_catalogs_are_valid_and_cover_every_category() -> None:
     summaries = validate_catalogs()
 
     assert {summary.category for summary in summaries} == CATEGORIES
-    assert sum(summary.case_count for summary in summaries) == 45
+    assert sum(summary.case_count for summary in summaries) == 59
     assert all(summary.case_count >= 3 for summary in summaries)
 
 
@@ -36,8 +36,9 @@ def test_security_catalog_covers_attack_and_benign_fixtures() -> None:
     from scripts.run_evals import EVALS_DIR
 
     cases = load_catalog(EVALS_DIR / "security" / "cases.json")["cases"]
-    assert len(cases) == 17
-    assert sum("benign_control" in case["tags"] for case in cases) >= 3
+    assert len(cases) == 31
+    assert sum("benign_control" in case["tags"] for case in cases) == 9
+    assert sum("injection_variant" in case["tags"] for case in cases) == 8
     assert {"unicode", "encoding", "link", "multimodal_description", "web"}.issubset(
         {tag for case in cases for tag in case["tags"]}
     )
