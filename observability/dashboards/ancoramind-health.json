@@ -9,28 +9,30 @@
   "panels": [
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
+      "description": "Un valor por componente (máximo entre instancias, para no pintar las de redeploys anteriores). OK = 1.",
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "Caído", "color": "red"}, "1": {"text": "OK", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
       "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
       "options": {"colorMode": "background", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "ancora_health_component", "refId": "A"}],
+      "targets": [{"expr": "max by (ancora_health_component) (ancora_health_component)", "legendFormat": "{{ancora_health_component}}", "refId": "A"}],
       "title": "Estado de componentes",
       "type": "stat"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
-      "fieldConfig": {"defaults": {"unit": "short"}},
+      "description": "Profundidad máxima de la cola global de admission en el rango. Es un gauge que se emite con actividad de Telegram: sin tráfico reciente no hay muestras y se indica «Sin actividad» en lugar de inventar un 0.",
+      "fieldConfig": {"defaults": {"unit": "short", "noValue": "Sin actividad"}},
       "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
-      "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "ancora_admission_queue_depth", "refId": "A"}],
-      "title": "Cola de admission",
+      "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "max(max_over_time(ancora_admission_queue_depth{ancora_queue_scope=\"global\"}[$__range]))", "instant": true, "refId": "A"}],
+      "title": "Cola de admission (máx. en rango)",
       "type": "stat"
     },
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
       "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
-      "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "ancora_runtime_config_revision", "refId": "A"}],
+      "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "max(ancora_runtime_config_revision)", "refId": "A"}],
       "title": "Revisión runtime activa",
       "type": "stat"
     },
@@ -39,7 +41,7 @@
       "fieldConfig": {"defaults": {"unit": "short"}},
       "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
       "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "sum(increase(ancora_health_heartbeat_total[$__rate_interval])) by (ancora_health_component)", "refId": "A"}],
+      "targets": [{"expr": "sum(increase(ancora_health_heartbeat_total[$__rate_interval])) by (ancora_health_component)", "legendFormat": "{{ancora_health_component}}", "refId": "A"}],
       "title": "Heartbeats recientes",
       "type": "stat"
     },

@@ -24,6 +24,18 @@ def test_health_dashboard_uses_confirmed_counter_names() -> None:
     assert all("alert" not in panel for panel in dashboard["panels"])
 
 
+def test_status_stats_aggregate_across_instances() -> None:
+    """Each redeploy creates a new ``service_instance_id``; stat panels must collapse them."""
+    panels = {panel["title"]: panel for panel in _dashboard()["panels"]}
+    components = panels["Estado de componentes"]["targets"][0]["expr"]
+    revision = panels["Revisión runtime activa"]["targets"][0]["expr"]
+
+    assert components == "max by (ancora_health_component) (ancora_health_component)"
+    assert revision == "max(ancora_runtime_config_revision)"
+    assert "Cola de admission (máx. en rango)" in panels
+    assert panels["Cola de admission (máx. en rango)"]["fieldConfig"]["defaults"]["noValue"]
+
+
 def test_tool_panels_match_the_metrics_the_hook_emits() -> None:
     """Dashboard series must follow the OTel names emitted by the tool hook.
 
