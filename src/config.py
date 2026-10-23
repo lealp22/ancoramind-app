@@ -3,6 +3,9 @@
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_PHOENIX_PSEUDONYM_KEY_MIN = 32
+"""Minimum length of PHOENIX_USER_PSEUDONYM_KEY (specs/046: >=32 random bytes)."""
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables / .env file."""
@@ -264,6 +267,16 @@ class Settings(BaseSettings):
     otel_exporter_otlp_insecure: bool = True
     otel_exporter_otlp_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     otel_export_interval_millis: int = Field(default=30000, ge=1000, le=300000)
+    phoenix_tracing_enabled: bool = False
+    """ADR-007/specs/046: masked content traces to Phoenix. OFF by default; a separate
+    pipeline from the Grafana Collector, so it never changes OTEL_* behaviour."""
+    phoenix_collector_endpoint: str = ""
+    """Private Phoenix OTLP endpoint (Railway private network); never the public domain."""
+    phoenix_api_key: str = ""
+    """Phoenix system API key; Railway secret only."""
+    phoenix_user_pseudonym_key: str = ""
+    """Dedicated HMAC key for user pseudonyms (>=32 chars); not derived from other secrets."""
+    phoenix_project_name: str = "ancoramind"
     health_probe_interval_seconds: float = Field(default=30.0, ge=5, le=300)
     """Cadence of the internal metadata-only health monitor; it never gates traffic."""
     health_gateway_probe_timeout_seconds: float = Field(default=2.0, gt=0, le=10)
@@ -276,6 +289,38 @@ class Settings(BaseSettings):
     def db_url(self) -> str | None:
         """Return the database URL for Agno, or None for default SQLite."""
         return self.agno_database_url if self.agno_database_url else None
+
+    @property
+    def phoenix_tracing_missing(self) -> tuple[str, ...]:
+        """Names of the settings that keep the Phoenix pipeline inactive.
+
+        Unlike other capabilities this is deliberately not a startup error
+        (specs/046 criterion 7): content tracing is optional and fail-open, so an
+        incomplete configuration disables it silently instead of blocking the app.
+        Only names are returned, never values.
+        """
+        return tuple(
+            name
+            for name, ok in (
+                ("PHOENIX_COLLECTOR_ENDPOINT", self._phoenix_endpoint_is_private_http()),
+                ("PHOENIX_API_KEY", bool(self.phoenix_api_key.strip())),
+                (
+                    "PHOENIX_USER_PSEUDONYM_KEY",
+                    len(self.phoenix_user_pseudonym_key.strip()) >= _PHOENIX_PSEUDONYM_KEY_MIN,
+                ),
+                ("PHOENIX_PROJECT_NAME", bool(self.phoenix_project_name.strip())),
+            )
+            if not ok
+        )
+
+    @property
+    def phoenix_tracing_active(self) -> bool:
+        """True only when the flag is on and every required setting is present."""
+        return self.phoenix_tracing_enabled and not self.phoenix_tracing_missing
+
+    def _phoenix_endpoint_is_private_http(self) -> bool:
+        url = self.phoenix_collector_endpoint.strip()
+        return url.startswith(("http://", "https://")) and not any(ch.isspace() for ch in url)
 
     @model_validator(mode="after")
     def validate_litellm_proxy_settings(self) -> "Settings":

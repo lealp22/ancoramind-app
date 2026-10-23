@@ -250,6 +250,12 @@ Estas reglas vienen del brief de ingeniería. **No violarlas aunque parezca más
     OpenTelemetry + Collector privado + Grafana Cloud con allowlist de metadata.
     No prompts, mensajes, respuestas, documentos ni argumentos/resultados
     completos. La auditoría durable permanece en PostgreSQL.
+    **Enmienda acotada (ADR-007, 2026-10-23):** esta regla sigue íntegra para
+    el pipeline OTel/Grafana. Un pipeline separado hacia Phoenix puede recibir
+    una copia **enmascarada** del contenido conversacional (retención 30 días,
+    captura manual en el adaptador gobernado, nunca documentos, extracciones,
+    voz ni secretos), detrás de flag OFF por defecto y fail-open. Activarlo en
+    producción exige el gate de specs/046; no es un permiso general de captura.
 
 ---
 

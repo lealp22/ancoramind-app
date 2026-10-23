@@ -30,6 +30,9 @@ Cloud sigue siendo el backend inicial, pero el código no se acopla a ese vendor
 6. **Telemetría Agno** — se desactiva en Agent, AgentOS y environment.
 7. **Privacidad** — allowlist de metadata; no se exportan prompts, mensajes,
    respuestas, documentos, extracciones ni argumentos/resultados completos.
+   *Enmienda (2026-10-23, ADR-007):* aplica a este pipeline (Collector/Grafana),
+   que sigue sin contenido. El pipeline separado de Phoenix puede recibir contenido
+   enmascarado bajo las condiciones de ADR-007.
 8. **Correlación** — `correlation_id`, IDs Railway/Telegram/Agno/Gateway/provider,
    ruta, revisión, tokens, coste, latencia, errores y circuit state.
 9. **Cardinalidad** — IDs solo como atributos de spans/logs, nunca labels de

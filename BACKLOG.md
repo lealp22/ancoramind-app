@@ -40,7 +40,7 @@
 | BL-47 Tool de lectura `list_pending_proposals` | ✅ validado E2E Telegram con revisión 8/GPT-6 Luna: lectura real + `present_reply` (`tool_call_count=2`), excluye propuesta histórica no presentada |
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
 | BL-55 Gap analysis contra rúbrico de evaluación académica | 🆕 registrado; huecos priorizados en justificación de modelo/coste proyectado, LLM-juez (Jev) ejecutado, red-teaming (PyRIT/Garak) ejecutado y documento de riesgos propio — ver `docs/academic-rubric-gap-analysis.md` |
-| BL-56 Trazas con contenido enmascarado en Phoenix | 🔶 exporter/spike local sólo sintético; auth/OTLP/borrado probados sin Railway; captura productiva bloqueada por procedencia de documentos/voz, coste/UI y aceptación ADR-007 — specs/046 |
+| BL-56 Trazas con contenido enmascarado en Phoenix | 🔶 exporter/spike local sólo sintético; auth/OTLP/borrado probados sin Railway; ADR-007 Accepted (2026-10-23) con captura manual; implementar con flag OFF, activación sujeta al gate (procedencia documentos/voz, coste/UI, privacidad) — specs/046 |
 | MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
 Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL

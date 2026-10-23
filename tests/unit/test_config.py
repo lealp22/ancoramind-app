@@ -88,6 +88,97 @@ class TestSettings:
         assert settings.otel_exporter_otlp_endpoint == "http://collector.internal:4317"
         assert settings.otel_exporter_otlp_insecure is False
 
+    def _clear_phoenix_env(self, monkeypatch) -> None:
+        for name in (
+            "PHOENIX_TRACING_ENABLED",
+            "PHOENIX_COLLECTOR_ENDPOINT",
+            "PHOENIX_API_KEY",
+            "PHOENIX_USER_PSEUDONYM_KEY",
+            "PHOENIX_PROJECT_NAME",
+        ):
+            monkeypatch.delenv(name, raising=False)
+
+    def _complete_phoenix_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("PHOENIX_TRACING_ENABLED", "true")
+        monkeypatch.setenv("PHOENIX_COLLECTOR_ENDPOINT", "http://phoenix.railway.internal:4317")
+        monkeypatch.setenv("PHOENIX_API_KEY", "system-key")
+        monkeypatch.setenv("PHOENIX_USER_PSEUDONYM_KEY", "k" * 32)
+
+    def test_phoenix_tracing_is_off_and_inactive_by_default(self, monkeypatch) -> None:
+        self._clear_phoenix_env(monkeypatch)
+
+        settings = Settings(_env_file=None)
+
+        assert settings.phoenix_tracing_enabled is False
+        assert settings.phoenix_tracing_active is False
+        assert settings.phoenix_project_name == "ancoramind"
+
+    def test_phoenix_tracing_active_when_flag_and_all_settings_present(self, monkeypatch) -> None:
+        self._clear_phoenix_env(monkeypatch)
+        self._complete_phoenix_env(monkeypatch)
+
+        settings = Settings(_env_file=None)
+
+        assert settings.phoenix_tracing_missing == ()
+        assert settings.phoenix_tracing_active is True
+
+    def test_phoenix_flag_off_stays_inactive_even_with_full_configuration(
+        self, monkeypatch
+    ) -> None:
+        self._clear_phoenix_env(monkeypatch)
+        self._complete_phoenix_env(monkeypatch)
+        monkeypatch.setenv("PHOENIX_TRACING_ENABLED", "false")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.phoenix_tracing_missing == ()
+        assert settings.phoenix_tracing_active is False
+
+    @pytest.mark.parametrize(
+        ("variable", "value"),
+        [
+            ("PHOENIX_COLLECTOR_ENDPOINT", ""),
+            ("PHOENIX_COLLECTOR_ENDPOINT", "phoenix.railway.internal:4317"),
+            ("PHOENIX_COLLECTOR_ENDPOINT", "http://phoenix .internal:4317"),
+            ("PHOENIX_API_KEY", ""),
+            ("PHOENIX_API_KEY", "   "),
+            ("PHOENIX_USER_PSEUDONYM_KEY", ""),
+            ("PHOENIX_USER_PSEUDONYM_KEY", "k" * 31),
+            ("PHOENIX_PROJECT_NAME", "  "),
+        ],
+    )
+    def test_phoenix_tracing_inactive_without_a_required_setting(
+        self, monkeypatch, variable: str, value: str
+    ) -> None:
+        self._clear_phoenix_env(monkeypatch)
+        self._complete_phoenix_env(monkeypatch)
+        monkeypatch.setenv(variable, value)
+
+        settings = Settings(_env_file=None)  # must not raise: fail-open configuration
+
+        assert variable in settings.phoenix_tracing_missing
+        assert settings.phoenix_tracing_active is False
+
+    def test_phoenix_missing_reports_names_never_values(self, monkeypatch) -> None:
+        self._clear_phoenix_env(monkeypatch)
+        monkeypatch.setenv("PHOENIX_TRACING_ENABLED", "true")
+        monkeypatch.setenv("PHOENIX_API_KEY", "super-secret-value")
+
+        missing = Settings(_env_file=None).phoenix_tracing_missing
+
+        assert "PHOENIX_COLLECTOR_ENDPOINT" in missing
+        assert "PHOENIX_USER_PSEUDONYM_KEY" in missing
+        assert all("super-secret-value" not in item for item in missing)
+
+    def test_phoenix_settings_do_not_change_grafana_pipeline_settings(self, monkeypatch) -> None:
+        self._clear_phoenix_env(monkeypatch)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        self._complete_phoenix_env(monkeypatch)
+
+        settings = Settings(_env_file=None)
+
+        assert settings.otel_exporter_otlp_endpoint == ""
+
     def test_litellm_proxy_requires_private_url_and_virtual_key(self, monkeypatch) -> None:
         # A local Gateway validation can export these; clear them so the
         # fail-closed invariant is asserted instead of the ambient environment.

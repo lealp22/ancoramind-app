@@ -1,8 +1,11 @@
 # Spec 046 — Trazas con contenido enmascarado en Phoenix
 
-Estado: propuesta, sin implementar. Desarrolla el ADR-007 (Proposed). Nada de
-esta spec se implementa hasta cerrar el spike (`spike.md`) y que el propietario
-acepte el ADR.
+Estado: ADR-007 **Accepted** (2026-10-23) para implementar detrás de flag OFF.
+La activación en producción sigue sujeta al gate de esta spec.
+
+**Decisión 2026-10-23:** captura **manual** en el adaptador gobernado de
+`LLMAccess` con procedencia de texto; la auto-instrumentación global de Agno
+queda descartada para producción. T6 se reformula en consecuencia.
 
 **2026-10-22:** trabajo experimental autorizado, no integración: masking puro ya
 existente + `scripts/phoenix_spike/` sólo sintético y `spike-result.md`. ADR sigue
@@ -83,10 +86,55 @@ flag sea `true`
 - `src/observability/masking.py` — detectores y enmascarador, sin Agno.
 - `src/observability/phoenix_export.py` — `SpanExporter` envolvente (allowlist +
   máscara + fail-closed) y alta del provider.
-- Instrumentación Agno solo si el spike la valida; si no, spans manuales en el
-  adaptador de `LLMAccess`.
+- Captura manual: spans creados por nuestro código en el adaptador de `LLMAccess`,
+  con procedencia explícita por fragmento; documentos, extracciones y voz se
+  excluyen antes de crear el span y un historial mixto se descarta entero.
 - Documentación: `docs/production-security-privacy.md` (inventario de datos,
   retención, DPIA), `AGENTS.md` principio 11 (enmienda acotada) y ADR-006 punto 7.
+
+## Diseño de captura (T6, decisión del propietario 2026-10-23)
+
+Investigación de solo lectura sobre el código actual:
+
+- `LLMAccess.model_for` lo usan el Agent principal, la extracción de documentos,
+  Dream, la compactación de contexto y los evals. Varias de esas rutas reciben
+  contenido documental o de memoria por diseño.
+- En `GovernedModelMixin.ainvoke` los mensajes llegan ya mezclados (instrucciones,
+  historial, resultados de tools, mensaje del usuario) y sin procedencia.
+- Una transcripción de voz sustituye a `input_text` en el procesador
+  (`voice_text`) y desde ahí no se distingue de texto escrito.
+
+Por tanto **no se captura en `ainvoke`**. Se captura en
+`GovernedInteractionRunner.run`, donde la procedencia se conoce por construcción:
+
+**Lista de entrada por procedencia (allowlist):**
+
+| Se captura (enmascarado) | Condición |
+| --- | --- |
+| Texto escrito del usuario | solo si no proviene de voz (`voice_text is None`) |
+| Respuesta final (`present_reply`) | salida del modelo |
+| Argumentos de las tools `propose_*` | enmascarado por esquema + patrón |
+| Metadatos por llamada al modelo | tokens, latencia, ruta, coste del ledger; sin texto |
+
+**Excluido siempre, antes de crear el span:** transcripciones y audio; bloque de
+adjuntos; resultados de tools de lectura (`untrusted_results`); historial y
+resumen de compactación; y las rutas de extracción documental, Dream, compactación
+y evals (no generan spans con contenido).
+
+**Reglas:**
+
+- Sin etiquetado heurístico: si la procedencia no se conoce por construcción, no
+  se captura. No se intenta adivinar si un fragmento «parece» un documento.
+- El historial mixto se excluye entero.
+- Coste: atributo desde el ledger (`_governed_record`), no cálculo de Phoenix.
+- La voz queda **excluida de las trazas** por decisión del propietario; incluirla
+  exigiría su propio análisis (BL-26: consentimiento y retención).
+
+**Consecuencia aceptada:** las trazas muestran el mensaje, la respuesta final, las
+tools llamadas y sus argumentos de propuesta, pero no lo que devolvieron las tools
+de lectura ni el historial. Para un fallo como `InvalidPresentationOutputError`
+se ve la entrada y el fallo, no el contexto completo que vio el modelo. Ampliar la
+captura se decide fuente a fuente, cada una con su análisis.
 
 ## Criterios de aceptación
 

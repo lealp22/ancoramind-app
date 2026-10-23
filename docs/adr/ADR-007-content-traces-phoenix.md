@@ -1,11 +1,23 @@
 # ADR-007 — Trazas con contenido enmascarado en Phoenix
 
-> **Status:** Proposed (borrador, sin implementación). Pasa a Accepted solo tras
-> el spike de compatibilidad y la aprobación del propietario.
+> **Status:** Accepted (2026-10-23, decisión del propietario) **como autorización
+> para implementar detrás de flag OFF**. No autoriza activar la captura en
+> producción: eso exige el gate de activación de specs/046.
 > **Contexto:** hoy no se puede saber qué vio el modelo ni por qué falló una
 > petición concreta. Grafana (ADR-006) es metadata-only por diseño.
-> **Enmienda:** al aceptarse, modifica el principio 11 de `AGENTS.md` y el punto 7
+> **Enmienda (en vigor):** modifica el principio 11 de `AGENTS.md` y el punto 7
 > del ADR-006 solo para el pipeline de Phoenix. Grafana sigue sin contenido.
+
+## Decisión de aceptación (2026-10-23)
+
+El propietario decide guardar en Phoenix una copia **enmascarada** del contenido de
+las conversaciones de todos los usuarios autorizados, con retención de 30 días, y
+que la captura sea **manual**: el seam vive en el adaptador gobernado de
+`LLMAccess`, con procedencia confiable del texto, y se excluyen documentos,
+extracciones y voz **antes** de crear el span. La auto-instrumentación global de
+Agno (`openinference-instrumentation-agno`) queda **descartada** como vía de
+producción: no distingue la procedencia del texto. Un historial de procedencia
+mixta se excluye entero.
 
 ---
 
@@ -110,10 +122,12 @@ exporta**. Perder una traza es aceptable; exportar un dato sin enmascarar, no.
   referencia larga) obligan a reformular. Cualquier cambio de los detectores
   afecta a ambos usos y debe revisarse contra los dos.
 - Un `SpanExporter` envolvente que enmascara y aplica la allowlist antes de delegar.
-- Instrumentación `openinference-instrumentation-agno` solo si el spike confirma
-  compatibilidad con `agno>=2.9`, `present_reply` y `tool_choice=required`.
+- **Captura manual** (decisión 2026-10-23) en el adaptador gobernado de `LLMAccess`,
+  con spans creados por nuestro código y procedencia explícita por fragmento de
+  texto. No se usa `openinference-instrumentation-agno` en producción; el
+  prototipo de `scripts/phoenix_spike/` es solo referencia.
 
-## Pruebas exigidas antes de aceptar
+## Pruebas exigidas antes de activar en producción
 
 - Corpus sintético con DNI, NIE, tarjetas, IBAN, matrículas y VIN válidos e inválidos.
 - Test de privacidad: ninguna canario sensible llega al exporter.
@@ -135,17 +149,18 @@ exporta**. Perder una traza es aceptable; exportar un dato sin enmascarar, no.
 - El enmascarado por patrones es incompleto y requiere mantenimiento.
 - Obliga a actualizar `docs/production-security-privacy.md` (inventario, retención, DPIA).
 
-## Pendiente antes de aceptar
+## Pendiente antes de activar en producción
 
 - Spike sintético ejecutado (2026-10-22): compatibilidad Agno/terminal, provider
   separado, exporter experimental, auth y borrado local probados; límites en
   `specs/046-phoenix-masked-traces/spike-result.md`. Coste/UI y overhead aceptable
   no demostrados; sin inferencia real ni integración productiva.
-- Resolver exclusión de documentos/transcripciones en mensajes e historial:
-  auto-instrumentar globalmente Agno y filtrar nombres de atributos no basta.
-  Propuesta de seam manual con procedencia confiable en adaptador gobernado;
-  no decisión arquitectónica aceptada automáticamente.
-- Retención 30 días y todos los usuarios autorizados ya decididos por propietario
-  en specs/046 (2026-10-20). Pendiente ejecución productiva de borrado paginado,
-  privacidad/términos y control de acceso/red antes de activar.
-- Aceptación explícita de ADR-007/enmiendas por el propietario sigue pendiente.
+- Diseñar e implementar el seam manual con procedencia confiable y su prueba de
+  exclusión de documentos/transcripciones/voz (T6). Verificar primero qué
+  distingue hoy `governed_model.py` entre texto de usuario y contenido documental.
+- Retención 30 días y todos los usuarios autorizados decididos por el propietario
+  (2026-10-20). Pendiente ejecución productiva de borrado paginado, privacidad,
+  términos y control de acceso/red antes de activar.
+- Medir latencia con export real en Railway y definir cómo se aporta el coste
+  (atributo desde el ledger).
+- Aceptación **de la activación** (flag ON) sigue siendo una decisión posterior.
