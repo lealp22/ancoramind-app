@@ -35,6 +35,7 @@ from src.domain.llm_access.models import LlmUsageEventCreate  # noqa: E402
 LEDGER = ROOT / "evals" / "runs" / "ledger.jsonl"
 JUDGE_MODEL = "respan/span-02"
 SECOND_OPINION = "openai/gpt-6-luna-decisions"
+SEMANTIC_OUTCOMES = frozenset({"clarify", "safe_response"})
 
 
 class UsageCollector:
@@ -103,11 +104,28 @@ async def run_case(executor: Any, case: EvalCase, route: str, revision: int,
                 "error": type(error).__name__, "usage": collector.take(),
                 "seconds": round(time.monotonic() - started, 1)}
     result = evaluate_observation(request, observation)
+    failures = list(result.failures)
+    if case.expected_outcome in SEMANTIC_OUTCOMES:
+        # clarify/safe_response solo se distinguen leyendo el texto: decide el juez.
+        failures = [f for f in failures if not f.startswith("outcome expected")]
     return {"case_id": case.case_id, "category": case.category,
-            "status": "pass" if result.passed else "fail",
-            "failures": list(result.failures), "tools": list(result.observed_tool_names),
+            "status": "pass" if not failures else "fail",
+            "failures": failures, "tools": list(result.observed_tool_names),
             "usage": collector.take(), "seconds": round(time.monotonic() - started, 1),
             "_text": observation.delivered_text or observation.response_text or ""}
+
+
+def settle_status(row: dict[str, Any], case: EvalCase, judged: bool) -> None:
+    """Combina comprobaciones de código y juez en el estado final del caso."""
+    if row["status"] != "pass":
+        return
+    verdicts = [j["verdict"] for j in row.get("judge", [])] if judged else []
+    if "fail" in verdicts:
+        row["status"] = "fail"
+    elif case.expected_outcome in SEMANTIC_OUTCOMES and not judged:
+        row["status"] = "unevaluated"  # sin juez no hay forma de comprobar el texto
+    elif any(v != "pass" for v in verdicts):
+        row["status"] = "review"  # juez incierto o con error: revisión humana
 
 
 
@@ -142,9 +160,12 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase]) -> dict[str
                 break
             row = await run_case(executor, case, route, revision, collector)
             text = row.pop("_text", "")
-            if case.response_criteria and row["status"] != "error" and not args.no_judge:
+            judged = bool(case.response_criteria) and row["status"] != "error" \
+                and not args.no_judge
+            if judged:
                 row["judge"], used = judge_case(client, key, case, text, JUDGE_MODEL)
                 judge_tokens += used
+            settle_status(row, case, judged)
             rows.append(row)
             print(f"{row['status']:5} {case.case_id} {row['seconds']}s", flush=True)
     agent_cost = [r["usage"]["cost_usd"] for r in rows]
@@ -184,8 +205,7 @@ def main() -> int:
         summary = await run_suite(args, cases)
         # Registro y resumen dentro del bucle: loop.close() se cuelga en Windows.
         append_ledger({k: v for k, v in summary.items() if k != "rows"} | {
-            "rows": [{k: v for k, v in r.items() if k != "failures"}
-                     for r in summary["rows"]]})
+            "rows": summary["rows"]})
         print(json.dumps({k: v for k, v in summary.items() if k != "rows"},
                          ensure_ascii=False), flush=True)
         sys.stdout.flush()

@@ -9,9 +9,69 @@
   "panels": [
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Mensajes de Telegram admitidos para ejecutar al Agent en el rango seleccionado.",
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "blue"}}},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "options": {"colorMode": "value", "graphMode": "none", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "round(sum(increase(ancora_telegram_admissions_total{ancora_admission_status=\"accepted\"}[$__range])))", "instant": true, "refId": "A"}],
+      "title": "KPI · Peticiones aceptadas",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Mensajes rechazados en la admission (usuario no autorizado, etc.); no llegan a la IA.",
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "blue"}}},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "options": {"colorMode": "value", "graphMode": "none", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "round(sum(increase(ancora_telegram_admissions_total{ancora_admission_status=\"rejected\"}[$__range])))", "instant": true, "refId": "A"}],
+      "title": "KPI · Peticiones rechazadas",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Inferencias gobernadas (Agent, visión, embeddings que pasan por LLMAccess) en el rango.",
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "blue"}}},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "options": {"colorMode": "value", "graphMode": "none", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "round(sum(increase(ancora_llm_calls_total[$__range])))", "instant": true, "refId": "A"}],
+      "title": "KPI · Llamadas LLM",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Invocaciones de tools del Agent en el rango. Solo metadata.",
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "blue"}}},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "options": {"colorMode": "value", "graphMode": "none", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "round(sum(increase(ancora_tool_calls_total[$__range])))", "instant": true, "refId": "A"}],
+      "title": "KPI · Llamadas a tools",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Errores de inferencia más errores de entrega a Telegram. Los contadores de error solo existen tras el primer error, por eso la ausencia de serie cuenta como 0.",
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "red"}}},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "options": {"colorMode": "value", "graphMode": "none", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "round((sum(increase(ancora_llm_calls_total{ancora_status=\"error\"}[$__range])) or vector(0)) + (sum(increase(ancora_telegram_deliveries_total{ancora_delivery_status=\"error\"}[$__range])) or vector(0)))", "instant": true, "refId": "A"}],
+      "title": "KPI · Errores (LLM + entrega)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Suma del coste ESTIMADO (pricing_snapshot de la ruta) en el rango. No es facturación. Los tokens de entrada/salida no se muestran: el proveedor no devuelve uso y no hay serie.",
+      "fieldConfig": {"defaults": {"unit": "currencyUSD", "decimals": 3, "color": {"mode": "fixed", "fixedColor": "green"}}},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "options": {"colorMode": "value", "graphMode": "none", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
+      "targets": [{"expr": "sum(increase(ancora_llm_estimated_cost_usd_total[$__range]))", "instant": true, "refId": "A"}],
+      "title": "KPI · Coste estimado (USD)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "description": "Un valor por componente (máximo entre instancias, para no pintar las de redeploys anteriores). OK = 1.",
       "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "Caído", "color": "red"}, "1": {"text": "OK", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}},
-      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 4},
       "options": {"colorMode": "background", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
       "targets": [{"expr": "max by (ancora_health_component) (ancora_health_component)", "legendFormat": "{{ancora_health_component}}", "refId": "A"}],
       "title": "Estado de componentes",
@@ -21,7 +81,7 @@
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "description": "Profundidad máxima de la cola global de admission en el rango. Es un gauge que se emite con actividad de Telegram: sin tráfico reciente no hay muestras y se indica «Sin actividad» en lugar de inventar un 0.",
       "fieldConfig": {"defaults": {"unit": "short", "noValue": "Sin actividad"}},
-      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 4},
       "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
       "targets": [{"expr": "max(max_over_time(ancora_admission_queue_depth{ancora_queue_scope=\"global\"}[$__range]))", "instant": true, "refId": "A"}],
       "title": "Cola de admission (máx. en rango)",
@@ -30,7 +90,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 4},
       "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value"},
       "targets": [{"expr": "max(ancora_runtime_config_revision)", "refId": "A"}],
       "title": "Revisión runtime activa",
@@ -39,7 +99,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 4},
       "options": {"colorMode": "value", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name"},
       "targets": [{"expr": "sum(increase(ancora_health_heartbeat_total[$__rate_interval])) by (ancora_health_component)", "legendFormat": "{{ancora_health_component}}", "refId": "A"}],
       "title": "Heartbeats recientes",
@@ -48,7 +108,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "ops"}},
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 5},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 9},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
         {"expr": "sum(rate(ancora_telegram_admissions_total[$__rate_interval])) by (ancora_admission_status)", "legendFormat": "{{ancora_admission_status}}", "refId": "A"},
@@ -60,7 +120,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "ms"}},
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 5},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 9},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
         {"expr": "histogram_quantile(0.50, sum(rate(ancora_agent_run_duration_milliseconds_bucket[$__rate_interval])) by (le))", "legendFormat": "agent p50", "refId": "A"},
@@ -73,7 +133,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 5},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 9},
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
         {"expr": "sum(increase(ancora_llm_calls_total[$__rate_interval])) by (ancora_status, gen_ai_request_model)", "legendFormat": "{{ancora_status}} {{gen_ai_request_model}}", "refId": "A"},
@@ -85,7 +145,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 17},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [{"expr": "sum(increase(ancora_telegram_deliveries_total[$__rate_interval])) by (ancora_delivery_status)", "legendFormat": "{{ancora_delivery_status}}", "refId": "A"}],
       "title": "Resultado de deliveries Telegram",
@@ -94,7 +154,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [{"expr": "ancora_gateway_circuit_state", "legendFormat": "circuit {{ancora_circuit_state}}", "refId": "A"}],
       "title": "Estado del circuit breaker",
@@ -103,7 +163,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "currencyUSD"}},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "description": "Coste ESTIMADO con el pricing_snapshot de la ruta, no facturación. El coste real del proveedor y los tokens solo se emiten si el proveedor los devuelve; hoy no hay muestras y no se muestran como cero.",
       "targets": [
@@ -115,7 +175,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 21},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [
         {"expr": "sum(increase(ancora_llm_calls_total{ancora_status=\"error\"}[$__rate_interval])) by (error_type)", "legendFormat": "LLM {{error_type}}", "refId": "A"},
@@ -128,7 +188,7 @@
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "description": "Invocaciones de tools del Agent por nombre y resultado. Solo metadata: nunca argumentos ni resultados. Pendiente de confirmar los nombres de serie en Grafana Explore (specs/016 verification).",
       "fieldConfig": {"defaults": {"unit": "short"}},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 29},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 33},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [{"expr": "sum(increase(ancora_tool_calls_total[$__rate_interval])) by (ancora_tool_name, ancora_tool_outcome)", "legendFormat": "{{ancora_tool_name}} {{ancora_tool_outcome}}", "refId": "A"}],
       "title": "Tools invocadas",
@@ -138,7 +198,7 @@
       "datasource": {"type": "prometheus", "uid": "${datasource}"},
       "description": "Latencia p95 por tool (solo ejecuciones completadas). Solo metadata. Pendiente de confirmar los nombres de serie en Grafana Explore (specs/016 verification).",
       "fieldConfig": {"defaults": {"unit": "ms"}},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 29},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 33},
       "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
       "targets": [{"expr": "histogram_quantile(0.95, sum(rate(ancora_tool_call_duration_milliseconds_bucket[$__rate_interval])) by (le, ancora_tool_name))", "legendFormat": "{{ancora_tool_name}} p95", "refId": "A"}],
       "title": "Latencia p95 por tool",
@@ -149,7 +209,7 @@
   "schemaVersion": 39,
   "tags": ["ancoramind", "health", "metadata-only", "specs-016"],
   "templating": {"list": [{"current": {}, "hide": 0, "includeAll": false, "label": "Datasource", "multi": false, "name": "datasource", "options": [], "query": "prometheus", "refresh": 1, "type": "datasource"}]},
-  "time": {"from": "now-6h", "to": "now"},
+  "time": {"from": "now-7d", "to": "now"},
   "timezone": "browser",
   "title": "AncoraMind · Salud operativa",
   "uid": "ancoramind-health",
