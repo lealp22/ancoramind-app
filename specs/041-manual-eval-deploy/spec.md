@@ -107,6 +107,15 @@ de claves/presupuesto. Es recuperación por upload del servicio/volumen existent
 no reconnect de la fuente histórica ni rollback automático. Aún requiere CI/nueva
 ejecución manual; las pruebas offline no demuestran recuperación en Railway.
 
+Diagnóstico posterior al run39948532960: `command_error_category` contiene sólo
+una categoría fija derivada de códigos/prefijos CLI5.70.0, o `unclassified`.
+No contiene mensajes/hints/códigos arbitrarios, longitudes, hashes ni valores.
+`status --json` conserva reporter humano en errores: se cubren ambas formas.
+La clasificación no autoriza repetir, omitir guards ni cambiar token/scope;
+authorization_denied no demuestra por sí solo expiración de la credencial.
+RAILWAY_NO_TELEMETRY/RAILWAY_NO_AUTO_UPDATE se fijan en el proceso hijo para
+evitar envío secundario de errores crudos y mantener el binario fijado.
+
 ## No objetivos y límites
 
 No arreglar dispatcher interno Railway, promover golden, configurar presupuesto,

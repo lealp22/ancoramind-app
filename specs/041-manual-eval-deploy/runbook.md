@@ -221,6 +221,40 @@ mensaje crudo del proveedor. Un fallo en cli_version ocurre sin exponer el token
 no rotar credenciales para arreglarlo. El aviso npm observado con npm11.19 no
 demostraba script bloqueado: la causa exacta del intento histórico sigue abierta.
 
+### Fallo inventory en check_only — run39948532960
+
+En SHA354a89307e939fed8ee4a8949c64d790577df36c (CI39931630401) pasa
+`cli_verified_without_token`, pero `inventory` sale1. No se llega a pendingWork,
+config de recuperación ni mutaciones. La corrección de null-deployment no se
+ha podido validar remotamente. No repetir ese SHA esperando un resultado distinto.
+
+El incremento diagnóstico posterior añade `command_error_category`, exclusivamente
+categorías fijas; stdout/stderr siguen privados en memoria. La CLI5.70.0 no activa
+el reporter JSON al fallar `status --json`, por eso se reconocen también prefijos
+humanos fijos de sus fuentes. No se imprime el código/mensaje arbitrario del servidor.
+La telemetría propia de CLI se desactiva para no reenviar errores crudos a terceros,
+y el auto-update se desactiva explícitamente (CI ya lo desactiva por defecto).
+
+- `authorization_denied`: el comando informa rechazo de acceso; **no distingue**
+  token revocado/incorrecto de recurso fuera de alcance. Revisar en dashboard
+  la credencial de proyecto/entorno elegida y el secret del environment GitHub,
+  sin copiar su valor aquí ni cambiarlo a un token personal de alcance mayor.
+- `project_token_not_found`: la CLI clasifica el project token como no encontrado;
+  comprobar su vigencia/tipo antes de decidir una sustitución humana.
+- `credential_header_invalid`: valor incompatible con cabecera; revisar pegado
+  del secret sin mostrar el valor. No añadir strip() ni fallback automático.
+- `transport_or_response_error`, `response_decode_error`, `graphql_schema_error`:
+  revisar conectividad/compatibilidad CLI/API; no concluir que hay que rotar claves.
+- `project_not_found`/`linked_project_missing`/errores de entorno: revisar scope y
+  destino explícito; no crear infraestructura ni enlazar automáticamente.
+- `unclassified`: no hay señal reconocible; no es prueba de autenticación válida.
+  No publicar mensajes crudos ni relajar gates para desbloquearlo.
+
+Diagnóstico con la sesión del navegador no equivale a probar el token almacenado
+en GitHub. Este incremento sólo mejora evidencia, **no arregla una causa histórica
+todavía desconocida**. Publicarlo requiere commit/CI nuevos; usar después sólo
+check_only hasta comprender el bloqueo. No arrancar campañas ni tocar reservas.
+
 ## Referencias
 
 - [GitHub: ejecutar manualmente un workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)

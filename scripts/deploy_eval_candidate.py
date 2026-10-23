@@ -155,13 +155,77 @@ def prepare(root: Path, sha: str, destination: Path, env: dict[str, str]) -> dic
     return metadata
 
 
+def railway_error_category(stdout: str, stderr: str, exit_code: int) -> str:
+    """Classify fixed CLI5.70.0 signals in memory; never return provider text.
+
+    status --json still uses the human reporter on errors in this CLI version.
+    Other commands use {error, code, hint}; arbitrary codes/messages are not safe
+    metadata. Categories are observations, not proof that a credential expired.
+    """
+    codes = {
+        "UNAUTHORIZED": "authorization_denied",
+        "UNAUTHORIZED_TOKEN": "authorization_denied",
+        "UNAUTHORIZED_LOGIN": "authorization_denied",
+        "OAUTH_INSUFFICIENT_GRANT": "authorization_denied",
+        "NOT_AUTHENTICATED": "authentication_missing",
+        "INVALID_TOKEN": "project_token_not_found",
+        "INVALID_HEADER": "credential_header_invalid",
+        "PROJECT_NOT_FOUND": "project_not_found",
+        "PROJECT_DELETED": "project_deleted",
+        "ENVIRONMENT_NOT_FOUND": "environment_not_found",
+        "ENVIRONMENT_RESTRICTED": "environment_restricted",
+        "ENVIRONMENT_DELETED": "environment_deleted",
+        "NO_LINKED_PROJECT": "linked_project_missing",
+        "RATELIMITED": "rate_limited",
+        "FETCH_ERROR": "transport_or_response_error",
+        "MISSING_RESPONSE_DATA": "response_data_missing",
+        "TWO_FACTOR_REQUIRED": "two_factor_required",
+        "GRAPHQL_ERROR": "graphql_error",
+    }
+    for stream in (stdout, stderr):
+        try:
+            value = json.loads(stream)
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(value, dict) and isinstance(value.get("error"), str):
+            code = value.get("code")
+            if isinstance(code, str) and code in codes:
+                return codes[code]
+    # Fixed strings from errors.rs/client.rs/reporter.rs. Match line starts,
+    # not arbitrary substrings that might be present inside provider data.
+    prefixes = {
+        "Unauthorized.": "authorization_denied",
+        "You do not have access to this resource.": "authorization_denied",
+        "Not signed in.": "authentication_missing",
+        "Invalid RAILWAY_TOKEN.": "project_token_not_found",
+        "Login state is corrupt.": "credential_header_invalid",
+        "Project not found.": "project_not_found",
+        "Project is deleted.": "project_deleted",
+        "Environment is deleted.": "environment_deleted",
+        "No linked project found.": "linked_project_missing",
+        "You are being ratelimited.": "rate_limited",
+        "Failed to fetch:": "transport_or_response_error",
+        "Failed to get data from GraphQL response": "response_data_missing",
+        "Cannot query field ": "graphql_schema_error",
+        "Cannot return null for non-nullable field ": "graphql_response_contract_error",
+        "error decoding response body": "response_decode_error",
+    }
+    for stream in (stderr, stdout):
+        for prefix, category in prefixes.items():
+            if re.search(r"(?m)^(?:Error: |error: )?" + re.escape(prefix), stream):
+                return category
+    return "cli_usage_error" if exit_code == 2 else "unclassified"
+
+
 class RailwayCommandError(ValueError):
     """Only fixed phase labels and numeric exit status may leave the CLI boundary."""
 
-    def __init__(self, phase: str, exit_code: int | None, failure: str = "failed"):
+    def __init__(self, phase: str, exit_code: int | None, failure: str = "failed",
+                 category: str = "unclassified"):
         super().__init__("eval_deploy_railway_command_" + failure)
         self.phase = phase
         self.exit_code = exit_code
+        self.category = category
 
 
 class Railway:
@@ -177,7 +241,8 @@ class Railway:
             raise ValueError("eval_deploy_runner_cli_missing")
         self.binary = binary
         self.env = {key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR") if key in os.environ}
-        self.env.update(CI="true", NO_COLOR="1")
+        self.env.update(CI="true", NO_COLOR="1", RAILWAY_NO_TELEMETRY="1",
+                        RAILWAY_NO_AUTO_UPDATE="1")
         if token is not None:
             self.env["RAILWAY_TOKEN"] = token
 
@@ -194,12 +259,14 @@ class Railway:
             process = subprocess.run([self.binary, *args], env=self.env, cwd=cwd,
                                      capture_output=True, text=True, timeout=180, check=False)
         except subprocess.TimeoutExpired:
-            raise RailwayCommandError(label, None, "timeout") from None
+            raise RailwayCommandError(label, None, "timeout", "command_timeout") from None
         except OSError:
-            raise RailwayCommandError(label, None, "unavailable") from None
+            raise RailwayCommandError(label, None, "unavailable", "process_unavailable") from None
         if process.returncode:
             # Do not leak CLI/GraphQL exception text, values or arbitrary container logs.
-            raise RailwayCommandError(label, process.returncode)
+            raise RailwayCommandError(label, process.returncode, category=railway_error_category(
+                process.stdout, process.stderr, process.returncode,
+            ))
         return process.stdout
 
     def status(self) -> dict[str, Any]:
@@ -531,7 +598,8 @@ def main(argv: list[str] | None = None) -> int:
         if re.fullmatch(r"eval_deploy_[a-z_]+", reason):
             report["reason"] = reason
         if isinstance(error, RailwayCommandError):
-            report.update(phase=error.phase, command_exit_code=error.exit_code)
+            report.update(phase=error.phase, command_exit_code=error.exit_code,
+                          command_error_category=error.category)
         print(json.dumps(report, ensure_ascii=True))
         return 1
     finally:

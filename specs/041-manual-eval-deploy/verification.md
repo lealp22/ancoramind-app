@@ -1,5 +1,34 @@
 # Verificación — 2026-10-18
 
+## Nuevo intento bloqueado antes de recuperación — 2026-10-23
+
+- Run39948532960/job120397040393/control-candidato354a89307e939fed8ee4a8949c64d790577df36c,
+  CI39931630401/attempt1, check_only=true. Preparación/versión CLI5.70.0 correctas;
+  inventory exit1, sin variable set/up/inferencia. Causa exacta no recuperable de
+  ese log: sólo fase/reason/código, ni stdout ni stderr conservados.
+- Fuentes CLI5.70.0: status acepta --project/--environment/--json; exit1 es error
+  de ejecución, parseo usa exit2. Project.graphql y EnvironmentInstances.graphql
+  respondieron HTTP200/sin errors con sesión navegador, 1entorno/9servicios/5volúmenes,
+  paginación completa. **No** valida token GitHub ni descarta fallo transitorio.
+- MCP/read-only: evals sigue sin deployment, activeDeployments[] en query de API;
+  volumen100MB/mount esperado, comando idle/región1 y pin histórico db0c59b intactos.
+  No cambios staged según MCP. Sin accesos a variables/secretos del servicio.
+- Nuevo incremento sólo diagnóstico: category allowlist derivada de código JSON
+  o prefijo fijo CLI, nunca mensajes/arguments/paths. Unknown→unclassified. CLI status
+  no llama reporter.set_mode(json), así que --json no garantiza error estructurado.
+  Desactiva telemetría CLI (macros enviaba error_message a su endpoint) y auto-update
+  explícitamente; no cambia consultas, gobernanza, scope/token ni retries.
+- Regresión previa:210focales verdes reproducen aislamiento sin determinar causa
+  remota; nuevas pruebas simulan autorización/schema/transporte y comprueban que
+  categoría sí sale, valor/mensaje/hint no, sin más comandos ni retry.
+- Validación final: **303 focales** publicación/recuperación/categorías/packaging/idle
+  (69 nuevas de diagnóstico), **2407 unitarias/2skips** en proceso hijo con
+  WEB_SEARCH_ENABLED=false/AGNO_TELEMETRY=false. Ruff global, mypy187, catálogo
+  prompt history16 y diff limpios. No cambio src/schema ni integraciones PG.
+  Exporter local4318 ausente avisa al terminar, sin fallo de pytest/exit0.
+- No CLI local, ejecución workflow, deploy, push, rotación, evidencia ni campaña.
+  Incremento local; no confundir diagnóstico preparado con recuperación resuelta.
+
 ## Recuperación sin deployment — implementación local 2026-10-23
 
 - Intento manual39874388814/control y candidato18ecd5bf30351877debe03bf820c313af8853f35,
