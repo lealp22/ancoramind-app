@@ -119,9 +119,9 @@ class GovernedModelMixin:
                 raise
             actual_cost = _actual_call_cost(context, self._governed_effective_route, response)
             span_attributes = {
-                "gen_ai.usage.input_tokens": _safe_int(getattr(response, "input_tokens", None)),
-                "gen_ai.usage.output_tokens": _safe_int(getattr(response, "output_tokens", None)),
-                "gen_ai.usage.total_tokens": _safe_int(getattr(response, "total_tokens", None)),
+                "gen_ai.usage.input_tokens": _usage_tokens(response, "input_tokens"),
+                "gen_ai.usage.output_tokens": _usage_tokens(response, "output_tokens"),
+                "gen_ai.usage.total_tokens": _usage_tokens(response, "total_tokens"),
                 "gen_ai.usage.estimated_cost_usd": estimated_cost or None,
                 "gen_ai.usage.actual_cost_usd": actual_cost,
             }
@@ -152,9 +152,9 @@ class GovernedModelMixin:
             enabled=observability.metrics_enabled,
         )
         for metric_name, value in (
-            ("ancora.llm.input_tokens", _safe_int(getattr(response, "input_tokens", None))),
-            ("ancora.llm.output_tokens", _safe_int(getattr(response, "output_tokens", None))),
-            ("ancora.llm.total_tokens", _safe_int(getattr(response, "total_tokens", None))),
+            ("ancora.llm.input_tokens", _usage_tokens(response, "input_tokens")),
+            ("ancora.llm.output_tokens", _usage_tokens(response, "output_tokens")),
+            ("ancora.llm.total_tokens", _usage_tokens(response, "total_tokens")),
         ):
             if value is not None:
                 get_telemetry().counter(
@@ -223,9 +223,9 @@ class GovernedModelMixin:
             effective_gateway_route=self._governed_effective_route,
             provider=provider,
             model=model_id,
-            input_tokens=_safe_int(getattr(response, "input_tokens", None)),
-            output_tokens=_safe_int(getattr(response, "output_tokens", None)),
-            total_tokens=_safe_int(getattr(response, "total_tokens", None)),
+            input_tokens=_usage_tokens(response, "input_tokens"),
+            output_tokens=_usage_tokens(response, "output_tokens"),
+            total_tokens=_usage_tokens(response, "total_tokens"),
             provider_request_id=_provider_request_id(response),
             estimated_cost=estimated_cost,
             actual_cost=actual_cost,
@@ -300,6 +300,19 @@ def _safe_int(value: Any) -> int | None:
     return value if isinstance(value, int) else None
 
 
+def _usage_tokens(response: Any, name: str) -> int | None:
+    """Read token usage from a provider response.
+
+    Agno's chat adapters (``OpenAIChat``/``OpenRouter``/``OpenAILike``) do not set
+    ``ModelResponse.input_tokens``; they report usage in ``response_usage`` (a
+    ``MessageMetrics``). Prefer the direct attribute so other adapters keep working.
+    """
+    direct = _safe_int(getattr(response, name, None))
+    if direct is not None:
+        return direct
+    return _safe_int(getattr(getattr(response, "response_usage", None), name, None))
+
+
 def _duration_ms(value: Any) -> int | None:
     """Normalize Agno's integer-ms or float-second timing value to milliseconds."""
     if isinstance(value, int):
@@ -371,8 +384,8 @@ def _actual_call_cost(
         return None
     cost = 0.0
     seen = False
-    input_tokens = _safe_int(getattr(response, "input_tokens", None))
-    output_tokens = _safe_int(getattr(response, "output_tokens", None))
+    input_tokens = _usage_tokens(response, "input_tokens")
+    output_tokens = _usage_tokens(response, "output_tokens")
     if input_tokens is not None and price.input_cost_per_1m_usd is not None:
         cost += input_tokens * price.input_cost_per_1m_usd / 1_000_000
         seen = True

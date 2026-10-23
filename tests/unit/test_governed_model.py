@@ -407,3 +407,50 @@ async def test_ainvoke_proceeds_without_a_stop_reader() -> None:
 
     assert response.content == "ok"
     assert model.provider_calls == 1
+
+
+class _UsageOnlyProviderModel(FakeProviderModel):
+    """Provider like Agno OpenAIChat: usage only in ``response_usage``."""
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> ModelResponse:
+        from agno.models.metrics import MessageMetrics
+
+        self.provider_calls += 1
+        return ModelResponse(
+            content="ok",
+            response_usage=MessageMetrics(input_tokens=11, output_tokens=3, total_tokens=14),
+        )
+
+
+async def test_ainvoke_records_tokens_from_response_usage() -> None:
+    recorder = _Recorder()
+    model = build_governed_model(
+        _UsageOnlyProviderModel,
+        {"id": "fake-model", "fail": False, "ttft": None},
+        recorder=recorder,
+        route_name="ancoramind-default",
+        effective_route="ancoramind-default-r1",
+        revision=1,
+    )
+
+    with execution_context_scope(_context()):
+        await model.ainvoke([])
+
+    event = recorder.events[0]
+    assert (event.input_tokens, event.output_tokens, event.total_tokens) == (11, 3, 14)
+
+
+async def test_direct_token_attributes_win_over_response_usage() -> None:
+    from agno.models.metrics import MessageMetrics
+
+    from src.agent.governed_model import _usage_tokens
+
+    response = ModelResponse(
+        input_tokens=3,
+        response_usage=MessageMetrics(input_tokens=99),
+    )
+
+    assert _usage_tokens(response, "input_tokens") == 3
+    assert _usage_tokens(response, "output_tokens") == 0  # MessageMetrics default
+    assert _usage_tokens(ModelResponse(), "input_tokens") is None
+
