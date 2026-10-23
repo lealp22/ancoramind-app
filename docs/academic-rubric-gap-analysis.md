@@ -99,7 +99,7 @@ recolectados, 219 de integración recolectados, ruff y mypy limpios (187 fichero
 
 **Cubierto:** despliegue Railway + Gateway + Supabase + Collector/Grafana Cloud;
 CI con ruff, mypy, pytest y `export_prompt_history --check`; migraciones Alembic;
-evaluador determinista corriendo (`scripts/run_evals.py` valida **45 casos en 6
+evaluador determinista corriendo (`scripts/run_evals.py` valida **59 casos en 6
 categorías**; no llama a ningún LLM); harness aislado del Agent y del Core de
 consentimiento; `/health/readiness`, OpenTelemetry, ledger de uso en PostgreSQL,
 dashboard propio `/admin/dashboard` (FinOps y calidad); 2 260 tests unitarios
@@ -133,7 +133,7 @@ propietario**; PyRIT y Garak evaluados en papel.
 | # | Hueco | Esfuerzo | Gasto | Deploy |
 |---|---|---|---|---|
 | M4-1 | **Red-teaming no ejecutado** (lo pide el enunciado). PyRIT/Garak no están instalados ni hay resultados. Piloto propuesto sobre el harness aislado, mapeado a OWASP LLM Top 10; alternativa manual si no es viable. Estimación 0,5-5 USD (cálculo del agente, no del repo) | Medio | **Sí, requiere aprobación** | No |
-| M4-2 | **Seguridad sin medir con modelo real**: los 17 casos de `evals/security` son estáticos. Es el riesgo dominante (R1/R10). Ejecutar con `GovernedPhysicalEvalExecutor` y medir ASR/falsos positivos | Medio | Sí (≈ 0,1-0,5 USD) | No |
+| M4-2 | **Seguridad sin medir con modelo real**: los 31 casos de `evals/security` (17 originales + 14 semillas de red-teaming) son estáticos. Es el riesgo dominante (R1/R10). Ejecutar con `GovernedPhysicalEvalExecutor` y medir ASR/falsos positivos | Medio | Sí (≈ 0,1-0,5 USD) | No |
 | M4-3 | **Documento de riesgos propio**: promover el borrador de registro a `docs/` tras revisión | Bajo | No | No |
 | M4-4 | **Heurística de inyección débil**: el «8/8 recall» es recall **en muestra**, medido sobre los casos con los que se calibró, con 3 negativos benignos (no 2: el test exige 3 y los docs están desfasados). En web da 4/5. **No está cableada en ninguna tool** (verificado: `src/` no la importa), por lo que no protege producción. Ampliar corpus (≥ 100 negativos ES) y decidir cablear o descartar | Medio | No | Si se cablea |
 | M4-5 | **Aislamiento entre dos cuentas**: guion preparado (`specs/017…/data-isolation-e2e.md`), sin evidencia de ejecución real | Bajo-medio | Sí (≈ 13 interacciones, ≈ 0,05 USD) | No |
@@ -159,7 +159,7 @@ Verificadas por los agentes salvo indicación. En caso de conflicto manda
 | Dónde | Dice | Realidad detectada |
 |---|---|---|
 | `AGENTS.md` §3/§5 | 1 421 unitarios, 160 de integración | §1 del mismo fichero: 2 260 y 207; medido hoy: 2 262 / 219 recolectados |
-| `AGENTS.md`, `BACKLOG.md` | 36 casos de evals | `scripts/run_evals.py` valida 45 en 6 categorías |
+| `AGENTS.md`, `BACKLOG.md` | 36 casos de evals | `scripts/run_evals.py` valida 59 en 6 categorías |
 | `docs/development.md` | 506 tests | Obsoleto |
 | `docs/architecture.md` §2.4, §3, §13 | Admisión, ledger y LiteLLM «no implementados»; HITL de Agno | Implementados (ADR-004, specs/013); el consentimiento lo implementa el Core |
 | `docs/governance.md` §5 | Metadatos YAML `risk`/`requires_confirmation`; nombres previos al refactor; `temperature=0.7`, `r43` | No existen en `src/`; son ejemplos |

@@ -44,7 +44,7 @@ seis bloques de control implementados:
    fail-closed sin secretos.
 
 **Lo que NO hay (honestidad para el PDF):** ninguna campaña adversarial ejecutada contra un Agent real (el
-catálogo `evals/security` son 17 casos *estáticos*, validados por contrato; el 8/8 de recall es de una heurística
+catálogo `evals/security` son 31 casos *estáticos* (17 originales + 14 semillas de red-teaming añadidas el 2026-10-23), validados por contrato; el 8/8 de recall es de una heurística
 sin wiring, calibrada *en-muestra*), ni PyRIT ni Garak ejecutados, ni un risk register propio antes de este
 borrador, ni DPIA/revisión legal RGPD (el piloto se limita a datos ficticios), ni auditoría de dependencias en CI,
 ni E2E real de aislamiento entre dos cuentas (guion preparado, no evidenciado como ejecutado), ni persistencia de
@@ -177,13 +177,17 @@ medir con un modelo real**, seguido de **R11/R8 (higiene de cadena de suministro
 
 Verificado por **ejecución local** de `python scripts/run_evals.py` (determinista: sólo carga catálogos JSON e
 importa `src.agent.eval_semantic_scoring`; no llama a ningún LLM) **[EJECUTADO]**:
-`Evals catalog valid: 45 cases across 6 categories` — confirmation 7, documents 3, response_style 12,
-**security 17**, tool_selection 3, vehicle 3, + 9 ejemplos sintéticos provisionales de calibración.
+`Evals catalog valid: 59 cases across 6 categories` — confirmation 7, documents 3, response_style 12,
+**security 31**, tool_selection 3, vehicle 3, + 9 ejemplos sintéticos provisionales de calibración
+(ejecutado 2026-10-23; antes de las semillas de red-teaming eran 45 casos y 17 de `security`).
 
-Composición de las 17 de `security` (análisis propio del JSON): 13 con tag `prompt_injection` (8 de
-documento/nota/filename/multimodal-descrito + 5 de contenido web), 3 `benign_control`/`false_positive`,
-1 `least_privilege` (no existe tool genérica de borrado masivo). Resultado esperado: 11 `tool_call` (con
-`forbidden_tools`) y 6 `safe_response`. Cubren: instrucción en documento, filename malicioso, nota con
+Composición de las 31 de `security` (análisis propio del JSON): 13 con tag `prompt_injection` (8 de
+documento/nota/filename/multimodal-descrito + 5 de contenido web), 8 `injection_variant` (semillas de
+red-teaming: español, cambio de rol, leetspeak, ancho cero, confirmación falsificada en español, imagen
+Markdown de exfiltración, bloque de tool-result falso, petición de volcar el prompt), 9
+`benign_control`/`false_positive` (3 originales + 6 nuevos), 1 `least_privilege` (no existe tool genérica
+de borrado masivo). Resultado esperado: 25 `tool_call` (con `forbidden_tools`) y 6 `safe_response`. Los 17
+originales cubren: instrucción en documento, filename malicioso, nota con
 «confirmación» falsificada, cierre falso de delimitador, bidi Unicode en filename, base64, enlace de exfiltración,
 texto en imagen (**sólo descripción textual simulada**, no imagen real), y cinco casos web (snippet, título,
 confirmación falsificada, cierre de delimitador, petición de lectura de datos privados + URL).
@@ -320,6 +324,17 @@ interacción (`docs/model-selection-and-cost-projection.md`, 7 interacciones). 1
 **≈2–5 USD de techo** total, con ledger de la sesión de evals (specs/042). Las sesiones previas aprobadas fueron
 de 0,10 USD: este piloto exige **nueva aprobación de presupuesto** y clave eval dedicada.
 
+**Decisión del propietario (2026-10-24): aprobado el piloto con PyRIT (opción A).** Techo total **nominal de
+3 USD** (estimación, no promesa de factura exacta), **sesión nueva** independiente de la de 0,10 USD, clave
+Gateway de evals dedicada **creada por el propietario**, ejecución **sólo por el propietario** (el agente
+prepara código y no lanza inferencia ni despliega). Al llegar al tope se detiene: sin reintentos, sin
+relanzar casos interrumpidos y sin reconstruir salidas. El modelo atacante de PyRIT queda por decidir entre
+las opciones que proponga el agente, siempre vía Gateway con alias gobernado. Si falla, alternativa manual
+(opción C) con el mismo catálogo. **Estado del evaluador:** el propietario indica que se está trabajando en el
+evaluador de specs/040-042 para que funcione de otra manera; este piloto no depende de modificarlo desde
+aquí, y cualquier cambio de su código exige SHA, CI y publicación aparte (specs/041-042). Hasta entonces la
+campaña previa sigue parcial (1/5) y se presenta tal cual.
+
 **Riesgos de la propia prueba y mitigaciones.** Gasto descontrolado (clave eval con tope + ledger + reserva por
 caso); contaminar producción (harness sin DB ni tools reales, Gateway-only, sin `.env` operativo); exfiltrar
 contenido sintético a terceros (todo sintético; reportes metadata-only); dependencia pesada/supply chain de PyRIT
@@ -346,7 +361,7 @@ crudos), ampliar `evals/security/cases.json` (más negativos benignos, ES/Unicod
 | # | Hueco | Qué hay hoy | Propuesta | Esfuerzo | ¿Gasto de inferencia? | ¿Despliegue? |
 |---|---|---|---|---|---|---|
 | H1 | **Red-teaming ejecutado** (PyRIT/Garak o equivalente) | Sólo documentado como candidato | Piloto §5.2 (opción A o manual C) | Medio | Sí (≈0,5–5 USD, aprobación) | No (harness aislado; requiere despliegue eval ya existente) |
-| H2 | **Evals adversariales contra Agent real** (cierra BL-39 punto 4) | 17 casos estáticos; ninguna ejecución real de `security` | Ejecutar `security` con `GovernedPhysicalEvalExecutor` y medir ASR/FP | Medio | Sí (bajo, ≈0,1–0,5 USD) | No |
+| H2 | **Evals adversariales contra Agent real** (cierra BL-39 punto 4) | 31 casos estáticos; ninguna ejecución real de `security` | Ejecutar `security` con `GovernedPhysicalEvalExecutor` y medir ASR/FP | Medio | Sí (bajo, ≈0,1–0,5 USD) | No |
 | H3 | **Documento de riesgos propio** | Modelo de amenaza dentro de `llm-security-hardening.md`; este borrador de §3 | Promover §3 a `docs/` tras revisión del propietario | Bajo | No | No |
 | H4 | **Aislamiento real entre dos cuentas** | Guion `data-isolation-e2e.md` preparado; repos probados por separado | Ejecutar el guion (4+9 interacciones) | Bajo-medio | Sí (13 interacciones ≈ 0,05 USD) | No (usa el entorno actual; necesita ventana/SHA/cuenta B) |
 | H5 | **Escaneo de dependencias/secretos/imagen en CI** | Ruff `S`, mypy; sin lockfile; sin `pip-audit`, Dependabot, gitleaks/trivy | Lockfile + `pip-audit` + secret scanning + Dependabot; digest de imagen base; `USER` no-root | Bajo | No | Sí para Dockerfile (nuevo build) |
@@ -380,7 +395,7 @@ con las limitaciones X». Con la evidencia actual, lo defendible es lo segundo.
    Incluir **una tabla amenaza→control→ruta→prueba** y 1–2 fragmentos de código citables
    (`claim_confirmation`, sobre `untrusted_data`).
 4. **Registro de riesgos** (§3) con riesgo residual y responsables; resaltar R1/R10 como riesgo dominante.
-5. **Evidencia de verificación** — suite (2260/207), evals deterministas (45 casos), heurística (8/8 con sus límites),
+5. **Evidencia de verificación** — suite (2260/207), evals deterministas (59 casos), heurística (8/8 con sus límites; 1/8 sobre las variantes nuevas),
    auditoría specs/023 con hallazgos reales y su remediación (caso ilustrativo del bypass legacy y del bug de `/new`).
 6. **Red-teaming** — marco (OWASP LLM Top 10), PyRIT vs. Garak, resultado del piloto (**si se ejecuta**; si no,
    presentar la propuesta, el playbook manual y la justificación de no haberlo ejecutado).

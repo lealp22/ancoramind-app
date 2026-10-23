@@ -24,7 +24,7 @@
   (2026-10-17). Los commits posteriores (hasta `253b0bb`, 2026-10-22) están **validados sólo en local**.
 - **Evaluación pre-producción.** 2.260 tests unitarios pasan (2 omitidos), cobertura 81,75 % (ejecutado
   hoy), 219 de integración con PostgreSQL real recolectados (no ejecutables sin Docker; última
-  ejecución documentada 207 pasan + 1 omitido). Catálogo de **45 casos sintéticos / 6 categorías**
+  ejecución documentada 207 pasan + 1 omitido). Catálogo de **59 casos sintéticos / 6 categorías**
   con validador determinista, un harness aislado del Agent (con tools simuladas), un harness Core de
   consentimiento y heurísticas deterministas anti-inyección (recall 8/8 sobre el catálogo con el que
   se calibraron, 4/5 sobre casos web no usados para calibrar).
@@ -253,14 +253,14 @@ Tipos (ficheros en `tests/unit/` ≈ 150):
 
 ### 3.2 Catálogo de evals (verificado con `python scripts/run_evals.py`)
 
-`evals/*/cases.json` — **45 casos, 6 categorías** **[CÓDIGO]** (README/AGENTS citan 36 o 42 en frases antiguas):
+`evals/*/cases.json` — **59 casos, 6 categorías** **[CÓDIGO]** (45 hasta el 2026-10-22; el 2026-10-23 se añadieron 14 semillas de red-teaming a `security`; README/AGENTS citan 36 o 42 en frases antiguas):
 
 | Categoría | Casos | Outcomes esperados | Qué protege |
 |---|---:|---|---|
 | `confirmation` | 7 | 4 `safe_response`, 2 `confirm_pending_action`, 1 `tool_call` | consentimiento: ni cero/múltiples propuestas, ni expirada, ni de otro principal, ni "sí" ambiguo |
 | `documents` | 3 | 2 `tool_call`, 1 `safe_response` | uso de tools documentales y control de contenido no confiable |
 | `response_style` | 12 (26 criterios) | 9 `tool_call`, 2 `safe_response`, 1 `clarify` | brevedad, incertidumbre, presentación particionada de propuestas, nombres de documento sin UUID |
-| `security` | 17 | 11 `tool_call`, 6 `safe_response` | 13 de inyección (docs, filenames, tool_result, web, delimitadores, confirmación falsificada, exfiltración) + 3 controles benignos/falsos positivos |
+| `security` | 31 | 25 `tool_call`, 6 `safe_response` | 13 de inyección (docs, filenames, tool_result, web, delimitadores, confirmación falsificada, exfiltración) + 8 variantes de red-teaming (`injection_variant`: español, rol, leetspeak, ancho cero, imagen Markdown, tool-result falso, fuga de prompt) + 9 controles benignos/falsos positivos + 1 de mínimo privilegio |
 | `tool_selection` | 3 | 3 `tool_call` | elección de tool correcta |
 | `vehicle` | 3 | 2 `tool_call`, 1 `clarify` | flujo de vehículos |
 
@@ -271,7 +271,7 @@ Contrato JSON v1: `id`, `description`, `input`, `context` (sintético, nunca ide
 
 | Runner | Qué mide exactamente | LLM |
 |---|---|---|
-| `scripts/run_evals.py` | **Estructura del catálogo:** schema v1, ids únicos con prefijo de categoría, outcome válido, contradicciones (`required_tool` ∈ `forbidden_tools`), ausencia de secretos obvios, cobertura; valida además el fixture de 9 ejemplos de calibración. Salida `Evals catalog valid: 45 cases across 6 categories` (exit 0). **No** mide comportamiento del modelo | No |
+| `scripts/run_evals.py` | **Estructura del catálogo:** schema v1, ids únicos con prefijo de categoría, outcome válido, contradicciones (`required_tool` ∈ `forbidden_tools`), ausencia de secretos obvios, cobertura; valida además el fixture de 9 ejemplos de calibración. Salida `Evals catalog valid: 59 cases across 6 categories` (exit 0). **No** mide comportamiento del modelo | No |
 | `src.agent.evals` (`evaluate_observation`, specs/018) | Compara por código: `outcome` esperado vs observado, `required_tool` observada, `forbidden_tools` no observadas, `requires_user_confirmation`, y que exista propuesta reviewable creada en el run para `propose_todo_item`. Un `Model` guionizado en tests | No (en tests) |
 | `GovernedPhysicalEvalExecutor` (`src/agent/eval_physical_executor.py`) | Agent real, modelo vía `LLMAccess` inyectado, snapshot/presupuesto propios, 15 tools simuladas sin I/O (`eval_tools.py`); `outcome` derivado sólo de las tools realmente invocadas; `present_reply` terminal como en producción | Sí, sólo con campaña autorizada |
 | `CoreConsentEvalExecutor` (T6b) | Protocolo Core de consentimiento con almacén sintético: propuesta presentada → claim válido → mutación; negativos de cero/múltiples/no presentada/expirada/otro principal/descarte; `WRITE_TRIVIAL` fuera del pipeline | No |
@@ -292,7 +292,7 @@ Hechos de medición honestos sobre las heurísticas (`tests/unit/test_injection_
 Respuesta para la rúbrica ("al menos algún evaluador no-subjetivo"): existen **tres capas deterministas**
 ejecutables sin coste:
 
-1. Validador de catálogo (`run_evals.py`, 45 casos) y su test (`test_eval_catalog.py`).
+1. Validador de catálogo (`run_evals.py`, 59 casos) y su test (`test_eval_catalog.py`).
 2. Comparador de observaciones del harness (`evaluate_observation`): criterios binarios sobre tool llamada /
    tool vetada / outcome / confirmación — **no dependen del texto** de la respuesta.
 3. Verificación de reglas de gobernanza en Core por tests de integración (consentimiento, claims únicos,
@@ -300,7 +300,7 @@ ejecutables sin coste:
 
 Resultado real documentado: el comparador se ejercitó con Model guionizado (offline). Con modelo real sólo se
 ha ejecutado la campaña del §3.6. **No existe aún una cifra de "tasa de acierto de tool selection con LLM real"**
-(ningún informe agregado de pass-rate sobre los 45 casos).
+(ningún informe agregado de pass-rate sobre los 59 casos).
 
 ### 3.5 Harness aislado del Agent y del Core de consentimiento
 
@@ -541,7 +541,7 @@ Plan mínimo de implantación (sólo con señales ya existentes): (1) provisiona
 | H-7 | **Despliegue por un tercero reproducible sin conocimiento previo** | guía paso a paso extensa pero con ~35 variables manuales y estado documental mixto (contradicciones Auto Deploy/Wait for CI) | Consolidar un único `docs/deployment-railway.md` con "estado vigente" y un `Makefile`/script de preflight que valide variables y migración (extender `run-e2e.ps1 -Check`) | Bajo | No | No |
 | H-8 | **Trazas con contenido para diagnóstico** (Phoenix) no operativas | ADR-007 Proposed; spike local | Cerrar el spike (seam de procedencia, coste, SLO de overhead), aceptar la enmienda del principio 11 y activar bajo flag sólo para el propietario | Alto | No | Sí |
 | H-9 | **Estado de parada de emergencia no durable** | sólo memoria | Tabla Postgres + repositorio detrás de `EmergencyStopReader` | Bajo-medio | No | No (tests locales) |
-| H-10 | Red-teaming ejecutado (relevante a evaluación de seguridad, módulo 4) | PyRIT/Garak sólo documentados | Piloto mínimo sobre el harness aislado con los 17 casos `security` y variantes | Medio | Sí | No obligatorio |
+| H-10 | Red-teaming ejecutado (relevante a evaluación de seguridad, módulo 4) | PyRIT/Garak sólo documentados | Piloto mínimo sobre el harness aislado con los 31 casos `security` (incluye 8 variantes semilla) y las variantes que genere PyRIT | Medio | Sí | No obligatorio |
 | H-11 | Evidencia de "estado actual de producción" | última nota 2026-10-17; plataforma hoy no disponible | Capturas/exports ya existentes (URL del dashboard Grafana, tablas de IDs en `mvp-release-campaign.md`) como evidencia fechada; no inventar métricas actuales | Bajo | No | No |
 
 ---
@@ -556,7 +556,7 @@ Plan mínimo de implantación (sólo con señales ya existentes): (1) provisiona
    patrón de CD; migraciones, secretos, rollback (§2.2–2.6).
 4. **Evaluación previa a producción**
    4.1 Pirámide de pruebas con cifras (2.260 unitarias, 219 de integración, E2E manuales).
-   4.2 Catálogo de evals (45 casos / 6 categorías) y evaluador determinista (qué mide exactamente).
+   4.2 Catálogo de evals (59 casos / 6 categorías) y evaluador determinista (qué mide exactamente).
    4.3 Harness aislado del Agent y harness Core de consentimiento; seguridad de la evaluación (presupuesto, sin replay).
    4.4 Heurísticas anti-inyección: resultados y límites de la medición.
    4.5 Campañas reales y lecciones (campaña interrumpida, run parcial, `InvalidPresentationOutputError`).
