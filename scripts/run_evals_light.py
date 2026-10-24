@@ -51,6 +51,16 @@ EXCLUDED_CASES = {
 }
 
 
+AGENT_PRICE_IN_PER_M = 0.10   # USD/M tokens de entrada: ESTIMACIÓN (catálogo OpenRouter
+AGENT_PRICE_OUT_PER_M = 0.50  # 2026-10-18, GPT-6 Luna); no es la factura real.
+
+
+def estimate_agent_cost(usage: dict[str, Any]) -> float:
+    """Coste estimado del Agent: el ledger de uso no trae coste (pricing=None)."""
+    return (usage["input_tokens"] * AGENT_PRICE_IN_PER_M
+            + usage["output_tokens"] * AGENT_PRICE_OUT_PER_M) / 1_000_000
+
+
 class UsageCollector:
     """Recoge tokens/coste por llamada del Agent (solo metadatos, sin contenido)."""
 
@@ -115,11 +125,11 @@ def judge_case(client: httpx.Client, key: str, case: EvalCase, answer: str,
 
 
 async def run_case(executor: Any, case: EvalCase, route: str, revision: int,
-                   collector: UsageCollector) -> dict[str, Any]:
+                   collector: UsageCollector, timeout: float = 240.0) -> dict[str, Any]:
     request = EvalExecutionRequest(case=case, logical_route=route, config_revision=revision)
     started = time.monotonic()
     try:
-        observation = await executor.execute(request)
+        observation = await asyncio.wait_for(executor.execute(request), timeout=timeout)
     except Exception as error:  # noqa: BLE001 - un caso roto no debe parar la suite
         diagnostic = getattr(error, "diagnostic", None)
         return {"case_id": case.case_id, "category": case.category, "status": "error",
@@ -175,22 +185,24 @@ def git_sha() -> str:
         return "unknown"
 
 
-async def run_suite(args: argparse.Namespace, cases: list[EvalCase]) -> dict[str, Any]:
+async def run_suite(args: argparse.Namespace, cases: list[EvalCase],
+                    spent_before: float = 0.0) -> dict[str, Any]:
     collector = UsageCollector()
     executor = build_executor(collector)
     core_executor = CoreConsentEvalExecutor()
     route, revision = "ancoramind-default", executor._snapshot.revision  # noqa: SLF001
     key = os.environ.get("OPENROUTER_API_KEY", "")
-    judge_tokens, rows = 0, []
+    judge_tokens, rows, stopped = 0, [], False
     with httpx.Client(timeout=60, follow_redirects=False, trust_env=False) as client:
         for case in cases:
-            spent = sum(r["usage"]["cost_usd"] or 0 for r in rows) + (
+            spent = spent_before + sum(estimate_agent_cost(r["usage"]) for r in rows) + (
                 judge_tokens * judge_bench.PRICES[JUDGE_MODEL] / 1_000_000)
             if spent >= args.max_usd:
                 print(f"tope_alcanzado {spent:.4f} USD: casos restantes sin ejecutar")
+                stopped = True
                 break
             row = await run_case(core_executor if case.category == CORE_CATEGORY else executor,
-                                 case, route, revision, collector)
+                                 case, route, revision, collector, args.case_timeout)
             answer = row.pop("_answer", "")
             proposal_text = row.pop("_proposal_text", "")
             persisted = row.pop("_persisted", 0)
@@ -213,6 +225,8 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase]) -> dict[str
         "agent_output_tokens": sum(r["usage"]["output_tokens"] for r in rows),
         "agent_cost_usd": None if any(c is None for c in agent_cost) else round(
             sum(agent_cost), 6),
+        "agent_cost_est_usd": round(sum(estimate_agent_cost(r["usage"]) for r in rows), 6),
+        "stopped_by_budget": stopped,
         "judge_input_tokens": judge_tokens, "judge_cost_usd": judge_cost, "rows": rows,
     }
 
@@ -224,7 +238,12 @@ def main() -> int:
     parser.add_argument("--case", action="append", help="id de caso, repetible")
     parser.add_argument("--no-judge", action="store_true")
     parser.add_argument("--max-usd", type=float, default=0.30,
-                        help="para antes del siguiente caso si el gasto lo supera")
+                        help="para antes del siguiente caso si el gasto ESTIMADO lo supera "
+                             "(acumulado entre repeticiones)")
+    parser.add_argument("--repeat", type=int, default=1,
+                        help="pasadas seguidas; cada una añade su línea al ledger")
+    parser.add_argument("--case-timeout", type=float, default=240.0,
+                        help="segundos máximos por caso (un caso colgado no bloquea la suite)")
     args = parser.parse_args()
     cases = load_eval_cases(categories=set(args.category) if args.category else None)
     cases = [c for c in cases if not args.case or c.case_id in set(args.case)]
@@ -240,14 +259,22 @@ def main() -> int:
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
     async def amain() -> None:
-        summary = await run_suite(args, cases)
-        # Registro y resumen dentro del bucle: loop.close() se cuelga en Windows.
-        append_ledger({k: v for k, v in summary.items() if k != "rows"} | {
-            "rows": summary["rows"]})
-        print(json.dumps({k: v for k, v in summary.items() if k != "rows"},
-                         ensure_ascii=False), flush=True)
+        total, all_passed = 0.0, True
+        for number in range(1, args.repeat + 1):
+            print(f"== pasada {number}/{args.repeat} (gasto estimado acumulado "
+                  f"{total:.4f} USD) ==", flush=True)
+            summary = await run_suite(args, cases, spent_before=total)
+            # Registro dentro del bucle: loop.close() se cuelga en Windows.
+            append_ledger({k: v for k, v in summary.items() if k != "rows"} | {
+                "rows": summary["rows"]})
+            print(json.dumps({k: v for k, v in summary.items() if k != "rows"},
+                             ensure_ascii=False), flush=True)
+            total += summary["agent_cost_est_usd"] + summary["judge_cost_usd"]
+            all_passed = all_passed and summary["passed"] == summary["cases"]
+            if summary["stopped_by_budget"]:
+                break
         sys.stdout.flush()
-        os._exit(0 if summary["passed"] == summary["cases"] else 1)
+        os._exit(0 if all_passed else 1)
 
     asyncio.run(amain())
     return 0
