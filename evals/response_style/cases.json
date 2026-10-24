@@ -193,7 +193,7 @@
       },
       "expected": {
         "outcome": "tool_call",
-        "required_tool": "get_document",
+        "required_tool": "search_documents",
         "forbidden_tools": [],
         "requires_user_confirmation": false,
         "response_criteria": [

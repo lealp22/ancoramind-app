@@ -71,17 +71,25 @@ def build_executor(collector: UsageCollector):
     return GovernedPhysicalEvalExecutor(llm_access=access)
 
 
-def judge_state(case: EvalCase, text: str) -> dict[str, Any]:
-    return {"peticion_del_usuario": case.input_text, "contexto": dict(case.synthetic_context),
-            "respuesta_answer": text, "respuesta_proposal_text": ""}
+def judge_state(case: EvalCase, answer: str, proposal_text: str = "",
+                persisted_proposals: int | None = None) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "peticion_del_usuario": case.input_text, "contexto": dict(case.synthetic_context),
+        "respuesta_answer": answer, "respuesta_proposal_text": proposal_text}
+    if persisted_proposals is not None:
+        # Hecho objetivo medido por el código: el juez no puede verlo en el texto.
+        state["propuestas_persistidas_por_el_core"] = persisted_proposals
+    return state
 
 
-def judge_case(client: httpx.Client, key: str, case: EvalCase, text: str,
-               model: str) -> tuple[list[dict[str, Any]], int]:
+def judge_case(client: httpx.Client, key: str, case: EvalCase, answer: str,
+               proposal_text: str, model: str,
+               persisted_proposals: int | None = None) -> tuple[list[dict[str, Any]], int]:
     """Un `noul` por criterio. Devuelve (veredictos, tokens de entrada)."""
     verdicts, tokens = [], 0
     for index, criterion in enumerate(case.response_criteria):
-        item = {"state": judge_state(case, text), "criterion": criterion}
+        item = {"state": judge_state(case, answer, proposal_text, persisted_proposals),
+                "criterion": criterion}
         try:
             p, used = judge_bench.ask(client, key, model, item)
         except (httpx.HTTPError, KeyError, ValueError):
@@ -112,7 +120,11 @@ async def run_case(executor: Any, case: EvalCase, route: str, revision: int,
             "status": "pass" if not failures else "fail",
             "failures": failures, "tools": list(result.observed_tool_names),
             "usage": collector.take(), "seconds": round(time.monotonic() - started, 1),
-            "_text": observation.delivered_text or observation.response_text or ""}
+            "_answer": (observation.reply.answer if observation.reply else "") or "",
+            "_proposal_text": (getattr(observation.reply, "proposal_text", "")
+                               if observation.reply else "") or "",
+            "_persisted": sum(1 for p in (observation.proposals or ())
+                              if p.get("created_this_run"))}
 
 
 def settle_status(row: dict[str, Any], case: EvalCase, judged: bool) -> None:
@@ -159,11 +171,14 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase]) -> dict[str
                 print(f"tope_alcanzado {spent:.4f} USD: casos restantes sin ejecutar")
                 break
             row = await run_case(executor, case, route, revision, collector)
-            text = row.pop("_text", "")
+            answer = row.pop("_answer", "")
+            proposal_text = row.pop("_proposal_text", "")
+            persisted = row.pop("_persisted", 0)
             judged = bool(case.response_criteria) and row["status"] != "error" \
                 and not args.no_judge
             if judged:
-                row["judge"], used = judge_case(client, key, case, text, JUDGE_MODEL)
+                row["judge"], used = judge_case(client, key, case, answer, proposal_text,
+                                                JUDGE_MODEL, persisted)
                 judge_tokens += used
             settle_status(row, case, judged)
             rows.append(row)
