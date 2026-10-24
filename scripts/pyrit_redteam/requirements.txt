@@ -1,0 +1,18 @@
+# Isolated red-team venv ONLY (outside the repo). Never add to pyproject.toml
+# dependencies and never import PyRIT from src/ (BL-55 M4-1, modulo-4 §5.2).
+#
+# Install in TWO steps (PowerShell, from the repo root), after creating the venv:
+#
+#   python -m venv C:\Users\0020572\venvs\pyrit-redteam
+#   $py = "C:\Users\0020572\venvs\pyrit-redteam\Scripts\python.exe"
+#   & $py -m pip install --no-deps --no-binary=ecoji -r scripts\pyrit_redteam\requirements-ecoji.txt
+#   & $py -m pip install --only-binary=:all: -r scripts\pyrit_redteam\requirements.txt
+#   & $py -m pip check
+#   & $py -m pip list        # must list pyrit 1.1.0 and ecoji 0.1.1
+#
+# Step 1 builds the single package that publishes no wheel (see
+# requirements-ecoji.txt). Step 2 refuses any other source build
+# (--only-binary avoids running third-party setup.py) and finds ecoji already
+# satisfied. `pip check` alone proves nothing: an empty venv also passes it.
+# Exact pin: PyRIT v1.1.0 (MIT, microsoft/PyRIT, released 2026-09-04).
+pyrit==1.1.0

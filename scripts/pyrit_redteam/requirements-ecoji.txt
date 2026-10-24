@@ -1,0 +1,12 @@
+# The ONLY package allowed to build from source in the PyRIT red-team venv.
+# `ecoji` is a transitive dependency of PyRIT (used by its emoji converter, which
+# this pilot does not use) and publishes an sdist but no wheel.
+#
+# Reviewed 2026-10-24 by reading the downloaded sdist without executing it:
+# ecoji 0.1.1, Apache license, plain-setuptools setup.py, 280 lines of pure
+# Python, no network, subprocess, eval or exec. Do not extend this exception.
+#
+# Install on its own with --no-deps: pip's hash-checking mode (triggered by --hash)
+# requires hashes for every requirement in the file, so this must stay separate
+# from requirements.txt. Build-time tools (setuptools) are not covered by the hash.
+ecoji==0.1.1 --hash=sha256:9665b2545d73ea0b4e0c9897cc6575df8ae7dc3946a82ac9d62db2f147139a9c
