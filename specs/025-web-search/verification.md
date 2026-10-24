@@ -64,10 +64,33 @@ buscar, si cita las URLs, cómo sintetiza) ni la telemetría real de Grafana/OTe
 solo los logs de Python capturados en el proceso. Calidad de fuentes: una de
 cinco es un vídeo y dos son de otros países, algo a tener en cuenta en el prompt.
 
+## Manual — flujo del Agent por Telegram en producción (2026-10-24)
+
+Prueba manual del propietario, tres mensajes entre las 20:48 y las 20:50 (CEST):
+uno de texto ("¿qué ha pasado con el hackeo a PHP?") y dos de voz (seguimiento
+sobre el alcance del incidente y sobre Node.js). Telemetría revisada después en
+Grafana Tempo (`runtime_config.revision` 9, ruta `ancoramind-default-r4`).
+
+- [x] El Agent decide buscar: `search_web` aparece en los tres runs (1, 1 y 2
+  llamadas) y cada run termina con `present_reply`.
+- [x] Cita fuentes: las tres respuestas incluyen enlaces (WIRED/Reuters/Xataka,
+  EL PAÍS/France 24/Reuters, nodejs.org) y distinguen intentos de explotación de
+  sistemas comprometidos.
+- [x] Sin consulta ni snippets en trazas: los spans `ancora.tool.call` solo
+  llevan el nombre de la tool y los IDs de correlación; ningún atributo contiene
+  la consulta ni resultados.
+- [x] Coste: 0,0031 / 0,0037 / 0,0065 USD por run (2, 2 y 3 llamadas al modelo).
+
+**Límites:** solo se revisó Tempo. El datasource de Loki no devolvió etiquetas en
+esa ventana, así que no hay evidencia de logs (ni a favor ni en contra), y no se
+consultó Phoenix (ADR-007). Los spans no registran créditos de Tavily ni número
+de resultados. No se han probado todavía por Telegram: consulta con dato personal
+(DNI/IBAN/matrícula) a través del Agent ni una página con instrucciones
+incrustadas.
+
 ## Manual pendiente
 
-- [ ] Flujo del Agent por Telegram (Railway + Telegram Web con Playwright,
-  sesión iniciada por el propietario): confirmar que el Agent decide buscar,
-  cita las URLs y que no aparecen consulta/snippets en la telemetría. Bloqueado
-  por el incidente de Railway; las variables ya están puestas, falta que el
-  deployment pendiente (`NEEDS_APPROVAL`) se despliegue y verificar su SHA.
+- [ ] Consulta con dato personal por Telegram: el Agent no debe reformularla para
+  esquivar el filtro y no debe haber llamada a Tavily.
+- [ ] Contenido web con instrucciones incrustadas (prompt injection real).
+- [ ] Confirmar ausencia de consulta/snippets en logs y en Phoenix si está activo.

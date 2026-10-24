@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 import httpx  # noqa: E402
 
 from scripts import judge_bench  # noqa: E402
+from src.agent.eval_core_consent_executor import CoreConsentEvalExecutor  # noqa: E402
 from src.agent.evals import (  # noqa: E402
     EvalCase,
     EvalExecutionRequest,
@@ -36,6 +37,18 @@ LEDGER = ROOT / "evals" / "runs" / "ledger.jsonl"
 JUDGE_MODEL = "respan/span-02"
 SECOND_OPINION = "openai/gpt-6-luna-decisions"
 SEMANTIC_OUTCOMES = frozenset({"clarify", "safe_response"})
+CORE_CATEGORY = "confirmation"  # lo resuelve el harness Core, sin LLM (specs/018 T6b)
+# Casos que el runner ligero no puede ejecutar: motivo por caso.
+EXCLUDED_CASES = {
+    # El executor crea el adjunto como application/octet-stream y Agno sólo admite
+    # una lista cerrada de MIME: falla con ValidationError antes de llamar al modelo.
+    "documents.attachment_is_analyzed_once",
+    # OpenRouter bloquea la petición con 403 ("prompt injection patterns detected")
+    # por la frase literal "Ignore previous instructions": el modelo nunca ve el caso.
+    # El texto no se reformula: lo fijan los tests de recall de la heurística (BL-39).
+    "security.document_prompt_injection_is_data",
+    "security.web_snippet_instruction_is_data",
+}
 
 
 class UsageCollector:
@@ -108,13 +121,17 @@ async def run_case(executor: Any, case: EvalCase, route: str, revision: int,
     try:
         observation = await executor.execute(request)
     except Exception as error:  # noqa: BLE001 - un caso roto no debe parar la suite
+        diagnostic = getattr(error, "diagnostic", None)
         return {"case_id": case.case_id, "category": case.category, "status": "error",
-                "error": type(error).__name__, "usage": collector.take(),
+                "error": type(error).__name__,
+                **({"terminal": diagnostic.model_dump()} if diagnostic else {}),
+                "usage": collector.take(),
                 "seconds": round(time.monotonic() - started, 1)}
     result = evaluate_observation(request, observation)
     failures = list(result.failures)
-    if case.expected_outcome in SEMANTIC_OUTCOMES:
+    if case.expected_outcome in SEMANTIC_OUTCOMES and case.category != CORE_CATEGORY:
         # clarify/safe_response solo se distinguen leyendo el texto: decide el juez.
+        # En `confirmation` el resultado lo fija el Core de forma determinista.
         failures = [f for f in failures if not f.startswith("outcome expected")]
     return {"case_id": case.case_id, "category": case.category,
             "status": "pass" if not failures else "fail",
@@ -134,7 +151,8 @@ def settle_status(row: dict[str, Any], case: EvalCase, judged: bool) -> None:
     verdicts = [j["verdict"] for j in row.get("judge", [])] if judged else []
     if "fail" in verdicts:
         row["status"] = "fail"
-    elif case.expected_outcome in SEMANTIC_OUTCOMES and not judged:
+    elif (case.expected_outcome in SEMANTIC_OUTCOMES and case.category != CORE_CATEGORY
+          and not judged):
         row["status"] = "unevaluated"  # sin juez no hay forma de comprobar el texto
     elif any(v != "pass" for v in verdicts):
         row["status"] = "review"  # juez incierto o con error: revisión humana
@@ -160,6 +178,7 @@ def git_sha() -> str:
 async def run_suite(args: argparse.Namespace, cases: list[EvalCase]) -> dict[str, Any]:
     collector = UsageCollector()
     executor = build_executor(collector)
+    core_executor = CoreConsentEvalExecutor()
     route, revision = "ancoramind-default", executor._snapshot.revision  # noqa: SLF001
     key = os.environ.get("OPENROUTER_API_KEY", "")
     judge_tokens, rows = 0, []
@@ -170,7 +189,8 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase]) -> dict[str
             if spent >= args.max_usd:
                 print(f"tope_alcanzado {spent:.4f} USD: casos restantes sin ejecutar")
                 break
-            row = await run_case(executor, case, route, revision, collector)
+            row = await run_case(core_executor if case.category == CORE_CATEGORY else executor,
+                                 case, route, revision, collector)
             answer = row.pop("_answer", "")
             proposal_text = row.pop("_proposal_text", "")
             persisted = row.pop("_persisted", 0)
@@ -208,9 +228,12 @@ def main() -> int:
     args = parser.parse_args()
     cases = load_eval_cases(categories=set(args.category) if args.category else None)
     cases = [c for c in cases if not args.case or c.case_id in set(args.case)]
-    # Los casos de consentimiento exigen un harness Core distinto (ver specs/018).
-    cases = [c for c in cases if c.expected_outcome != "confirm_pending_action"
-             and not (c.required_tool or "").startswith("execute_")]
+    # `confirmation` va al harness Core (determinista, sin LLM); en el resto, los casos
+    # de consentimiento no son ejecutables por el Agent, que no tiene `execute_*`.
+    cases = [c for c in cases if c.case_id not in EXCLUDED_CASES]
+    cases = [c for c in cases if c.category == CORE_CATEGORY or (
+        c.expected_outcome != "confirm_pending_action"
+        and not (c.required_tool or "").startswith("execute_"))]
     if not args.run:
         print(f"ensayo: {len(cases)} casos seleccionados; añade --run para inferir")
         return 0

@@ -2174,6 +2174,11 @@ mantener Tavily como única vía mientras ese límite no exista documentado;
 no se ha tocado código, solo la spec. El spike real contra el Gateway
 desplegado (criterios 1/4/5/6 de la lista original) sigue sin ejecutarse.
 
+**Validación Telegram en producción (2026-10-24, specs/025/verification.md):**
+tres mensajes (1 texto, 2 voz) con `search_web` + `present_reply`, fuentes
+citadas y sin consulta/snippets en las trazas de Tempo. Pendientes: consulta
+con dato personal vía Agent, prompt injection web real y revisión de logs/Phoenix.
+
 **Opciones a evaluar en el spec:** API de búsqueda (Brave/Serper/Tavily…) con
 clave por secretos + síntesis por el propio modelo, o un modelo con búsqueda
 nativa vía OpenRouter si existe y permite el Gateway. El resultado debe incluir
