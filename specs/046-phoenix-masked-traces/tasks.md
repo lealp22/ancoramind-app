@@ -12,9 +12,17 @@
       red de seguridad numérica.
 - [x] T3 · Corpus existente válido/inválido y 10 controles cotidianos en español;
       0 positivos en esos controles, no medida poblacional de falsos positivos.
-- [ ] T4 · `phoenix_export.py`: exporter envolvente con allowlist, máscara y
-      fail-closed por span. Prototipo sintético en `scripts/phoenix_spike/exporter.py`,
-      sin integración en `src/`; no confundir con exporter de producción terminado.
+- [x] T4 parcial (2026-10-25) · `src/observability/phoenix_export.py`:
+      `MaskedSpanExporter` (allowlist, máscara por esquema+patrón, fail-closed por
+      span, fail-open en I/O), procedencia `ancora.capture.source` ∈
+      {user_text, final_reply, proposal_args, call_metadata}, tools sólo
+      `propose_*`/`present_reply`, `build_phoenix_tracing`/`configure_`/`shutdown_`
+      con provider propio no global, nunca lanza y sin dependencias nuevas
+      (gRPC OTLP ya estaba). Tests en `tests/unit/test_phoenix_export.py`.
+      **Sin cablear**: no se llama desde `main.py`/`lifecycle.py` ni hay seam (T6),
+      así que ni siquiera con el flag ON se exporta nada. Pendiente de T4: cablear
+      arranque/parada junto a T6, y máscara por esquema de campos de dominio
+      concretos (T2). El prototipo del spike sigue siendo sólo referencia.
 - [x] T5 parcial (2026-10-23) · Settings `PHOENIX_*` en `src/config.py` y `.env.example`;
       `phoenix_tracing_active` exige flag + endpoint http(s) + API key + clave de
       seudónimo ≥32 + proyecto; configuración incompleta no impide arrancar
