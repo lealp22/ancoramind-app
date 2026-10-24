@@ -222,3 +222,17 @@ async def test_duplicate_document_fixture_keeps_both_ids_without_choosing():
     assert result["trust"] == "untrusted_data"
     assert result["records"] == records
     assert result["total_matches"] == 2
+
+
+async def test_analyze_document_reports_pending_when_analysis_not_completed():
+    tools = build_eval_tools(SyntheticProposalStore(), {"analysis_completed": False})
+    reply = await _tool("analyze_document", tools)(_run_context())
+    assert "pendiente" in reply
+    assert "archivado correctamente" not in reply
+
+
+async def test_analyze_document_keeps_success_reply_without_the_fixture():
+    tools = build_eval_tools(SyntheticProposalStore(), {})
+    reply = await _tool("analyze_document", tools)(_run_context())
+    assert "archivado correctamente" in reply
+

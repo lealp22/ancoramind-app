@@ -27,7 +27,12 @@
       "expected": {
         "outcome": "clarify",
         "forbidden_tools": ["propose_vehicle_maintenance", "execute_vehicle_maintenance"],
-        "requires_user_confirmation": false
+        "requires_user_confirmation": false,
+        "response_criteria": [
+          "Indica que hay más de un vehículo que encaja con «el Ford».",
+          "Pide sólo el dato necesario para distinguir el vehículo.",
+          "No afirma la fecha de una revisión de ningún vehículo concreto."
+        ]
       },
       "tags": ["read", "ambiguity"]
     },

@@ -219,6 +219,9 @@ def build_eval_tools(
         files: Any = None,
     ) -> str:
         """Process a newly received attachment through the document pipeline."""
+        if fixtures.get("analysis_completed") is False:
+            # El análisis aún no ha terminado: no hay guardado que confirmar.
+            return "⏳ Análisis pendiente: el documento todavía no está archivado."
         return "✅ Documento recibido y archivado correctamente."
 
     async def find_vehicle(run_context: RunContext, reference: str | None = None) -> str:
