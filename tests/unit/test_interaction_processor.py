@@ -370,6 +370,7 @@ async def test_processor_refreshes_typing_while_agent_run_is_pending(
             provenance=None,
             compaction_summary=None,
             reduced_history_runs=None,
+            capture_user_text=False,
         ) -> str:
             assert input_text == "hola"
             assert user_id == "5"
@@ -459,6 +460,78 @@ async def test_processor_resolves_attachment_after_claim_and_passes_media(
     resolver.resolve.assert_awaited_once()
     assert runner.run.await_args.kwargs["media"] == (resolved,)
     assert "analyze_document" in runner.run.await_args.args[0]
+
+
+async def _capture_flag_for(
+    monkeypatch: pytest.MonkeyPatch,
+    payload: dict,
+    *,
+    voice_text: str | None = None,
+) -> tuple[bool, str]:
+    """Run the processor on ``payload`` and return what the runner was told (specs/046 T6)."""
+    session = AsyncMock()
+    repo = AsyncMock(spec=TelegramInteractionsRepository)
+    cipher = TelegramPayloadCipher(Fernet.generate_key().decode("ascii"), key_version=1)
+    accepted = _interaction().model_copy(
+        update={"payload_ciphertext": cipher.encrypt(payload).ciphertext}
+    )
+    repo.claim_agent_start_with_run_id.return_value = accepted.model_copy(
+        update={"status": InteractionStatus.AGENT_STARTED}
+    )
+    response = AsyncMock()
+    response.id = uuid4()
+    repo.persist_response_ready.return_value = response
+    repo.claim_delivery_start.return_value = None
+    monkeypatch.setattr(processor_module, "TelegramInteractionsRepository", lambda _: repo)
+    resolver = AsyncMock()
+    resolver.resolve.return_value = ResolvedTelegramMedia(
+        content=b"x", filename="a.jpg", mime_type="image/jpeg", is_image=True
+    )
+    runner = AsyncMock()
+    runner.run.return_value = "ok"
+
+    async def session_factory() -> AsyncSession:
+        return cast(AsyncSession, session)
+
+    processor = InteractionProcessor(
+        session_factory=session_factory,
+        payload_cipher=cipher,
+        agent_runner=runner,
+        sender=AsyncMock(),
+        media_resolver=resolver,
+    )
+    await processor._run_agent(accepted, voice_text=voice_text)
+    return runner.run.await_args.kwargs["capture_user_text"], runner.run.await_args.args[0]
+
+
+async def test_typed_text_is_marked_capturable(monkeypatch: pytest.MonkeyPatch) -> None:
+    flag, text = await _capture_flag_for(monkeypatch, {"text": "apunta pan"})
+    assert (flag, text) == (True, "apunta pan")
+
+
+async def test_voice_transcription_is_never_marked_capturable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {"text": "texto tecleado", "attachments": [{"kind": "voice", "file_id": "v"}]}
+    flag, text = await _capture_flag_for(monkeypatch, payload, voice_text="lo que dije")
+    assert (flag, text) == (False, "lo que dije")
+
+
+async def test_synthesized_attachment_prompt_is_never_marked_capturable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {"text": None, "attachments": [{"kind": "photo", "file_id": "opaque-file-id"}]}
+    flag, text = await _capture_flag_for(monkeypatch, payload)
+    assert flag is False
+    assert "analyze_document" in text
+
+
+async def test_typed_caption_with_attachment_is_capturable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {"text": "guarda esto", "attachments": [{"kind": "photo", "file_id": "f"}]}
+    flag, _text = await _capture_flag_for(monkeypatch, payload)
+    assert flag is True
 
 
 def _attachment_bearing_interaction(

@@ -108,6 +108,7 @@ class InteractionAgentRunner(Protocol):
         execution_context: ExecutionContext | None = None,
         compaction_summary: str | None = None,
         reduced_history_runs: int | None = None,
+        capture_user_text: bool = False,
     ) -> str | AgentReply: ...
 
 
@@ -400,6 +401,11 @@ class InteractionProcessor:
             voices = tuple(item for item in attachments if item.kind == "voice")
             if voices and voice_text is None:
                 return await self._prepare_voice(interaction, voices[0], payload)
+            # Provenance for content traces (specs/046 T6): only text the user typed.
+            # A voice transcription or the synthesized attachment prompt below is not.
+            typed_text = (
+                voice_text is None and isinstance(input_text, str) and bool(input_text.strip())
+            )
             if voice_text is not None:
                 input_text = voice_text
                 attachments = ()
@@ -484,6 +490,7 @@ class InteractionProcessor:
                     provenance=self._provenance(interaction),
                     compaction_summary=compaction_summary,
                     reduced_history_runs=reduced_history_runs,
+                    capture_user_text=typed_text,
                     **({"execution_context": prepared_context} if prepared_context else {}),
                 )
                 content = await self._append_proposal_blocks(interaction, content)

@@ -50,6 +50,8 @@ _MESSAGE = re.compile(
 _TEXT_ATTRIBUTES = frozenset({"input.value", "output.value"})
 _TOOL_NAME = re.compile(r"propose_[a-z0-9_]+|present_reply")
 _PSEUDONYM = re.compile(r"[0-9a-f]{32}")
+# Exception class names only (never messages), so a failed run is diagnosable.
+_ERROR_TYPE = re.compile(r"[A-Za-z][A-Za-z0-9_.]{0,99}")
 # Schema layer (ADR-007 layer 1): masked by field name whatever the value looks like.
 _IDENTIFIERS = {
     "registration": "[MATRICULA]",
@@ -189,6 +191,12 @@ class MaskedSpanExporter(SpanExporter):
         return value
 
     @staticmethod
+    def _error_type(value: object) -> str:
+        if not isinstance(value, str) or not _ERROR_TYPE.fullmatch(value):
+            raise ValueError("Invalid error type")
+        return value
+
+    @staticmethod
     def _tool_name(value: object) -> str:
         if not isinstance(value, str) or not _TOOL_NAME.fullmatch(value):
             raise ValueError("Tool outside capture scope")
@@ -204,6 +212,8 @@ class MaskedSpanExporter(SpanExporter):
             return self._number(value)
         if key == "llm.model_name" or key in _TEXT_ATTRIBUTES:
             return self._text(value)
+        if key == "error.type":
+            return self._error_type(value)
         if key == "tool.name":
             return self._tool_name(value)
         if key == "tool.parameters":

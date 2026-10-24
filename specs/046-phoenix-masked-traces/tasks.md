@@ -19,20 +19,33 @@
       `propose_*`/`present_reply`, `build_phoenix_tracing`/`configure_`/`shutdown_`
       con provider propio no global, nunca lanza y sin dependencias nuevas
       (gRPC OTLP ya estaba). Tests en `tests/unit/test_phoenix_export.py`.
-      **Sin cablear**: no se llama desde `main.py`/`lifecycle.py` ni hay seam (T6),
-      así que ni siquiera con el flag ON se exporta nada. Pendiente de T4: cablear
-      arranque/parada junto a T6, y máscara por esquema de campos de dominio
-      concretos (T2). El prototipo del spike sigue siendo sólo referencia.
+      Cableado con T6 (2026-10-25): `lifecycle.py` llama a `configure_phoenix_tracing`
+      al crear el runner y a `shutdown_phoenix_tracing` en el apagado de
+      observabilidad. Con flag OFF o config incompleta devuelve `None` y no crea nada.
+      Pendiente de T4: máscara por esquema de campos de dominio concretos (T2) y
+      prueba contra Phoenix real en Railway. El prototipo del spike sigue siendo
+      sólo referencia.
 - [x] T5 parcial (2026-10-23) · Settings `PHOENIX_*` en `src/config.py` y `.env.example`;
       `phoenix_tracing_active` exige flag + endpoint http(s) + API key + clave de
       seudónimo ≥32 + proyecto; configuración incompleta no impide arrancar
       (fail-open) y solo informa nombres, nunca valores. Pendiente: alta del
       provider (va con T4); aún sin efecto en producción.
-- [ ] T6 · Captura manual en `GovernedInteractionRunner.run` (no en `ainvoke` ni
-      auto-instrumentación) según «Diseño de captura» de la spec: allowlist por
-      procedencia, voz excluida, exclusión previa de adjuntos/lecturas/historial y
-      rutas de extracción/Dream/compactación/evals, `correlation_id`,
-      `interaction_id` y seudónimo HMAC. Diseño aprobado 2026-10-23.
+- [x] T6 (2026-10-25, local, flag OFF) · Captura manual en
+      `GovernedInteractionRunner.run` vía `src/observability/phoenix_capture.py`
+      (política) + `phoenix_export.py` (exporter). Procedencia decidida por el
+      llamador: el processor pasa `capture_user_text` (False para voz, adjunto sin
+      texto sintetizado y cualquier otro llamador). Metadatos siempre (también en
+      fallo, con sólo el nombre de la clase de error). Respuesta del modelo y
+      argumentos `propose_*` sólo si el turno no tuvo adjuntos y todas sus tools
+      están en `SAFE_READ_TOOLS`/`propose_*`/`present_reply`: una tool nueva queda
+      excluida por defecto. Argumentos de tools de lectura nunca se capturan.
+      Trazas nuevas (contexto vacío), una por turno, con `correlation_id`,
+      `interaction_id` y seudónimo HMAC. Tests: `test_phoenix_capture.py` y
+      procedencia en `test_interaction_processor.py`; 4 mutaciones de las reglas de
+      privacidad rompen sus tests. **Desviación de la spec:** la spec capturaba la
+      respuesta final siempre; aquí se omite tras leer/analizar documentos o con
+      adjuntos, porque puede reproducir su contenido (ADR-007). Pendiente de
+      confirmar por el propietario, igual que la clasificación de `SAFE_READ_TOOLS`.
 - [ ] T7 · Test de privacidad: canarios no llegan al exporter; Grafana sin contenido;
       audio/adjuntos/documentos ausentes; LLM y BD intactos.
 - [ ] T8 · Test fail-open: Phoenix caído o error de máscara no afecta al Agent.

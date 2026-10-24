@@ -52,6 +52,8 @@ from src.observability import (
     log_context_scope,
     telemetry_attributes_from_execution_context,
 )
+from src.observability.phoenix_capture import ToolCallRecord, TurnRecord, capture_turn
+from src.observability.phoenix_export import PhoenixTracing
 from src.security.user_context import UserContext
 
 _UNTRUSTED_DATA_PREFIX = "Datos recuperados:\n"
@@ -99,12 +101,14 @@ class GovernedInteractionRunner:
         spend_reader: LlmSpendReader | None = None,
         stop_reader: EmergencyStopReader | None = None,
         tool_call_count_recorder: ToolCallCountRecorder | None = None,
+        phoenix_tracing: PhoenixTracing | None = None,
     ):
         self._config_manager = config_manager
         self._factory = factory
         self._spend_reader = spend_reader
         self._stop_reader = stop_reader
         self._tool_call_count_recorder = tool_call_count_recorder
+        self._phoenix_tracing = phoenix_tracing
 
     async def prepare_execution_context(
         self,
@@ -152,6 +156,67 @@ class GovernedInteractionRunner:
         )
         return context
 
+    def _capture_phoenix_turn(
+        self,
+        context: ExecutionContext,
+        *,
+        user_id: str,
+        input_text: str | None,
+        had_media: bool,
+        output: RunOutput | None,
+        failure: str | None,
+        started_ns: int,
+    ) -> None:
+        """Hand one finished turn to the masked Phoenix pipeline (specs/046 T6).
+
+        Fail-open: nothing here may change the result or the exception of the run.
+        """
+        if self._phoenix_tracing is None:
+            return
+        try:
+            executions = (getattr(output, "tools", None) or []) if output is not None else []
+            metrics = getattr(output, "metrics", None)
+            answer: str | None = None
+            proposal_text: str | None = None
+            if failure is None and output is not None:
+                try:
+                    reply = reply_from_run(output)
+                    answer, proposal_text = reply.answer, reply.proposal_text
+                except Exception:
+                    failure = "InvalidPresentationOutputError"
+            cost = context.budget.actual_cost_usd
+            capture_turn(
+                self._phoenix_tracing,
+                TurnRecord(
+                    correlation_id=context.correlation_id,
+                    user_id=user_id,
+                    started_ns=started_ns,
+                    ended_ns=time.time_ns(),
+                    route=context.config.config.routing.default_route,
+                    user_text=input_text,
+                    answer=answer,
+                    proposal_text=proposal_text,
+                    tool_calls=tuple(
+                        ToolCallRecord(
+                            name=item.tool_name or "",
+                            # Arguments of read tools are never carried, only propose_*.
+                            args=(item.tool_args or {})
+                            if (item.tool_name or "").startswith("propose_")
+                            else {},
+                        )
+                        for item in executions
+                    ),
+                    had_media=had_media,
+                    input_tokens=getattr(metrics, "input_tokens", None),
+                    output_tokens=getattr(metrics, "output_tokens", None),
+                    total_tokens=getattr(metrics, "total_tokens", None),
+                    cost_usd=cost if cost is not None else context.budget.estimated_cost_usd,
+                    error_type=failure,
+                ),
+            )
+        except Exception as exc:
+            logger.debug("Phoenix turn capture skipped (%s)", type(exc).__name__)
+
     async def run(
         self,
         input_text: str,
@@ -167,7 +232,15 @@ class GovernedInteractionRunner:
         execution_context: ExecutionContext | None = None,
         compaction_summary: str | None = None,
         reduced_history_runs: int | None = None,
+        capture_user_text: bool = False,
     ) -> AgentReply:
+        """Run one governed turn.
+
+        ``capture_user_text`` is True only when the caller knows ``input_text`` is
+        text the user typed (not a voice transcription nor synthesized). It is the
+        provenance gate for Phoenix content traces (specs/046 T6) and defaults to
+        False so any other caller captures no user text.
+        """
         context = execution_context or await self.prepare_execution_context(
             session_id=session_id,
             run_id=run_id,
@@ -209,6 +282,9 @@ class GovernedInteractionRunner:
                     session_state={},
                 )
                 started = time.perf_counter()
+                started_ns = time.time_ns()
+                agent_output: RunOutput | None = None
+                failure: str | None = None
                 try:
                     attachment_context = await ingest_resolved_telegram_media(
                         UserContext(user_id=user_id), media
@@ -230,7 +306,7 @@ class GovernedInteractionRunner:
                         compaction_summary=compaction_summary,
                         reduced_history_runs=reduced_history_runs,
                     )
-                    agent_output: RunOutput = await asyncio.wait_for(
+                    agent_output = await asyncio.wait_for(
                         agent.arun(
                             agent_input,
                             stream=False,
@@ -243,6 +319,7 @@ class GovernedInteractionRunner:
                     )
                     return reply_from_run(agent_output)
                 except TimeoutError as exc:
+                    failure = "ExecutionBudgetExceededError"
                     get_telemetry().mark_error(span, "ExecutionBudgetExceededError")
                     get_telemetry().counter(
                         "ancora.execution_budget.exceeded",
@@ -253,7 +330,20 @@ class GovernedInteractionRunner:
                         "max_runtime_seconds",
                         "Agent run cancelled after the approved runtime budget",
                     ) from exc
+                except BaseException as exc:
+                    # Class name only, for the content-trace root span; re-raised as is.
+                    failure = type(exc).__name__
+                    raise
                 finally:
+                    self._capture_phoenix_turn(
+                        context,
+                        user_id=user_id,
+                        input_text=input_text if capture_user_text else None,
+                        had_media=bool(media),
+                        output=agent_output,
+                        failure=failure,
+                        started_ns=started_ns,
+                    )
                     if self._tool_call_count_recorder is not None:
                         try:
                             await self._tool_call_count_recorder(

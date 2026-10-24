@@ -32,6 +32,7 @@ from src.domain.reminders.worker import RemindersWorker
 from src.domain.runtime_config.service import RuntimeConfigManager
 from src.domain.speech.service import maintain_voice_preparations
 from src.notifications.telegram import TelegramNotifier
+from src.observability.phoenix_export import configure_phoenix_tracing, shutdown_phoenix_tracing
 from src.observability.telemetry import shutdown_observability
 from src.repositories.database import get_session
 
@@ -56,6 +57,10 @@ def install_observability_lifespan(app: FastAPI) -> None:
                 shutdown_observability()
             except Exception:
                 logger.warning("Observability shutdown failed; continuing application shutdown")
+            try:
+                shutdown_phoenix_tracing()
+            except Exception:
+                logger.warning("Phoenix shutdown failed; continuing application shutdown")
 
     app.router.lifespan_context = observability_lifespan
 
@@ -172,6 +177,8 @@ def install_interaction_processor_lifespan(
         spend_reader=SessionSpendReader(get_session),
         stop_reader=emergency_stop_manager,
         tool_call_count_recorder=usage_recorder.record_tool_call_count,
+        # None unless PHOENIX_TRACING_ENABLED and every PHOENIX_* setting is present.
+        phoenix_tracing=configure_phoenix_tracing(settings),
     )
     context_compaction_summarizer = (
         GovernedContextCompactionAdapter(
