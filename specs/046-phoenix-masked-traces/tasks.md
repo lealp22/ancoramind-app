@@ -44,8 +44,9 @@
       procedencia en `test_interaction_processor.py`; 4 mutaciones de las reglas de
       privacidad rompen sus tests. **Desviación de la spec:** la spec capturaba la
       respuesta final siempre; aquí se omite tras leer/analizar documentos o con
-      adjuntos, porque puede reproducir su contenido (ADR-007). Pendiente de
-      confirmar por el propietario, igual que la clasificación de `SAFE_READ_TOOLS`.
+      adjuntos, porque puede reproducir su contenido (ADR-007). Propietario
+      confirma la excepción y `SAFE_READ_TOOLS` (2026-10-25); recogida en la spec,
+      sección «Diseño de captura». `search_documents` queda dentro de la exclusión.
 - [ ] T7 · Test de privacidad: canarios no llegan al exporter; Grafana sin contenido;
       audio/adjuntos/documentos ausentes; LLM y BD intactos.
 - [ ] T8 · Test fail-open: Phoenix caído o error de máscara no afecta al Agent.

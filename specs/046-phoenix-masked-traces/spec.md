@@ -112,8 +112,8 @@ Por tanto **no se captura en `ainvoke`**. Se captura en
 | Se captura (enmascarado) | Condición |
 | --- | --- |
 | Texto escrito del usuario | solo si no proviene de voz (`voice_text is None`) |
-| Respuesta final (`present_reply`) | salida del modelo |
-| Argumentos de las tools `propose_*` | enmascarado por esquema + patrón |
+| Respuesta final (`present_reply`) | salida del modelo; solo si el turno cumple la excepción de abajo |
+| Argumentos de las tools `propose_*` | enmascarado por esquema + patrón; misma condición |
 | Metadatos por llamada al modelo | tokens, latencia, ruta, coste del ledger; sin texto |
 
 **Excluido siempre, antes de crear el span:** transcripciones y audio; bloque de
@@ -123,6 +123,21 @@ y evals (no generan spans con contenido).
 
 **Reglas:**
 
+- **Excepción para contenido generado por el modelo (decisión del propietario,
+  2026-10-25).** La respuesta final y los argumentos `propose_*` pueden reproducir
+  contenido documental o de terceros que el modelo vio en el turno. Por eso solo se
+  capturan si el turno no tuvo adjuntos y todas sus tools son `present_reply`,
+  `propose_*` (salvo `propose_document_delete`, que nombra un documento) o una de la
+  lista `SAFE_READ_TOOLS` (`src/observability/phoenix_capture.py`: `search_notes`,
+  `list_todo_lists`, `list_todo_items`, `list_reminders`, `check_calendar`,
+  `list_pending_proposals`, `find_vehicle`, `get_vehicle_summary`,
+  `get_vehicle_maintenance_history`; confirmada por el propietario). En un turno que
+  use `get_document`, `search_documents`, `search_documents_semantically`,
+  `analyze_document`, `export_document`, `search_web`, o cualquier tool no
+  clasificada, solo se guardan el texto escrito del usuario y los metadatos. El
+  texto del usuario basta para saber qué se pidió; el contenido devuelto no se
+  copia. Regla de fallo seguro: una tool nueva queda excluida hasta que se
+  clasifique explícitamente.
 - Sin etiquetado heurístico: si la procedencia no se conoce por construcción, no
   se captura. No se intenta adivinar si un fragmento «parece» un documento.
 - El historial mixto se excluye entero.
