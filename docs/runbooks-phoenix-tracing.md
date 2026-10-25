@@ -50,7 +50,16 @@ habilitarlo.
 ## 3. Phoenix: comprobaciones en la instancia
 
 El servicio `Phoenix` (imagen `arizephoenix/phoenix:15.1.0`) y su Postgres propio
-(`Postgres-lM2q`) ya existen en el proyecto `ancoramind-app`.
+(`Postgres-88Df`) existen en el proyecto `ancoramind-app`.
+
+**Historial (2026-10-25):** la instancia original (con su base `Postgres-lM2q`) se
+eliminó y se desplegó de nuevo la plantilla porque no se recordaba la contraseña del
+administrador y el acceso estaba bloqueado por intentos fallidos. La instancia actual
+nació vacía: no tiene trazas, usuarios ni claves anteriores. Se verificó antes y
+después que el resto de servicios y volúmenes (`Postgres`, `litellm-postgres`,
+`Redis`, `ancoramind-evals`) siguieron intactos. Esto significa que cualquier cosa que
+dijera una versión anterior de este runbook sobre el dominio, la base o la clave de
+API anteriores ya no aplica.
 
 ### 3.1 Variables del servicio Phoenix (sólo nombres verificados)
 
@@ -62,8 +71,9 @@ tickets, capturas ni este repositorio.
 
 ### 3.2 Retención de 30 días — comprobar
 
-La variable `PHOENIX_DEFAULT_RETENTION_POLICY_DAYS` existe. Su valor es lo que el
-propietario declara como 30, pero **no está comprobado**. Antes de activar:
+La variable `PHOENIX_DEFAULT_RETENTION_POLICY_DAYS` existe. El propietario confirma
+(2026-10-25) que vale `30` en la instancia nueva; yo no he leído el valor. Falta
+comprobar el proyecto en la UI (paso 2). Antes de activar:
 
 1. En Railway, servicio `Phoenix` → **Variables**, confirmar que vale `30`.
 2. Esa variable fija el valor por defecto de proyectos nuevos. En la UI de Phoenix,
@@ -75,16 +85,21 @@ propietario declara como 30, pero **no está comprobado**. Antes de activar:
 
 ### 3.3 Autenticación
 
-`PHOENIX_ENABLE_AUTH` está definida. Comprobar que la UI pide credenciales y que la
-contraseña inicial por defecto se cambió (el propietario indicó que se cambió el
-2026-10-20). La API key del sistema que usará la app se crea en la UI de Phoenix
-(**Settings → API Keys → System**). Guardarla sólo como secreto de Railway.
+`PHOENIX_ENABLE_AUTH` está definida. El propietario confirma (2026-10-25) que, tras
+recrear la instancia, entró con la contraseña inicial y la cambió en el primer
+acceso. La contraseña de administrador se guarda en un gestor de contraseñas: no hay
+SMTP configurado (`PHOENIX_SMTP_*` ausentes), así que **no existe recuperación por
+correo** y perderla obliga a recrear la instancia, como ocurrió el 2026-10-25.
+Tras demasiados intentos fallidos Phoenix bloquea el acceso ("Too many requests");
+no insistir si ocurre. La API key del sistema que usará la app se crea en la UI de
+Phoenix (**Settings → API Keys → System**). Guardarla sólo como secreto de Railway.
 
 ### 3.4 Dominio público — decisión vigente
 
 **Por ahora no se retira el dominio público** de Phoenix (decisión del propietario,
 2026-10-25). El servicio sigue accesible por internet en
-`phoenix-production-34fa.up.railway.app`. Mientras sea así:
+`phoenix-production-921f.up.railway.app` (dominio nuevo tras recrear la instancia).
+Mientras sea así:
 
 - La autenticación es la única barrera. Mantener `PHOENIX_ENABLE_AUTH` activo y la
   política de contraseñas fuerte.
