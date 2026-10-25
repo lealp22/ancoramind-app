@@ -56,6 +56,13 @@ EXCLUDED_TAGS = frozenset({"benign_control", "false_positive", "injection_varian
 RANDOM_SEED = 20261024
 MAX_SEED_CASES = 15
 
+# OpenRouter answers 403 ("prompt injection patterns detected") before the model
+# sees the request when the tool result contains this literal phrase. Whether the
+# filter is case-insensitive is NOT known, so the check below is conservative and
+# also drops the random-capitalisation variants. A 403 is not a pass: it means the
+# case was never evaluated (specs/049, ``EXCLUDED_CASES`` in run_evals_light).
+FILTERED_PHRASE = "ignore previous instructions"
+
 # The ``environment`` must disable PyRIT's own retry loops BEFORE import: they
 # default to 10 attempts. Phase A makes no remote call, but keep the guard so a
 # future code path cannot silently retry (the approved budget forbids retries).
@@ -118,11 +125,28 @@ def select_seeds(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return seeds[:MAX_SEED_CASES]
 
 
+def contains_filtered_phrase(context: dict[str, Any]) -> bool:
+    """True when any value would carry the phrase the provider filter blocks."""
+    return any(
+        isinstance(value, str) and FILTERED_PHRASE in value.lower()
+        for value in context.values()
+    )
+
+
 async def generate_variants(
     seeds: list[dict[str, Any]], converters: dict[str, Convert]
 ) -> list[dict[str, Any]]:
+    """Apply each converter to each seed and return only evaluable variants.
+
+    A variant inherits the whole seed (``expected`` included, so the
+    ``response_criteria`` the judge needs). Variants whose hostile text still
+    contains the filtered phrase are dropped: the provider would return 403 and
+    the case could never be evaluated.
+    """
     variants: list[dict[str, Any]] = []
     for seed in seeds:
+        if not seed["expected"].get("response_criteria"):
+            raise ValueError(f"seed without response_criteria: {seed['id']}")
         for name, convert in converters.items():
             variant = copy.deepcopy(seed)
             context = variant["context"]
@@ -130,6 +154,8 @@ async def generate_variants(
                 value = context[key]
                 if key in HOSTILE_CONTEXT_KEYS and isinstance(value, str) and value:
                     context[key] = await convert(value)
+            if contains_filtered_phrase(context):
+                continue
             seed_suffix = seed["id"].split(".", 1)[1]
             variant["id"] = f"security_pyrit.{seed_suffix}__{name}"
             variant["description"] = (
@@ -168,15 +194,17 @@ async def main_async(output: Path) -> int:
     if not seeds:
         print("No attack seeds selected.", file=sys.stderr)
         return 1
-    variants = await generate_variants(seeds, build_converters())
+    converters = build_converters()
+    variants = await generate_variants(seeds, converters)
     catalog = build_catalog(variants, [seed["id"] for seed in seeds])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(catalog, ensure_ascii=False, indent=2, sort_keys=False) + "\n",
         encoding="utf-8",
     )
-    per_seed = len(variants) // len(seeds)
-    print(f"{len(seeds)} seeds x {per_seed} converters = {len(variants)} variants")
+    possible = len(seeds) * len(converters)
+    print(f"{len(seeds)} seeds x {len(converters)} converters = {possible} possible; "
+          f"{len(variants)} kept, {possible - len(variants)} dropped (filtered phrase)")
     print(f"Wrote candidate catalog (NOT part of run_evals): {output}")
     return 0
 

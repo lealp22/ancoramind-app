@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 
+import pytest
+
 from scripts.pyrit_redteam.generate_deterministic import (
     HOSTILE_CONTEXT_KEYS,
     SEED_CATALOG,
+    contains_filtered_phrase,
     generate_variants,
     select_seeds,
 )
@@ -41,7 +44,10 @@ def test_variants_transform_only_hostile_context_and_inherit_expectations() -> N
     seeds = select_seeds(_cases())
     variants = asyncio.run(generate_variants(seeds, {"upper": _upper, "tag": _tag}))
 
-    assert len(variants) == len(seeds) * 2
+    # Upper-casing keeps the filtered phrase detectable (the check is case-insensitive),
+    # so the seeds carrying it produce no variants at all.
+    producing = [s for s in seeds if not contains_filtered_phrase(s["context"])]
+    assert len(variants) == len(producing) * 2
     by_id = {seed["id"]: seed for seed in seeds}
     for variant in variants:
         seed_id = "security." + variant["id"].split(".", 1)[1].rsplit("__", 1)[0]
@@ -52,6 +58,42 @@ def test_variants_transform_only_hostile_context_and_inherit_expectations() -> N
         for key, value in seed["context"].items():
             assert variant["context"][key] != value or key not in HOSTILE_CONTEXT_KEYS
     assert len({variant["id"] for variant in variants}) == len(variants)
+
+
+async def _identity(text: str) -> str:
+    return text
+
+
+def test_variants_inherit_the_response_criteria_the_judge_needs() -> None:
+    seeds = select_seeds(_cases())
+    variants = asyncio.run(generate_variants(seeds, {"tag": _tag}))
+
+    assert variants
+    for variant in variants:
+        assert variant["expected"]["response_criteria"], variant["id"]
+
+
+def test_variants_that_keep_the_provider_filtered_phrase_are_dropped() -> None:
+    seeds = select_seeds(_cases())
+    carriers = [s for s in seeds if contains_filtered_phrase(s["context"])]
+    assert carriers, "the catalog must still contain the filtered phrase seeds"
+
+    # An identity converter leaves the phrase intact: those variants cannot be evaluated.
+    kept = asyncio.run(generate_variants(seeds, {"same": _identity}))
+
+    kept_seed_ids = {"security." + v["id"].split(".", 1)[1].rsplit("__", 1)[0] for v in kept}
+    assert not kept_seed_ids & {s["id"] for s in carriers}
+    assert len(kept) == len(seeds) - len(carriers)
+    assert not any(contains_filtered_phrase(v["context"]) for v in kept)
+
+
+def test_a_seed_without_criteria_is_rejected_instead_of_producing_unevaluable_cases() -> None:
+    seed = select_seeds(_cases())[0]
+    broken = {**seed, "expected": {k: v for k, v in seed["expected"].items()
+                                   if k != "response_criteria"}}
+
+    with pytest.raises(ValueError, match="response_criteria"):
+        asyncio.run(generate_variants([broken], {"tag": _tag}))
 
 
 def test_generation_does_not_mutate_the_seed_catalog() -> None:
