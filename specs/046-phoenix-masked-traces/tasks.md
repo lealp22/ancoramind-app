@@ -70,9 +70,39 @@
       `input_value=`, 300 caracteres, enmascarado, sólo para tools registradas y sólo
       con `outcome=error`. Límite residual documentado en la spec (nombres/hosts no
       se detectan). Vigilar tras activar si aparece contenido; revisar T7 (canarios).
-- [ ] T7 · Test de privacidad: canarios no llegan al exporter; Grafana sin contenido;
-      audio/adjuntos/documentos ausentes; LLM y BD intactos.
-- [ ] T8 · Test fail-open: Phoenix caído o error de máscara no afecta al Agent.
+- [x] T7 (2026-10-25, local) · `tests/unit/test_phoenix_pipeline_privacy.py`: un turno
+      real (`GovernedInteractionRunner` + `GovernedAgentFactory` reales con su hook
+      de presupuesto, modelo guionizado, tools sintéticas) con dos providers reales
+      exportando a memoria (Grafana y Phoenix). Canarios (DNI, tarjeta, teléfono,
+      IBAN, matrícula, mensaje de error) entran por entrada del usuario, argumentos
+      de propuesta, resultado de lectura, documento y error de tool. Comprueba lo que
+      cada exportador **recibe**, no los filtros por separado: Grafana sin ningún
+      canario ni clave fuera de su allowlist; Phoenix sólo con marcadores; sin
+      resultados de lectura, contenido de documentos, bytes/nombre de adjuntos ni
+      texto de voz; el LLM y lo persistido son idénticos con y sin Phoenix
+      (criterio 9). Un test de control falla si algún pipeline no exporta nada.
+      **Hallazgo en producción, ajeno a Phoenix:** ver «Hallazgo T7» abajo.
+- [x] T8 (2026-10-25, local) · Mismo fichero: Phoenix caído (export, flush y shutdown
+      lanzan), exporter que devuelve FAILURE, masker que lanza, provider roto y
+      provider ya cerrado no cambian la respuesta; un turno fallido produce el mismo
+      error con y sin Phoenix; Grafana sigue exportando con Phoenix caído; sin
+      reintentos acumulados; el `MaskedSpanExporter` es el único acceso al delegado.
+      Con el masker roto sólo salen spans de metadatos de tool (sin texto libre).
+
+      **Hallazgo T7 (pipeline Grafana, ya desplegado antes de Phoenix):** al fallar
+      una tool, `MetadataTelemetry.span()` llamaba a `use_span()` con los valores por
+      defecto del SDK (`record_exception=True`, `set_status_on_exception=True`), que
+      copiaban a Grafana el mensaje de la excepción en `status.description` y en un
+      evento `exception` con `exception.message` y `exception.stacktrace`,
+      saltándose la allowlist de atributos. En el test, un DNI dentro del mensaje de
+      una excepción de tool llegaba al exporter. Corregido en `telemetry.py`: ambos
+      a `False` y el estado de error se marca con el nombre de la clase únicamente,
+      para todos los spans de la app. Revertir el arreglo hace fallar los tests.
+      **No se ha comprobado qué hay ya almacenado en Grafana Cloud** (trazas
+      anteriores de tools con error); si la regla 11 importa retroactivamente,
+      conviene revisar la retención de trazas allí. El log de consola de Railway
+      sigue recibiendo el texto de la excepción por parte del propio Agno
+      (`log_warning/log_error`), sin cambio.
 - [ ] T9 · Documentar en `docs/production-security-privacy.md` (inventario, retención,
       DPIA, borrado por usuario), actualizar los términos del piloto (texto de
       todos los usuarios autorizados, enmascarado, 30 días) y enmendar

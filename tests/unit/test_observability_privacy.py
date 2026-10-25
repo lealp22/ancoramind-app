@@ -7,6 +7,10 @@ import json
 import logging
 
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 import src.observability.telemetry as telemetry_module
 from src.config import Settings
@@ -150,6 +154,30 @@ def test_span_context_does_not_swallow_the_instrumented_business_exception() -> 
         telemetry.span("test.span", {"message.content": "secret"}),
     ):
         raise RuntimeError("business failure")
+
+
+def test_failed_span_keeps_error_status_but_never_the_exception_text() -> None:
+    """The SDK would copy `str(exc)` and the stack trace into the span by default.
+
+    Found by the end-to-end privacy test (specs/046 T7): a tool failing with a message
+    that quoted a DNI reached the exporter in the status description and in an
+    `exception` event, bypassing the attribute allowlist.
+    """
+    sink = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(sink))
+    telemetry = MetadataTelemetry(provider.get_tracer("privacy-test"), _FakeMeter())
+
+    with pytest.raises(RuntimeError), telemetry.span("tool.call", {"ancora.route": "r"}):
+        raise RuntimeError("lookup failed for 12345678Z")
+
+    (span,) = sink.get_finished_spans()
+    assert span.status.status_code is StatusCode.ERROR
+    assert span.status.description is None
+    assert span.attributes is not None
+    assert span.attributes["error.type"] == "RuntimeError"
+    assert span.events == ()
+    assert "12345678Z" not in span.to_json()
 
 
 def test_span_uses_only_allowlisted_metadata_and_ends_on_error() -> None:

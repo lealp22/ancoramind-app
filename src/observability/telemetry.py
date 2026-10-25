@@ -188,8 +188,22 @@ class MetadataTelemetry:
             yield trace.get_current_span()
             return
         try:
-            with use_span(span, end_on_exit=False):
-                yield span
+            # The SDK defaults would copy the exception message and stack trace into
+            # the span (an `exception` event and the status description). Those can
+            # quote user data, so both are off. The failure is still marked here for
+            # every call site, with the exception class name only, so error rates
+            # keep working without relying on each caller to remember `mark_error`.
+            with use_span(
+                span,
+                end_on_exit=False,
+                record_exception=False,
+                set_status_on_exception=False,
+            ):
+                try:
+                    yield span
+                except Exception as exc:
+                    self.mark_error(span, type(exc).__name__)
+                    raise
         finally:
             try:
                 span.end()
