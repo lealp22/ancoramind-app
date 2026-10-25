@@ -176,7 +176,7 @@ flowchart TB
 | **Canal** | Telegram (private chats only) | Gestionado por AgentOS |
 | **LLM** | Rutas lógicas + LiteLLM Proxy (target specs/013) | OpenRouter upstream; config runtime versionada |
 | **Validación** | Pydantic | Schemas para extracciones estructuradas |
-| **Observabilidad** | OpenTelemetry metadata-only + Collector/Grafana Cloud | Collector privado desplegado y métricas base ingeridas; dashboard/alertas y matriz T7 pendientes |
+| **Observabilidad** | OpenTelemetry metadata-only + Collector/Grafana Cloud | Collector privado desplegado y métricas base ingeridas; dashboard/alertas y matriz T7 pendientes. Trazas de contenido enmascarado en Phoenix (ADR-007): implementado localmente, desactivado (§14.2) |
 | **Despliegue** | Docker + Railway | Una réplica inicial; servicios privados para Gateway/Collector |
 | **Migraciones** | Alembic | Propiedad exclusiva de AncoraMind |
 
@@ -409,6 +409,27 @@ Estados: `pending_confirmation`, `confirmed`, `discarded`, `executed`, `failed`.
   documentos, extracciones ni argumentos/resultados completos de tools
 - PostgreSQL conserva auditoría durable; Grafana se usa para diagnóstico,
   métricas y alertas
+- Los spans de Grafana no registran el mensaje ni la traza de una excepción: un
+  fallo se marca con el nombre de su clase únicamente (specs/046 T7)
+
+### 14.2 Trazas de contenido enmascarado en Phoenix (ADR-007, specs/046)
+
+Excepción acotada al principio 11, **sólo para este pipeline**; §14.1 sigue íntegro
+para Grafana.
+
+- Pipeline separado: `TracerProvider` propio, nunca global, y un exporter que
+  reconstruye cada span desde una allowlist y descarta el span entero ante la
+  duda (`src/observability/phoenix_export.py`). Los spans no pasan por el Collector.
+- Captura manual en `GovernedInteractionRunner.run`, con la procedencia decidida por
+  el llamador (`phoenix_capture.py`). Sin auto-instrumentación de Agno.
+- Enmascarado sólo en la telemetría: por campo y forma del valor
+  (`field_policy.py`) y por patrón con validación (`masking.py`). Nunca altera lo
+  que reciben el modelo o la base de datos.
+- Desactivado por defecto (`PHOENIX_TRACING_ENABLED`), con configuración completa
+  como condición adicional, y fail-open: Phoenix no bloquea Telegram, el Core ni la
+  inferencia.
+- Qué se captura, qué no, límites del enmascarado, retención y borrado por usuario:
+  `docs/production-security-privacy.md`.
 
 ---
 

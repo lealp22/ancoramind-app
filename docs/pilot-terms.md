@@ -1,7 +1,13 @@
 # AncoraMind — Condiciones del piloto de pruebas
 
 > Documento para las personas invitadas al piloto. Es el destino de
-> `PILOT_NOTICE_URL`. Última actualización: 2026-10-20.
+> `PILOT_NOTICE_URL`. Última actualización: 2026-10-25.
+>
+> **Aviso al operador (borrar al publicar):** la sección de Phoenix describe un
+> servicio que **aún no está activo**: el flag `PHOENIX_TRACING_ENABLED` está
+> apagado y no hay variables `PHOENIX_*` en producción. Publica este texto
+> **antes** de activarlo, no después. Si cambias el plazo de 30 días, o la
+> retención en la instancia de Phoenix no es la declarada, corrige el texto.
 
 ## Qué es esto
 
@@ -29,11 +35,29 @@ Tus mensajes y archivos pasan por estos servicios:
 | Supabase | Base de datos y almacenamiento de documentos |
 | OpenRouter y el modelo de IA que atiende la petición | Entender tu mensaje y responder |
 | Grafana Cloud | Métricas técnicas de funcionamiento, sin contenido de tus mensajes |
+| Phoenix (alojado por el operador en Railway) | Una **copia enmascarada** de lo que escribes y de las respuestas, para poder investigar fallos (ver más abajo) |
 
 El texto de tus mensajes y el contenido de tus documentos se envían al modelo de
 IA para generar la respuesta. **No se ha verificado** que los proveedores del
 modelo no conserven esos datos ni que no los usen para otros fines. Por eso
 insistimos en los datos ficticios.
+
+### Copia de diagnóstico en Phoenix
+
+Para entender por qué falla una petición, el operador guarda una copia de lo que
+escribes y de las respuestas del asistente. Antes de guardarla se **enmascaran**
+los formatos que el sistema reconoce (DNI, IBAN, tarjeta, matrícula, teléfono,
+correo y similares). Ese enmascarado **no es completo**: no reconoce nombres,
+direcciones ni datos de salud escritos con tus palabras, y esos quedarían tal cual.
+
+- Se guarda durante **30 días** y después se elimina.
+- Tu identificador de Telegram no se guarda: se sustituye por un código que no
+  permite saber quién eres sin una clave que sólo tiene el operador.
+- No se guardan audios, ni el contenido de tus documentos o archivos adjuntos, ni
+  lo que el asistente lee de tus datos al responder.
+- Puedes pedir al operador que borre tu copia.
+
+Esta copia se aplica a todas las personas invitadas.
 
 ## Cómo funciona el asistente
 
@@ -49,8 +73,12 @@ insistimos en los datos ficticios.
 
 - Los datos que introduzcas se conservan mientras dure el piloto. Al ser ficticios,
   **no se prevé un borrado planificado**.
-- Los datos de conversación que quedan en un estado de error ambiguo se eliminan
-  automáticamente a los 7 días, conservando solo metadatos técnicos.
+- Los datos de conversación que quedan en un estado de error ambiguo están pensados
+  para eliminarse a los 7 días, conservando sólo metadatos técnicos. **Hoy ese
+  borrado no se ejecuta de forma automática**; hasta que lo haga, se conservan.
+- El historial de conversación que mantiene el asistente para dar continuidad a
+  tus charlas **no tiene un plazo de borrado automático** todavía.
+- La copia de diagnóstico de Phoenix se elimina a los 30 días (ver arriba).
 - Tu acceso puede revocarse en cualquier momento, tuyo o del operador, y deja de
   funcionar en tu siguiente mensaje.
 

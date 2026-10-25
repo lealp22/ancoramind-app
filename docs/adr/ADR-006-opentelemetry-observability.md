@@ -44,6 +44,10 @@ Cloud sigue siendo el backend inicial, pero el código no se acopla a ese vendor
 12. **Implementación T10** — `src/observability/` aplica allowlist estricta;
     las métricas excluyen IDs de alta cardinalidad y los logs no serializan ni el
     mensaje ni argumentos posicionales. El exporter OTLP es opcional y fail-open.
+    *Corrección (2026-10-25, specs/046 T7):* la allowlist sólo filtraba los
+    atributos; el SDK añadía por su cuenta el mensaje y la traza de una excepción
+    (`status.description` y un evento `exception`). `MetadataTelemetry.span()` los
+    desactiva ahora y marca el fallo sólo con el nombre de su clase.
 
 ## Separación de responsabilidades
 

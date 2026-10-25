@@ -103,10 +103,23 @@
       conviene revisar la retención de trazas allí. El log de consola de Railway
       sigue recibiendo el texto de la excepción por parte del propio Agno
       (`log_warning/log_error`), sin cambio.
-- [ ] T9 · Documentar en `docs/production-security-privacy.md` (inventario, retención,
-      DPIA, borrado por usuario), actualizar los términos del piloto (texto de
-      todos los usuarios autorizados, enmascarado, 30 días) y enmendar
-      AGENTS.md/ADR-006.
+- [x] T9 (2026-10-25) · Documentación al día, sin activar nada.
+      `docs/production-security-privacy.md`: inventario de copias de contenido (con
+      «verificado» frente a «declarado»), qué se captura y qué no, límites del
+      enmascarado, retención y borrado por usuario, y los factores que dispararían
+      una DPIA (no realizada, pendiente de revisión legal). `docs/pilot-terms.md`:
+      sección de la copia en Phoenix (enmascarado incompleto, 30 días, seudónimo,
+      qué no se guarda, derecho a pedir borrado) y plazos de conservación corregidos,
+      con aviso al operador de **publicar el texto antes de activar el flag**.
+      `docs/architecture.md` §14.2 nueva y fila de observabilidad. AGENTS.md: estado
+      de BL-56 (el principio 11 ya estaba enmendado desde 2026-10-23). ADR-006: nota
+      de corrección del hallazgo de Grafana. Hallazgos que salieron al documentar:
+      la purga de payloads ambiguos a 7 días no la invoca ningún código de
+      producción (los términos prometían un borrado que no ocurre; el texto ya no lo
+      promete) y `agno_runtime` guarda sin enmascarar y sin retención (ya anotado
+      por el propietario). **Pendiente de prueba real:** el borrado por usuario sólo
+      se probó contra un backend local desechable, y la retención de 30 días es
+      declarada, no comprobada.
 - [ ] T10 · Runbook: variables en Railway, red privada, retirada del dominio público.
 - [ ] T11 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`; SHA/CI.
 - [ ] T12 · Activación controlada: flag ON solo para el propietario y verificación E2E.

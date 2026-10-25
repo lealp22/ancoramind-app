@@ -3287,7 +3287,7 @@ interruptor. 31 tests nuevos, 1111 unit tests (suite completa), Ruff y
 - **Sin broadcast multi-instancia** — cada réplica tendría su propio estado
   en memoria (no es un escenario de despliegue actual conocido).
 
-### BL-56 · Trazas con contenido enmascarado en Phoenix 🔶 exporter/spike sintético local — specs/046 + ADR-007
+### BL-56 · Trazas con contenido enmascarado en Phoenix 🔶 implementado local con flag OFF (T1–T9); falta runbook, SHA/CI y activación — specs/046 + ADR-007
 
 Hoy no se puede saber qué vio el modelo ni por qué falló una petición concreta
 (p. ej. `InvalidPresentationOutputError` solo deja un contador). ADR-007
@@ -3323,6 +3323,27 @@ Informe Q1–Q9: `specs/046-phoenix-masked-traces/spike-result.md`.
 **Gobernanza:** propietario autoriza este trabajo aislado; no equivale a aceptar
 ADR-007 ni habilitar captura. No bloquea ni reabre incrementos existentes;
 Grafana (ADR-006) sigue sin contenido.
+
+**Implementación local (2026-10-25, T1–T9, flag OFF, sin desplegar):**
+`phoenix_export.py`, `phoenix_capture.py` y `field_policy.py` en
+`src/observability/`; captura manual en `GovernedInteractionRunner.run`; el
+processor pasa `capture_user_text` (falso para voz y texto sintetizado). Spans por
+tool con metadatos y mensaje de error acotado y enmascarado. Test de extremo a
+extremo de privacidad y fail-open (`test_phoenix_pipeline_privacy.py`). Detalle y
+decisiones del propietario en `specs/046-phoenix-masked-traces/{spec,tasks}.md`;
+inventario y límites en `docs/production-security-privacy.md`. Sin variables
+`PHOENIX_*` en Railway (comprobado por nombre el 2026-10-25).
+
+**Hallazgos de T7/T9 que no son de Phoenix (decisión del propietario pendiente):**
+
+- *Corregido:* los spans de Grafana copiaban el mensaje y la traza de una excepción
+  de tool (`telemetry.py`). El contenido manejado hasta hoy es ficticio.
+- *Abierto:* `purge_expired_payloads` (payloads de `failed_ambiguous` a 7 días) está
+  implementada y probada, pero **ningún código de producción la invoca**. Los
+  términos del piloto prometían ese borrado; el texto ya dice que hoy no es
+  automático. Cablear la purga en un worker o cambiar la promesa.
+- *Abierto (ya anotado por el propietario):* `agno_runtime.agno_sessions` guarda
+  sin enmascarar los resultados de las tools, sin retención (BL-34).
 
 ---
 

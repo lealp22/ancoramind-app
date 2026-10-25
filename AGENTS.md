@@ -165,6 +165,24 @@ recordatorios y eventos, con trazabilidad completa.
   2260 unitarias/2 skips, Ruff/mypy187 y navegador aislado superados en specs/048;
   no despliegue ni validación remota nueva. No confundir con Grafana/specs016.
 
+  **Trazas de contenido enmascarado en Phoenix (BL-56/specs/046/ADR-007, local,
+  2026-10-25):** implementado con el flag `PHOENIX_TRACING_ENABLED` **apagado** y sin
+  ninguna variable `PHOENIX_*` en Railway (comprobado por nombre); no desplegado ni
+  probado contra Phoenix real. Pipeline separado del de Grafana
+  (`src/observability/phoenix_export.py`, `phoenix_capture.py`, `field_policy.py`),
+  captura manual en `GovernedInteractionRunner.run`, fail-open y fail-closed por span.
+  Voz, adjuntos, documentos y resultados de lectura nunca se capturan; una tool sin
+  clasificar en `phoenix_capture.py` queda excluida. Un test de extremo a extremo
+  (`tests/unit/test_phoenix_pipeline_privacy.py`) comprueba lo que recibe cada
+  exportador. Su hallazgo: los spans de Grafana copiaban el mensaje y la traza de
+  una excepción de tool; corregido en `telemetry.py`. Verificado por consulta:
+  el runtime de Agno (`agno_runtime`) guarda sin enmascarar los resultados de las
+  tools y no tiene retención (BL-34, decisión pendiente). La purga a 7 días de
+  payloads ambiguos está implementada pero ningún código de producción la invoca.
+  Inventario, límites del enmascarado y borrado por usuario:
+  `docs/production-security-privacy.md`. Pendiente: runbook (T10), SHA/CI (T11),
+  activación controlada (T12); activar exige antes publicar `docs/pilot-terms.md`.
+
 ---
 
 ## 2. Principios arquitectónicos NO negociables
