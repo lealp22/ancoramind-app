@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -80,6 +81,10 @@ def render(runs: list[dict]) -> str:
 
 
 def main() -> int:
+    # Con la salida redirigida en Windows el códec es cp1252 y la flecha de la cabecera
+    # no cabe: forzar UTF-8 evita el UnicodeEncodeError.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--last", type=int, default=5)
     parser.add_argument("--sha")
