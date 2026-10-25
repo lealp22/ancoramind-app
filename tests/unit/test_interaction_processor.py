@@ -459,7 +459,8 @@ async def test_processor_resolves_attachment_after_claim_and_passes_media(
     repo.claim_agent_start_with_run_id.assert_awaited_once()
     resolver.resolve.assert_awaited_once()
     assert runner.run.await_args.kwargs["media"] == (resolved,)
-    assert "analyze_document" in runner.run.await_args.args[0]
+    assert "analyze_document" not in runner.run.await_args.args[0]
+    assert runner.run.await_args.args[0].startswith("He adjuntado un documento.")
 
 
 async def _capture_flag_for(
@@ -523,7 +524,8 @@ async def test_synthesized_attachment_prompt_is_never_marked_capturable(
     payload = {"text": None, "attachments": [{"kind": "photo", "file_id": "opaque-file-id"}]}
     flag, text = await _capture_flag_for(monkeypatch, payload)
     assert flag is False
-    assert "analyze_document" in text
+    assert "analyze_document" not in text
+    assert text.startswith("He adjuntado un documento.")
 
 
 async def test_typed_caption_with_attachment_is_capturable(

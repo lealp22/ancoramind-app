@@ -68,9 +68,17 @@ class TestAssembleInstructions:
         assert any("Vehicle Registration" in block for block in instructions)
 
     def test_document_skill_loaded(self):
-        """The document ingestion contract should be included."""
+        """The document skill must describe the Core-side ingestion, not a tool."""
         instructions = assemble_instructions()
-        assert any("MUST call `analyze_document` exactly once" in block for block in instructions)
+        assert any("Adjuntos archivados antes de este turno" in block for block in instructions)
+
+    def test_no_prompt_asks_the_agent_to_call_the_unregistered_ingestion_tool(self):
+        """The Agent catalog has no ``analyze_document`` (commit 83b557e): a prompt that
+        orders it makes the model blame a missing tool or end its run badly."""
+        text = "\n".join(assemble_instructions())
+        assert "MUST call `analyze_document`" not in text
+        assert "`analyze_document` confirms" not in text
+        assert "`get_document`, `analyze_document`" not in text
 
     def test_identity_is_first(self):
         """Identity block should be first."""

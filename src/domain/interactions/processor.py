@@ -410,9 +410,7 @@ class InteractionProcessor:
                 input_text = voice_text
                 attachments = ()
             if (not isinstance(input_text, str) or not input_text.strip()) and attachments:
-                input_text = (
-                    "He adjuntado un documento. Archívalo y analízalo usando analyze_document."
-                )
+                input_text = "He adjuntado un documento. Dime qué se ha archivado y qué contiene."
             if not isinstance(input_text, str) or not input_text.strip():
                 raise ValueError("normalized Telegram update has no processable text")
         except ValueError:
