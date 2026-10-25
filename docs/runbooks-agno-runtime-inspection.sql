@@ -147,15 +147,74 @@ ORDER BY filas DESC;
 -- ═════════════════════════════════════════════════════════════════════════════
 -- 8. OPCIONAL — comprobar si hay datos con formato sensible. DEVUELVE CONTENIDO.
 -- ═════════════════════════════════════════════════════════════════════════════
--- Sólo cuenta cuántas sesiones contienen algo con forma de DNI/IBAN/tarjeta.
--- No muestra el dato: devuelve conteos. Es un cálculo sobre texto de conversaciones
--- personales; ejecútalo sólo si decides que necesitas esa cifra, y no copies filas.
--- Aproximación por forma, SIN validar el dígito de control: sobreestima (cualquier
--- 8 dígitos + letra cuenta). Sirve para saber si "hay algo", no cuánto es real.
--- Usa `\y` (límite de palabra) y `E'...'` para no depender de la configuración de
--- barras invertidas del cliente.
-SELECT count(*) FILTER (WHERE runs::text ~* E'\\y[0-9]{8}[A-Z]\\y')                            AS sesiones_con_forma_de_dni,
-       count(*) FILTER (WHERE runs::text ~* E'\\yES[0-9]{2}[0-9 ]{18,}')                       AS sesiones_con_forma_de_iban,
-       count(*) FILTER (WHERE runs::text ~  E'\\y[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}\\y') AS sesiones_con_forma_de_tarjeta,
-       count(*)                                                                               AS sesiones_totales
-FROM agno_runtime.agno_sessions;
+-- Cuenta en cuántas sesiones hay un dato con formato de DNI o tarjeta que ADEMÁS
+-- supera su dígito de control. No muestra el dato: devuelve conteos. Lee texto de
+-- conversaciones personales; ejecútalo sólo si necesitas esa cifra y no copies filas.
+--
+-- Versión 2. La primera buscaba sólo la FORMA y dio 20 de 21 sesiones "con tarjeta":
+-- era ruido. Una run de Agno está llena de identificadores y métricas de 16 dígitos,
+-- y cualquiera encaja en la forma. Ahora:
+--   * Sólo se escanea el texto de mensajes (`content`) y de resultados de tools
+--     (`result`), no los ids, marcas de tiempo ni métricas.
+--   * La tarjeta debe pasar Luhn y no ser un único dígito repetido (0000... pasa
+--     Luhn pero no es una tarjeta). El DNI debe cumplir la letra de control.
+--   * IBAN omitido: su control (módulo 97 sobre un número de ~30 dígitos) no cabe
+--     de forma fiable en SQL sin una función propia, y esa función no es de sólo
+--     lectura. Si lo necesitas, hazlo con el enmascarador real (src/observability/
+--     masking.py) sobre una exportación, no aquí.
+-- Sigue siendo una cota, no una medida exacta: falsos negativos si el dato está
+-- partido o escrito de otro modo (el enmascarador de la app tiene el mismo límite).
+WITH textos AS (
+  -- Un texto por fila: cada `content` de mensaje y cada `result` de tool.
+  SELECT s.session_id, x.txt
+  FROM agno_runtime.agno_sessions s
+  CROSS JOIN LATERAL jsonb_array_elements(
+         CASE WHEN jsonb_typeof(s.runs) = 'array' THEN s.runs ELSE '[]'::jsonb END) AS r
+  CROSS JOIN LATERAL (
+    SELECT m ->> 'content' AS txt
+    FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(r -> 'messages') = 'array' THEN r -> 'messages' ELSE '[]'::jsonb END) AS m
+    UNION ALL
+    SELECT t ->> 'result'
+    FROM jsonb_array_elements(
+           CASE WHEN jsonb_typeof(r -> 'tools') = 'array' THEN r -> 'tools' ELSE '[]'::jsonb END) AS t
+  ) x
+  WHERE x.txt IS NOT NULL
+),
+candidatos_tarjeta AS (
+  -- 13-19 dígitos, con espacios o guiones opcionales, sin dígitos pegados alrededor.
+  SELECT session_id,
+         regexp_replace(m[1], '[^0-9]', '', 'g') AS digitos
+  FROM textos,
+       LATERAL regexp_matches(txt, '(?<![0-9])([0-9](?:[ -]?[0-9]){12,18})(?![0-9])', 'g') AS m
+),
+tarjetas_validas AS (
+  SELECT DISTINCT session_id
+  FROM candidatos_tarjeta c
+  WHERE digitos !~ '^(.)\1+$'  -- un solo dígito repetido no es una tarjeta
+    AND (
+      -- Luhn: desde el último dígito (ord = 0), se doblan los de posición impar.
+      SELECT sum(CASE WHEN d.ord % 2 = 1
+                      THEN (CASE WHEN d.v * 2 > 9 THEN d.v * 2 - 9 ELSE d.v * 2 END)
+                      ELSE d.v END)
+      FROM (
+        SELECT substr(c.digitos, length(c.digitos) - g + 1, 1)::int AS v, g - 1 AS ord
+        FROM generate_series(1, length(c.digitos)) AS g
+      ) d
+    ) % 10 = 0
+),
+candidatos_dni AS (
+  SELECT session_id, upper(m[1]) AS dni
+  FROM textos,
+       LATERAL regexp_matches(txt, '(?<![0-9A-Za-z])([0-9]{8}[- ]?[A-Za-z])(?![0-9A-Za-z])', 'g') AS m
+),
+dni_validos AS (
+  SELECT DISTINCT session_id
+  FROM candidatos_dni
+  WHERE substr('TRWAGMYFPDXBNJZSQVHLCKE',
+               (substr(regexp_replace(dni, '[- ]', '', 'g'), 1, 8)::int % 23) + 1, 1)
+        = right(regexp_replace(dni, '[- ]', '', 'g'), 1)
+)
+SELECT (SELECT count(*) FROM agno_runtime.agno_sessions)     AS sesiones_totales,
+       (SELECT count(*) FROM tarjetas_validas)               AS sesiones_con_tarjeta_que_pasa_luhn,
+       (SELECT count(*) FROM dni_validos)                    AS sesiones_con_dni_valido;

@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 #   search_web -> third-party content, not the user's data.
 SAFE_READ_TOOLS = frozenset(
     {
+        # Returns only the clock and the user's timezone; used to resolve "mañana"
+        # before propose_reminder/propose_calendar_event, so omitting it would blind
+        # most reminder and calendar turns.
+        "get_current_datetime",
         "search_notes",
         "list_todo_lists",
         "list_todo_items",

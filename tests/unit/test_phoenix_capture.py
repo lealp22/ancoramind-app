@@ -600,6 +600,28 @@ def test_registry_matches_every_propose_tool_defined_in_the_code():
     )
 
 
+def test_every_tool_registered_for_the_agent_is_classified():
+    """A registered tool missing from the registry would show as ``unknown_tool`` and
+    silently blind every turn that uses it (found with `get_current_datetime`)."""
+    import re
+    from pathlib import Path
+
+    from src.observability.phoenix_capture import KNOWN_TOOLS
+
+    main = Path("src/main.py").read_text("utf-8")
+    registered = set(re.findall(r"tools = \[(\w+)\]", main))
+    pattern = r"tools\.(?:append|extend)\(\s*(.*?)\)\s*(?:logger|\n\n|$)"
+    for block in re.findall(pattern, main, re.S):
+        registered |= set(re.findall(r"\b([a-z][a-z_]+)\b", block))
+    # Only identifiers that name a tool function defined under src/agent/tools.
+    defined = set()
+    for path in Path("src/agent/tools").glob("*.py"):
+        text = path.read_text("utf-8")
+        defined |= set(re.findall(r"^(?:async )?def ([a-z]\w+)\(\s*run_context", text, re.M))
+    missing = {name for name in registered & defined if name not in KNOWN_TOOLS}
+    assert not missing, f"Classify these registered tools in phoenix_capture: {sorted(missing)}"
+
+
 def test_runner_builds_tool_metadata_from_real_executions_without_result_text(monkeypatch):
     from agno.metrics import ToolCallMetrics
 
