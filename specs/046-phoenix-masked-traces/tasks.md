@@ -47,6 +47,14 @@
       adjuntos, porque puede reproducir su contenido (ADR-007). Propietario
       confirma la excepción y `SAFE_READ_TOOLS` (2026-10-25); recogida en la spec,
       sección «Diseño de captura». `search_documents` queda dentro de la exclusión.
+      **Visibilidad por tool (opción A, 2026-10-25):** span `tool_metadata` por
+      llamada (nombre del registro, orden, ok/error, duración, tamaño del
+      resultado). Cierra un fallo propio de la primera entrega: el nombre de tool
+      lo escribe el modelo y un `propose_*` inventado desbloqueaba contenido y
+      llegaba al span; ahora todo nombre fuera de `KNOWN_TOOLS` sale como
+      `unknown_tool`. Test de deriva contra las `propose_*` definidas en
+      `src/agent/tools` (detectó `propose_preference_forget`, no cableada).
+      Opción B (resultados enmascarados de `SAFE_READ_TOOLS`) no se implementa.
 - [ ] T7 · Test de privacidad: canarios no llegan al exporter; Grafana sin contenido;
       audio/adjuntos/documentos ausentes; LLM y BD intactos.
 - [ ] T8 · Test fail-open: Phoenix caído o error de máscara no afecta al Agent.

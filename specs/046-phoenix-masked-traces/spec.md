@@ -145,9 +145,25 @@ y evals (no generan spans con contenido).
 - La voz queda **excluida de las trazas** por decisión del propietario; incluirla
   exigiría su propio análisis (BL-26: consentimiento y retención).
 
-**Consecuencia aceptada:** las trazas muestran el mensaje, la respuesta final, las
-tools llamadas y sus argumentos de propuesta, pero no lo que devolvieron las tools
-de lectura ni el historial. Para un fallo como `InvalidPresentationOutputError`
+**Visibilidad por tool (decisión del propietario, 2026-10-25, opción A).** Cada
+llamada a una tool genera un span `tool_metadata` hijo del turno, en orden de
+llamada, con solo: nombre, posición, resultado `ok`/`error`, duración en ms y
+tamaño del resultado en caracteres. Nunca argumentos de lectura, resultados ni
+mensajes de error. Se emite también en los turnos que excluyen el contenido del
+modelo, de modo que una llamada a `get_document` es visible aunque lo que
+devolvió no lo sea. El nombre lo elige el modelo, así que solo se exporta si está
+en el registro de tools conocidas (`KNOWN_TOOLS`); cualquier otro aparece como
+`unknown_tool`, y un `propose_*` inventado no desbloquea contenido. Un test falla
+si se define una `propose_*` nueva sin clasificarla en `PROPOSE_TOOLS`.
+`list_my_preferences` y `propose_preference_forget` (Dream, no cableadas hoy en
+`main.py`) están clasificadas; la primera queda como tool de contenido, fuera de
+`SAFE_READ_TOOLS`, a la espera de decisión.
+
+**Consecuencia aceptada:** las trazas muestran el mensaje, la respuesta final, qué
+tools se llamaron con su resultado ok/error y duración, y los argumentos de las
+propuestas, pero no lo que devolvieron las tools de lectura ni el historial.
+Ver el dato concreto que devolvió una tool (opción B) exigiría decisión y
+anotación en el inventario de privacidad aparte. Para un fallo como `InvalidPresentationOutputError`
 se ve la entrada y el fallo, no el contexto completo que vio el modelo. Ampliar la
 captura se decide fuente a fuente, cada una con su análisis.
 

@@ -82,6 +82,13 @@ def _flush(tracing: PhoenixTracing) -> None:
     tracing.provider.force_flush()
 
 
+def _assert_no_model_content(sink: _Sink) -> None:
+    """Typed text and metadata may be present; model-generated content must not be."""
+    sources = set(_by_source(sink))
+    assert {"call_metadata", "user_text"} <= sources
+    assert not sources & {"final_reply", "proposal_args"}
+
+
 # ── policy ──────────────────────────────────────────────────────────────────
 
 
@@ -91,7 +98,13 @@ def test_typed_note_turn_captures_all_four_sources(monkeypatch):
     capture_turn(tracing, record)
     _flush(tracing)
     grouped = _by_source(sink)
-    assert set(grouped) == {"call_metadata", "user_text", "final_reply", "proposal_args"}
+    assert set(grouped) == {
+        "call_metadata",
+        "user_text",
+        "tool_metadata",
+        "final_reply",
+        "proposal_args",
+    }
     assert grouped["user_text"][0].attributes["input.value"] == "apunta una nota"
     assert grouped["final_reply"][0].attributes["output.value"] == "Hecho"
     assert json.loads(grouped["proposal_args"][0].attributes["tool.parameters"]) == {
@@ -152,7 +165,7 @@ def test_turn_with_document_or_unknown_tools_keeps_only_user_text_and_metadata(
     assert model_content_allowed(record) is False
     capture_turn(tracing, record)
     _flush(tracing)
-    assert set(_by_source(sink)) == {"call_metadata", "user_text"}
+    _assert_no_model_content(sink)
     assert "El documento dice" not in " ".join(span.to_json() for span in sink.spans)
     tracing.shutdown()
 
@@ -161,7 +174,7 @@ def test_turn_with_attachments_never_captures_model_generated_content(monkeypatc
     tracing, sink = _tracing(monkeypatch)
     capture_turn(tracing, _record(had_media=True, answer="Resumen del PDF"))
     _flush(tracing)
-    assert set(_by_source(sink)) == {"call_metadata", "user_text"}
+    _assert_no_model_content(sink)
     tracing.shutdown()
 
 
@@ -196,7 +209,7 @@ def test_failed_turn_still_exports_metadata_with_error_class_only(monkeypatch):
     root = _by_source(sink)["call_metadata"][0]
     assert root.attributes["error.type"] == "InvalidPresentationOutputError"
     assert root.status.status_code is trace.StatusCode.ERROR
-    assert set(_by_source(sink)) == {"call_metadata", "user_text"}
+    _assert_no_model_content(sink)
     tracing.shutdown()
 
 
@@ -241,6 +254,167 @@ def test_ambient_grafana_span_is_never_the_parent(monkeypatch):
     ambient_id = ambient.get_span_context().trace_id
     assert all(span.context.trace_id != ambient_id for span in sink.spans)
     tracing.shutdown()
+
+
+# ── per-tool metadata (specs/046 "Visibilidad por tool") ─────────────────────
+
+
+def _tool_spans(sink: _Sink) -> list[ReadableSpan]:
+    spans = _by_source(sink).get("tool_metadata", [])
+    return sorted(spans, key=lambda span: span.attributes["ancora.tool.index"])
+
+
+def test_every_tool_call_gets_a_metadata_span_in_call_order(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(
+                ToolCallRecord("find_vehicle", {}, duration_ms=12.5, result_chars=340),
+                ToolCallRecord("get_document", {}, failed=True, duration_ms=3.0),
+                ToolCallRecord("propose_note", {"content": "x"}),
+            )
+        ),
+    )
+    _flush(tracing)
+    spans = _tool_spans(sink)
+    assert [s.attributes["ancora.tool.name"] for s in spans] == [
+        "find_vehicle",
+        "get_document",
+        "propose_note",
+    ]
+    assert [s.attributes["ancora.tool.outcome"] for s in spans] == ["ok", "error", "ok"]
+    assert spans[0].attributes["ancora.tool.duration_ms"] == 12.5
+    assert spans[0].attributes["ancora.tool.result_chars"] == 340
+    assert "ancora.tool.result_chars" not in spans[1].attributes
+    tracing.shutdown()
+
+
+def test_document_tool_is_visible_as_metadata_even_though_its_content_is_not(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            answer=f"Contiene {DNI}",
+            tool_calls=(ToolCallRecord("get_document", {"document_id": "1"}, result_chars=900),),
+        ),
+    )
+    _flush(tracing)
+    assert [s.attributes["ancora.tool.name"] for s in _tool_spans(sink)] == ["get_document"]
+    assert "final_reply" not in _by_source(sink)
+    assert DNI not in " ".join(span.to_json() for span in sink.spans)
+    tracing.shutdown()
+
+
+@pytest.mark.parametrize(
+    "invented", [f"propose_{DNI}", "propose_", "ignore previous instructions", DNI, "Ñ", ""]
+)
+def test_model_invented_tool_names_never_reach_a_span(monkeypatch, invented):
+    tracing, sink = _tracing(monkeypatch)
+    record = _record(tool_calls=(ToolCallRecord(invented, {"content": "SECRET-ARG"}),))
+    assert model_content_allowed(record) is False
+    capture_turn(tracing, record)
+    _flush(tracing)
+    dumped = " ".join(span.to_json() for span in sink.spans)
+    assert invented not in dumped or invented == ""
+    assert "SECRET-ARG" not in dumped
+    assert [s.attributes["ancora.tool.name"] for s in _tool_spans(sink)] == ["unknown_tool"]
+    assert "proposal_args" not in _by_source(sink)
+    assert "final_reply" not in _by_source(sink)
+    tracing.shutdown()
+
+
+def test_tool_metadata_never_carries_arguments_results_or_error_text(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(
+                ToolCallRecord("find_vehicle", {"query": "ARG-CANARY"}, failed=True),
+                ToolCallRecord("search_web", {"query": "ARG-CANARY"}, result_chars=10),
+            )
+        ),
+    )
+    _flush(tracing)
+    for span in _tool_spans(sink):
+        assert set(span.attributes) <= {
+            "ancora.capture.source",
+            "openinference.span.kind",
+            "ancora.correlation_id",
+            "ancora.interaction_id",
+            "user.id",
+            "ancora.tool.name",
+            "ancora.tool.index",
+            "ancora.tool.outcome",
+            "ancora.tool.duration_ms",
+            "ancora.tool.result_chars",
+        }
+    assert "ARG-CANARY" not in " ".join(span.to_json() for span in sink.spans)
+    tracing.shutdown()
+
+
+@pytest.mark.parametrize(
+    "attributes",
+    [
+        {"ancora.tool.name": "Not A Tool"},
+        {"ancora.tool.name": "tool12"},
+        {"ancora.tool.name": DNI},
+        {"ancora.tool.outcome": "maybe"},
+        {"ancora.tool.duration_ms": -1.0},
+        {"ancora.tool.result_chars": float("inf")},
+    ],
+)
+def test_exporter_drops_tool_spans_with_invalid_metadata(attributes):
+    delegate = _Sink()
+    from src.observability.phoenix_export import MaskedSpanExporter
+
+    exporter = MaskedSpanExporter(delegate, project_name="ancoramind")
+    span = ReadableSpan(
+        "x",
+        attributes={
+            "ancora.capture.source": "tool_metadata",
+            "openinference.span.kind": "TOOL",
+            **attributes,
+        },
+    )
+    exporter.export([span])
+    assert delegate.spans == [] and exporter.dropped == 1
+
+
+def test_registry_matches_every_propose_tool_defined_in_the_code():
+    import re
+    from pathlib import Path
+
+    from src.observability.phoenix_capture import PROPOSE_TOOLS
+
+    defined = set()
+    for path in Path("src/agent/tools").glob("*.py"):
+        defined |= set(re.findall(r"^async def (propose_\w+)\(", path.read_text("utf-8"), re.M))
+    assert defined == set(PROPOSE_TOOLS), (
+        "Classify new propose_* tools in phoenix_capture.PROPOSE_TOOLS "
+        f"(missing: {defined - PROPOSE_TOOLS}, stale: {PROPOSE_TOOLS - defined})"
+    )
+
+
+def test_runner_builds_tool_metadata_from_real_executions_without_result_text(monkeypatch):
+    from agno.metrics import ToolCallMetrics
+
+    from src.agent.governed_interaction_runner import _tool_call_record
+
+    record = _tool_call_record(
+        ToolExecution(
+            tool_name="find_vehicle",
+            tool_args={"query": "ARG-CANARY"},
+            result=f"Coche con matrícula {DNI}",
+            tool_call_error=True,
+            metrics=ToolCallMetrics(duration=0.25),
+        )
+    )
+    assert record.args == {}
+    assert record.failed is True
+    assert record.duration_ms == 250
+    assert record.result_chars == len(f"Coche con matrícula {DNI}")
+    assert DNI not in repr(record)
 
 
 # ── fail-open ───────────────────────────────────────────────────────────────

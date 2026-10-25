@@ -41,7 +41,9 @@ SERVICE = "ancoramind-core"
 CAPTURE_SOURCE_ATTRIBUTE = "ancora.capture.source"
 # Provenances the capture seam can vouch for by construction (specs/046 "Diseño de
 # captura"). Anything else, including voice or document-derived text, is dropped.
-CAPTURE_SOURCES = frozenset({"user_text", "final_reply", "proposal_args", "call_metadata"})
+CAPTURE_SOURCES = frozenset(
+    {"user_text", "final_reply", "proposal_args", "call_metadata", "tool_metadata"}
+)
 
 _MESSAGE = re.compile(
     r"llm\.(?:input|output)_messages\.\d+\.message\.(?:role|content|name|tool_call_id|"
@@ -50,6 +52,13 @@ _MESSAGE = re.compile(
 _TEXT_ATTRIBUTES = frozenset({"input.value", "output.value"})
 _TOOL_NAME = re.compile(r"propose_[a-z0-9_]+|present_reply")
 _PSEUDONYM = re.compile(r"[0-9a-f]{32}")
+# Per-tool metadata spans (specs/046 "Visibilidad por tool"): a bare identifier, so a
+# name cannot smuggle digits/spaces/punctuation; capture already maps unknown names.
+_TOOL_IDENTIFIER = re.compile(r"[a-z][a-z_]{0,63}")
+_TOOL_OUTCOMES = frozenset({"ok", "error"})
+_TOOL_NUMBERS = frozenset(
+    {"ancora.tool.index", "ancora.tool.duration_ms", "ancora.tool.result_chars"}
+)
 # Exception class names only (never messages), so a failed run is diagnosable.
 _ERROR_TYPE = re.compile(r"[A-Za-z][A-Za-z0-9_.]{0,99}")
 # Schema layer (ADR-007 layer 1): masked by field name whatever the value looks like.
@@ -197,6 +206,18 @@ class MaskedSpanExporter(SpanExporter):
         return value
 
     @staticmethod
+    def _tool_identifier(value: object) -> str:
+        if not isinstance(value, str) or not _TOOL_IDENTIFIER.fullmatch(value):
+            raise ValueError("Invalid tool identifier")
+        return value
+
+    @staticmethod
+    def _tool_outcome(value: object) -> str:
+        if not isinstance(value, str) or value not in _TOOL_OUTCOMES:
+            raise ValueError("Invalid tool outcome")
+        return value
+
+    @staticmethod
     def _tool_name(value: object) -> str:
         if not isinstance(value, str) or not _TOOL_NAME.fullmatch(value):
             raise ValueError("Tool outside capture scope")
@@ -214,6 +235,12 @@ class MaskedSpanExporter(SpanExporter):
             return self._text(value)
         if key == "error.type":
             return self._error_type(value)
+        if key == "ancora.tool.name":
+            return self._tool_identifier(value)
+        if key == "ancora.tool.outcome":
+            return self._tool_outcome(value)
+        if key in _TOOL_NUMBERS:
+            return self._number(value)
         if key == "tool.name":
             return self._tool_name(value)
         if key == "tool.parameters":

@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from uuid import UUID
 
+from agno.models.response import ToolExecution
 from agno.run import RunContext
 from agno.run.agent import RunOutput
 
@@ -88,6 +89,23 @@ def _attachment_context_for_agent(value: str) -> str:
     if not isinstance(payload.get("records"), list):
         return ""
     return value
+
+
+def _tool_call_record(item: ToolExecution) -> ToolCallRecord:
+    """Metadata of one tool call for the content-trace pipeline (specs/046).
+
+    Only ``propose_*`` arguments are carried (the exporter re-checks the name against
+    its registry). A result is reduced to its length; its text is never read onward.
+    """
+    name = item.tool_name or ""
+    duration = getattr(item.metrics, "duration", None)
+    return ToolCallRecord(
+        name=name,
+        args=(item.tool_args or {}) if name.startswith("propose_") else {},
+        failed=bool(item.tool_call_error),
+        duration_ms=duration * 1000 if isinstance(duration, (int, float)) else None,
+        result_chars=len(item.result) if isinstance(item.result, str) else None,
+    )
 
 
 class GovernedInteractionRunner:
@@ -196,16 +214,7 @@ class GovernedInteractionRunner:
                     user_text=input_text,
                     answer=answer,
                     proposal_text=proposal_text,
-                    tool_calls=tuple(
-                        ToolCallRecord(
-                            name=item.tool_name or "",
-                            # Arguments of read tools are never carried, only propose_*.
-                            args=(item.tool_args or {})
-                            if (item.tool_name or "").startswith("propose_")
-                            else {},
-                        )
-                        for item in executions
-                    ),
+                    tool_calls=tuple(_tool_call_record(item) for item in executions),
                     had_media=had_media,
                     input_tokens=getattr(metrics, "input_tokens", None),
                     output_tokens=getattr(metrics, "output_tokens", None),

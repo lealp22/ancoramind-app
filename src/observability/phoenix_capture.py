@@ -55,15 +55,68 @@ SAFE_READ_TOOLS = frozenset(
     }
 )
 _PRESENT_REPLY = "present_reply"
-_PROPOSE_PREFIX = "propose_"
+# Registered tools whose results can carry document or third-party content. They are
+# known by name (so their calls are visible as metadata) but never unlock model content.
+CONTENT_TOOLS = frozenset(
+    {
+        "search_documents",
+        "search_documents_semantically",
+        "get_document",
+        "analyze_document",
+        "export_document",
+        "search_web",
+        # Not registered in main.py today. Its result is what the system inferred
+        # about the user, not their own records: not in SAFE_READ_TOOLS until the
+        # owner decides.
+        "list_my_preferences",
+    }
+)
+# Every ``propose_*`` tool defined under ``src/agent/tools``; a drift test fails when
+# a new one is added without being listed here.
+PROPOSE_TOOLS = frozenset(
+    {
+        "propose_note",
+        "propose_document_delete",
+        "propose_preference_forget",
+        "propose_vehicle",
+        "propose_vehicle_maintenance",
+        "propose_reminder",
+        "propose_reminder_snooze",
+        "propose_calendar_event",
+        "propose_todo_list",
+        "propose_todo_list_rename",
+        "propose_todo_list_delete",
+        "propose_todo_item",
+        "propose_todo_item_update",
+        "propose_todo_item_complete",
+        "propose_todo_item_reopen",
+        "propose_todo_item_move",
+        "propose_todo_item_delete",
+    }
+)
 # Proposing a document deletion names a document: its filename is untrusted metadata.
 _EXCLUDED_PROPOSALS = frozenset({"propose_document_delete"})
+KNOWN_TOOLS = SAFE_READ_TOOLS | CONTENT_TOOLS | PROPOSE_TOOLS | {_PRESENT_REPLY}
+UNKNOWN_TOOL = "unknown_tool"
+
+
+def public_tool_name(name: str) -> str:
+    """The tool name as it may appear in a span.
+
+    The model chooses tool names, so an unregistered one (a hallucinated or injected
+    string) must never reach a span verbatim.
+    """
+    return name if name in KNOWN_TOOLS else UNKNOWN_TOOL
 
 
 @dataclass(frozen=True)
 class ToolCallRecord:
     name: str
     args: Mapping[str, object]
+    failed: bool = False
+    duration_ms: float | None = None
+    result_chars: int | None = None
+    """Size of the result only; the result itself is never carried."""
 
 
 @dataclass(frozen=True)
@@ -100,7 +153,8 @@ def model_content_allowed(record: TurnRecord) -> bool:
         name = call.name
         if name == _PRESENT_REPLY or name in SAFE_READ_TOOLS:
             continue
-        if name.startswith(_PROPOSE_PREFIX) and name not in _EXCLUDED_PROPOSALS:
+        # Registered names only: a made-up ``propose_*`` string unlocks nothing.
+        if name in PROPOSE_TOOLS and name not in _EXCLUDED_PROPOSALS:
             continue
         return False
     return True
@@ -171,10 +225,30 @@ def _emit(tracing: PhoenixTracing, record: TurnRecord) -> None:
     try:
         if record.user_text is not None:
             child("user_text", "CHAIN", {"input.value": record.user_text})
+        _emit_tool_metadata(child, record)
         if model_content_allowed(record):
             _emit_model_content(child, record)
     finally:
         root.end(end_time=record.ended_ns)
+
+
+def _emit_tool_metadata(child: Any, record: TurnRecord) -> None:
+    """One metadata-only span per tool call, in call order (specs/046 "Visibilidad por tool").
+
+    Name (registry-checked), outcome, duration and result size. Never arguments,
+    results or error messages: those can carry document or third-party content.
+    """
+    for index, call in enumerate(record.tool_calls):
+        attributes: dict[str, Any] = {
+            "ancora.tool.name": public_tool_name(call.name),
+            "ancora.tool.index": index,
+            "ancora.tool.outcome": "error" if call.failed else "ok",
+        }
+        if call.duration_ms is not None:
+            attributes["ancora.tool.duration_ms"] = call.duration_ms
+        if call.result_chars is not None:
+            attributes["ancora.tool.result_chars"] = call.result_chars
+        child("tool_metadata", "TOOL", attributes)
 
 
 def _emit_model_content(child: Any, record: TurnRecord) -> None:
@@ -184,7 +258,7 @@ def _emit_model_content(child: Any, record: TurnRecord) -> None:
         )
         child("final_reply", "CHAIN", {"output.value": reply})
     for call in record.tool_calls:
-        if call.name.startswith(_PROPOSE_PREFIX):
+        if call.name in PROPOSE_TOOLS and call.name not in _EXCLUDED_PROPOSALS:
             # json.dumps without ``default``: a non-serializable argument aborts this
             # capture rather than being stringified into a span.
             child(
