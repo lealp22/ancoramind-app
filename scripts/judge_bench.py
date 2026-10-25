@@ -61,6 +61,20 @@ def verdict(probability: float) -> str:
 
 def ask(client: httpx.Client, key: str, model: str, item: dict) -> tuple[float, int]:
     """Devuelve (probabilidad de cumplimiento, tokens de entrada)."""
+    probability, tokens, _cost = ask_with_cost(client, key, model, item)
+    return probability, tokens
+
+
+def reported_cost(value: object) -> float | None:
+    """Coste que devuelve el proveedor, o None si falta o no es un importe válido."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if value >= 0 else None
+
+
+def ask_with_cost(client: httpx.Client, key: str, model: str,
+                  item: dict) -> tuple[float, int, float | None]:
+    """Devuelve (probabilidad, tokens de entrada, coste USD que informa OpenRouter)."""
     body = {
         "model": model,
         "state": item["state"],
@@ -80,7 +94,9 @@ def ask(client: httpx.Client, key: str, model: str, item: dict) -> tuple[float, 
     response = client.post(URL, json=body, headers={"Authorization": f"Bearer {key}"})
     response.raise_for_status()
     data = response.json()
-    return float(data["answers"]["cumple"]["noul"]), int(data["usage"]["input_tokens"])
+    usage = data["usage"]
+    return (float(data["answers"]["cumple"]["noul"]), int(usage["input_tokens"]),
+            reported_cost(usage.get("cost")))
 
 
 def run_model(model: str, items: list[dict], key: str, budget: float) -> dict:

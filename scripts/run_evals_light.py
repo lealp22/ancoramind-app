@@ -52,13 +52,19 @@ EXCLUDED_CASES = {
 
 
 AGENT_PRICE_IN_PER_M = 0.10   # USD/M tokens de entrada: ESTIMACIÓN (catálogo OpenRouter
-AGENT_PRICE_OUT_PER_M = 0.50  # 2026-10-18, GPT-6 Luna); no es la factura real.
+AGENT_PRICE_OUT_PER_M = 0.50  # 2026-10-18, GPT-6 Luna); sólo respaldo si falta el coste real.
 
 
 def estimate_agent_cost(usage: dict[str, Any]) -> float:
-    """Coste estimado del Agent: el ledger de uso no trae coste (pricing=None)."""
+    """Coste estimado del Agent (respaldo): tokens × tarifa fija, no es la factura."""
     return (usage["input_tokens"] * AGENT_PRICE_IN_PER_M
             + usage["output_tokens"] * AGENT_PRICE_OUT_PER_M) / 1_000_000
+
+
+def agent_cost(usage: dict[str, Any]) -> float:
+    """Coste del Agent: el que informa OpenRouter; si falta, la estimación."""
+    reported = usage.get("provider_cost_usd")
+    return reported if reported is not None else estimate_agent_cost(usage)
 
 
 class UsageCollector:
@@ -66,20 +72,52 @@ class UsageCollector:
 
     def __init__(self) -> None:
         self.events: list[LlmUsageEventCreate] = []
+        # Coste que OpenRouter informa en cada respuesta completada (None si no lo trae).
+        self.provider_costs: list[float | None] = []
 
     async def __call__(self, event: LlmUsageEventCreate) -> None:
         self.events.append(event)
 
+    def record_provider_cost(self, response: Any) -> None:
+        usage = getattr(response, "response_usage", None)
+        self.provider_costs.append(judge_bench.reported_cost(getattr(usage, "cost", None)))
+
     def take(self) -> dict[str, Any]:
         events, self.events = self.events, []
+        provider, self.provider_costs = self.provider_costs, []
         cost = [e.actual_cost if e.actual_cost is not None else e.estimated_cost
                 for e in events]
+        completed = sum(1 for e in events if e.status == "completed")
+        # Las llamadas fallidas no traen respuesta: sólo se exige coste a las completadas.
+        known = len(provider) >= completed and all(c is not None for c in provider)
         return {
             "model_calls": len(events),
             "input_tokens": sum(e.input_tokens or 0 for e in events),
             "output_tokens": sum(e.output_tokens or 0 for e in events),
             "cost_usd": None if any(c is None for c in cost) else round(sum(cost), 6),
+            # None = OpenRouter no informó el coste de alguna llamada.
+            "provider_cost_usd": round(sum(c for c in provider if c is not None), 8)
+            if known else None,
         }
+
+
+def install_cost_probe(collector: UsageCollector) -> None:
+    """Captura `usage.cost` de cada respuesta sin tocar el ledger de producción.
+
+    `_actual_call_cost` se invoca una vez por llamada completada, con la respuesta del
+    proveedor; el sustituto sólo observa y delega: su resultado no cambia.
+    """
+    from src.agent import governed_model
+
+    original = getattr(governed_model, "_actual_call_cost_original",
+                       governed_model._actual_call_cost)
+
+    def probe(context: Any, effective_route: str, response: Any) -> float | None:
+        collector.record_provider_cost(response)
+        return original(context, effective_route, response)
+
+    governed_model._actual_call_cost_original = original  # type: ignore[attr-defined]
+    governed_model._actual_call_cost = probe  # type: ignore[assignment]
 
 
 def build_executor(collector: UsageCollector):
@@ -88,6 +126,7 @@ def build_executor(collector: UsageCollector):
     from src.agent.llm_access import AgnoLLMAccess
     from src.config import Settings
 
+    install_cost_probe(collector)
     settings = Settings()
     settings.litellm_proxy_enabled = False
     access = AgnoLLMAccess(settings=settings, usage_recorder=collector)
@@ -107,21 +146,29 @@ def judge_state(case: EvalCase, answer: str, proposal_text: str = "",
 
 def judge_case(client: httpx.Client, key: str, case: EvalCase, answer: str,
                proposal_text: str, model: str,
-               persisted_proposals: int | None = None) -> tuple[list[dict[str, Any]], int]:
-    """Un `noul` por criterio. Devuelve (veredictos, tokens de entrada)."""
-    verdicts, tokens = [], 0
+               persisted_proposals: int | None = None,
+               ) -> tuple[list[dict[str, Any]], int, float | None]:
+    """Un `noul` por criterio. Devuelve (veredictos, tokens de entrada, coste USD).
+
+    El coste es el que informa OpenRouter; `None` si alguna llamada no lo trajo.
+    """
+    verdicts, tokens, cost, cost_known = [], 0, 0.0, True
     for index, criterion in enumerate(case.response_criteria):
         item = {"state": judge_state(case, answer, proposal_text, persisted_proposals),
                 "criterion": criterion}
         try:
-            p, used = judge_bench.ask(client, key, model, item)
+            p, used, reported = judge_bench.ask_with_cost(client, key, model, item)
         except (httpx.HTTPError, KeyError, ValueError):
             verdicts.append({"criterion": index, "p": None, "verdict": "error"})
             continue
         tokens += used
+        if reported is None:
+            cost_known = False
+        else:
+            cost += reported
         verdicts.append({"criterion": index, "p": round(p, 3),
                          "verdict": judge_bench.verdict(p)})
-    return verdicts, tokens
+    return verdicts, tokens, (cost if cost_known else None)
 
 
 async def run_case(executor: Any, case: EvalCase, route: str, revision: int,
@@ -193,10 +240,12 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase],
     route, revision = "ancoramind-default", executor._snapshot.revision  # noqa: SLF001
     key = os.environ.get("OPENROUTER_API_KEY", "")
     judge_tokens, rows, stopped = 0, [], False
+    judge_real, judge_real_known = 0.0, True
     with httpx.Client(timeout=60, follow_redirects=False, trust_env=False) as client:
         for case in cases:
-            spent = spent_before + sum(estimate_agent_cost(r["usage"]) for r in rows) + (
-                judge_tokens * judge_bench.PRICES[JUDGE_MODEL] / 1_000_000)
+            judge_so_far = (judge_real if judge_real_known
+                            else judge_tokens * judge_bench.PRICES[JUDGE_MODEL] / 1_000_000)
+            spent = spent_before + sum(agent_cost(r["usage"]) for r in rows) + judge_so_far
             if spent >= args.max_usd:
                 print(f"tope_alcanzado {spent:.4f} USD: casos restantes sin ejecutar")
                 stopped = True
@@ -209,25 +258,33 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase],
             judged = bool(case.response_criteria) and row["status"] != "error" \
                 and not args.no_judge
             if judged:
-                row["judge"], used = judge_case(client, key, case, answer, proposal_text,
-                                                JUDGE_MODEL, persisted)
+                row["judge"], used, reported = judge_case(
+                    client, key, case, answer, proposal_text, JUDGE_MODEL, persisted)
                 judge_tokens += used
+                if reported is None:
+                    judge_real_known = False
+                else:
+                    judge_real += reported
             settle_status(row, case, judged)
             rows.append(row)
             print(f"{row['status']:5} {case.case_id} {row['seconds']}s", flush=True)
-    agent_cost = [r["usage"]["cost_usd"] for r in rows]
-    judge_cost = round(judge_tokens * judge_bench.PRICES[JUDGE_MODEL] / 1_000_000, 6)
+    provider_costs = [r["usage"].get("provider_cost_usd") for r in rows]
+    agent_cost_real = None if any(c is None for c in provider_costs) else round(
+        sum(provider_costs), 6)
+    judge_est = round(judge_tokens * judge_bench.PRICES[JUDGE_MODEL] / 1_000_000, 6)
     return {
         "ts": datetime.now(UTC).isoformat(timespec="seconds"), "git_sha": git_sha(),
         "agent_model": os.environ.get("LLM_MODEL", ""), "judge_model": JUDGE_MODEL,
         "cases": len(rows), "passed": sum(r["status"] == "pass" for r in rows),
         "agent_input_tokens": sum(r["usage"]["input_tokens"] for r in rows),
         "agent_output_tokens": sum(r["usage"]["output_tokens"] for r in rows),
-        "agent_cost_usd": None if any(c is None for c in agent_cost) else round(
-            sum(agent_cost), 6),
+        # Coste informado por OpenRouter (None si alguna llamada no lo trajo).
+        "agent_cost_usd": agent_cost_real,
         "agent_cost_est_usd": round(sum(estimate_agent_cost(r["usage"]) for r in rows), 6),
         "stopped_by_budget": stopped,
-        "judge_input_tokens": judge_tokens, "judge_cost_usd": judge_cost, "rows": rows,
+        "judge_input_tokens": judge_tokens,
+        "judge_cost_usd": round(judge_real, 6) if judge_real_known else None,
+        "judge_cost_est_usd": judge_est, "rows": rows,
     }
 
 
@@ -238,8 +295,9 @@ def main() -> int:
     parser.add_argument("--case", action="append", help="id de caso, repetible")
     parser.add_argument("--no-judge", action="store_true")
     parser.add_argument("--max-usd", type=float, default=0.30,
-                        help="para antes del siguiente caso si el gasto ESTIMADO lo supera "
-                             "(acumulado entre repeticiones)")
+                        help="para antes del siguiente caso si el gasto supera este importe "
+                             "(coste informado por OpenRouter; estimado si falta; "
+                             "acumulado entre repeticiones)")
     parser.add_argument("--repeat", type=int, default=1,
                         help="pasadas seguidas; cada una añade su línea al ledger")
     parser.add_argument("--case-timeout", type=float, default=240.0,
@@ -269,7 +327,10 @@ def main() -> int:
                 "rows": summary["rows"]})
             print(json.dumps({k: v for k, v in summary.items() if k != "rows"},
                              ensure_ascii=False), flush=True)
-            total += summary["agent_cost_est_usd"] + summary["judge_cost_usd"]
+            total += (summary["agent_cost_usd"] if summary["agent_cost_usd"] is not None
+                      else summary["agent_cost_est_usd"]) + (
+                summary["judge_cost_usd"] if summary["judge_cost_usd"] is not None
+                else summary["judge_cost_est_usd"])
             all_passed = all_passed and summary["passed"] == summary["cases"]
             if summary["stopped_by_budget"]:
                 break

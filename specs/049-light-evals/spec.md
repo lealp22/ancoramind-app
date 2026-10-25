@@ -78,10 +78,11 @@ python scripts/report_evals.py --last 5                           # estabilidad 
     texto: lo fijan los tests de recall de la heurística (BL-39,
     `test_injection_heuristics`). Sin cubrir en este runner.
 - `--max-usd` (0,30 por defecto) para antes del siguiente caso; `--no-judge` omite el juez.
-  El tope cuenta el coste **estimado** del Agent (tokens × 0,10/0,50 USD/M, catálogo
-  OpenRouter 2026-10-18, GPT-6 Luna; no es la factura) más el del juez, y se acumula entre
-  repeticiones. Antes el Agent contaba como 0 (su coste real es `null`) y el tope no
-  protegía nada.
+  El tope cuenta el coste que **informa OpenRouter** (`usage.cost` de cada respuesta) del
+  Agent y del juez; si alguna llamada no lo trae, usa la estimación (Agent: tokens ×
+  0,10/0,50 USD/M, catálogo 2026-10-18, GPT-6 Luna; juez: tokens × tarifa de
+  `judge_bench.PRICES`). Se acumula entre repeticiones. Antes el Agent contaba como 0 y el
+  tope no protegía nada; con la estimación fija, sobrestimaba o subestimaba según la caché.
 - `--repeat N`: N pasadas seguidas, una línea de ledger por pasada.
 - `--case-timeout` (240 s por defecto): un caso colgado deja de bloquear la suite.
 - El Agent va directo a OpenRouter con tu `.env` (sin Gateway): decisión de capstone.
@@ -91,8 +92,11 @@ python scripts/report_evals.py --last 5                           # estabilidad 
 Cada `--run` añade una línea a `evals/runs/ledger.jsonl` (versionable): fecha, SHA de
 Git, modelos, casos/aprobados, tokens y coste del Agent y del juez, y por caso
 estado, tools, uso, duración y veredicto por criterio. **Sin prompts ni
-respuestas.** Si OpenRouter no devuelve coste, `agent_cost_usd` queda `null` y los
-tokens sirven de referencia (no se inventa un precio).
+respuestas.** `agent_cost_usd` y `judge_cost_usd` son el coste que informa OpenRouter;
+`agent_cost_est_usd` y `judge_cost_est_usd` son la estimación con tarifa fija, que se
+conserva como respaldo y para comparar. Si el proveedor no informa el coste de alguna
+llamada, el campo real queda `null` (no se mezcla con estimaciones). Las entradas
+anteriores al 2026-10-25 sólo traen la estimación; su `judge_cost_usd` era un recálculo.
 Cada fila guarda además `failures` (textos de las comprobaciones de código: nombres
 de tools y resultados, sin contenido). La primera entrada del ledger (SHA `11188f1`)
 tiene tokens a 0 por el bug descrito abajo; no es un dato real.
@@ -275,11 +279,22 @@ A tener en cuenta:
 - **Ejecución aparte.** Con `--category redteam` se puede lanzar o excluir sin afectar a
   la suite habitual, y el informe por categoría ya separa resultados.
 
+## Coste real de OpenRouter (2026-10-25)
+
+El runner lee `usage.cost` de la respuesta del Agent y de la del juez. En el Agent se
+captura envolviendo `governed_model._actual_call_cost` (`install_cost_probe`): sólo
+observa y delega, no cambia el ledger de uso del Agent ni la lógica de producción, que
+sigue calculando el coste con las tarifas de la configuración (`pricing=None` aquí).
+
+Medido con ejecuciones reales de un caso: `tool_selection.note_search` 0,001051 USD
+informado frente a 0,001512 estimado (14.604 tokens de entrada, 104 de salida);
+`security.benign_note_with_link` 0,001032 frente a 0,001493. En el diagnóstico previo, dos
+llamadas con casi los mismos tokens costaron 0,000914 y 0,000117 USD (8×): la estimación
+fija no sigue esa variación. La causa (¿caché del proveedor?) **no está comprobada**.
+Con estas medidas la estimación sobrestima ~44 %, pero eso no se ha generalizado.
+
 ## Pendiente
 
-- Registrar el coste real del juez: `usage.cost` viene en cada respuesta de la API de
-  decisiones (medido: 1,77e-06 USD para 177 tokens) y hoy se descarta y se recalcula con
-  una tabla fija. Pasar a guardar el valor devuelto.
 - Ver el detalle de lo evaluado (entrada, respuesta, veredicto por criterio): el ledger
   no guarda contenido a propósito, y `report_evals.py` sólo agrega estados.
 - Decidir dónde se ejecuta y quién lo lanza (hoy: local, a mano). Ver conversación sobre

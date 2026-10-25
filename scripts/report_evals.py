@@ -36,13 +36,30 @@ def per_case(runs: list[dict]) -> dict[str, list[str]]:
     return table
 
 
+def cost_label(run: dict) -> str:
+    """Coste Agent + juez: el informado por OpenRouter; «~» marca una estimación."""
+    agent = run.get("agent_cost_usd")
+    agent_est = run.get("agent_cost_est_usd")
+    judge = run.get("judge_cost_usd")
+    judge_est = run.get("judge_cost_est_usd")
+    if "judge_cost_est_usd" not in run:
+        # Ledger anterior: judge_cost_usd era siempre un recálculo con tarifa fija.
+        judge, judge_est = None, judge
+
+    def part(real: float | None, est: float | None) -> str:
+        if real is not None:
+            return str(real)
+        return f"~{est}" if est is not None else "?"
+
+    return f"{part(agent, agent_est)}+{part(judge, judge_est)} USD"
+
+
 def render(runs: list[dict]) -> str:
     table = per_case(runs)
     lines = [f"Pasadas: {len(runs)}  ({runs[0]['ts']} → {runs[-1]['ts']})", ""]
     totals = [
         f"  pasada {i}: {r['passed']}/{r['cases']} pass  sha={r['git_sha']}  "
-        f"tokens_in={r['agent_input_tokens']}  "
-        f"coste_est={r.get('agent_cost_est_usd', '?')}+{r['judge_cost_usd']} USD"
+        f"tokens_in={r['agent_input_tokens']}  coste={cost_label(r)}"
         for i, r in enumerate(runs, 1)
     ]
     lines += totals + [""]
