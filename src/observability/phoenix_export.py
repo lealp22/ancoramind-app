@@ -30,6 +30,14 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, Spa
 from opentelemetry.trace import SpanContext, Status, TraceState
 from opentelemetry.util.types import AttributeValue
 
+from src.observability.field_policy import (
+    IDENTIFIER_MARKERS,
+    INVALID_MARKER,
+    FieldClass,
+    classify,
+    is_uuid,
+    is_valid_structured,
+)
 from src.observability.masking import mask_sensitive
 
 if TYPE_CHECKING:
@@ -66,18 +74,6 @@ _TOOL_ERROR_MESSAGE = "ancora.tool.error_message"
 _MAX_TOOL_ERROR_CHARS = 300
 # Exception class names only (never messages), so a failed run is diagnosable.
 _ERROR_TYPE = re.compile(r"[A-Za-z][A-Za-z0-9_.]{0,99}")
-# Schema layer (ADR-007 layer 1): masked by field name whatever the value looks like.
-_IDENTIFIERS = {
-    "registration": "[MATRICULA]",
-    "vin": "[BASTIDOR]",
-    "user_id": "[USUARIO]",
-    "telegram_user_id": "[USUARIO]",
-    "email": "[EMAIL]",
-    "phone": "[TELEFONO]",
-    "iban": "[IBAN]",
-    "dni": "[DNI]",
-    "nie": "[NIE]",
-}
 # A tool payload carrying any of these keys is never exported, not even masked.
 _EXCLUDED = frozenset(
     {
@@ -156,18 +152,37 @@ class MaskedSpanExporter(SpanExporter):
             raise ValueError("Invalid text projection")
         return self.masker(value)
 
+    def _json_field(self, key: str, child: Any, depth: int) -> Any:
+        """One ``key: value`` pair of a tool payload, treated per ``field_policy``.
+
+        A validated UUID in an id field and a strictly shaped value in a structured
+        field are kept verbatim. A value that FAILS its field's validation is not
+        legitimate content (a date or id field is not where prose belongs), so it is
+        replaced by a marker instead of being exported after pattern masking, which
+        cannot see names. Free text and unlisted fields are masked by pattern.
+        """
+        field_class = classify(key)
+        if field_class is FieldClass.IDENTIFIER:
+            return IDENTIFIER_MARKERS[key.lower()]
+        if field_class is FieldClass.INTERNAL_ID:
+            if child is None:
+                return None
+            return child.lower() if is_uuid(child) else INVALID_MARKER
+        if field_class is FieldClass.STRUCTURED:
+            return child if is_valid_structured(key, child) else INVALID_MARKER
+        return self._json_value(child, depth + 1)
+
     def _json_object(self, value: dict[Any, Any], depth: int) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for key, child in value.items():
             if not isinstance(key, str):
                 raise ValueError("Non-string key")
-            lowered = key.lower()
-            if lowered in _EXCLUDED:
+            if key.lower() in _EXCLUDED:
                 raise ValueError("Excluded content")
-            if lowered in _IDENTIFIERS:
-                result[key] = _IDENTIFIERS[lowered]
+            if key.lower() in IDENTIFIER_MARKERS:
+                result[key] = IDENTIFIER_MARKERS[key.lower()]
             else:
-                result[self._text(key)] = self._json_value(child, depth + 1)
+                result[self._text(key)] = self._json_field(key, child, depth)
         return result
 
     def _json_value(self, value: Any, depth: int = 0) -> Any:

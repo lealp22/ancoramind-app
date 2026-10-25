@@ -5,11 +5,21 @@
 - [x] T1 · Decisión del propietario (2026-10-23): ADR-007 Accepted con la enmienda
       acotada del principio 11, captura manual, retención 30 días, todos los
       usuarios autorizados. Autoriza implementar con flag OFF; no la activación.
-- [ ] T2 parcial · `src/observability/masking.py` ya existente: detectores por patrón;
-      esquema sólo en exporter experimental, aún no en captura productiva.
-      Alcance previsto: detectores por esquema, patrón con
-      validación (Luhn, DNI/NIE, IBAN, matrícula, VIN, email, teléfono, tokens) y
-      red de seguridad numérica.
+- [x] T2 (2026-10-25, local) · `src/observability/masking.py` (patrón con validación:
+      Luhn, DNI/NIE, IBAN, matrícula, VIN, email, teléfono, tokens, red numérica) +
+      nueva `src/observability/field_policy.py` (capa por esquema, por nombre de
+      campo y forma del valor), usada por `MaskedSpanExporter` en los argumentos
+      `propose_*`. Cuatro clases: identificador personal (marcador tipado siempre),
+      texto libre (se conserva y se enmascara por patrón), id interno (se conserva
+      sólo si es un UUID canónico) y estructurado (se conserva sólo con la forma
+      estricta de su campo). Un valor que no valida en un id o campo estructurado
+      sale como `[INVALIDO]`, no se exporta tras enmascararlo: el patrón no ve
+      nombres y una fecha con prosa es una anomalía. Corrige dos defectos del
+      prototipo: los UUID salían como `[TOKEN]` (se perdía la correlación con
+      PostgreSQL) y los enteros pasaban por la red numérica. Un test de deriva
+      falla si una `propose_*` añade un parámetro sin clasificar. **Límite
+      aceptado, sin cambio:** el texto libre sólo se enmascara por formato; nombres,
+      direcciones y salud no se detectan (ADR-007).
 - [x] T3 · Corpus existente válido/inválido y 10 controles cotidianos en español;
       0 positivos en esos controles, no medida poblacional de falsos positivos.
 - [x] T4 parcial (2026-10-25) · `src/observability/phoenix_export.py`:
