@@ -288,6 +288,14 @@ async def run_suite(args: argparse.Namespace, cases: list[EvalCase],
     }
 
 
+def disable_telemetry() -> None:
+    """Sin exportador OTel local: sin Collector, el SDK reintenta y puede colgar el runner.
+
+    Sólo afecta a este proceso y no pisa un valor que el operador haya fijado.
+    """
+    os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", action="store_true", help="lanza inferencia real")
@@ -316,6 +324,7 @@ def main() -> int:
         return 0
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
+    disable_telemetry()
     async def amain() -> None:
         total, all_passed = 0.0, True
         for number in range(1, args.repeat + 1):

@@ -7,8 +7,13 @@ from src.main import _init_domain_tools
 
 
 def test_web_search_is_not_registered_when_disabled() -> None:
+    # Explícito: Settings lee también variables del proceso, no sólo el .env.
     settings = Settings(
-        _env_file=None, app_env="development", ancora_database_url="", telegram_token=""
+        _env_file=None,
+        app_env="development",
+        ancora_database_url="",
+        telegram_token="",
+        web_search_enabled=False,
     )
 
     tools = _init_domain_tools(settings)

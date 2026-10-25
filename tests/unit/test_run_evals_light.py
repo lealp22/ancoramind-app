@@ -129,6 +129,18 @@ def test_cost_probe_records_the_cost_and_does_not_change_the_result(monkeypatch)
     monkeypatch.delattr(governed_model, "_actual_call_cost_original", raising=False)
 
 
+def test_disable_telemetry_sets_the_flag_but_respects_an_operator_value(monkeypatch):
+    # setenv antes de delenv: así monkeypatch restaura "ausente" y no filtra el valor.
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "placeholder")
+    monkeypatch.delenv("OTEL_SDK_DISABLED")
+    light.disable_telemetry()
+    assert light.os.environ["OTEL_SDK_DISABLED"] == "true"
+
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    light.disable_telemetry()
+    assert light.os.environ["OTEL_SDK_DISABLED"] == "false"
+
+
 def test_report_shows_the_real_cost_and_marks_estimates():
     real = {"agent_cost_usd": 0.0123, "agent_cost_est_usd": 0.09,
             "judge_cost_usd": 0.0002, "judge_cost_est_usd": 0.0003}
