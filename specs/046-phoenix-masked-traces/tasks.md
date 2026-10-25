@@ -135,8 +135,15 @@
       usaba nadie). Corregido en `phoenix_export.py`: con el flag a `true` y config
       incompleta se registra un `WARNING` con los **nombres** que faltan, nunca
       valores; con el flag a `false` no se registra nada.
-- [~] T11 (2026-10-25) · **Gates locales superados; SHA/CI y integración pendientes, no
-      se pueden cerrar desde este equipo.** Reproducido el job `quality` del CI:
+- [~] T11 (2026-10-25) · **Gates locales superados, incluida la integración; falta
+      sólo el SHA/CI, que depende del propietario.** Actualización: con Docker y
+      PostgreSQL local disponibles se ejecutó la suite de integración tal como la
+      corre el CI (`ANCORA_TEST_REQUIRE_DB=1`, contenedor `pgvector/pgvector:pg16`,
+      base dedicada `ancoramind_test`, sin `ANCORA_TEST_DATABASE_URL`):
+      **218 pasan, 1 se omite** (`test_stt_live_smoke`, inferencia real que exige
+      aprobación explícita, omitido por diseño). Las notas de abajo sobre «integración
+      no ejecutada» corresponden a la primera pasada, sin Docker. Reproducido el job
+      `quality` del CI:
       Ruff, `mypy src/` (190 ficheros), `export_prompt_history.py --check` y
       `pytest tests/unit/ -q --cov=src` (2682 pasan, 2 se omiten, cobertura 82 %;
       módulos nuevos: `phoenix_capture` 100 %, `field_policy` 96 %, `phoenix_export`

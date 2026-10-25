@@ -106,11 +106,27 @@ manual. Nombres y significado:
 | `PHOENIX_USER_PSEUDONYM_KEY` | ≥ 32 caracteres aleatorios | Secreto, **independiente de cualquier otro**. Ver abajo |
 | `PHOENIX_PROJECT_NAME` | `ancoramind` (por defecto) | Nombre del proyecto en la UI |
 
-**Puerto gRPC — comprobar.** El exporter usa OTLP por **gRPC**. Phoenix escucha gRPC
-por defecto en `4317` y existe `PHOENIX_GRPC_PORT` en su servicio, pero no se ha leído
-su valor. Confirmarlo en las variables del servicio `Phoenix` (el HTTP/UI usa
-`PHOENIX_PORT`, que **no** es el de gRPC). Si el puerto es otro, usarlo en el
-endpoint.
+**Puerto gRPC — comprobar.** El exporter usa OTLP por **gRPC**, no por HTTP. Según la
+documentación de Phoenix: gRPC escucha por defecto en `4317` (variable
+`PHOENIX_GRPC_PORT`) y la UI y el OTLP/HTTP en `6006` (variable `PHOENIX_PORT`).
+**No son el mismo puerto**; usar el de la UI como destino del exporter no funciona.
+En esta instancia ambas variables existen en el servicio, pero no se ha leído su valor.
+
+Cómo comprobarlo, sin exponer secretos:
+
+1. Railway → proyecto `ancoramind-app` → servicio **Phoenix** → pestaña **Variables**.
+2. Localizar la fila `PHOENIX_GRPC_PORT` y leer sólo su valor. No abrir ni copiar las
+   demás filas de la pantalla (`PHOENIX_SECRET`, `PHOENIX_SQL_DATABASE_URL` y la
+   contraseña inicial están en la misma lista).
+3. Si la variable **no está** o está vacía, el puerto es el de por defecto, `4317`.
+4. Anotar el valor y usarlo en `PHOENIX_COLLECTOR_ENDPOINT`
+   (`http://phoenix.railway.internal:<ese-valor>`).
+5. Comprobarlo desde la red privada con la prueba de alcance de abajo: que el nombre
+   resuelva no demuestra que el puerto escuche.
+
+Si el exporter apunta a un puerto equivocado no hay error visible en la app (es
+fail-open): simplemente no llegan trazas. Por eso la verificación E2E del §5 es la
+prueba definitiva, no esta comprobación.
 
 **Generar la clave de seudónimos** (no reutilizar ni derivar de otra):
 
@@ -136,10 +152,13 @@ el puerto responde, sin enviar contenido:
 
 ```sh
 getent hosts phoenix.railway.internal
+python -c "import socket,sys; s=socket.create_connection(('phoenix.railway.internal', int(sys.argv[1])), 3); print('puerto abierto'); s.close()" <puerto-gRPC>
 ```
 
-Si no resuelve, ambos servicios deben estar en el mismo proyecto y entorno
-(`production`). No continuar hasta que resuelva.
+La primera línea comprueba que el nombre resuelve; la segunda, que el puerto acepta
+conexiones TCP (no envía datos ni autentica). Si no resuelve, ambos servicios deben
+estar en el mismo proyecto y entorno (`production`). No continuar hasta que las dos
+respondan.
 
 ## 5. Activación controlada y verificación E2E (T12)
 
@@ -163,7 +182,7 @@ usuarios autorizados** a la vez (decisión de specs/046): no hay lista parcial.
 | «Apunta una nota: comprar pan» | Mensaje, tool `propose_note`, respuesta | — |
 | «Mi DNI es 12345678Z, guárdalo en una nota» | `[DNI]` | `12345678Z` |
 | «Busca mi factura» (usa `search_documents`) | La llamada a la tool como metadato | El contenido que devuelve; la respuesta del modelo |
-| Una nota de voz | **Nada** de ese turno | Cualquier texto de la transcripción |
+| Una nota de voz (**sólo si `TELEGRAM_VOICE_ENABLED=true`**; si está apagada, anotar «no aplicable») | **Nada** de ese turno | Cualquier texto de la transcripción |
 | Un adjunto con pie de foto | El pie de foto | Nombre y contenido del archivo; respuesta del modelo |
 
 Pasos siguientes de la activación (continúan la numeración del paso 3):

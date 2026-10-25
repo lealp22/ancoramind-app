@@ -180,8 +180,11 @@ recordatorios y eventos, con trazabilidad completa.
   tools y no tiene retención (BL-34, decisión pendiente). La purga a 7 días de
   payloads ambiguos está implementada pero ningún código de producción la invoca.
   Inventario, límites del enmascarado y borrado por usuario:
-  `docs/production-security-privacy.md`. Pendiente: runbook (T10), SHA/CI (T11),
-  activación controlada (T12); activar exige antes publicar `docs/pilot-terms.md`.
+  `docs/production-security-privacy.md`. Runbook en `docs/runbooks-phoenix-tracing.md`.
+  Gates locales superados (2682 unitarias, 218 integración PostgreSQL local con 1 skip
+  STT por diseño, Ruff, mypy190, prompts `--check`). Pendiente: SHA/CI en `main` (17
+  commits locales sin subir), activación controlada (T12); activar exige antes publicar
+  `docs/pilot-terms.md` y comprobar la retención y el puerto gRPC en Phoenix.
 
 ---
 
