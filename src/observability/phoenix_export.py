@@ -402,6 +402,14 @@ def build_phoenix_tracing(
     not registered as the global one, so no instrumentation can feed it by accident.
     """
     if not settings.phoenix_tracing_active:
+        # The flag is ON but the configuration is incomplete: fail closed, but say which
+        # settings are missing so a typo does not silently disable tracing. Names only,
+        # never values. With the flag OFF nothing is logged (the normal state).
+        if settings.phoenix_tracing_enabled:
+            logger.warning(
+                "Phoenix tracing is enabled but inactive; missing or invalid: %s",
+                ", ".join(settings.phoenix_tracing_missing),
+            )
         return None
     try:
         exporter = MaskedSpanExporter(

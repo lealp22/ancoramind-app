@@ -120,6 +120,36 @@
       por el propietario). **Pendiente de prueba real:** el borrado por usuario sólo
       se probó contra un backend local desechable, y la retención de 30 días es
       declarada, no comprobada.
-- [ ] T10 · Runbook: variables en Railway, red privada, retirada del dominio público.
-- [ ] T11 · Gates: pytest unit + integration, Ruff, mypy, `git diff --check`; SHA/CI.
+- [x] T10 (2026-10-25) · `docs/runbooks-phoenix-tracing.md`: condiciones previas a
+      activar, despliegue, comprobaciones en la instancia de Phoenix, variables de
+      `ancoramind-app` (staged, flag OFF), prueba de alcance privada, activación y
+      verificación E2E con tabla de casos, apagado, borrado por usuario y diagnóstico.
+      Distingue lo verificado de lo que el operador debe **comprobar**: el valor de
+      `PHOENIX_DEFAULT_RETENTION_POLICY_DAYS` (sólo se vio el nombre), el puerto gRPC
+      (`PHOENIX_GRPC_PORT`, no leído por contener secretos junto a él), y el borrado
+      en la instancia real (sólo ensayado en un backend local). **El dominio público
+      de Phoenix NO se retira por ahora (decisión del propietario, 2026-10-25)**; el
+      runbook lo recoge como riesgo vigente y prohíbe usarlo como destino. Al
+      redactarlo salió un hueco de diseño: una variable `PHOENIX_*` mal escrita
+      desactivaba el pipeline **sin ningún aviso** (`phoenix_tracing_missing` no la
+      usaba nadie). Corregido en `phoenix_export.py`: con el flag a `true` y config
+      incompleta se registra un `WARNING` con los **nombres** que faltan, nunca
+      valores; con el flag a `false` no se registra nada.
+- [~] T11 (2026-10-25) · **Gates locales superados; SHA/CI y integración pendientes, no
+      se pueden cerrar desde este equipo.** Reproducido el job `quality` del CI:
+      Ruff, `mypy src/` (190 ficheros), `export_prompt_history.py --check` y
+      `pytest tests/unit/ -q --cov=src` (2682 pasan, 2 se omiten, cobertura 82 %;
+      módulos nuevos: `phoenix_capture` 100 %, `field_policy` 96 %, `phoenix_export`
+      98 %), más `git diff --check`. **No ejecutado:** los tests de integración (el
+      equipo no tiene Docker ni PostgreSQL; el CI los corre con Docker). Se comprobó
+      que se recolectan 219 sin errores de importación y, por inspección, que los
+      fakes de integración usan `**kwargs` y absorben `capture_user_text`; es un
+      razonamiento, no una ejecución. **No hay SHA verificado:** hay 17 commits locales
+      sin subir a `origin/main` (el último, `c9c90fd`, no incluye los cambios de esta
+      tanda sin commitear) y el CI sólo corre al subirlos. Subir a `main`, esperar los
+      tres jobs (`quality`, `integration`, `collector-config`) y registrar SHA,
+      `deployment_id` y resultados es una decisión y una acción del propietario
+      (AGENTS.md §10, Wait for CI desactivado). Hallazgo al medir cobertura: el
+      exportador OTLP de producción no lo construía ningún test; ahora sí, y se fija
+      `http://` → canal en claro (la red privada de Railway) y la cabecera `Bearer`.
 - [ ] T12 · Activación controlada: flag ON solo para el propietario y verificación E2E.

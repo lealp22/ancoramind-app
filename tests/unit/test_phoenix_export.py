@@ -287,6 +287,37 @@ def test_incomplete_config_builds_nothing_even_with_flag_on(monkeypatch, missing
     assert build_phoenix_tracing(settings) is None
 
 
+def test_flag_on_with_incomplete_config_warns_with_names_only(monkeypatch, caplog):
+    settings = _settings(
+        monkeypatch, PHOENIX_API_KEY="", PHOENIX_COLLECTOR_ENDPOINT="phoenix.railway.internal"
+    )
+    with caplog.at_level("WARNING"):
+        assert build_phoenix_tracing(settings) is None
+    # Inspect records, not caplog.text: other tests install a metadata-only formatter.
+    messages = [record.getMessage() for record in caplog.records]
+    warning = next(m for m in messages if "enabled but inactive" in m)
+    assert "PHOENIX_API_KEY" in warning
+    assert "PHOENIX_COLLECTOR_ENDPOINT" in warning
+    assert "PHOENIX_USER_PSEUDONYM_KEY" not in warning  # it was set, so not reported
+    assert "phoenix.railway.internal" not in warning  # names only, never values
+
+
+def test_flag_off_logs_nothing_about_phoenix(monkeypatch, caplog):
+    settings = _settings(monkeypatch, PHOENIX_TRACING_ENABLED="false", PHOENIX_API_KEY="")
+    with caplog.at_level("DEBUG"):
+        assert build_phoenix_tracing(settings) is None
+    assert not [r for r in caplog.records if "hoenix" in r.getMessage()]
+
+
+def test_the_missing_settings_warning_never_contains_a_secret_value(monkeypatch, caplog):
+    secret = "super-secret-system-key-value"
+    settings = _settings(monkeypatch, PHOENIX_USER_PSEUDONYM_KEY="short", PHOENIX_API_KEY=secret)
+    with caplog.at_level("WARNING"):
+        build_phoenix_tracing(settings)
+    assert secret not in " ".join(r.getMessage() for r in caplog.records)
+    assert "short" not in " ".join(r.getMessage() for r in caplog.records)
+
+
 def test_flag_off_never_imports_or_creates_the_otlp_exporter(monkeypatch):
     called = Mock()
     monkeypatch.setattr(phoenix_export, "_otlp_exporter", called)
@@ -306,6 +337,95 @@ def test_setup_failure_is_swallowed_and_does_not_log_secrets(monkeypatch, caplog
     assert any("RuntimeError" in message for message in messages)
     assert not any("system-key" in message for message in messages)
     assert all(record.exc_info is None for record in caplog.records)
+
+
+def test_real_otlp_exporter_is_built_for_the_private_grpc_endpoint(monkeypatch):
+    """The only code that builds the production exporter; no other test constructs it."""
+    settings = _settings(monkeypatch, PHOENIX_API_KEY="secret-system-key-value")
+    exporter = phoenix_export._otlp_exporter(settings)
+    try:
+        assert exporter._endpoint == "phoenix.railway.internal:4317"
+        assert exporter._insecure is True  # plain http on the private network
+        assert exporter._timeout == settings.otel_exporter_otlp_timeout_seconds
+        assert dict(exporter._headers)["authorization"] == "Bearer secret-system-key-value"
+    finally:
+        exporter.shutdown()
+
+
+def test_an_https_endpoint_uses_a_secure_channel(monkeypatch):
+    """Documents the library's behaviour, not a guard of ours: gRPC derives TLS from the
+    URL scheme, so an ``https://`` endpoint is secure whatever ``insecure=`` says. What
+    our line must get right is the opposite case, covered by the private-network test
+    above: ``http://`` must be plain text, or the Railway-internal link would try TLS."""
+    settings = _settings(monkeypatch, PHOENIX_COLLECTOR_ENDPOINT="https://phoenix.example.com:4317")
+    exporter = phoenix_export._otlp_exporter(settings)
+    try:
+        assert exporter._insecure is False
+    finally:
+        exporter.shutdown()
+
+
+def test_the_api_key_is_only_ever_sent_as_a_bearer_header_and_never_logged(monkeypatch, caplog):
+    secret = "secret-system-key-value"
+    settings = _settings(monkeypatch, PHOENIX_API_KEY=secret)
+    with caplog.at_level("DEBUG"):
+        tracing = build_phoenix_tracing(settings)
+    assert tracing is not None
+    assert secret not in " ".join(record.getMessage() for record in caplog.records)
+    assert secret not in repr(tracing.exporter)
+    tracing.shutdown()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        json.dumps(
+            {"notes": ["uno", "dni 12345678Z", {"anidado": "tarjeta 4539 1488 0343 6467"}]}
+        ),
+        json.dumps({"notes": [[["profundo 12345678Z"]]]}),
+    ],
+)
+def test_lists_and_nested_values_are_masked_recursively(arguments):
+    projected = _exporter()._json_text(arguments)
+    assert "12345678Z" not in projected
+    assert "4539 1488 0343 6467" not in projected
+
+
+def test_numbers_outside_known_fields_still_go_through_the_numeric_safety_net():
+    projected = json.loads(_exporter()._json_text(json.dumps({"extra": 612345678901})))
+    assert projected["extra"] != 612345678901
+    assert "612345678901" not in json.dumps(projected)
+
+
+def test_booleans_and_nulls_pass_through_unchanged():
+    projected = json.loads(_exporter()._json_text(json.dumps({"extra": [True, False, None]})))
+    assert projected == {"extra": [True, False, None]}
+
+
+def test_an_excessively_deep_payload_is_rejected_not_truncated():
+    deep: object = "x"
+    for _ in range(30):
+        deep = [deep]
+    with pytest.raises(ValueError, match="depth"):
+        _exporter()._json_value(deep)
+
+
+@pytest.mark.parametrize("bad", [{1: "numeric key"}, {"a": object()}, {"a": float("inf")}])
+def test_unsupported_payload_shapes_raise_instead_of_leaking(bad):
+    with pytest.raises(ValueError):
+        _exporter()._json_value(bad)
+
+
+def test_oversized_json_arguments_are_rejected_before_parsing():
+    with pytest.raises(ValueError):
+        _exporter()._json_text("[" + "0," * 40_000 + "0]")
+
+
+def test_provider_shutdown_failure_is_swallowed(monkeypatch):
+    tracing = build_phoenix_tracing(_settings(monkeypatch), delegate=_delegate())
+    assert tracing is not None
+    monkeypatch.setattr(tracing.provider, "shutdown", Mock(side_effect=RuntimeError("boom")))
+    tracing.shutdown()  # must not raise
 
 
 def test_provider_is_isolated_from_the_global_one_and_exports_masked(monkeypatch):
