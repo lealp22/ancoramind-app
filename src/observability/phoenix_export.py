@@ -20,7 +20,7 @@ import json
 import logging
 import math
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -59,6 +59,11 @@ _TOOL_OUTCOMES = frozenset({"ok", "error"})
 _TOOL_NUMBERS = frozenset(
     {"ancora.tool.index", "ancora.tool.duration_ms", "ancora.tool.result_chars"}
 )
+_TOOL_ERROR_MESSAGE = "ancora.tool.error_message"
+# Tool error text is a free string written by the tool or a library (it may quote
+# values), so it is only accepted on a span that declares ``outcome=error`` and is
+# bounded harder than ordinary text.
+_MAX_TOOL_ERROR_CHARS = 300
 # Exception class names only (never messages), so a failed run is diagnosable.
 _ERROR_TYPE = re.compile(r"[A-Za-z][A-Za-z0-9_.]{0,99}")
 # Schema layer (ADR-007 layer 1): masked by field name whatever the value looks like.
@@ -144,6 +149,7 @@ class MaskedSpanExporter(SpanExporter):
         self.exported = 0
         self.dropped = 0
         self.failures = 0
+        self._table = self._sanitizers()
 
     def _text(self, value: object) -> str:
         if not isinstance(value, str) or len(value) > _MAX_TEXT:
@@ -217,34 +223,50 @@ class MaskedSpanExporter(SpanExporter):
             raise ValueError("Invalid tool outcome")
         return value
 
+    def _tool_error_message(self, value: object, source: Mapping[str, Any]) -> str:
+        if source.get("ancora.tool.outcome") != "error":
+            raise ValueError("Error message on a span that did not fail")
+        if not isinstance(value, str) or len(value) > _MAX_TOOL_ERROR_CHARS:
+            raise ValueError("Invalid tool error message")
+        return self._text(value)
+
     @staticmethod
     def _tool_name(value: object) -> str:
         if not isinstance(value, str) or not _TOOL_NAME.fullmatch(value):
             raise ValueError("Tool outside capture scope")
         return value
 
-    def _attribute(self, key: str, value: object) -> AttributeValue | None:
+    def _sanitizers(self) -> dict[str, Callable[[object, Mapping[str, Any]], AttributeValue]]:
+        """Exact-key allowlist: attribute name -> sanitizer. Unlisted keys are dropped."""
+
+        def plain(fn: Callable[[object], AttributeValue]) -> Callable[..., AttributeValue]:
+            return lambda value, _source: fn(value)
+
+        table: dict[str, Callable[..., AttributeValue]] = {
+            "ancora.correlation_id": plain(lambda v: str(UUID(str(v)))),
+            "ancora.interaction_id": plain(lambda v: str(UUID(str(v)))),
+            "user.id": plain(self._pseudonym),
+            "llm.model_name": plain(self._text),
+            "error.type": plain(self._error_type),
+            "ancora.tool.name": plain(self._tool_identifier),
+            "ancora.tool.outcome": plain(self._tool_outcome),
+            _TOOL_ERROR_MESSAGE: self._tool_error_message,
+            "tool.name": plain(self._tool_name),
+            "tool.parameters": plain(self._json_text),
+        }
+        for key in _COUNTS | _COSTS | _TOOL_NUMBERS:
+            table[key] = plain(self._number)
+        for key in _TEXT_ATTRIBUTES:
+            table[key] = plain(self._text)
+        return table
+
+    def _attribute(
+        self, key: str, value: object, source: Mapping[str, Any]
+    ) -> AttributeValue | None:
         """Sanitized value for an allowlisted ``key``; ``None`` means not allowlisted."""
-        if key in {"ancora.correlation_id", "ancora.interaction_id"}:
-            return str(UUID(str(value)))
-        if key == "user.id":
-            return self._pseudonym(value)
-        if key in _COUNTS or key in _COSTS:
-            return self._number(value)
-        if key == "llm.model_name" or key in _TEXT_ATTRIBUTES:
-            return self._text(value)
-        if key == "error.type":
-            return self._error_type(value)
-        if key == "ancora.tool.name":
-            return self._tool_identifier(value)
-        if key == "ancora.tool.outcome":
-            return self._tool_outcome(value)
-        if key in _TOOL_NUMBERS:
-            return self._number(value)
-        if key == "tool.name":
-            return self._tool_name(value)
-        if key == "tool.parameters":
-            return self._json_text(value)
+        sanitizer = self._table.get(key)
+        if sanitizer is not None:
+            return sanitizer(value, source)
         if _MESSAGE.fullmatch(key):
             if key.endswith("function.name"):
                 return self._tool_name(value)
@@ -265,7 +287,7 @@ class MaskedSpanExporter(SpanExporter):
             "openinference.span.kind": str(kind),
         }
         for key, value in source.items():
-            sanitized = self._attribute(key, value)
+            sanitized = self._attribute(key, value, source)
             # Everything not handled above is dropped: this is an allowlist.
             if sanitized is not None:
                 attributes[key] = sanitized

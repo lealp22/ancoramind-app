@@ -100,6 +100,29 @@ KNOWN_TOOLS = SAFE_READ_TOOLS | CONTENT_TOOLS | PROPOSE_TOOLS | {_PRESENT_REPLY}
 UNKNOWN_TOOL = "unknown_tool"
 
 
+MAX_TOOL_ERROR_CHARS = 300
+# Pydantic validation errors quote the received value after this marker.
+_QUOTED_VALUE_MARKER = "input_value="
+
+
+def bounded_tool_error(message: str | None) -> str | None:
+    """First line of a tool error, cut before any quoted argument value, bounded.
+
+    Tool error text is a free string produced by the tool or a library and may quote
+    data (Pydantic's ``input_value=...``, SQL fragments, hostnames). Only the first
+    line is kept, then cut at the quoted-value marker. The exporter masks what is
+    left; this limits how much unrecognised text can reach a span in the first place.
+    """
+    if not message or not message.strip():
+        return None
+    first = message.strip().splitlines()[0]
+    cut = first.find(_QUOTED_VALUE_MARKER)
+    if cut != -1:
+        first = first[:cut]
+    first = first.strip()
+    return first[:MAX_TOOL_ERROR_CHARS] or None
+
+
 def public_tool_name(name: str) -> str:
     """The tool name as it may appear in a span.
 
@@ -117,6 +140,8 @@ class ToolCallRecord:
     duration_ms: float | None = None
     result_chars: int | None = None
     """Size of the result only; the result itself is never carried."""
+    error_message: str | None = None
+    """Bounded error text, set only when ``failed`` (see ``bounded_tool_error``)."""
 
 
 @dataclass(frozen=True)
@@ -235,8 +260,9 @@ def _emit(tracing: PhoenixTracing, record: TurnRecord) -> None:
 def _emit_tool_metadata(child: Any, record: TurnRecord) -> None:
     """One metadata-only span per tool call, in call order (specs/046 "Visibilidad por tool").
 
-    Name (registry-checked), outcome, duration and result size. Never arguments,
-    results or error messages: those can carry document or third-party content.
+    Name (registry-checked), outcome, duration and result size; for a failed call
+    also its bounded, masked error message (owner decision 2026-10-25). Never
+    arguments or successful results: those can carry document or third-party content.
     """
     for index, call in enumerate(record.tool_calls):
         attributes: dict[str, Any] = {
@@ -248,6 +274,10 @@ def _emit_tool_metadata(child: Any, record: TurnRecord) -> None:
             attributes["ancora.tool.duration_ms"] = call.duration_ms
         if call.result_chars is not None:
             attributes["ancora.tool.result_chars"] = call.result_chars
+        # Only for a failed call, and only for a registered tool: the text of an
+        # error can quote data, and ``unknown_tool`` is already an anomaly marker.
+        if call.failed and call.error_message and public_tool_name(call.name) != UNKNOWN_TOOL:
+            attributes["ancora.tool.error_message"] = call.error_message
         child("tool_metadata", "TOOL", attributes)
 
 

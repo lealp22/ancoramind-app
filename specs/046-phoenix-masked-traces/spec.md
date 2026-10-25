@@ -147,14 +147,29 @@ y evals (no generan spans con contenido).
 
 **Visibilidad por tool (decisión del propietario, 2026-10-25, opción A).** Cada
 llamada a una tool genera un span `tool_metadata` hijo del turno, en orden de
-llamada, con solo: nombre, posición, resultado `ok`/`error`, duración en ms y
-tamaño del resultado en caracteres. Nunca argumentos de lectura, resultados ni
-mensajes de error. Se emite también en los turnos que excluyen el contenido del
+llamada, con solo: nombre, posición, resultado `ok`/`error`, duración en ms,
+tamaño del resultado en caracteres y, **solo si la llamada falló**, su mensaje de
+error (decisión del propietario, 2026-10-25). Nunca argumentos de lectura ni
+resultados correctos. Se emite también en los turnos que excluyen el contenido del
 modelo, de modo que una llamada a `get_document` es visible aunque lo que
 devolvió no lo sea. El nombre lo elige el modelo, así que solo se exporta si está
 en el registro de tools conocidas (`KNOWN_TOOLS`); cualquier otro aparece como
 `unknown_tool`, y un `propose_*` inventado no desbloquea contenido. Un test falla
 si se define una `propose_*` nueva sin clasificarla en `PROPOSE_TOOLS`.
+**Mensaje de error de una tool.** Agno guarda como resultado de una tool fallida el
+`str()` de la excepción tal cual (medido con un Agent real: un `RuntimeError` con un
+DNI y un host dentro llega íntegro), y los errores de validación de Pydantic citan el
+valor recibido tras `input_value=`. Es texto libre que puede contener datos, así que
+no se captura sin límites: solo se exporta si el span declara `outcome=error` y la
+tool es del registro (`unknown_tool` nunca lleva mensaje); se reduce a la **primera
+línea**, se corta antes de `input_value=` y se limita a 300 caracteres
+(`bounded_tool_error`); el exporter lo rechaza si excede 300 o si el span no falló, y
+lo pasa por el enmascarador. **Límite residual aceptado:** el enmascarador reconoce
+formatos (DNI, IBAN, tarjeta, matrícula…) pero no nombres propios, direcciones ni
+hosts; una excepción que cite uno de ellos en su primera línea se exportaría tal
+cual. Las tools del repositorio capturan sus propios errores y devuelven frases fijas
+(`internal_error_reply`), de modo que un `tool_call_error` real solo surge de una
+excepción no prevista, un argumento inválido o el hook de presupuesto.
 `list_my_preferences` y `propose_preference_forget` (Dream, no cableadas hoy en
 `main.py`) están clasificadas; la primera queda como tool de contenido, fuera de
 `SAFE_READ_TOOLS`, a la espera de decisión.

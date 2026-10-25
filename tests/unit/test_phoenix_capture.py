@@ -21,6 +21,7 @@ from src.observability.phoenix_capture import (
     SAFE_READ_TOOLS,
     ToolCallRecord,
     TurnRecord,
+    bounded_tool_error,
     capture_turn,
     model_content_allowed,
 )
@@ -324,7 +325,7 @@ def test_model_invented_tool_names_never_reach_a_span(monkeypatch, invented):
     tracing.shutdown()
 
 
-def test_tool_metadata_never_carries_arguments_results_or_error_text(monkeypatch):
+def test_tool_metadata_never_carries_arguments_or_successful_result_text(monkeypatch):
     tracing, sink = _tracing(monkeypatch)
     capture_turn(
         tracing,
@@ -348,9 +349,212 @@ def test_tool_metadata_never_carries_arguments_results_or_error_text(monkeypatch
             "ancora.tool.outcome",
             "ancora.tool.duration_ms",
             "ancora.tool.result_chars",
+            "ancora.tool.error_message",
         }
     assert "ARG-CANARY" not in " ".join(span.to_json() for span in sink.spans)
     tracing.shutdown()
+
+
+# ── tool error message (owner decision 2026-10-25) ───────────────────────────
+
+
+def _error_span(sink: _Sink) -> ReadableSpan:
+    return _tool_spans(sink)[0]
+
+
+def test_failed_tool_exports_its_error_message_masked(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(
+                ToolCallRecord(
+                    "find_vehicle",
+                    {},
+                    failed=True,
+                    error_message=f"db failed for user {DNI} at host secret-host",
+                ),
+            )
+        ),
+    )
+    _flush(tracing)
+    attrs = _error_span(sink).attributes
+    assert attrs["ancora.tool.outcome"] == "error"
+    assert attrs["ancora.tool.error_message"] == "db failed for user [DNI] at host secret-host"
+    assert DNI not in " ".join(span.to_json() for span in sink.spans)
+    tracing.shutdown()
+
+
+def test_successful_tool_never_carries_a_message_even_if_one_is_supplied(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(ToolCallRecord("find_vehicle", {}, failed=False, error_message="LEAK"),)
+        ),
+    )
+    _flush(tracing)
+    assert "ancora.tool.error_message" not in _error_span(sink).attributes
+    assert "LEAK" not in " ".join(span.to_json() for span in sink.spans)
+    tracing.shutdown()
+
+
+def test_error_message_of_an_unregistered_tool_is_never_exported(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(ToolCallRecord("made_up", {}, failed=True, error_message="LEAK detail"),)
+        ),
+    )
+    _flush(tracing)
+    attrs = _error_span(sink).attributes
+    assert attrs["ancora.tool.name"] == "unknown_tool"
+    assert "ancora.tool.error_message" not in attrs
+    tracing.shutdown()
+
+
+def test_error_message_is_exported_even_when_model_content_is_excluded(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(
+                ToolCallRecord("get_document", {}, failed=True, error_message="timeout"),
+            )
+        ),
+    )
+    _flush(tracing)
+    assert _error_span(sink).attributes["ancora.tool.error_message"] == "timeout"
+    _assert_no_model_content(sink)
+    tracing.shutdown()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("   \n  ", None),
+        ("simple", "simple"),
+        ("first\nsecond line with 12345678Z", "first"),
+        (
+            "1 validation error for propose_x\namount\n  bad [type=int, input_value='SECRET', ...]",
+            "1 validation error for propose_x",
+        ),
+        ("bad value [type=int, input_value='SECRET', input_type=str]", "bad value [type=int,"),
+        ("input_value='only a value'", None),
+        ("x" * 1000, "x" * 300),
+    ],
+)
+def test_bounded_tool_error_keeps_first_line_cuts_quoted_values_and_caps_length(raw, expected):
+    assert bounded_tool_error(raw) == expected
+
+
+def test_error_message_carrying_a_quoted_argument_never_reaches_a_span(monkeypatch):
+    tracing, sink = _tracing(monkeypatch)
+    pydantic_style = (
+        "1 validation error for propose_note\ncontent\n"
+        "  Input should be a valid string [type=string_type, input_value=Segredo-Ana-Lopez, "
+        "input_type=int]"
+    )
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(
+                ToolCallRecord(
+                    "propose_note",
+                    {},
+                    failed=True,
+                    error_message=bounded_tool_error(pydantic_style),
+                ),
+            )
+        ),
+    )
+    _flush(tracing)
+    dumped = " ".join(span.to_json() for span in sink.spans)
+    assert "Segredo-Ana-Lopez" not in dumped
+    assert "validation error for propose_note" in dumped
+    tracing.shutdown()
+
+
+def test_known_limit_unrecognised_text_in_an_error_is_not_masked(monkeypatch):
+    """Documents the residual risk: the masker detects formats, not names or hosts."""
+    tracing, sink = _tracing(monkeypatch)
+    capture_turn(
+        tracing,
+        _record(
+            tool_calls=(
+                ToolCallRecord(
+                    "find_vehicle", {}, failed=True, error_message="no vehicle for Maria Lopez"
+                ),
+            )
+        ),
+    )
+    _flush(tracing)
+    assert _error_span(sink).attributes["ancora.tool.error_message"] == (
+        "no vehicle for Maria Lopez"
+    )
+    tracing.shutdown()
+
+
+def test_exporter_rejects_an_error_message_on_a_span_that_did_not_fail():
+    from src.observability.phoenix_export import MaskedSpanExporter
+
+    sink = _Sink()
+    exporter = MaskedSpanExporter(sink, project_name="ancoramind")
+    span = ReadableSpan(
+        "x",
+        attributes={
+            "ancora.capture.source": "tool_metadata",
+            "openinference.span.kind": "TOOL",
+            "ancora.tool.name": "find_vehicle",
+            "ancora.tool.outcome": "ok",
+            "ancora.tool.error_message": "LEAK",
+        },
+    )
+    exporter.export([span])
+    assert sink.spans == [] and exporter.dropped == 1
+
+
+def test_exporter_rejects_an_oversized_error_message():
+    from src.observability.phoenix_export import MaskedSpanExporter
+
+    sink = _Sink()
+    exporter = MaskedSpanExporter(sink, project_name="ancoramind")
+    span = ReadableSpan(
+        "x",
+        attributes={
+            "ancora.capture.source": "tool_metadata",
+            "openinference.span.kind": "TOOL",
+            "ancora.tool.name": "find_vehicle",
+            "ancora.tool.outcome": "error",
+            "ancora.tool.error_message": "x" * 301,
+        },
+    )
+    exporter.export([span])
+    assert sink.spans == [] and exporter.dropped == 1
+
+
+def test_runner_keeps_the_error_text_of_a_failed_call_but_not_a_successful_result():
+    from agno.metrics import ToolCallMetrics
+
+    from src.agent.governed_interaction_runner import _tool_call_record
+
+    failed = _tool_call_record(
+        ToolExecution(
+            tool_name="find_vehicle",
+            result=f"db failed for user {DNI}\ntraceback line",
+            tool_call_error=True,
+            metrics=ToolCallMetrics(duration=0.1),
+        )
+    )
+    ok = _tool_call_record(
+        ToolExecution(tool_name="find_vehicle", result="Coche SECRET-RESULT", tool_call_error=False)
+    )
+    assert failed.error_message == f"db failed for user {DNI}"
+    assert ok.error_message is None
+    assert "SECRET-RESULT" not in repr(ok)
 
 
 @pytest.mark.parametrize(
@@ -401,20 +605,23 @@ def test_runner_builds_tool_metadata_from_real_executions_without_result_text(mo
 
     from src.agent.governed_interaction_runner import _tool_call_record
 
-    record = _tool_call_record(
+    result = f"Coche con matrícula {DNI}"
+    ok = _tool_call_record(
         ToolExecution(
             tool_name="find_vehicle",
             tool_args={"query": "ARG-CANARY"},
-            result=f"Coche con matrícula {DNI}",
-            tool_call_error=True,
+            result=result,
+            tool_call_error=False,
             metrics=ToolCallMetrics(duration=0.25),
         )
     )
-    assert record.args == {}
-    assert record.failed is True
-    assert record.duration_ms == 250
-    assert record.result_chars == len(f"Coche con matrícula {DNI}")
-    assert DNI not in repr(record)
+    assert ok.args == {}
+    assert ok.failed is False
+    assert ok.duration_ms == 250
+    assert ok.result_chars == len(result)
+    assert ok.error_message is None
+    assert DNI not in repr(ok)
+    assert "ARG-CANARY" not in repr(ok)
 
 
 # ── fail-open ───────────────────────────────────────────────────────────────

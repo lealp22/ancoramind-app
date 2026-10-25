@@ -53,7 +53,12 @@ from src.observability import (
     log_context_scope,
     telemetry_attributes_from_execution_context,
 )
-from src.observability.phoenix_capture import ToolCallRecord, TurnRecord, capture_turn
+from src.observability.phoenix_capture import (
+    ToolCallRecord,
+    TurnRecord,
+    bounded_tool_error,
+    capture_turn,
+)
 from src.observability.phoenix_export import PhoenixTracing
 from src.security.user_context import UserContext
 
@@ -95,16 +100,21 @@ def _tool_call_record(item: ToolExecution) -> ToolCallRecord:
     """Metadata of one tool call for the content-trace pipeline (specs/046).
 
     Only ``propose_*`` arguments are carried (the exporter re-checks the name against
-    its registry). A result is reduced to its length; its text is never read onward.
+    its registry). A successful result is reduced to its length; its text is never read
+    onward. For a failed call Agno stores ``str(exception)`` in ``result``, so that one
+    string is kept, bounded, as the error message.
     """
     name = item.tool_name or ""
     duration = getattr(item.metrics, "duration", None)
+    failed = bool(item.tool_call_error)
+    result = item.result if isinstance(item.result, str) else None
     return ToolCallRecord(
         name=name,
         args=(item.tool_args or {}) if name.startswith("propose_") else {},
-        failed=bool(item.tool_call_error),
+        failed=failed,
         duration_ms=duration * 1000 if isinstance(duration, (int, float)) else None,
-        result_chars=len(item.result) if isinstance(item.result, str) else None,
+        result_chars=len(result) if result is not None else None,
+        error_message=bounded_tool_error(result) if failed else None,
     )
 
 

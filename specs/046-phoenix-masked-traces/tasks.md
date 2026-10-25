@@ -55,6 +55,11 @@
       `unknown_tool`. Test de deriva contra las `propose_*` definidas en
       `src/agent/tools` (detectó `propose_preference_forget`, no cableada).
       Opción B (resultados enmascarados de `SAFE_READ_TOOLS`) no se implementa.
+      **Mensaje de error de tool (2026-10-25):** decisión del propietario de incluirlo
+      cuando el resultado es `error`. Acotado: primera línea, cortado antes de
+      `input_value=`, 300 caracteres, enmascarado, sólo para tools registradas y sólo
+      con `outcome=error`. Límite residual documentado en la spec (nombres/hosts no
+      se detectan). Vigilar tras activar si aparece contenido; revisar T7 (canarios).
 - [ ] T7 · Test de privacidad: canarios no llegan al exporter; Grafana sin contenido;
       audio/adjuntos/documentos ausentes; LLM y BD intactos.
 - [ ] T8 · Test fail-open: Phoenix caído o error de máscara no afecta al Agent.
