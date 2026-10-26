@@ -41,6 +41,7 @@
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
 | BL-55 Gap analysis contra rúbrico de evaluación académica | 🆕 registrado; huecos priorizados en justificación de modelo/coste proyectado, LLM-juez (Jev) ejecutado, red-teaming (PyRIT/Garak) ejecutado y documento de riesgos propio — ver `docs/academic-rubric-gap-analysis.md` |
 | BL-56 Trazas con contenido enmascarado en Phoenix | 🔶 exporter/spike local sólo sintético; auth/OTLP/borrado probados sin Railway; ADR-007 Accepted (2026-10-23) con captura manual; implementar con flag OFF, activación sujeta al gate (procedencia documentos/voz, coste/UI, privacidad) — specs/046 |
+| BL-57 Ataques adaptativos con PyRIT (red-teaming iterativo) | 🆕 diseño documentado, sin implementar; piloto determinista hecho (90 variantes, 12 pasadas, 0 `fail`); falta adaptador de inyección indirecta, scorer determinista y canal entre venvs; opcional — specs/051 |
 | MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
 Tests locales (2026-10-17): 1503 unitarias (80,42 % cobertura) y 173 integraciones PostgreSQL
@@ -3344,6 +3345,43 @@ inventario y límites en `docs/production-security-privacy.md`. Sin variables
   automático. Cablear la purga en un worker o cambiar la promesa.
 - *Abierto (ya anotado por el propietario):* `agno_runtime.agno_sessions` guarda
   sin enmascarar los resultados de las tools, sin retención (BL-34).
+
+---
+
+### BL-57 · Ataques adaptativos con PyRIT (red-teaming iterativo) 🆕 diseño documentado, sin implementar — specs/051
+
+El piloto de PyRIT (2026-10-26) usó la librería como **generador de texto fijo**:
+90 variantes (68 deterministas + 22 paráfrasis con LLM), 12 pasadas con el evaluador
+ligero, 0 `fail`, ninguna tool de escritura llamada, unos 0,41 USD de 2 USD
+(`docs/academic/modulo-4-seguridad-riesgos.md` §5.3). No mide a un atacante que
+**ve la respuesta y reintenta**, que es lo que más se parece a un adversario real. El
+propietario quiere abordarlo "en lo que sea posible" cuando haya tiempo.
+
+**Hallazgo clave:** los ataques multi-turno de PyRIT (`RedTeamingAttack`, Crescendo,
+PAIR, TAP) asumen un atacante que escribe en el turno del usuario, y el riesgo de
+AncoraMind es la **inyección indirecta** (datos devueltos por una tool). PyRIT v1.1.0
+trae `XPIAWorkflow` (cross-domain prompt injection), que encaja mejor, pero hace un
+solo intento: la adaptación habría que construirla.
+
+**Qué falta (nada de ello probado, ver la spec):**
+- Un adaptador que coloque el texto del atacante en el `context` del caso (la pieza que
+  no existe en PyRIT ni en el evaluador) y un target que envuelva el Agent.
+- Un scorer **determinista** (¿se llamó a una tool prohibida?), en lugar de un LLM
+  scorer: el éxito del ataque ya es observable por código y evita el ruido del juez.
+- Un canal entre el venv de PyRIT (aislado, sin `src/`) y el del repo.
+- Tope de gasto por ataque y global, con `RETRY_MAX_NUM_ATTEMPTS=1` y SDK sin
+  reintentos (PyRIT reintenta 10 veces por defecto).
+
+**Plan por fases, cada una con su presupuesto y su decisión:** 0) bucle sin LLM
+(0 USD); 1) atacante simple sin PyRIT (~0,05 USD); 2) `RedTeamingAttack` de PyRIT
+(~0,10–0,30 USD); 3) Crescendo/PAIR/TAP solo si las anteriores muestran algo. Las cifras
+son estimaciones del agente, no medidas.
+
+**Restricciones heredadas:** no sustituye ni modifica el evaluador ligero (specs/049);
+no promueve `security_pyrit` a categoría viva (decisión del 2026-10-26); sin Gateway
+(decisión de capstone, OpenRouter directo con la clave de evals); cero escritura real
+(tools simuladas, sin DB ni Telegram). Prioridad: **opcional**, no bloquea ningún
+orden de la tabla de prioridades.
 
 ---
 
