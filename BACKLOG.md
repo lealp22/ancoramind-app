@@ -41,6 +41,7 @@
 | BL-48 Presentación única de propuestas y respuestas acotadas tras descarte | 🔶 AC1–AC7 E2E y AC8–AC9 aislados superados; harness real exigido: lanzador one-shot, SDK sin retry y revisión humana implementados/probados sin coste; commit/SHA, acceso privado, aprobación y resultados pendientes — specs/036 y 018 T7 |
 | BL-55 Gap analysis contra rúbrico de evaluación académica | 🆕 registrado; huecos priorizados en justificación de modelo/coste proyectado, LLM-juez (Jev) ejecutado, red-teaming (PyRIT/Garak) ejecutado y documento de riesgos propio — ver `docs/academic-rubric-gap-analysis.md` |
 | BL-56 Trazas con contenido enmascarado en Phoenix | 🔶 exporter/spike local sólo sintético; auth/OTLP/borrado probados sin Railway; ADR-007 Accepted (2026-10-23) con captura manual; implementar con flag OFF, activación sujeta al gate (procedencia documentos/voz, coste/UI, privacidad) — specs/046 |
+| BL-58 Evals de adjuntos desfasados (tool `analyze_document` simulada, `files=`, caso `attachment_is_analyzed_once`) | 🆕 documentado, sin tocar para no alterar lo cerrado; prioridad 1b (no P0, lo siguiente tras el orden 1) |
 | BL-57 Ataques adaptativos con PyRIT (red-teaming iterativo) | 🆕 diseño documentado, sin implementar; piloto determinista hecho (90 variantes, 12 pasadas, 0 `fail`); falta adaptador de inyección indirecta, scorer determinista y canal entre venvs; opcional — specs/051 |
 | MVP usable | 🔶 E2E funcional de M1–M5 completo en Railway (2026-10-17 — BL-1); pendientes hallazgos de presentación BL-49/50/51, onboarding family&friends BL-24/43 y ejecución del harness de evals — ver orden de cierre P0 |
 
@@ -210,6 +211,7 @@ construido, no trabajo de desarrollo nuevo.
 | Orden | Bloque de trabajo | Qué falta para cerrar |
 |---|---|---|
 | 1 | **Validación MVP (BL-1/41) + invitaciones y administración family&friends (BL-24/43) + dashboard visual Grafana (BL-33, alcance acotado arriba) + ejecución del harness de evals (BL-8/BL-48 T7/T7a)** | Recordatorios → vehículos+mantenimiento → calendario, zona horaria, recurrencia/snooze → imagen/PDF escaneado (BL-6); en paralelo, validar onboarding/revocación, panel protegido y aislamiento antes del primer participante; Collector desplegado + dashboard importado como evidencia visual de demo; y ejecutar el plan de 5 casos del harness T7a contra rev. 8/r4 en cuanto se apruebe gasto/acceso — reutilizar las garantías de consentimiento ya implementadas, sin ampliar gobernanza nueva |
+| 1b | **Evals de adjuntos alineados con el flujo actual (BL-58)** | Decisión del propietario (2026-10-26): no es P0, pero es lo siguiente tras cerrar el orden 1 y el trabajo final. Quitar la tool simulada `analyze_document` y `files=`, inyectar el bloque «Adjuntos archivados», reformular 2 casos de `documents`; cambio aparte, con su commit, anotando la pérdida de comparabilidad |
 | 2 | Seguridad/consentimiento (BL-39/40 + BL-46/48) | BL-46 completado; BL-48 congelado en su alcance de presentación (no en la ejecución del harness, que ya subió al orden 1) hasta cerrar el orden 1 — no se amplía con hallazgos nuevos de BL-1 salvo fallo de seguridad real |
 | 3 | Operación gobernada (BL-23/33/44, resto no cubierto por la excepción) | Degradación/circuit del Gateway sin bypass, alertas, matriz de degradación T7, parada/recuperación y rotación con runbook; requieren campaña operativa autorizada, no cortes improvisados |
 | 4 | Seguridad semántica adicional (BL-8/39) | Ampliar catálogos/corpus más allá del plan de 5 casos ya ejecutado en orden 1, scoring semántico más profundo si procede |
@@ -3382,6 +3384,35 @@ no promueve `security_pyrit` a categoría viva (decisión del 2026-10-26); sin G
 (decisión de capstone, OpenRouter directo con la clave de evals); cero escritura real
 (tools simuladas, sin DB ni Telegram). Prioridad: **opcional**, no bloquea ningún
 orden de la tabla de prioridades.
+
+### BL-58 · Evals de adjuntos desfasados respecto al flujo actual 🆕 documentado, sin tocar
+
+**Hallazgo (2026-10-26):** el Core archiva el adjunto antes del turno e inyecta al Agent
+un bloque «Adjuntos archivados antes de este turno» (`governed_interaction_runner.py`).
+El Agent ya no tiene `analyze_document` y `prompts/skills/documents.md` se lo prohíbe.
+Los evals siguen modelando el flujo antiguo:
+
+- `src/agent/eval_tools.py`: registra una tool simulada `analyze_document` que producción
+  no ofrece (el defecto más relevante: el Agent evaluado dispone de una tool inexistente).
+- `src/agent/eval_physical_executor.py`: pasa el adjunto como `files=`; producción nunca
+  da bytes al Agent.
+- `evals/documents/cases.json`: `attachment_is_analyzed_once` exige
+  `required_tool: analyze_document` y fallaría con el prompt actual;
+  `no_invented_archive_confirmation` describe el flujo antiguo.
+- `tests/unit/test_eval_tools.py:227` prueba esa tool simulada.
+  (`forbidden_tools` de `evals/security/cases.json` la nombra: inofensivo, sirve de centinela.)
+
+**Propuesta:** quitar `files=` y la tool simulada; con `attachment` (y sin
+`analysis_completed: false`) inyectar en `run_input` el mismo bloque que construye
+producción, reutilizando `render_retrieved_records`; reformular el caso 2 como
+`safe_response` con `forbidden_tools: ["analyze_document"]`; el caso 3 sin bloque
+(coherente con la regla del prompt). Los recuentos de casos no cambian.
+
+**Por qué no se hizo:** cerrar el documento del trabajo final. Cambiar el catálogo hace no
+comparables las pasadas históricas de `documents`, y tocar los ejecutores afecta a
+specs/040-042 y 049. Hacerlo como cambio aparte, con su propio commit, y anotar la
+ruptura de comparabilidad. Sin inferencia hasta decidirlo. Prioridad (decisión del propietario, 2026-10-26):
+**1b** en la tabla de órdenes: no es P0, pero es lo siguiente tras cerrar el orden 1.
 
 ---
 

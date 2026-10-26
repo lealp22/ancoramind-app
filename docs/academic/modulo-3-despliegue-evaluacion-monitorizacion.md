@@ -264,6 +264,18 @@ Tipos (ficheros en `tests/unit/` ≈ 150):
 | `tool_selection` | 3 | 3 `tool_call` | elección de tool correcta |
 | `vehicle` | 3 | 2 `tool_call`, 1 `clarify` | flujo de vehículos |
 
+**Límite conocido de `documents` (BL-58, detectado el 2026-10-26, sin corregir):** 2 de sus 3 casos y el
+harness físico siguen modelando el flujo **anterior** de adjuntos. Hoy el Core archiva el adjunto antes del turno
+e inyecta al Agent el bloque «Adjuntos archivados antes de este turno» como DATA; el Agent ya no dispone de
+`analyze_document` y su prompt se lo prohíbe. Los evals, en cambio, (a) registran una tool simulada
+`analyze_document` (`eval_tools.py`) que producción no ofrece, (b) pasan el adjunto como `files=`
+(`eval_physical_executor.py`) y (c) el caso `attachment_is_analyzed_once` exige `required_tool: analyze_document`,
+por lo que **fallaría** con el prompt vigente si se ejecutara con LLM real. `no_invented_archive_confirmation`
+describe también el flujo antiguo. Ninguna campaña real ejecutó estos casos tras el cambio, así que no hay
+resultado afectado; pero **no deben citarse como evidencia del comportamiento actual con adjuntos**. Se decidió
+no corregirlo antes del cierre del trabajo para no alterar catálogos ni ejecutores ya cerrados (specs/040-042, 049) ni la
+comparabilidad de pasadas históricas; queda en prioridad 1b del backlog con la corrección propuesta.
+
 Contrato JSON v1: `id`, `description`, `input`, `context` (sintético, nunca identidad/permisos), `expected`
 (`outcome`, `required_tool`, `forbidden_tools`, `requires_user_confirmation`, `response_criteria`), `tags`.
 
