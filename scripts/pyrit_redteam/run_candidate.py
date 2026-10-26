@@ -73,11 +73,14 @@ def load_candidate(path: Path = CANDIDATE) -> tuple[dict[str, Any], list[EvalCas
 
 
 def select(cases: list[EvalCase], only: list[str] | None, converter: list[str] | None,
-           limit: int | None) -> list[EvalCase]:
+           limit: int | None, exclude: list[str] | None = None) -> list[EvalCase]:
     chosen = [c for c in cases if not only or c.case_id in set(only)]
     if converter:
         suffixes = tuple(f"__{name}" for name in converter)
         chosen = [c for c in chosen if c.case_id.endswith(suffixes)]
+    if exclude:
+        blocked = tuple(f"__{name}" for name in exclude)
+        chosen = [c for c in chosen if not c.case_id.endswith(blocked)]
     return chosen[:limit] if limit else chosen
 
 
@@ -94,13 +97,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--converter", action="append",
                         help="only variants of this converter (e.g. base64), repeatable")
     parser.add_argument("--limit", type=int, help="first N selected cases (small first batch)")
+    parser.add_argument("--exclude-converter", action="append",
+                        help="drop variants of this converter (e.g. base64), repeatable")
+    parser.add_argument("--provider-guardrail", choices=["block", "flag", "off"],
+                        help="state of OpenRouter's prompt-injection guardrail for this key "
+                             "during the run; required with --run and recorded in the ledger "
+                             "(declared by the operator, the script cannot verify it)")
     parser.add_argument("--max-usd", type=float, default=DEFAULT_MAX_USD)
     parser.add_argument("--no-judge", action="store_true")
     parser.add_argument("--case-timeout", type=float, default=240.0)
     args = parser.parse_args(argv)
+    if args.run and args.provider_guardrail is None:
+        # Batches with and without the provider filter measure different things;
+        # never let a real run be recorded without saying which one it was.
+        parser.error("--provider-guardrail is required with --run")
 
     catalog, cases = load_candidate()
-    cases = select(cases, args.case, args.converter, args.limit)
+    cases = select(cases, args.case, args.converter, args.limit, args.exclude_converter)
     print(f"candidate: {len(cases)} cases selected (pyrit {catalog.get('pyrit_version')}, "
           f"seed {catalog.get('random_seed')})")
     if not args.run:
@@ -114,7 +127,13 @@ def main(argv: list[str] | None = None) -> int:
     async def amain() -> None:
         summary = await light.run_suite(args, cases)
         append_ledger(
-            {"catalog": "security_pyrit", "catalog_status": catalog["status"]} | summary
+            {
+                "catalog": "security_pyrit",
+                "catalog_status": catalog["status"],
+                "provider_guardrail": args.provider_guardrail,
+                "excluded_converters": args.exclude_converter or [],
+            }
+            | summary
         )
         print(json.dumps({k: v for k, v in summary.items() if k != "rows"}, ensure_ascii=False),
               flush=True)

@@ -90,6 +90,64 @@ def test_dry_run_infers_nothing_and_writes_no_ledger(tmp_path, monkeypatch, caps
     assert not ledger.exists()
 
 
+def test_select_can_exclude_a_converter(tmp_path) -> None:
+    ids = ["security_pyrit.a__base64", "security_pyrit.b__rot13", "security_pyrit.c__base64"]
+    _, cases = wrapper.load_candidate(_write(tmp_path, [_case(i) for i in ids]))
+
+    kept = wrapper.select(cases, None, None, None, exclude=["base64"])
+
+    assert [c.case_id for c in kept] == [ids[1]]
+
+
+def test_a_real_run_requires_the_guardrail_state_to_be_declared(monkeypatch) -> None:
+    monkeypatch.setattr(
+        wrapper.light, "run_suite",
+        lambda *a, **k: pytest.fail("must not infer without a declared guardrail state"),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        wrapper.main(["--run"])
+
+    assert error.value.code == 2
+
+
+class _ExitedError(Exception):
+    def __init__(self, code: int) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def test_the_ledger_records_the_declared_guardrail_and_exclusions(tmp_path, monkeypatch) -> None:
+    ledger = tmp_path / "redteam_ledger.jsonl"
+    path = _write(tmp_path, [_case("security_pyrit.a__rot13"), _case("security_pyrit.b__base64")])
+    real_load = wrapper.load_candidate
+    seen: list[str] = []
+
+    async def fake_run_suite(args, cases, spent_before=0.0):
+        seen.extend(c.case_id for c in cases)
+        return {"cases": len(cases), "passed": len(cases), "rows": [], "agent_cost_usd": 0.0}
+
+    def fake_exit(code: int) -> None:
+        raise _ExitedError(code)
+
+    monkeypatch.setattr(wrapper, "load_candidate", lambda: real_load(path))
+    monkeypatch.setattr(wrapper, "LEDGER", ledger)
+    monkeypatch.setattr(wrapper.light, "run_suite", fake_run_suite)
+    monkeypatch.setattr(wrapper.light, "disable_telemetry", lambda: None)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(wrapper.os, "_exit", fake_exit)
+
+    with pytest.raises(_ExitedError) as exited:
+        wrapper.main(["--run", "--provider-guardrail", "flag", "--exclude-converter", "base64"])
+
+    entry = json.loads(ledger.read_text(encoding="utf-8"))
+    assert exited.value.code == 0
+    assert seen == ["security_pyrit.a__rot13"]
+    assert entry["provider_guardrail"] == "flag"
+    assert entry["excluded_converters"] == ["base64"]
+    assert entry["catalog"] == "security_pyrit"
+
+
 def test_default_ceiling_is_the_owner_approved_two_dollars() -> None:
     assert wrapper.DEFAULT_MAX_USD == 2.0
 
