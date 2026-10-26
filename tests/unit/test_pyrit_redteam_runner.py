@@ -226,6 +226,41 @@ def test_the_report_only_mixes_passes_with_the_same_guardrail_state() -> None:
     assert select_passes(runs, "off", 5, 10, None) == []
 
 
+def test_select_can_drop_individual_cases_and_rejects_unknown_ids(tmp_path) -> None:
+    ids = ["security_pyrit.a__para_formal", "security_pyrit.b__para_formal",
+           "security_pyrit.c__para_roleplay"]
+    _, cases = wrapper.load_candidate(_write(tmp_path, [_case(i) for i in ids]))
+
+    kept = wrapper.select(cases, None, None, None, exclude_cases=[ids[1]])
+
+    assert [c.case_id for c in kept] == [ids[0], ids[2]]
+    with pytest.raises(ValueError, match="does not match any case"):
+        wrapper.select(cases, None, None, None, exclude_cases=["security_pyrit.typo"])
+
+
+def test_the_ledger_records_which_cases_were_excluded(tmp_path, monkeypatch) -> None:
+    received, entries = _run_repeat(
+        tmp_path, monkeypatch,
+        ["--run", "--provider-guardrail", "block", "--exclude-case", "security_pyrit.a__rot13"],
+        spends=[0.0],
+    )
+
+    assert entries[0]["excluded_cases"] == ["security_pyrit.a__rot13"]
+
+
+def test_an_unknown_excluded_case_stops_the_run_before_any_spending(monkeypatch) -> None:
+    monkeypatch.setattr(
+        wrapper.light, "run_suite",
+        lambda *a, **k: pytest.fail("a typo in --exclude-case must not reach run_suite"),
+    )
+
+    with pytest.raises(SystemExit) as error:
+        wrapper.main(["--run", "--provider-guardrail", "block",
+                      "--exclude-case", "security_pyrit.no_such_case"])
+
+    assert error.value.code == 2
+
+
 def test_default_ceiling_is_the_owner_approved_two_dollars() -> None:
     assert wrapper.DEFAULT_MAX_USD == 2.0
 

@@ -32,6 +32,11 @@ from scripts import run_evals_light as light  # noqa: E402
 from src.agent.evals import EvalCase  # noqa: E402
 
 CANDIDATE = ROOT / "evals" / "security_pyrit" / "candidate_deterministic.json"
+# Only these two files may be run; --catalog picks one by name, never by free path.
+CATALOGS = {
+    "deterministic": CANDIDATE,
+    "paraphrases": ROOT / "evals" / "security_pyrit" / "candidate_paraphrases.json",
+}
 LEDGER = ROOT / "evals" / "runs" / "redteam_ledger.jsonl"
 EXPECTED_STATUS = "candidate_pending_human_review"
 DEFAULT_MAX_USD = 2.0  # owner-approved ceiling for the whole PyRIT pilot (2026-10-25)
@@ -73,8 +78,15 @@ def load_candidate(path: Path = CANDIDATE) -> tuple[dict[str, Any], list[EvalCas
 
 
 def select(cases: list[EvalCase], only: list[str] | None, converter: list[str] | None,
-           limit: int | None, exclude: list[str] | None = None) -> list[EvalCase]:
+           limit: int | None, exclude: list[str] | None = None,
+           exclude_cases: list[str] | None = None) -> list[EvalCase]:
+    known = {c.case_id for c in cases}
+    unknown = sorted(set(exclude_cases or []) - known)
+    if unknown:
+        # A typo would silently keep a case the operator meant to drop.
+        raise ValueError(f"--exclude-case does not match any case: {unknown}")
     chosen = [c for c in cases if not only or c.case_id in set(only)]
+    chosen = [c for c in chosen if c.case_id not in set(exclude_cases or [])]
     if converter:
         suffixes = tuple(f"__{name}" for name in converter)
         chosen = [c for c in chosen if c.case_id.endswith(suffixes)]
@@ -101,12 +113,17 @@ def pass_cost(summary: dict[str, Any]) -> float:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run", action="store_true", help="launches real inference")
+    parser.add_argument("--catalog", choices=sorted(CATALOGS), default="deterministic",
+                        help="which candidate catalog to run (default: deterministic, phase A)")
     parser.add_argument("--case", action="append", help="case id, repeatable")
     parser.add_argument("--converter", action="append",
                         help="only variants of this converter (e.g. base64), repeatable")
     parser.add_argument("--limit", type=int, help="first N selected cases (small first batch)")
     parser.add_argument("--exclude-converter", action="append",
                         help="drop variants of this converter (e.g. base64), repeatable")
+    parser.add_argument("--exclude-case", action="append",
+                        help="drop one case id after human review, repeatable; the ledger "
+                             "records which ones were excluded")
     parser.add_argument("--provider-guardrail", choices=["block", "flag", "off"],
                         help="state of OpenRouter's prompt-injection guardrail for this key "
                              "during the run; required with --run and recorded in the ledger "
@@ -125,8 +142,14 @@ def main(argv: list[str] | None = None) -> int:
         # never let a real run be recorded without saying which one it was.
         parser.error("--provider-guardrail is required with --run")
 
-    catalog, cases = load_candidate()
-    cases = select(cases, args.case, args.converter, args.limit, args.exclude_converter)
+    # ``load_candidate()`` keeps its no-argument default for the phase A catalog.
+    catalog, cases = (load_candidate() if args.catalog == "deterministic"
+                      else load_candidate(CATALOGS[args.catalog]))
+    try:
+        cases = select(cases, args.case, args.converter, args.limit, args.exclude_converter,
+                       args.exclude_case)
+    except ValueError as error:
+        parser.error(str(error))
     print(f"candidate: {len(cases)} cases selected (pyrit {catalog.get('pyrit_version')}, "
           f"seed {catalog.get('random_seed')})")
     if not args.run:
@@ -147,9 +170,11 @@ def main(argv: list[str] | None = None) -> int:
             append_ledger(
                 {
                     "catalog": "security_pyrit",
+                    "catalog_file": args.catalog,
                     "catalog_status": catalog["status"],
                     "provider_guardrail": args.provider_guardrail,
                     "excluded_converters": args.exclude_converter or [],
+                    "excluded_cases": args.exclude_case or [],
                     "converter_filter": args.converter or [],
                 }
                 | summary
