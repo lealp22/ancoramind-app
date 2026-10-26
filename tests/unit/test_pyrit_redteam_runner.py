@@ -125,7 +125,10 @@ def test_the_ledger_records_the_declared_guardrail_and_exclusions(tmp_path, monk
 
     async def fake_run_suite(args, cases, spent_before=0.0):
         seen.extend(c.case_id for c in cases)
-        return {"cases": len(cases), "passed": len(cases), "rows": [], "agent_cost_usd": 0.0}
+        # Same keys as the real ``run_suite`` summary, which always carries all four costs.
+        return {"cases": len(cases), "passed": len(cases), "rows": [], "agent_cost_usd": 0.0,
+                "agent_cost_est_usd": 0.0, "judge_cost_usd": 0.0, "judge_cost_est_usd": 0.0,
+                "stopped_by_budget": False}
 
     def fake_exit(code: int) -> None:
         raise _ExitedError(code)
@@ -146,6 +149,81 @@ def test_the_ledger_records_the_declared_guardrail_and_exclusions(tmp_path, monk
     assert entry["provider_guardrail"] == "flag"
     assert entry["excluded_converters"] == ["base64"]
     assert entry["catalog"] == "security_pyrit"
+
+
+def _run_repeat(tmp_path, monkeypatch, argv, spends):
+    """Drive ``main`` with a fake run_suite that reports the given per-pass spend."""
+    ledger = tmp_path / "redteam_ledger.jsonl"
+    path = _write(tmp_path, [_case("security_pyrit.a__rot13")])
+    real_load = wrapper.load_candidate
+    received: list[float] = []
+    queue = list(spends)
+
+    async def fake_run_suite(args, cases, spent_before=0.0):
+        received.append(spent_before)
+        spent = queue.pop(0)
+        return {"cases": 1, "passed": 1, "rows": [], "agent_cost_usd": spent,
+                "agent_cost_est_usd": spent, "judge_cost_usd": 0.0, "judge_cost_est_usd": 0.0,
+                "stopped_by_budget": spent_before + spent >= args.max_usd}
+
+    def fake_exit(code: int) -> None:
+        raise _ExitedError(code)
+
+    monkeypatch.setattr(wrapper, "load_candidate", lambda: real_load(path))
+    monkeypatch.setattr(wrapper, "LEDGER", ledger)
+    monkeypatch.setattr(wrapper.light, "run_suite", fake_run_suite)
+    monkeypatch.setattr(wrapper.light, "disable_telemetry", lambda: None)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(wrapper.os, "_exit", fake_exit)
+    with pytest.raises(_ExitedError):
+        wrapper.main(argv)
+    return received, [json.loads(line) for line in ledger.read_text("utf-8").splitlines()]
+
+
+def test_repeat_accumulates_spend_across_passes_so_the_ceiling_is_global(tmp_path, monkeypatch):
+    received, entries = _run_repeat(
+        tmp_path, monkeypatch,
+        ["--run", "--provider-guardrail", "block", "--repeat", "3", "--max-usd", "0.25"],
+        spends=[0.1, 0.1, 0.1],
+    )
+
+    # Pass 3 starts from 0.2 already spent, so the ceiling applies to the invocation.
+    assert received == pytest.approx([0.0, 0.1, 0.2])
+    assert len(entries) == 3
+    assert [e["stopped_by_budget"] for e in entries] == [False, False, True]
+
+
+def test_repeat_stops_after_the_pass_that_hits_the_ceiling(tmp_path, monkeypatch):
+    received, entries = _run_repeat(
+        tmp_path, monkeypatch,
+        ["--run", "--provider-guardrail", "block", "--repeat", "5", "--max-usd", "0.15"],
+        spends=[0.1, 0.1, 0.1, 0.1, 0.1],
+    )
+
+    assert len(received) == 2 and len(entries) == 2
+
+
+def test_repeat_must_be_positive() -> None:
+    with pytest.raises(SystemExit) as error:
+        wrapper.main(["--repeat", "0"])
+
+    assert error.value.code == 2
+
+
+def test_the_report_only_mixes_passes_with_the_same_guardrail_state() -> None:
+    from scripts.pyrit_redteam.report_candidate import select_passes
+
+    runs = [
+        {"provider_guardrail": "block", "cases": 56, "converter_filter": []},
+        {"provider_guardrail": "flag", "cases": 12, "converter_filter": ["base64"]},
+        {"provider_guardrail": "block", "cases": 56, "converter_filter": []},
+        {"cases": 2},  # tandas anteriores a que el ledger guardase el guardrail
+    ]
+
+    assert len(select_passes(runs, "block", 5, 10, None)) == 2
+    assert select_passes(runs, "flag", 5, 10, ["base64"]) == [runs[1]]
+    assert select_passes(runs, "flag", 5, 10, ["rot13"]) == []
+    assert select_passes(runs, "off", 5, 10, None) == []
 
 
 def test_default_ceiling_is_the_owner_approved_two_dollars() -> None:

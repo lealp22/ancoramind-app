@@ -90,6 +90,14 @@ def append_ledger(entry: dict[str, Any]) -> None:
         file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def pass_cost(summary: dict[str, Any]) -> float:
+    """USD spent by one pass: what OpenRouter reported, else the fixed-rate estimate."""
+    agent = summary["agent_cost_usd"]
+    judge = summary["judge_cost_usd"]
+    return (agent if agent is not None else summary["agent_cost_est_usd"]) + (
+        judge if judge is not None else summary["judge_cost_est_usd"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run", action="store_true", help="launches real inference")
@@ -103,10 +111,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="state of OpenRouter's prompt-injection guardrail for this key "
                              "during the run; required with --run and recorded in the ledger "
                              "(declared by the operator, the script cannot verify it)")
-    parser.add_argument("--max-usd", type=float, default=DEFAULT_MAX_USD)
+    parser.add_argument("--repeat", type=int, default=1,
+                        help="consecutive passes; each appends its own ledger line")
+    parser.add_argument("--max-usd", type=float, default=DEFAULT_MAX_USD,
+                        help="ceiling for the whole invocation, accumulated across passes")
     parser.add_argument("--no-judge", action="store_true")
     parser.add_argument("--case-timeout", type=float, default=240.0)
     args = parser.parse_args(argv)
+    if args.repeat < 1:
+        parser.error("--repeat must be at least 1")
     if args.run and args.provider_guardrail is None:
         # Batches with and without the provider filter measure different things;
         # never let a real run be recorded without saying which one it was.
@@ -125,21 +138,31 @@ def main(argv: list[str] | None = None) -> int:
     light.disable_telemetry()
 
     async def amain() -> None:
-        summary = await light.run_suite(args, cases)
-        append_ledger(
-            {
-                "catalog": "security_pyrit",
-                "catalog_status": catalog["status"],
-                "provider_guardrail": args.provider_guardrail,
-                "excluded_converters": args.exclude_converter or [],
-            }
-            | summary
-        )
-        print(json.dumps({k: v for k, v in summary.items() if k != "rows"}, ensure_ascii=False),
-              flush=True)
+        # ``--max-usd`` is a ceiling for the WHOLE invocation: each pass starts from what
+        # the previous ones spent, exactly as run_evals_light does with ``spent_before``.
+        spent, all_passed = 0.0, True
+        for number in range(1, args.repeat + 1):
+            print(f"== pass {number}/{args.repeat} (spent so far {spent:.4f} USD) ==", flush=True)
+            summary = await light.run_suite(args, cases, spent_before=spent)
+            append_ledger(
+                {
+                    "catalog": "security_pyrit",
+                    "catalog_status": catalog["status"],
+                    "provider_guardrail": args.provider_guardrail,
+                    "excluded_converters": args.exclude_converter or [],
+                    "converter_filter": args.converter or [],
+                }
+                | summary
+            )
+            print(json.dumps({k: v for k, v in summary.items() if k != "rows"},
+                             ensure_ascii=False), flush=True)
+            spent += pass_cost(summary)
+            all_passed = all_passed and summary["passed"] == summary["cases"]
+            if summary["stopped_by_budget"]:
+                break
         sys.stdout.flush()
         # The lightweight runner exits this way: loop.close() hangs on Windows.
-        os._exit(0 if summary["passed"] == summary["cases"] else 1)
+        os._exit(0 if all_passed else 1)
 
     asyncio.run(amain())
     return 0
